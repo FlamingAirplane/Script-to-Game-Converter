@@ -182,6 +182,17 @@ export function ImportView({ onConvert, busy }: { onConvert: (inputs: SourceInpu
 -> target   /   @end                         divert / ending
 ## Heading {#custom_id}                      Markdown heading as a passage`}</pre>
       </details>
+
+      <p className="colophon-note small">
+        Narrative Bridge is free and open source ·{' '}
+        <a href="https://github.com/FlamingAirplane/Script-to-Game-Converter" target="_blank" rel="noopener noreferrer">
+          View on GitHub
+        </a>{' '}
+        ·{' '}
+        <a href="https://github.com/FlamingAirplane/Script-to-Game-Converter/issues" target="_blank" rel="noopener noreferrer">
+          Report a problem
+        </a>
+      </p>
     </div>
   );
 }

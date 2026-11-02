@@ -793,3 +793,6 @@ kbd { font: 12.5px var(--mono); padding: 1px 6px; border: 1px solid var(--rule-2
 .stage-head { gap: 12px; }
 .stage-head h2 { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
 .stage-head .row { flex: none; }
+
+.colophon-note { text-align: center; color: var(--faded); font-style: italic; margin: 30px 0 0; }
+.colophon-note a { color: var(--pen); }
