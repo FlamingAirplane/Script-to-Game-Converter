@@ -101,7 +101,15 @@ export function ExportView({ processed, onState }: { processed: ProcessedStory; 
               <Pass ok={!blocking.length} /> {blocking.length ? `${blocking.length} blocking error(s)` : 'No blocking errors'}
             </li>
             <li>
-              <Pass ok={!!processed.smoke && !processed.smoke.runtimeErrors.length} /> {processed.smoke ? `${processed.smoke.completedRuns}/${processed.smoke.runs} automated playthroughs reached an ending` : 'Story smoke test not run'}
+              {processed.smokePending ? (
+                <>
+                  <span className="sev sev-info">…</span> Running automated playthroughs…
+                </>
+              ) : (
+                <>
+                  <Pass ok={!!processed.smoke && !processed.smoke.runtimeErrors.length} /> {processed.smoke ? `${processed.smoke.completedRuns}/${processed.smoke.runs} automated playthroughs reached an ending` : 'Story smoke test not run'}
+                </>
+              )}
             </li>
             {pending.length > 0 && (
               <li>
@@ -109,7 +117,7 @@ export function ExportView({ processed, onState }: { processed: ProcessedStory; 
               </li>
             )}
           </ul>
-          <button className="btn primary big" disabled={busy || blocking.length > 0} onClick={build}>
+          <button className="btn primary big" disabled={busy || blocking.length > 0 || !!processed.smokePending} onClick={build}>
             {busy ? 'Building…' : `Build ${adapter.label} package`}
           </button>
           {blocking.length > 0 && <p className="error-text small">Fix the errors in the Diagnostics panel to enable export.</p>}

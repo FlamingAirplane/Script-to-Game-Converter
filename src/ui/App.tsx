@@ -1,8 +1,8 @@
-import { useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { buildStory, type SourceInput } from '../core/builder';
 import type { Diagnostic } from '../core/diagnostics';
 import type { ConversionMode, StoryProject } from '../core/isr';
-import { processProject, type ConversionState } from '../core/pipeline';
+import type { ConversionState } from '../core/pipeline';
 import { validateSchema } from '../core/schema';
 import { download } from './common';
 import { DiagnosticsPanel } from './DiagnosticsPanel';
@@ -14,6 +14,7 @@ import { PlaytestView } from './PlaytestView';
 import { passageForEntity } from './projectOps';
 import { ReviewView, STORY_SETTINGS } from './ReviewView';
 import { ThemeToggle } from './ThemeToggle';
+import { useProcessedStory } from './useProcessedStory';
 
 type Tab = 'import' | 'review' | 'graph' | 'ink' | 'play' | 'export';
 // Tabs read as chapters of the book, numbered in roman numerals.
@@ -66,9 +67,8 @@ export function App() {
   const [, force] = useState(0);
   const openRef = useRef<HTMLInputElement>(null);
 
-  const deferred = useDeferredValue(project);
-  const processed = useMemo(() => (deferred ? processProject(deferred, parseDiagnostics) : null), [deferred, parseDiagnostics]);
-  const stale = deferred !== project;
+  // Processed in a background worker; `stale` while a newer edit is being processed.
+  const { processed, stale } = useProcessedStory(project, parseDiagnostics);
 
   useEffect(() => {
     if (!project) return;
@@ -185,7 +185,7 @@ export function App() {
     }
   };
 
-  const state: ConversionState = busy ? 'Parsing' : exportState ?? (stale ? 'Validating' : processed?.state ?? 'Queued');
+  const state: ConversionState = busy ? 'Parsing' : exportState ?? (stale || processed?.smokePending ? 'Validating' : processed?.state ?? 'Queued');
   const stageIndex = (() => {
     if (!processed) return -1;
     if (exportState === 'Succeeded') return 5;

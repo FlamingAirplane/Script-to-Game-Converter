@@ -309,3 +309,40 @@ describe('Final Draft and Word import', () => {
     expect(project.passages[1].content[0]).toMatchObject({ type: 'action', text: '# not a heading, just text' });
   });
 });
+
+describe('background processing', () => {
+  it('the fast pass (skipSmoke) matches the full pass once playthroughs are attached', async () => {
+    const { attachSmoke } = await import('../src/core/pipeline');
+    const { smokeTestAsync } = await import('../src/core/validate');
+    for (const s of SAMPLES) {
+      const { project, diagnostics } = await build(s.text, s.fileName, s.mode);
+      const full = processProject(project, diagnostics);
+      const quick = processProject(project, diagnostics, { skipSmoke: true });
+      expect(quick.compile.ok).toBe(true);
+      expect(quick.smokePending).toBe(true);
+      expect(quick.diagnostics.filter((d) => d.exportBlocked)).toEqual([]);
+      const r = await smokeTestAsync(quick.compile.json!, project, { shouldContinue: () => true });
+      const merged = attachSmoke(quick, r!);
+      expect(merged.state).toBe(full.state);
+      expect(merged.smoke).toEqual(full.smoke);
+      expect(merged.diagnostics.map((d) => d.code)).toEqual(full.diagnostics.map((d) => d.code));
+    }
+  });
+
+  it('cancels playthroughs when a newer edit arrives', async () => {
+    const { smokeTestAsync } = await import('../src/core/validate');
+    const s = SAMPLES.find((x) => x.id === 'archive')!;
+    const { project } = await build(s.text, s.fileName, 'structured');
+    const quick = processProject(project, [], { skipSmoke: true });
+    const r = await smokeTestAsync(quick.compile.json!, project, { shouldContinue: () => false, sliceMs: 0 });
+    expect(r).toBeNull();
+  });
+
+  it('a linear story needs only one playthrough', () => {
+    const s = SAMPLES.find((x) => x.id === 'motel')!;
+    return build(s.text, s.fileName, 'faithful').then(({ project }) => {
+      const r = processProject(project);
+      expect(r.smoke).toMatchObject({ runs: 1, completedRuns: 1, stopReason: 'deterministic' });
+    });
+  });
+});
