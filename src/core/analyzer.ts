@@ -1,0 +1,166 @@
+import { diag, type Diagnostic } from './diagnostics';
+import {
+  conditionItemIds,
+  isActive,
+  type Condition,
+  type Effect,
+  type Passage,
+  type StoryProject,
+} from './isr';
+
+export interface GraphEdge {
+  id: string;
+  from: string;
+  to: string;
+  label: string;
+  kind: 'choice' | 'divert' | 'fallback';
+  conditional: boolean;
+  pending: boolean;
+}
+
+export interface StoryGraph {
+  nodes: { id: string; title: string; isEnding: boolean; isStart: boolean; reachable: boolean; origin: Passage['origin'] }[];
+  edges: GraphEdge[];
+}
+
+export interface Analysis {
+  graph: StoryGraph;
+  diagnostics: Diagnostic[];
+  reachable: Set<string>;
+  endings: string[];
+}
+
+const STAGE = 'graph_analysis' as const;
+const VSTAGE = 'story_validation' as const;
+
+export function analyze(project: StoryProject): Analysis {
+  const ds: Diagnostic[] = [];
+  const passages = project.passages;
+  const byId = new Map<string, Passage>();
+  for (const p of passages) {
+    if (byId.has(p.id)) ds.push(diag('DUPLICATE_PASSAGE_ID', 'error', VSTAGE, `Two passages use the identifier "${p.id}".`, { entityId: p.id, source: p.source, remediation: 'Rename one of the passages.' }));
+    else byId.set(p.id, p);
+    if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(p.id))
+      ds.push(diag('INVALID_PASSAGE_ID', 'error', VSTAGE, `"${p.id}" is not a valid Ink identifier.`, { entityId: p.id, remediation: 'Use letters, digits and underscores only.' }));
+  }
+
+  const start = project.project.startPassage;
+  if (!byId.has(start))
+    ds.push(diag('START_MISSING', 'error', VSTAGE, `The start passage "${start}" does not exist.`, { entityId: start, remediation: 'Pick a start passage in the Review tab.' }));
+
+  const items = new Map(project.items.map((i) => [i.id, i]));
+  const vars = new Map(project.variables.map((v) => [v.id, v]));
+  const readVars = new Set<string>();
+  const usedItems = new Set<string>();
+  const givenItems = new Set<string>();
+
+  const checkCondition = (c: Condition, entityId: string) => {
+    for (const id of conditionItemIds(c)) {
+      usedItems.add(id);
+      if (!items.has(id))
+        ds.push(diag('ITEM_UNDECLARED', 'error', VSTAGE, `Condition references undeclared item "${id}".`, { entityId, details: { itemId: id }, remediation: `Declare it with "@item ${id}" or add it in the Items panel.` }));
+    }
+    walkCompare(c, (cmp) => {
+      readVars.add(cmp.variableId);
+      const v = vars.get(cmp.variableId);
+      if (!v) {
+        ds.push(diag('VAR_UNDECLARED', 'error', VSTAGE, `Condition references undeclared variable "${cmp.variableId}".`, { entityId, details: { variableId: cmp.variableId } }));
+        return;
+      }
+      const t = typeof cmp.value;
+      const expected = v.type === 'bool' ? 'boolean' : v.type === 'int' ? 'number' : 'string';
+      if (t !== expected)
+        ds.push(diag('CONDITION_TYPE_MISMATCH', 'error', VSTAGE, `"${cmp.variableId}" is ${v.type} but is compared with ${JSON.stringify(cmp.value)}.`, { entityId }));
+      if (v.type !== 'int' && !['==', '!='].includes(cmp.op))
+        ds.push(diag('CONDITION_BAD_OPERATOR', 'error', VSTAGE, `Operator "${cmp.op}" is only supported for integer variables.`, { entityId }));
+    });
+  };
+  const checkEffect = (e: Effect, entityId: string, active: boolean) => {
+    if (e.type === 'give_item' || e.type === 'take_item') {
+      if (!items.has(e.itemId)) ds.push(diag('ITEM_UNDECLARED', 'error', VSTAGE, `Effect references undeclared item "${e.itemId}".`, { entityId }));
+      usedItems.add(e.itemId);
+      if (e.type === 'give_item' && active) givenItems.add(e.itemId);
+    } else {
+      const v = vars.get(e.variableId);
+      if (!v) ds.push(diag('VAR_UNDECLARED', 'error', VSTAGE, `Effect sets undeclared variable "${e.variableId}".`, { entityId }));
+      else if (e.type === 'add_var' && v.type !== 'int') ds.push(diag('CONDITION_TYPE_MISMATCH', 'error', VSTAGE, `Cannot add to non-integer variable "${e.variableId}".`, { entityId }));
+    }
+  };
+
+  const edges: GraphEdge[] = [];
+  for (const p of passages) {
+    for (const b of p.content) {
+      if (b.type !== 'effect') continue;
+      const active = !b.review || isActive(b.review);
+      checkEffect(b.effect, p.id, active);
+      if (b.review === 'pending')
+        ds.push(diag('UNAPPROVED_GENERATED', 'review', 'story_validation', `A generated effect in "${p.title}" needs approval.`, { entityId: p.id, exportBlocked: false }));
+    }
+    const activeChoices = p.choices.filter((c) => isActive(c.review));
+    for (const c of p.choices) {
+      const pending = c.review === 'pending';
+      if (c.review === 'rejected') continue;
+      if (pending)
+        ds.push(diag('UNAPPROVED_GENERATED', 'review', 'story_validation', `Proposed choice "${c.text}" in "${p.title}" has not been approved.`, { entityId: c.id, details: { passageId: p.id }, remediation: 'Approve or reject it in the Review tab.', exportBlocked: false }));
+      if (!c.text.trim()) ds.push(diag('CHOICE_TEXT_MISSING', 'error', VSTAGE, `A choice in "${p.title}" has no text.`, { entityId: c.id }));
+      if (!c.target) ds.push(diag('CHOICE_NO_TARGET', 'error', VSTAGE, `Choice "${c.text}" has no destination.`, { entityId: c.id, details: { passageId: p.id }, source: c.source }));
+      else if (c.target !== 'END' && !byId.has(c.target))
+        ds.push(diag('INK_TARGET_MISSING', 'error', VSTAGE, `Choice destination "${c.target}" does not exist.`, { entityId: c.id, details: { target: c.target, passageId: p.id }, source: c.source, remediation: 'Point the choice at an existing passage or create the passage.' }));
+      c.conditions.forEach((x) => checkCondition(x, c.id));
+      c.effects.forEach((e) => checkEffect(e, c.id, !pending));
+      if (c.target) edges.push({ id: c.id, from: p.id, to: c.target, label: c.text, kind: 'choice', conditional: c.conditions.length > 0, pending });
+    }
+    if (p.divert) {
+      if (p.divert !== 'END' && !byId.has(p.divert))
+        ds.push(diag('INK_TARGET_MISSING', 'error', VSTAGE, `Divert destination "${p.divert}" does not exist.`, { entityId: p.id, details: { target: p.divert } }));
+      edges.push({ id: `${p.id}__divert`, from: p.id, to: p.divert, label: activeChoices.length ? 'fallback' : '', kind: activeChoices.length ? 'fallback' : 'divert', conditional: false, pending: false });
+    }
+    if (!p.isEnding && !p.divert && activeChoices.length === 0)
+      ds.push(diag('NO_AVAILABLE_CHOICES', 'warning', STAGE, `"${p.title}" has no choices, divert or ending — the player will be stuck.`, { entityId: p.id, remediation: 'Add a choice, a divert, or mark it as an ending.', exportBlocked: false }));
+    else if (!p.divert && activeChoices.length > 0 && activeChoices.every((c) => c.conditions.length > 0))
+      ds.push(diag('ALL_CHOICES_CONDITIONAL', 'warning', STAGE, `Every choice in "${p.title}" is conditional; if none are available the player is stuck.`, { entityId: p.id, remediation: 'Add an unconditional choice or a fallback divert.', exportBlocked: false }));
+    if (p.content.length === 0 && passages.length > 1)
+      ds.push(diag('EMPTY_PASSAGE', 'info', STAGE, `"${p.title}" has no narrative content.`, { entityId: p.id, exportBlocked: false }));
+  }
+
+  // Reachability over approved edges.
+  const reachable = new Set<string>();
+  const adj = new Map<string, string[]>();
+  for (const e of edges) if (!e.pending) (adj.get(e.from) ?? adj.set(e.from, []).get(e.from)!).push(e.to);
+  const queue = byId.has(start) ? [start] : [];
+  while (queue.length) {
+    const id = queue.shift()!;
+    if (reachable.has(id) || !byId.has(id)) continue;
+    reachable.add(id);
+    queue.push(...(adj.get(id) ?? []));
+  }
+  for (const p of passages)
+    if (!reachable.has(p.id) && byId.has(start))
+      ds.push(diag('UNREACHABLE_PASSAGE', 'warning', STAGE, `No path from the start reaches "${p.title}".`, { entityId: p.id, remediation: 'Add a choice or divert that leads here, or remove it.', exportBlocked: false }));
+
+  const endings = passages.filter((p) => p.isEnding || p.divert === 'END' || p.choices.some((c) => isActive(c.review) && c.target === 'END')).map((p) => p.id);
+  if (!project.inkPassthrough && !endings.some((e) => reachable.has(e)))
+    ds.push(diag('NO_REACHABLE_ENDING', 'warning', STAGE, 'No ending can be reached from the start passage.', { remediation: 'Mark at least one passage as an ending.', exportBlocked: false }));
+
+  for (const id of usedItems)
+    if (items.has(id) && !givenItems.has(id) && passages.some((p) => p.choices.some((c) => isActive(c.review) && c.conditions.some((x) => conditionItemIds(x).has(id)))))
+      ds.push(diag('ITEM_NEVER_ACQUIRED', 'warning', STAGE, `Item "${id}" gates a choice but nothing ever gives it — that choice can never be taken.`, { entityId: id, remediation: `Add "@give ${id}" somewhere reachable.`, exportBlocked: false }));
+  for (const v of project.variables)
+    if (!readVars.has(v.id) && !project.inkPassthrough)
+      ds.push(diag('UNUSED_VARIABLE', 'info', STAGE, `Variable "${v.id}" is declared but never read.`, { entityId: v.id, exportBlocked: false }));
+  for (const i of project.items)
+    if (!usedItems.has(i.id) && i.origin !== 'generated')
+      ds.push(diag('UNUSED_ITEM', 'info', STAGE, `Item "${i.id}" is declared but never used.`, { entityId: i.id, exportBlocked: false }));
+
+  const graph: StoryGraph = {
+    nodes: passages.map((p) => ({ id: p.id, title: p.title, isEnding: endings.includes(p.id), isStart: p.id === start, reachable: reachable.has(p.id), origin: p.origin })),
+    edges,
+  };
+  return { graph, diagnostics: ds, reachable, endings };
+}
+
+function walkCompare(c: Condition, f: (c: Extract<Condition, { type: 'compare' }>) => void) {
+  if (c.type === 'compare') f(c);
+  else if (c.type === 'not') walkCompare(c.condition, f);
+  else if (c.type === 'and' || c.type === 'or') c.conditions.forEach((x) => walkCompare(x, f));
+}

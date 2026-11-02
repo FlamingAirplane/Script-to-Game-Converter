@@ -1,0 +1,43 @@
+{
+  "name": "narrative-bridge",
+  "version": "0.1.0",
+  "description": "Convert screenplays and prose into Ink stories and package them for Unity or Unreal Engine.",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc --noEmit && vite build",
+    "preview": "vite preview",
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit",
+    "cli": "tsx src/cli/index.ts"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/FlamingAirplane/Script-to-Game-Converter.git"
+  },
+  "license": "MIT",
+  "type": "module",
+  "bugs": {
+    "url": "https://github.com/FlamingAirplane/Script-to-Game-Converter/issues"
+  },
+  "homepage": "https://github.com/FlamingAirplane/Script-to-Game-Converter#readme",
+  "dependencies": {
+    "inkjs": "^2.4.0",
+    "jszip": "^3.10.2",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1"
+  },
+  "devDependencies": {
+    "@types/node": "^26.6.6",
+    "@types/react": "^18.3.31",
+    "@types/react-dom": "^18.3.7",
+    "@vitejs/plugin-react": "^4.7.0",
+    "tsx": "^4.23.15",
+    "typescript": "^7.0.2",
+    "vite": "^6.4.5",
+    "vitest": "^3.2.7"
+  },
+  "private": true,
+  "bin": {
+    "narrative-bridge": "src/cli/index.ts"
+  }
+}
