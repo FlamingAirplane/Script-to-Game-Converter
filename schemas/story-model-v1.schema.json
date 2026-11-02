@@ -1,0 +1,144 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://narrative-bridge.local/schemas/story-model-v1.schema.json",
+  "title": "Narrative Bridge Intermediate Story Representation",
+  "type": "object",
+  "required": ["schemaVersion", "project", "sources", "characters", "items", "variables", "passages"],
+  "properties": {
+    "schemaVersion": { "const": "1.0" },
+    "project": {
+      "type": "object",
+      "required": ["id", "title", "startPassage", "mode"],
+      "properties": {
+        "id": { "type": "string" },
+        "title": { "type": "string" },
+        "author": { "type": "string" },
+        "startPassage": { "$ref": "#/$defs/identifier" },
+        "mode": { "enum": ["faithful", "adaptation", "structured"] }
+      }
+    },
+    "sources": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["id", "fileName", "format", "sha256", "byteLength"],
+        "properties": {
+          "id": { "type": "string" },
+          "fileName": { "type": "string" },
+          "format": { "enum": ["txt", "fountain", "md", "ink"] },
+          "sha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+          "byteLength": { "type": "integer", "minimum": 0 },
+          "text": { "type": "string" }
+        }
+      }
+    },
+    "characters": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["id", "displayName", "aliases"],
+        "properties": { "id": { "$ref": "#/$defs/identifier" }, "displayName": { "type": "string" }, "aliases": { "type": "array", "items": { "type": "string" } } }
+      }
+    },
+    "items": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["id", "displayName", "consumable", "origin"],
+        "properties": { "id": { "$ref": "#/$defs/identifier" }, "displayName": { "type": "string" }, "consumable": { "type": "boolean" }, "origin": { "$ref": "#/$defs/provenance" } }
+      }
+    },
+    "variables": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["id", "type", "initial", "origin"],
+        "properties": {
+          "id": { "$ref": "#/$defs/identifier" },
+          "type": { "enum": ["bool", "int", "string"] },
+          "initial": { "type": ["boolean", "integer", "string"] },
+          "origin": { "$ref": "#/$defs/provenance" }
+        }
+      }
+    },
+    "passages": { "type": "array", "items": { "$ref": "#/$defs/passage" } },
+    "inkPassthrough": { "type": "string" }
+  },
+  "$defs": {
+    "identifier": { "type": "string", "pattern": "^[A-Za-z_][A-Za-z0-9_]*$" },
+    "provenance": { "enum": ["source", "transformed", "generated", "user_authored"] },
+    "review": { "enum": ["approved", "pending", "rejected"] },
+    "sourceRef": {
+      "type": "object",
+      "required": ["documentId", "line"],
+      "properties": { "documentId": { "type": "string" }, "line": { "type": "integer", "minimum": 1 }, "endLine": { "type": "integer" } }
+    },
+    "value": { "type": ["boolean", "integer", "string"] },
+    "condition": {
+      "oneOf": [
+        { "type": "object", "required": ["type", "itemId"], "properties": { "type": { "const": "has_item" }, "itemId": { "$ref": "#/$defs/identifier" } } },
+        { "type": "object", "required": ["type", "condition"], "properties": { "type": { "const": "not" }, "condition": { "$ref": "#/$defs/condition" } } },
+        {
+          "type": "object",
+          "required": ["type", "variableId", "op", "value"],
+          "properties": { "type": { "const": "compare" }, "variableId": { "$ref": "#/$defs/identifier" }, "op": { "enum": ["==", "!=", ">", ">=", "<", "<="] }, "value": { "$ref": "#/$defs/value" } }
+        },
+        { "type": "object", "required": ["type", "conditions"], "properties": { "type": { "enum": ["and", "or"] }, "conditions": { "type": "array", "items": { "$ref": "#/$defs/condition" } } } }
+      ]
+    },
+    "effect": {
+      "oneOf": [
+        { "type": "object", "required": ["type", "itemId"], "properties": { "type": { "enum": ["give_item", "take_item"] }, "itemId": { "$ref": "#/$defs/identifier" } } },
+        { "type": "object", "required": ["type", "variableId", "value"], "properties": { "type": { "const": "set_var" }, "variableId": { "$ref": "#/$defs/identifier" }, "value": { "$ref": "#/$defs/value" } } },
+        { "type": "object", "required": ["type", "variableId", "amount"], "properties": { "type": { "const": "add_var" }, "variableId": { "$ref": "#/$defs/identifier" }, "amount": { "type": "integer" } } }
+      ]
+    },
+    "contentBlock": {
+      "type": "object",
+      "required": ["type", "origin"],
+      "properties": {
+        "type": { "enum": ["dialogue", "action", "transition", "note", "effect", "unsupported"] },
+        "speakerId": { "type": "string" },
+        "text": { "type": "string" },
+        "parenthetical": { "type": "string" },
+        "effect": { "$ref": "#/$defs/effect" },
+        "reason": { "type": "string" },
+        "review": { "$ref": "#/$defs/review" },
+        "origin": { "$ref": "#/$defs/provenance" },
+        "source": { "$ref": "#/$defs/sourceRef" }
+      }
+    },
+    "choice": {
+      "type": "object",
+      "required": ["id", "text", "target", "conditions", "effects", "once", "origin", "review"],
+      "properties": {
+        "id": { "type": "string" },
+        "text": { "type": "string", "minLength": 1 },
+        "target": { "type": "string" },
+        "conditions": { "type": "array", "items": { "$ref": "#/$defs/condition" } },
+        "effects": { "type": "array", "items": { "$ref": "#/$defs/effect" } },
+        "once": { "type": "boolean" },
+        "origin": { "$ref": "#/$defs/provenance" },
+        "review": { "$ref": "#/$defs/review" },
+        "source": { "$ref": "#/$defs/sourceRef" }
+      }
+    },
+    "passage": {
+      "type": "object",
+      "required": ["id", "title", "content", "choices", "isEnding", "origin", "review"],
+      "properties": {
+        "id": { "$ref": "#/$defs/identifier" },
+        "title": { "type": "string" },
+        "sourceId": { "type": "string" },
+        "sceneHeading": { "type": "string" },
+        "content": { "type": "array", "items": { "$ref": "#/$defs/contentBlock" } },
+        "choices": { "type": "array", "items": { "$ref": "#/$defs/choice" } },
+        "divert": { "type": "string" },
+        "isEnding": { "type": "boolean" },
+        "origin": { "$ref": "#/$defs/provenance" },
+        "review": { "$ref": "#/$defs/review" },
+        "source": { "$ref": "#/$defs/sourceRef" }
+      }
+    }
+  }
+}
