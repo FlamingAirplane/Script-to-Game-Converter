@@ -64,7 +64,7 @@ export function buildPlayableHtml(story: ProcessedStory, inkRuntimeJs: string, a
     <p class="colophon">An interactive story. Your progress is saved in this browser.</p>
   </section>
   <section id="reader" class="reader" hidden>
-    <header class="running-head"><span id="rh-title"></span><span class="tools"><button id="voice" class="link" aria-pressed="false">Voices off</button><button id="undo" class="link" disabled>Undo</button><button id="restart" class="link">Start over</button></span></header>
+    <header class="running-head"><span id="rh-title"></span><span class="tools"><button id="sounds" class="link" aria-pressed="true">Sounds on</button><button id="voice" class="link" aria-pressed="false">Voices off</button><button id="undo" class="link" disabled>Undo</button><button id="restart" class="link">Start over</button></span></header>
     <div id="text" class="text" aria-live="polite"></div>
     <nav id="choices" class="choices"></nav>
   </section>
@@ -183,6 +183,32 @@ const PLAYER_JS = `
     if (!playing) nextVoice();
   }
 
+  // ---- Book sounds (synthesised; no audio files): page turn on a choice, a bell at the end ----
+  var soundsOn = true, actx = null;
+  try { soundsOn = localStorage.getItem('narrative-bridge.play.sounds') !== 'off'; } catch (e) {}
+  function ac() {
+    if (!soundsOn || !window.AudioContext) return null;
+    try { actx = actx || new AudioContext(); if (actx.state === 'suspended') actx.resume(); return actx; } catch (e) { return null; }
+  }
+  function env(c, peak, a, d) { var g = c.createGain(), t = c.currentTime; g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(peak, t + a); g.gain.exponentialRampToValueAtTime(0.0001, t + a + d); return g; }
+  function pageTurn() {
+    var c = ac(); if (!c) return;
+    var buf = c.createBuffer(1, Math.ceil(c.sampleRate * 0.45), c.sampleRate), d = buf.getChannelData(0);
+    for (var i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1;
+    var src = c.createBufferSource(); src.buffer = buf;
+    var bp = c.createBiquadFilter(); bp.type = 'bandpass'; bp.Q.value = 0.9;
+    bp.frequency.setValueAtTime(900, c.currentTime); bp.frequency.exponentialRampToValueAtTime(3800, c.currentTime + 0.32);
+    src.connect(bp).connect(env(c, 0.13, 0.06, 0.32)).connect(c.destination); src.start(); src.stop(c.currentTime + 0.45);
+  }
+  function chime() {
+    var c = ac(); if (!c) return;
+    [[660, 0.07], [1320, 0.035], [1980, 0.02], [2640, 0.012]].forEach(function (p) {
+      var o = c.createOscillator(); o.frequency.value = p[0];
+      o.connect(env(c, p[1], 0.01, 1.8)).connect(c.destination); o.start(); o.stop(c.currentTime + 2);
+    });
+  }
+  function soundsLabel() { $('sounds').textContent = soundsOn ? 'Sounds on' : 'Sounds off'; $('sounds').setAttribute('aria-pressed', String(soundsOn)); }
+
   function continueStory() {
     var from = lines.length;
     while (story.canContinue) {
@@ -225,6 +251,7 @@ const PLAYER_JS = `
     nav.textContent = '';
     var choices = story.currentChoices;
     if (!choices.length) {
+      if (lines.length) chime();
       nav.appendChild(el('p', 'end', '❦ The End ❦'));
       var again = el('div', 'end-actions');
       var b = el('button', 'btn', 'Read again');
@@ -246,6 +273,7 @@ const PLAYER_JS = `
     history.push({ state: story.state.toJson(), lines: lines.slice() });
     if (history.length > 50) history.shift();
     stopVoices();
+    pageTurn();
     story.ChooseChoiceIndex(index);
     lines.push({ chosen: text });
     continueStory();
@@ -295,6 +323,12 @@ const PLAYER_JS = `
   $('undo').onclick = undo;
   $('restart').onclick = startOver;
   voiceLabel();
+  soundsLabel();
+  $('sounds').onclick = function () {
+    soundsOn = !soundsOn;
+    try { localStorage.setItem('narrative-bridge.play.sounds', soundsOn ? 'on' : 'off'); } catch (e) {}
+    soundsLabel();
+  };
   $('voice').onclick = function () {
     voiceOn = !voiceOn;
     try { localStorage.setItem('narrative-bridge.play.voices', voiceOn ? 'on' : 'off'); } catch (e) {}

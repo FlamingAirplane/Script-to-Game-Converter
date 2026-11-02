@@ -6,6 +6,7 @@ import inkRuntime from '../../node_modules/inkjs/dist/ink.js?raw';
 import { referencedAudio } from '../core/audio';
 import type { ProcessedStory } from '../core/pipeline';
 import { collectClips } from './audioStore';
+import { sfx } from './sfx';
 import { Badge, SeverityIcon, download } from './common';
 
 // `stale`: an edit is still being processed, so exports wait for it rather than packaging the previous version.
@@ -46,6 +47,7 @@ export function ExportView({ processed, stale, onState }: { processed: Processed
       setZip(await zipExport(r));
       setPreview(r.files.find((f) => f.path.endsWith('narrative-bridge.manifest.json'))?.path ?? null);
       onState(r.report.errors.length ? 'Failed' : 'Succeeded');
+      if (!r.report.errors.length) sfx.stamp();
     } catch (e) {
       setError(e instanceof ExportBlockedError ? `Export blocked — ${e.message}` : String(e));
       onState('Failed');

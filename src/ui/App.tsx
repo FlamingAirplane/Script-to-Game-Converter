@@ -18,6 +18,7 @@ import { Logo } from './Logo';
 // Loaded on first use: Export carries the exporters, zip library and Ink runtime; Playtest the runtime.
 const ExportView = lazy(() => import('./ExportView').then((m) => ({ default: m.ExportView })));
 const PlaytestView = lazy(() => import('./PlaytestView').then((m) => ({ default: m.PlaytestView })));
+import { sfx } from './sfx';
 import { ThemeToggle } from './ThemeToggle';
 import { useProcessedStory } from './useProcessedStory';
 
@@ -63,6 +64,13 @@ export function App() {
   const [project, setProject] = useState<StoryProject | null>(initial?.project ?? null);
   const [parseDiagnostics, setParseDiagnostics] = useState<Diagnostic[]>(initial?.parseDiagnostics ?? []);
   const [tab, setTab] = useState<Tab>(initial ? 'review' : 'import');
+  const [soundOn, setSoundOn] = useState(sfx.enabled);
+  // A page turns whenever the chapter changes (not on first load).
+  const prevTab = useRef(tab);
+  useEffect(() => {
+    if (prevTab.current !== tab) sfx.pageTurn();
+    prevTab.current = tab;
+  }, [tab]);
   const [selected, setSelected] = useState<string>(initial?.project.project.startPassage ?? '');
   const [showDiag, setShowDiag] = useState(true);
   const [busy, setBusy] = useState(false);
@@ -242,6 +250,18 @@ export function App() {
           ↷
         </button>
         <ThemeToggle />
+        <button
+          className="btn tiny ghost"
+          aria-pressed={soundOn}
+          title={soundOn ? 'Book sounds on (page turns, choices, endings). Click to mute.' : 'Book sounds off. Click to turn on.'}
+          onClick={() => {
+            sfx.setEnabled(!soundOn);
+            setSoundOn(!soundOn);
+            if (!soundOn) sfx.choice();
+          }}
+        >
+          {soundOn ? '♪ sounds' : '♪ muted'}
+        </button>
         <button className="btn tiny ghost" onClick={() => openRef.current?.click()}>
           Open project
         </button>

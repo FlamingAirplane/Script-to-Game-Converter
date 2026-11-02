@@ -6,6 +6,7 @@ import { itemVar } from '../core/isr';
 import type { ProcessedStory } from '../core/pipeline';
 import { audioFileName, referencedAudio } from '../core/audio';
 import { Badge, Empty } from './common';
+import { sfx } from './sfx';
 import { VoiceQueue, type VoiceItem } from './voice';
 
 const VOICES_KEY = 'narrative-bridge.voices';
@@ -132,6 +133,11 @@ export function PlaytestView({ processed, onOpen }: { processed: ProcessedStory;
   useEffect(() => {
     bottom.current?.scrollIntoView({ behavior: 'smooth', block: 'end' });
   }, [lines.length]);
+  // A small bell when the story reaches an ending.
+  const isEnd = choices.length === 0 && lines.length > 0;
+  useEffect(() => {
+    if (isEnd) sfx.chime();
+  }, [isEnd]);
 
   if (!json)
     return (
@@ -146,6 +152,7 @@ export function PlaytestView({ processed, onOpen }: { processed: ProcessedStory;
     voiceQueue.current.stop();
     const s = story.current!;
     setHistory((h) => [...h, { state: s.state.toJson(), lines, segment: segment.current }]);
+    sfx.choice();
     s.ChooseChoiceIndex(i);
     advance([...lines, { text, tags: [], kind: 'choice' }]);
   };

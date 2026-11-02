@@ -472,14 +472,19 @@ function AutoText({ value, onChange, serif, label }: { value: string; onChange: 
     const el = ref.current;
     if (!el || typeof ResizeObserver === 'undefined') return;
     let width = el.clientWidth;
+    let frame = 0;
     const ro = new ResizeObserver(() => {
-      if (el.clientWidth !== width) {
-        width = el.clientWidth;
-        fit();
-      }
+      if (el.clientWidth === width) return;
+      width = el.clientWidth;
+      // Resize on the next frame so changing the height doesn't re-trigger this observer in the same frame.
+      cancelAnimationFrame(frame);
+      frame = requestAnimationFrame(fit);
     });
     ro.observe(el);
-    return () => ro.disconnect();
+    return () => {
+      cancelAnimationFrame(frame);
+      ro.disconnect();
+    };
   }, []);
   return <textarea ref={ref} rows={1} aria-label={label} className={`autotext ${serif ? 'serif' : 'mono small'}`} value={value} onChange={(e) => onChange(e.target.value)} />;
 }
