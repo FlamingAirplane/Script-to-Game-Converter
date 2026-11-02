@@ -58,6 +58,7 @@ export function ReviewView({ processed, selected, onSelect, update }: { processe
           </div>
         )}
         <input className="input small" placeholder="Filter passages…" value={filter} onChange={(e) => setFilter(e.target.value)} />
+        <h3 className="contents-head">Contents</h3>
         <ol className="passages">
           {visible.map((p) => {
             const issues = issuesByPassage.get(p.id);
@@ -66,7 +67,10 @@ export function ReviewView({ processed, selected, onSelect, update }: { processe
             return (
               <li key={p.id}>
                 <button className={`passage-item ${selected === p.id ? 'active' : ''}`} onClick={() => onSelect(p.id)}>
-                  <span className="passage-title">{p.title}</span>
+                  <span className="toc-line">
+                    <span className="passage-title">{p.title}</span>
+                    <span className="toc-num">{project.passages.indexOf(p) + 1}</span>
+                  </span>
                   <span className="passage-meta">
                     <span className="mono muted small">{p.id}</span>
                     {project.project.startPassage === p.id && <Badge tone="accent">start</Badge>}
@@ -445,12 +449,27 @@ function BlockRow({
 
 function AutoText({ value, onChange, serif }: { value: string; onChange: (v: string) => void; serif?: boolean }) {
   const ref = useRef<HTMLTextAreaElement>(null);
-  useEffect(() => {
+  const fit = () => {
     const el = ref.current;
     if (!el) return;
     el.style.height = 'auto';
     el.style.height = `${el.scrollHeight}px`;
-  }, [value]);
+  };
+  useEffect(fit, [value]);
+  // Re-measure when the column width changes (panels opening/closing, window resize).
+  useEffect(() => {
+    const el = ref.current;
+    if (!el || typeof ResizeObserver === 'undefined') return;
+    let width = el.clientWidth;
+    const ro = new ResizeObserver(() => {
+      if (el.clientWidth !== width) {
+        width = el.clientWidth;
+        fit();
+      }
+    });
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
   return <textarea ref={ref} rows={1} className={`autotext ${serif ? 'serif' : 'mono small'}`} value={value} onChange={(e) => onChange(e.target.value)} />;
 }
 

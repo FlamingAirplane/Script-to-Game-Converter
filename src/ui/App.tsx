@@ -15,13 +15,14 @@ import { passageForEntity } from './projectOps';
 import { ReviewView, STORY_SETTINGS } from './ReviewView';
 
 type Tab = 'import' | 'review' | 'graph' | 'ink' | 'play' | 'export';
-const TABS: { id: Tab; label: string; key: string }[] = [
-  { id: 'import', label: 'Import', key: '1' },
-  { id: 'review', label: 'Review', key: '2' },
-  { id: 'graph', label: 'Graph', key: '3' },
-  { id: 'ink', label: 'Ink', key: '4' },
-  { id: 'play', label: 'Playtest', key: '5' },
-  { id: 'export', label: 'Export', key: '6' },
+// Tabs read as chapters of the book, numbered in roman numerals.
+const TABS: { id: Tab; label: string; key: string; numeral: string }[] = [
+  { id: 'import', label: 'Import', key: '1', numeral: 'I' },
+  { id: 'review', label: 'Review', key: '2', numeral: 'II' },
+  { id: 'graph', label: 'Graph', key: '3', numeral: 'III' },
+  { id: 'ink', label: 'Ink', key: '4', numeral: 'IV' },
+  { id: 'play', label: 'Playtest', key: '5', numeral: 'V' },
+  { id: 'export', label: 'Export', key: '6', numeral: 'VI' },
 ];
 
 const STAGES: { state: ConversionState; label: string }[] = [
@@ -242,6 +243,7 @@ export function App() {
       <nav className="tabs">
         {TABS.map((t) => (
           <button key={t.id} className={`tab ${tab === t.id ? 'active' : ''}`} disabled={t.id !== 'import' && !processed} onClick={() => setTab(t.id)} title={`⌘${t.key}`}>
+            <span className="tab-num">{t.numeral}</span>
             {t.label}
             {t.id === 'review' && counts && counts.review > 0 && <span className="tab-count review">{counts.review}</span>}
           </button>
@@ -265,6 +267,7 @@ export function App() {
           {processed && tab === 'ink' && <InkView processed={processed} onOpen={open} />}
           {processed && tab === 'play' && <PlaytestView processed={processed} onOpen={open} />}
           {processed && tab === 'export' && <ExportView processed={processed} onState={setExportState} />}
+          {(tab === 'import' || tab === 'export') && <footer className="folio">— {TABS.find((t) => t.id === tab)!.numeral.toLowerCase()} —</footer>}
         </div>
         {processed && showDiag && tab !== 'import' && <DiagnosticsPanel diagnostics={processed.diagnostics} onJump={jump} onClose={() => setShowDiag(false)} />}
       </div>

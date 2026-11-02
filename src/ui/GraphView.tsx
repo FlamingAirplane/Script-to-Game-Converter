@@ -170,7 +170,7 @@ export function GraphView({ graph, start, selected, onOpen, endingsReached }: { 
                 onPointerEnter={() => setHover(n.id)}
                 onPointerLeave={() => setHover(null)}
               >
-                <rect width={W} height={H} rx={8} />
+                <rect width={W} height={H} rx={3} />
                 <text x={12} y={22} className="node-title">
                   {n.title.length > 24 ? n.title.slice(0, 23) + '…' : n.title}
                 </text>
