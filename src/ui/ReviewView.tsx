@@ -5,7 +5,7 @@ import { uniqueId, type Choice, type CompareOp, type Condition, type ContentBloc
 import type { ProcessedStory } from '../core/pipeline';
 import { Badge, ProvenanceBadge, SeverityIcon } from './common';
 import { friendly } from './friendly';
-import { addChoice, addPassage, deletePassage, renamePassage } from './projectOps';
+import { addChoice, addPassage, deletePassage, findText, mergeCharacter, movePassage, renamePassage, replaceText } from './projectOps';
 
 type Update = (fn: (draft: StoryProject) => void, group?: string) => void;
 
@@ -58,7 +58,8 @@ export function ReviewView({ processed, selected, onSelect, update }: { processe
             </div>
           </div>
         )}
-        <input className="input small" placeholder="Filter passages…" value={filter} onChange={(e) => setFilter(e.target.value)} />
+        <input className="input small" placeholder="Filter passages…" value={filter} onChange={(e) => setFilter(e.target.value)} aria-label="Filter passages" />
+        <FindReplace project={project} update={update} onSelect={onSelect} />
         <h3 className="contents-head">Contents</h3>
         <ol className="passages">
           {visible.map((p) => {
@@ -222,6 +223,12 @@ function PassageEditor({
               {showSource ? 'Hide source' : 'Show source'}
             </button>
           )}
+          <button className="icon" title="Move up in the contents" aria-label="Move passage up" disabled={project.passages[0]?.id === pid} onClick={() => update((d) => movePassage(d, pid, -1))}>
+            ↑
+          </button>
+          <button className="icon" title="Move down in the contents" aria-label="Move passage down" disabled={project.passages[project.passages.length - 1]?.id === pid} onClick={() => update((d) => movePassage(d, pid, 1))}>
+            ↓
+          </button>
           <button className="btn tiny" disabled={isStart} onClick={() => update((d) => (d.project.startPassage = pid))}>
             {isStart ? 'Start passage' : 'Make start'}
           </button>
@@ -662,6 +669,7 @@ function StorySettings({ project, update }: { project: StoryProject; update: Upd
             <th>id</th>
             <th>Display name</th>
             <th>Aliases seen in source</th>
+            <th>Same person as…</th>
           </tr>
         </thead>
         <tbody>
@@ -672,11 +680,34 @@ function StorySettings({ project, update }: { project: StoryProject; update: Upd
                 <input className="input small" value={c.displayName} onChange={(e) => update((d) => (d.characters[i].displayName = e.target.value), `settings:characters.displayName:${i}`)} />
               </td>
               <td className="muted small">{c.aliases.join(', ') || '—'}</td>
+              <td>
+                {project.characters.length > 1 && (
+                  <select
+                    className="input tiny-select"
+                    value=""
+                    aria-label={`Merge ${c.displayName} into another character`}
+                    onChange={(e) => {
+                      const into = project.characters.find((x) => x.id === e.target.value);
+                      if (!into || !confirm(`Merge ${c.displayName} into ${into.displayName}? All of ${c.displayName}’s lines will be spoken by ${into.displayName}.`)) return;
+                      update((d) => mergeCharacter(d, c.id, into.id));
+                    }}
+                  >
+                    <option value="">merge into…</option>
+                    {project.characters
+                      .filter((x) => x.id !== c.id)
+                      .map((x) => (
+                        <option key={x.id} value={x.id}>
+                          {x.displayName}
+                        </option>
+                      ))}
+                  </select>
+                )}
+              </td>
             </tr>
           ))}
           {!project.characters.length && (
             <tr>
-              <td colSpan={3} className="muted small">
+              <td colSpan={4} className="muted small">
                 No characters detected.
               </td>
             </tr>
@@ -794,5 +825,51 @@ function NewEntry({ placeholder, label, onAdd }: { placeholder: string; label: s
         {label}
       </button>
     </form>
+  );
+}
+
+function FindReplace({ project, update, onSelect }: { project: StoryProject; update: Update; onSelect: (id: string) => void }) {
+  const [query, setQuery] = useState('');
+  const [replacement, setReplacement] = useState('');
+  const [matchCase, setMatchCase] = useState(false);
+  const [done, setDone] = useState('');
+  const hits = useMemo(() => findText(project, query, matchCase), [project, query, matchCase]);
+  const titles = new Map(project.passages.map((p) => [p.id, p.title]));
+  return (
+    <details className="find-panel" onToggle={() => setDone('')}>
+      <summary>Find &amp; replace</summary>
+      <input className="input small" placeholder="Find…" value={query} onChange={(e) => (setQuery(e.target.value), setDone(''))} aria-label="Find text" />
+      <input className="input small" placeholder="Replace with…" value={replacement} onChange={(e) => setReplacement(e.target.value)} aria-label="Replace with" />
+      <div className="row">
+        <label className="check small">
+          <input type="checkbox" checked={matchCase} onChange={(e) => setMatchCase(e.target.checked)} /> match case
+        </label>
+        <span className="spacer" />
+        <button
+          className="btn tiny"
+          disabled={!hits.length}
+          onClick={() => {
+            const n = hits.length;
+            update((d) => replaceText(d, query, replacement, matchCase));
+            setDone(`Replaced ${n} ${n === 1 ? 'match' : 'matches'}. Undo with ↶ if needed.`);
+          }}
+        >
+          Replace all
+        </button>
+      </div>
+      {query && <p className="muted small">{done || `${hits.length} ${hits.length === 1 ? 'match' : 'matches'}`}</p>}
+      {hits.length > 0 && (
+        <ul className="find-hits">
+          {hits.slice(0, 40).map((h, i) => (
+            <li key={i}>
+              <button className="link small" onClick={() => onSelect(h.passageId)}>
+                <span className="find-where">{titles.get(h.passageId)}</span> {h.excerpt}
+              </button>
+            </li>
+          ))}
+          {hits.length > 40 && <li className="muted small">…and {hits.length - 40} more</li>}
+        </ul>
+      )}
+    </details>
   );
 }

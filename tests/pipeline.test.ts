@@ -346,3 +346,42 @@ describe('background processing', () => {
     });
   });
 });
+
+describe('review tools', () => {
+  it('finds and replaces across titles, text, parentheticals and choices', async () => {
+    const { findText, replaceText } = await import('../src/ui/projectOps');
+    const s = SAMPLES.find((x) => x.id === 'archive')!;
+    const { project } = await build(s.text, s.fileName, 'structured');
+    const hits = findText(project, 'archive');
+    expect(hits.length).toBeGreaterThanOrEqual(4);
+    expect(hits.some((h) => h.where === 'choice')).toBe(true);
+    expect(findText(project, 'ARCHIVE', true)).toHaveLength(0);
+    const n = replaceText(project, 'archive', 'library');
+    expect(n).toBe(hits.length);
+    expect(findText(project, 'archive')).toHaveLength(0);
+    expect(project.passages.find((p) => p.id === 'archive_entry')!.choices[0]).toMatchObject({ text: 'Open the library', origin: 'user_authored' });
+    expect(processProject(project).compile.ok).toBe(true); // ids are untouched
+  });
+
+  it('merges a duplicate character into another', async () => {
+    const { mergeCharacter } = await import('../src/ui/projectOps');
+    const { project } = await build('INT. A - DAY\n\nMIRA\nHi.\n\nMIRA (V.O.)\nStill me.\n\nMIRA K.\nAnd me.\n', 'x.fountain');
+    const k = project.characters.find((c) => c.displayName === 'MIRA K.')!;
+    const mira = project.characters.find((c) => c.displayName === 'MIRA')!;
+    expect(mergeCharacter(project, k.id, mira.id)).toBe(1);
+    expect(project.characters.map((c) => c.displayName)).toEqual(['MIRA']);
+    expect(mira.aliases).toContain('MIRA K.');
+    expect(project.passages[0].content.filter((b) => b.type === 'dialogue').every((b) => b.type === 'dialogue' && b.speakerId === mira.id)).toBe(true);
+  });
+
+  it('reorders passages without changing the story flow', async () => {
+    const { movePassage } = await import('../src/ui/projectOps');
+    const s = SAMPLES.find((x) => x.id === 'motel')!;
+    const { project } = await build(s.text, s.fileName);
+    const before = processProject(project).smoke!.endingsReached;
+    expect(movePassage(project, 'parking_lot', -1)).toBe(true);
+    expect(project.passages.map((p) => p.id)).toEqual(['roadside_motel', 'parking_lot', 'motel_office']);
+    expect(movePassage(project, 'roadside_motel', -1)).toBe(false);
+    expect(processProject(project).smoke!.endingsReached).toEqual(before);
+  });
+});

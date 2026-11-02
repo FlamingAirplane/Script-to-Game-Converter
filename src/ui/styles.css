@@ -597,3 +597,11 @@ input[type='checkbox'], input[type='radio'] { accent-color: var(--ink); }
 .offline-note a { color: var(--pen); }
 .brand, .brand span, .topbar .btn { white-space: nowrap; flex-shrink: 0; }
 .theme-toggle span { font-variant: normal; }
+.find-panel { border: 1px solid var(--rule); border-radius: 2px; padding: 6px 10px; display: flex; flex-direction: column; gap: 6px; }
+.find-panel[open] { padding-bottom: 10px; background: var(--paper-hi); }
+.find-panel summary { cursor: pointer; font-style: italic; color: var(--ink-2); }
+.find-panel .input { width: 100%; margin-top: 4px; }
+.find-hits { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 4px; max-height: 220px; overflow: auto; }
+.find-hits .link { text-decoration: none; color: var(--ink-2); line-height: 1.35; }
+.find-where { color: var(--rubric); font-variant: small-caps; text-transform: lowercase; letter-spacing: 0.06em; }
+.find-panel .check { white-space: nowrap; }

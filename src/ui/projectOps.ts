@@ -62,3 +62,109 @@ export function passageForEntity(p: StoryProject, entityId?: string, passageHint
   if (p.passages.some((x) => x.id === entityId)) return entityId;
   return p.passages.find((x) => x.choices.some((c) => c.id === entityId))?.id;
 }
+
+// ---- Find & replace -------------------------------------------------------------------------
+
+export interface TextMatch {
+  passageId: string;
+  where: 'title' | 'content' | 'choice';
+  index: number; // content block or choice index
+  excerpt: string;
+}
+
+function matcher(query: string, matchCase: boolean): RegExp {
+  return new RegExp(query.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), matchCase ? 'g' : 'gi');
+}
+
+function excerpt(text: string, at: number, len: number): string {
+  const start = Math.max(0, at - 24);
+  const end = Math.min(text.length, at + len + 24);
+  return `${start > 0 ? '…' : ''}${text.slice(start, end)}${end < text.length ? '…' : ''}`;
+}
+
+/** Every place the text appears: passage titles, narrative text, parentheticals and choice wording. */
+export function findText(p: StoryProject, query: string, matchCase = false): TextMatch[] {
+  if (!query) return [];
+  const out: TextMatch[] = [];
+  const scan = (text: string | undefined, m: Omit<TextMatch, 'excerpt'>) => {
+    if (!text) return;
+    for (const hit of text.matchAll(matcher(query, matchCase))) out.push({ ...m, excerpt: excerpt(text, hit.index ?? 0, query.length) });
+  };
+  for (const ps of p.passages) {
+    scan(ps.title, { passageId: ps.id, where: 'title', index: 0 });
+    ps.content.forEach((b, i) => {
+      if ('text' in b) scan(b.text, { passageId: ps.id, where: 'content', index: i });
+      if (b.type === 'dialogue') scan(b.parenthetical, { passageId: ps.id, where: 'content', index: i });
+    });
+    ps.choices.forEach((c, i) => scan(c.text, { passageId: ps.id, where: 'choice', index: i }));
+  }
+  return out;
+}
+
+/** Replaces every match; changed elements are marked as edited. Returns the number of replacements. */
+export function replaceText(p: StoryProject, query: string, replacement: string, matchCase = false): number {
+  if (!query) return 0;
+  let count = 0;
+  const re = matcher(query, matchCase);
+  const rep = (text: string) =>
+    text.replace(re, () => {
+      count++;
+      return replacement;
+    });
+  for (const ps of p.passages) {
+    const t = rep(ps.title);
+    if (t !== ps.title) {
+      ps.title = t;
+      if (ps.origin === 'source') ps.origin = 'user_authored';
+    }
+    for (const b of ps.content) {
+      let changed = false;
+      if ('text' in b && b.type !== 'unsupported') {
+        const n = rep(b.text);
+        if (n !== b.text) (b.text = n), (changed = true);
+      }
+      if (b.type === 'dialogue' && b.parenthetical) {
+        const n = rep(b.parenthetical);
+        if (n !== b.parenthetical) (b.parenthetical = n), (changed = true);
+      }
+      if (changed && b.origin !== 'generated') b.origin = 'user_authored';
+    }
+    for (const c of ps.choices) {
+      const n = rep(c.text);
+      if (n !== c.text) {
+        c.text = n;
+        if (c.origin === 'source') c.origin = 'user_authored';
+      }
+    }
+  }
+  return count;
+}
+
+// ---- Characters and passage order ------------------------------------------------------------
+
+/** Moves every line spoken by `fromId` to `intoId`, keeps the old name as an alias, and removes `fromId`. */
+export function mergeCharacter(p: StoryProject, fromId: string, intoId: string): number {
+  const from = p.characters.find((c) => c.id === fromId);
+  const into = p.characters.find((c) => c.id === intoId);
+  if (!from || !into || fromId === intoId) return 0;
+  let moved = 0;
+  for (const ps of p.passages)
+    for (const b of ps.content)
+      if (b.type === 'dialogue' && b.speakerId === fromId) {
+        b.speakerId = intoId;
+        if (b.origin === 'source') b.origin = 'transformed';
+        moved++;
+      }
+  into.aliases = [...new Set([...into.aliases, from.displayName, ...from.aliases])].filter((a) => a !== into.displayName);
+  p.characters = p.characters.filter((c) => c.id !== fromId);
+  return moved;
+}
+
+/** Moves a passage up or down in the contents (story flow is unchanged: it follows choices and diverts). */
+export function movePassage(p: StoryProject, id: string, dir: -1 | 1): boolean {
+  const i = p.passages.findIndex((x) => x.id === id);
+  const j = i + dir;
+  if (i < 0 || j < 0 || j >= p.passages.length) return false;
+  [p.passages[i], p.passages[j]] = [p.passages[j], p.passages[i]];
+  return true;
+}
