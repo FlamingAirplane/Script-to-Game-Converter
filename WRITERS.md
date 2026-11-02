@@ -28,7 +28,7 @@ kept; all of your words are.
 - **Recordings:** next to any line of dialogue, press **●** to record it with your microphone, or **♪** to attach an
   audio file (WAV, MP3, OGG; other formats are converted). Press ▶ to play it back. A line with a recording uses the
   recording instead of the voice.
-- Recordings go along with every export: the playable story, the Twine-free web page, and the Unity and Unreal
+- Recordings go along with every export: the playable story and the Unity and Unreal
   packages. **Save project** keeps them inside the project file too.
 
 ## Keeping your work

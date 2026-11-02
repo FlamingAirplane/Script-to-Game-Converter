@@ -289,7 +289,19 @@ export function App() {
         <div className="content" key={`page-${tab}`}>
           {tab === 'import' && <ImportView onConvert={convert} busy={busy} />}
           {processed && tab === 'review' && <ReviewView processed={{ ...processed, project: project! }} selected={selected} onSelect={setSelected} update={update} />}
-          {processed && tab === 'graph' && <GraphView graph={processed.analysis.graph} start={processed.project.project.startPassage} selected={selected} onOpen={open} endingsReached={processed.smoke?.endingsReached} />}
+          {processed && tab === 'graph' && (
+            <GraphView
+              graph={processed.analysis.graph}
+              start={processed.project.project.startPassage}
+              selected={selected}
+              onOpen={open}
+              endingsReached={processed.smoke?.endingsReached}
+              title={project!.project.title}
+              layout={project!.layout}
+              onMove={(id, pos) => update((d) => (d.layout = { ...d.layout, [id]: pos }))}
+              onResetLayout={() => update((d) => delete d.layout)}
+            />
+          )}
           {processed && tab === 'ink' && <InkView processed={processed} onOpen={open} />}
           {processed && tab === 'play' && <PlaytestView processed={processed} onOpen={open} />}
           {processed && tab === 'export' && <ExportView processed={processed} stale={stale} onState={setExportState} />}

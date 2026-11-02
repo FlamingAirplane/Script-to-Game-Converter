@@ -13,6 +13,10 @@ export function renamePassage(p: StoryProject, from: string, to: string): string
     for (const c of ps.choices) if (c.target === from) c.target = to;
   }
   if (p.project.startPassage === from) p.project.startPassage = to;
+  if (p.layout?.[from]) {
+    p.layout[to] = p.layout[from];
+    delete p.layout[from];
+  }
   return null;
 }
 
@@ -28,6 +32,7 @@ export function addPassage(p: StoryProject, afterId?: string): Passage {
 
 export function deletePassage(p: StoryProject, id: string) {
   p.passages = p.passages.filter((x) => x.id !== id);
+  if (p.layout) delete p.layout[id];
   // References are kept on purpose: the analyzer reports them as missing destinations to fix.
   if (p.project.startPassage === id) p.project.startPassage = p.passages[0]?.id ?? '';
 }

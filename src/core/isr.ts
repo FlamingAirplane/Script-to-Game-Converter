@@ -114,6 +114,8 @@ export interface StoryProject {
   passages: Passage[];
   // When importing Ink, the original Ink is passed through instead of regenerated.
   inkPassthrough?: string;
+  /** Passage positions dragged by hand on the story map (UI only; absent = automatic layout). */
+  layout?: Record<string, { x: number; y: number }>;
 }
 
 export function itemVar(itemId: string): string {
