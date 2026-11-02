@@ -8,6 +8,10 @@ One source-processing pipeline → one canonical story model (ISR) → one gener
 
 Everything runs locally. Scripts never leave your machine.
 
+**Try it online:** https://flamingairplane.github.io/Script-to-Game-Converter/ (the page runs entirely in your browser;
+nothing is uploaded). The site also offers the offline single-file edition for writers. It is rebuilt and redeployed by
+[`.github/workflows/pages.yml`](.github/workflows/pages.yml) on every push to `main`.
+
 ## Quick start
 
 ```bash

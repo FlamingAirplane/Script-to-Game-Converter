@@ -497,3 +497,5 @@ input[type='checkbox'], input[type='radio'] { accent-color: var(--ink); }
 .share-card p { flex: 1; margin: 0 0 10px; }
 .share-card .btn { align-self: flex-start; }
 @media (max-width: 760px) { .share-grid { grid-template-columns: 1fr; } }
+.offline-note { margin: -14px auto 24px; color: var(--faded); font-style: italic; }
+.offline-note a { color: var(--pen); }

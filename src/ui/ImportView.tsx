@@ -5,6 +5,10 @@ import { SUPPORTED_EXTENSIONS } from '../core/parsing/registry';
 import { SAMPLES } from '../samples';
 import { GettingStarted } from './GettingStarted';
 
+// The hosted site (GitHub Pages) also serves the offline writer edition next to index.html. Hidden in
+// development, where that file doesn't exist, and inside the offline edition itself (opened from file://).
+const OFFLINE_COPY_AVAILABLE = import.meta.env.PROD && typeof location !== 'undefined' && location.protocol.startsWith('http');
+
 const MODES: { id: ConversionMode; name: string; desc: string }[] = [
   { id: 'faithful', name: 'Faithful conversion', desc: 'Preserve content and order. Scenes become passages; nothing is invented.' },
   { id: 'adaptation', name: 'Interactive adaptation', desc: 'Propose choices and item-gated paths grounded in the text, for your approval.' },
@@ -45,6 +49,12 @@ export function ImportView({ onConvert, busy }: { onConvert: (inputs: SourceInpu
           Import a screenplay or structured prose, review what was understood, then export a validated Ink story packaged for Unity or Unreal Engine. Everything runs
           locally in your browser — nothing is uploaded.
         </p>
+        {OFFLINE_COPY_AVAILABLE && (
+          <p className="offline-note small">
+            Prefer to work offline? <a href="./Narrative-Bridge.html" download>Download Narrative Bridge as a single file</a> and double-click it any time ·{' '}
+            <a href="./WRITERS.md">guide for writers</a>
+          </p>
+        )}
         <GettingStarted />
       </section>
 
