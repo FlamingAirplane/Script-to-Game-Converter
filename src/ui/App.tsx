@@ -19,6 +19,7 @@ import { Logo } from './Logo';
 const ExportView = lazy(() => import('./ExportView').then((m) => ({ default: m.ExportView })));
 const PlaytestView = lazy(() => import('./PlaytestView').then((m) => ({ default: m.PlaytestView })));
 import { sfx } from './sfx';
+import { isTyping, plainKey, ShortcutSheet } from './Shortcuts';
 import { ThemeToggle } from './ThemeToggle';
 import { useProcessedStory } from './useProcessedStory';
 
@@ -65,6 +66,8 @@ export function App() {
   const [parseDiagnostics, setParseDiagnostics] = useState<Diagnostic[]>(initial?.parseDiagnostics ?? []);
   const [tab, setTab] = useState<Tab>(initial ? 'review' : 'import');
   const [soundOn, setSoundOn] = useState(sfx.enabled);
+  const [showKeys, setShowKeys] = useState(false);
+  const keys = useRef<{ tab: Tab; save: () => void | Promise<void>; find: () => void; step: (dir: 1 | -1) => void }>({ tab: 'import', save: () => {}, find: () => {}, step: () => {} });
   // A page turns whenever the chapter changes (not on first load).
   const prevTab = useRef(tab);
   useEffect(() => {
@@ -138,15 +141,34 @@ export function App() {
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       const mod = e.metaKey || e.ctrlKey;
-      const typing = (e.target as HTMLElement).closest('input, textarea, select');
-      if (mod && e.key.toLowerCase() === 'z' && !typing) {
+      const typing = isTyping(e);
+      const k = e.key.toLowerCase();
+      const h = keys.current;
+      if (mod && k === 'z' && !typing) {
         e.preventDefault();
         if (e.shiftKey) redo();
         else undo();
-      }
-      if (mod && /^[1-6]$/.test(e.key) && project) {
+      } else if (mod && /^[1-6]$/.test(e.key) && project) {
         e.preventDefault();
         setTab(TABS[+e.key - 1].id);
+      } else if (mod && k === 's' && project) {
+        e.preventDefault();
+        void h.save();
+      } else if (mod && k === 'o') {
+        e.preventDefault();
+        openRef.current?.click();
+      } else if (mod && k === 'f' && project) {
+        e.preventDefault();
+        h.find();
+      } else if (mod && e.key === '.' && project) {
+        e.preventDefault();
+        setShowDiag((v) => !v);
+      } else if (e.key === '?' && !typing && !mod) {
+        e.preventDefault();
+        setShowKeys(true);
+      } else if ((e.key === '[' || e.key === ']') && plainKey(e) && h.tab === 'review' && project) {
+        e.preventDefault();
+        h.step(e.key === ']' ? 1 : -1);
       }
     };
     window.addEventListener('keydown', onKey);
@@ -207,6 +229,27 @@ export function App() {
     }
   };
 
+  // Latest handlers for the keyboard shortcuts (the listener is registered once).
+  keys.current = {
+    tab,
+    save: saveProject,
+    find: () => {
+      if (tab === 'graph') return document.querySelector<HTMLInputElement>('.graph-search')?.focus();
+      if (tab !== 'review') setTab('review');
+      setTimeout(() => {
+        const panel = document.querySelector<HTMLDetailsElement>('.find-panel');
+        if (panel) panel.open = true;
+        panel?.querySelector<HTMLInputElement>('input')?.focus();
+      }, 50);
+    },
+    step: (dir: 1 | -1) => {
+      const ids = project?.passages.map((p) => p.id) ?? [];
+      const i = ids.indexOf(selected);
+      const next = ids[Math.max(0, Math.min(ids.length - 1, (i < 0 ? 0 : i) + dir))];
+      if (next) setSelected(next);
+    },
+  };
+
   const state: ConversionState = busy ? 'Parsing' : exportState ?? (stale || processed?.smokePending ? 'Validating' : processed?.state ?? 'Queued');
   const stageIndex = (() => {
     if (!processed) return -1;
@@ -248,6 +291,9 @@ export function App() {
         </button>
         <button className="btn tiny ghost" onClick={redo} disabled={!redoStack.current.length} title="Redo (⇧⌘Z)">
           ↷
+        </button>
+        <button className="btn tiny ghost" onClick={() => setShowKeys(true)} title="Keyboard shortcuts (?)">
+          ⌨ keys
         </button>
         <ThemeToggle />
         <button
@@ -333,6 +379,7 @@ export function App() {
         </div>
         {processed && showDiag && tab !== 'import' && <DiagnosticsPanel diagnostics={processed.diagnostics} project={project!} onJump={jump} onClose={() => setShowDiag(false)} />}
       </div>
+      {showKeys && <ShortcutSheet onClose={() => setShowKeys(false)} />}
     </div>
   );
 }

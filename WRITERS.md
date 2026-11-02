@@ -52,6 +52,11 @@ In the **Export** tab, under *Share without a game engine*:
 In the **Export** tab, choose Unity or Unreal, click **Build package**, then **Download .zip**. Send that one zip file to whoever is
 building the game. It includes your story, your original script and instructions for them.
 
+## Shortcuts
+
+Press **?** anywhere to see every keyboard shortcut. The handy ones: ⌘S (Ctrl+S on Windows) saves your project,
+⌘F finds text, and in Playtest the number keys pick a choice and Backspace undoes it.
+
 ## Troubleshooting
 
 - **The file opens as text or code instead of the app.** Right-click it → *Open With* → your web browser.

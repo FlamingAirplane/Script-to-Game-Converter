@@ -1,4 +1,5 @@
-import { useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { plainKey } from './Shortcuts';
 import type { StoryGraph } from '../core/analyzer';
 
 // The story map. Passages are laid out in columns by distance from the start (ordered to reduce
@@ -166,6 +167,23 @@ export function GraphView({
   // Fit when the map's overall size changes (not on every edit, so panning is preserved).
   // eslint-disable-next-line react-hooks/exhaustive-deps
   useLayoutEffect(fit, [Math.round(bounds.width), Math.round(bounds.height)]);
+
+  // Map keys: / find, F fit, + and − zoom.
+  const mapKeys = useRef({ fit, zoom: (f: number) => setView((v) => ({ ...v, k: Math.min(2.5, Math.max(0.2, v.k * f)) })) });
+  mapKeys.current = { fit, zoom: (f: number) => setView((v) => ({ ...v, k: Math.min(2.5, Math.max(0.2, v.k * f)) })) };
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (!plainKey(e)) return;
+      if (e.key === '/') document.querySelector<HTMLInputElement>('.graph-search')?.focus();
+      else if (e.key.toLowerCase() === 'f') mapKeys.current.fit();
+      else if (e.key === '+' || e.key === '=') mapKeys.current.zoom(1.2);
+      else if (e.key === '-' || e.key === '_') mapKeys.current.zoom(1 / 1.2);
+      else return;
+      e.preventDefault();
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, []);
 
   // Minimap geometry.
   const MW = 180;

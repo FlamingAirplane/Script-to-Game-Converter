@@ -7,6 +7,7 @@ import type { ProcessedStory } from '../core/pipeline';
 import { audioFileName, referencedAudio } from '../core/audio';
 import { Badge, Empty } from './common';
 import { sfx } from './sfx';
+import { plainKey } from './Shortcuts';
 import { VoiceQueue, type VoiceItem } from './voice';
 
 const VOICES_KEY = 'narrative-bridge.voices';
@@ -139,6 +140,23 @@ export function PlaytestView({ processed, onOpen }: { processed: ProcessedStory;
     if (isEnd) sfx.chime();
   }, [isEnd]);
 
+  // Playtest keys: 1–9 choose, Backspace undoes, R restarts, V toggles voices.
+  const actions = useRef<{ choose: (n: number) => void; undo: () => void; restart: () => void; voices: () => void } | null>(null);
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      const a = actions.current;
+      if (!a || !plainKey(e)) return;
+      if (/^[1-9]$/.test(e.key)) a.choose(+e.key - 1);
+      else if (e.key === 'Backspace') a.undo();
+      else if (e.key.toLowerCase() === 'r') a.restart();
+      else if (e.key.toLowerCase() === 'v') a.voices();
+      else return;
+      e.preventDefault();
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, []);
+
   if (!json)
     return (
       <div className="view">
@@ -184,6 +202,22 @@ export function PlaytestView({ processed, onOpen }: { processed: ProcessedStory;
     setNotice(`Set ${name} to ${String(value)}. The choices below were re-checked.`);
   };
 
+  const toggleVoices = () => {
+    const on = !voicesOn;
+    setVoicesOn(on);
+    if (!on) voiceQueue.current.stop();
+    try {
+      localStorage.setItem(VOICES_KEY, on ? 'on' : 'off');
+    } catch {
+      /* preference not saved */
+    }
+  };
+  actions.current = {
+    choose: (n) => choices[n] && choose(choices[n].index, choices[n].text),
+    undo,
+    restart,
+    voices: toggleVoices,
+  };
   const ended = choices.length === 0;
   // The drop cap opens the first real paragraph of prose, not a short line like "FADE IN:".
   const dropCapAt = lines.findIndex((l) => l.kind === 'text' && !l.speaker && !l.tags.includes('transition') && l.text.length >= 40);
@@ -199,16 +233,7 @@ export function PlaytestView({ processed, onOpen }: { processed: ProcessedStory;
               className={`btn tiny ${voicesOn ? 'ok' : ''}`}
               aria-pressed={voicesOn}
               title="Read dialogue aloud: recorded clips, or each character's voice from Story settings"
-              onClick={() => {
-                const on = !voicesOn;
-                setVoicesOn(on);
-                if (!on) voiceQueue.current.stop();
-                try {
-                  localStorage.setItem(VOICES_KEY, on ? 'on' : 'off');
-                } catch {
-                  /* preference not saved */
-                }
-              }}
+              onClick={toggleVoices}
             >
               {voicesOn ? '🔊 Voices on' : '🔈 Voices off'}
             </button>
