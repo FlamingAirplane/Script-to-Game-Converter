@@ -101,6 +101,13 @@ for (const [name, type] of [['WebKit', webkit], ['Chromium', chromium]]) {
       await page.reload();
       await page.getByRole('button', { name: /Archive Entrance/ }).waitFor({ timeout: 5000 });
     });
+    await step('imports a Final Draft (.fdx) file through the file picker', async () => {
+      await page.getByRole('button', { name: /Import/ }).first().click();
+      await page.locator('.dropzone input[type=file]').setInputFiles(fileURLToPath(new URL('../fixtures/archive.fdx', import.meta.url)));
+      await page.getByText('archive.fdx').waitFor({ timeout: 5000 });
+      await page.getByRole('button', { name: /^Convert/ }).click();
+      await page.locator('.passage-item', { hasText: 'Cliff Path' }).waitFor({ timeout: 5000 });
+    });
     if (errors.length) throw new Error(`console errors: ${errors.join(' | ')}`);
     console.log(`✓ ${name}: all checks passed (zip ${(zipBytes / 1024).toFixed(1)} KB)`);
   } catch (e) {

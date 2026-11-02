@@ -9,12 +9,13 @@ import { buildStory } from '../core/builder';
 import { sortDiagnostics, type Diagnostic } from '../core/diagnostics';
 import { ADAPTERS, buildPlayableHtml, buildTwee, ExportBlockedError, playableFileName, twineFileName, type EngineTarget } from '../core/export';
 import type { ConversionMode, StoryProject } from '../core/isr';
+import { BINARY_EXTENSIONS, prepareInput } from '../core/parsing/convert';
 import { processProject } from '../core/pipeline';
 
 const HELP = `Narrative Bridge — screenplays and prose → Ink → Unity / Unreal
 
 Usage:
-  narrative-bridge convert <files...> [--mode faithful|adaptation|structured] [--approve-all]
+  narrative-bridge convert <files...>          (.fountain .txt .md .ink .fdx .docx) [--mode faithful|adaptation|structured] [--approve-all]
                                       [--out story.ink] [--project story.nbproj.json] [--title "Title"]
   narrative-bridge validate <files... | project.nbproj.json>
   narrative-bridge export <files... | project.nbproj.json> --engine unity|unreal|web|twine --out <dir>
@@ -65,10 +66,13 @@ async function load(args: Args) {
     const project = JSON.parse(readFileSync(files[0], 'utf8')) as StoryProject;
     return processProject(project);
   }
-  const inputs = files.map((f) => {
-    if (!existsSync(f)) usage(`File not found: ${f}`);
-    return { fileName: basename(f), text: readFileSync(f, 'utf8') };
-  });
+  const inputs = await Promise.all(
+    files.map((f) => {
+      if (!existsSync(f)) usage(`File not found: ${f}`);
+      const binary = BINARY_EXTENSIONS.some((e) => f.toLowerCase().endsWith(e));
+      return prepareInput(basename(f), binary ? new Uint8Array(readFileSync(f)) : readFileSync(f, 'utf8'));
+    }),
+  );
   const mode = (args.mode as ConversionMode) ?? 'faithful';
   if (!['faithful', 'adaptation', 'structured'].includes(mode)) usage(`Unknown mode ${mode}`);
   const { project, diagnostics } = await buildStory(inputs, { mode, title: typeof args.title === 'string' ? args.title : undefined });

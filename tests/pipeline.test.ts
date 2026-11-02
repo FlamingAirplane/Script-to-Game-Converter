@@ -237,3 +237,151 @@ describe('share exports', () => {
     expect(() => buildTwee(processProject(project, diagnostics))).toThrow(ExportBlockedError);
   });
 });
+
+describe('Final Draft and Word import', () => {
+  const docx = async (paragraphs: [string, string][]) => {
+    const { default: JSZip } = await import('jszip');
+    const zip = new JSZip();
+    const p = (style: string, text: string) =>
+      `<w:p>${style ? `<w:pPr><w:pStyle w:val="${style}"/></w:pPr>` : ''}<w:r><w:t xml:space="preserve">${text}</w:t></w:r></w:p>`;
+    zip.file('word/document.xml', `<?xml version="1.0"?><w:document xmlns:w="w"><w:body>${paragraphs.map(([s, t]) => p(s, t)).join('')}</w:body></w:document>`);
+    zip.file('word/styles.xml', `<w:styles><w:style w:type="paragraph" w:styleId="Heading1"><w:name w:val="heading 1"/></w:style></w:styles>`);
+    return zip.generateAsync({ type: 'uint8array' });
+  };
+
+  it('converts an FDX screenplay, keeping every line, dual dialogue and the title page', async () => {
+    const { readFileSync } = await import('node:fs');
+    const { prepareInput } = await import('../src/core/parsing/convert');
+    const input = await prepareInput('archive.fdx', readFileSync('tests/fixtures/archive.fdx', 'utf8'));
+    expect(input.format).toBe('fountain');
+    expect(input.text).toMatch(/^Title: The Locked Archive\nAuthor: A. Writer/);
+    const { project, diagnostics } = await buildStory([input], { mode: 'faithful' });
+    expect(diagnostics.map((d) => d.code)).toContain('INPUT_CONVERTED');
+    expect(project.project.title).toBe('The Locked Archive');
+    expect(project.passages.map((p) => p.sceneHeading)).toEqual(['INT. ARCHIVE - NIGHT', 'EXT. CLIFF PATH - DAWN']);
+    const blocks = project.passages[0].content;
+    expect(blocks).toContainEqual(expect.objectContaining({ type: 'action', text: 'Rows of shelves vanish into the dark. MIRA lifts a lantern & squints.' }));
+    expect(blocks).toContainEqual(expect.objectContaining({ type: 'dialogue', parenthetical: 'whispering', text: 'The archive is locked. “Again.”' }));
+    expect(blocks).toContainEqual(expect.objectContaining({ type: 'action', text: 'THE DOOR CREAKS.' })); // caps action stays action
+    expect(blocks.filter((b) => b.type === 'dialogue')).toHaveLength(3);
+    expect(blocks).toContainEqual(expect.objectContaining({ type: 'transition', text: 'CUT TO:' }));
+    expect(project.characters.map((c) => c.displayName).sort()).toEqual(['MIRA', 'TOMAS']);
+    expect(processProject(project).compile.ok).toBe(true);
+  });
+
+  it('rejects files that are not Final Draft XML', async () => {
+    const { prepareInput } = await import('../src/core/parsing/convert');
+    await expect(prepareInput('x.fdx', '<html></html>')).rejects.toThrow(/not a Final Draft/);
+  });
+
+  it('converts a Word screenplay that uses screenplay styles', async () => {
+    const { prepareInput } = await import('../src/core/parsing/convert');
+    const bytes = await docx([
+      ['SceneHeading', 'INT. LIGHTHOUSE - NIGHT'],
+      ['Action', 'The lamp is dark.'],
+      ['Character', 'TOMAS'],
+      ['Parenthetical', 'weakly'],
+      ['Dialogue', 'The lens is gone.'],
+      ['Transition', 'FADE OUT.'],
+    ]);
+    const input = await prepareInput('script.docx', bytes);
+    expect(input.format).toBe('fountain');
+    const { project } = await buildStory([input], { mode: 'faithful' });
+    expect(project.passages[0].sceneHeading).toBe('INT. LIGHTHOUSE - NIGHT');
+    expect(project.passages[0].content).toContainEqual(expect.objectContaining({ type: 'dialogue', parenthetical: 'weakly', text: 'The lens is gone.' }));
+    expect(project.passages[0].content).toContainEqual(expect.objectContaining({ type: 'transition', text: 'FADE OUT.' }));
+  });
+
+  it('converts a Word prose document with headings into passages', async () => {
+    const { prepareInput } = await import('../src/core/parsing/convert');
+    const bytes = await docx([
+      ['Heading1', 'The Long Road'],
+      ['Heading2', 'Morning'],
+      ['', 'The sun came up over the hills.'],
+      ['Heading2', 'Evening'],
+      ['', '# not a heading, just text'],
+    ]);
+    const input = await prepareInput('novel.docx', bytes);
+    expect(input.format).toBe('md');
+    const { project } = await buildStory([input], { mode: 'faithful' });
+    expect(project.project.title).toBe('The Long Road');
+    expect(project.passages.map((p) => p.title)).toEqual(['Morning', 'Evening']);
+    expect(project.passages[1].content[0]).toMatchObject({ type: 'action', text: '# not a heading, just text' });
+  });
+});
+
+describe('background processing', () => {
+  it('the fast pass (skipSmoke) matches the full pass once playthroughs are attached', async () => {
+    const { attachSmoke } = await import('../src/core/pipeline');
+    const { smokeTestAsync } = await import('../src/core/validate');
+    for (const s of SAMPLES) {
+      const { project, diagnostics } = await build(s.text, s.fileName, s.mode);
+      const full = processProject(project, diagnostics);
+      const quick = processProject(project, diagnostics, { skipSmoke: true });
+      expect(quick.compile.ok).toBe(true);
+      expect(quick.smokePending).toBe(true);
+      expect(quick.diagnostics.filter((d) => d.exportBlocked)).toEqual([]);
+      const r = await smokeTestAsync(quick.compile.json!, project, { shouldContinue: () => true });
+      const merged = attachSmoke(quick, r!);
+      expect(merged.state).toBe(full.state);
+      expect(merged.smoke).toEqual(full.smoke);
+      expect(merged.diagnostics.map((d) => d.code)).toEqual(full.diagnostics.map((d) => d.code));
+    }
+  });
+
+  it('cancels playthroughs when a newer edit arrives', async () => {
+    const { smokeTestAsync } = await import('../src/core/validate');
+    const s = SAMPLES.find((x) => x.id === 'archive')!;
+    const { project } = await build(s.text, s.fileName, 'structured');
+    const quick = processProject(project, [], { skipSmoke: true });
+    const r = await smokeTestAsync(quick.compile.json!, project, { shouldContinue: () => false, sliceMs: 0 });
+    expect(r).toBeNull();
+  });
+
+  it('a linear story needs only one playthrough', () => {
+    const s = SAMPLES.find((x) => x.id === 'motel')!;
+    return build(s.text, s.fileName, 'faithful').then(({ project }) => {
+      const r = processProject(project);
+      expect(r.smoke).toMatchObject({ runs: 1, completedRuns: 1, stopReason: 'deterministic' });
+    });
+  });
+});
+
+describe('review tools', () => {
+  it('finds and replaces across titles, text, parentheticals and choices', async () => {
+    const { findText, replaceText } = await import('../src/ui/projectOps');
+    const s = SAMPLES.find((x) => x.id === 'archive')!;
+    const { project } = await build(s.text, s.fileName, 'structured');
+    const hits = findText(project, 'archive');
+    expect(hits.length).toBeGreaterThanOrEqual(4);
+    expect(hits.some((h) => h.where === 'choice')).toBe(true);
+    expect(findText(project, 'ARCHIVE', true)).toHaveLength(0);
+    const n = replaceText(project, 'archive', 'library');
+    expect(n).toBe(hits.length);
+    expect(findText(project, 'archive')).toHaveLength(0);
+    expect(project.passages.find((p) => p.id === 'archive_entry')!.choices[0]).toMatchObject({ text: 'Open the library', origin: 'user_authored' });
+    expect(processProject(project).compile.ok).toBe(true); // ids are untouched
+  });
+
+  it('merges a duplicate character into another', async () => {
+    const { mergeCharacter } = await import('../src/ui/projectOps');
+    const { project } = await build('INT. A - DAY\n\nMIRA\nHi.\n\nMIRA (V.O.)\nStill me.\n\nMIRA K.\nAnd me.\n', 'x.fountain');
+    const k = project.characters.find((c) => c.displayName === 'MIRA K.')!;
+    const mira = project.characters.find((c) => c.displayName === 'MIRA')!;
+    expect(mergeCharacter(project, k.id, mira.id)).toBe(1);
+    expect(project.characters.map((c) => c.displayName)).toEqual(['MIRA']);
+    expect(mira.aliases).toContain('MIRA K.');
+    expect(project.passages[0].content.filter((b) => b.type === 'dialogue').every((b) => b.type === 'dialogue' && b.speakerId === mira.id)).toBe(true);
+  });
+
+  it('reorders passages without changing the story flow', async () => {
+    const { movePassage } = await import('../src/ui/projectOps');
+    const s = SAMPLES.find((x) => x.id === 'motel')!;
+    const { project } = await build(s.text, s.fileName);
+    const before = processProject(project).smoke!.endingsReached;
+    expect(movePassage(project, 'parking_lot', -1)).toBe(true);
+    expect(project.passages.map((p) => p.id)).toEqual(['roadside_motel', 'parking_lot', 'motel_office']);
+    expect(movePassage(project, 'roadside_motel', -1)).toBe(false);
+    expect(processProject(project).smoke!.endingsReached).toEqual(before);
+  });
+});

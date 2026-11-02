@@ -159,7 +159,7 @@ export function PlaytestView({ processed, onOpen }: { processed: ProcessedStory;
             </button>
           </div>
         </div>
-        <div className="transcript">
+        <div className="transcript" tabIndex={0} aria-label="Story text">
           {lines.map((l, i) =>
             l.kind === 'choice' ? (
               <p key={i} className="t-choice">
@@ -266,11 +266,19 @@ export function PlaytestView({ processed, onOpen }: { processed: ProcessedStory;
           </div>
           <p className="muted small">Edit the story and try loading: saves from another story version are refused.</p>
         </section>
+        {processed.smokePending && (
+          <section>
+            <h3>Automated playthroughs</h3>
+            <p className="muted small">Running…</p>
+          </section>
+        )}
         {smoke && (
           <section>
             <h3>Automated playthroughs</h3>
             <p className="small">
               <strong>{smoke.completedRuns}</strong>/{smoke.runs} reached an ending · {smoke.visited.length}/{processed.project.passages.length} passages visited
+              {smoke.stopReason === 'deterministic' && <span className="muted"> · the story has no choices, so one playthrough covers it</span>}
+              {smoke.stopReason === 'no-new-coverage' && <span className="muted"> · stopped once more runs found nothing new</span>}
             </p>
             <ul className="endings">
               {Object.entries(smoke.endingsReached).map(([id, n]) => (

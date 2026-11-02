@@ -38,6 +38,7 @@ const TITLES: Record<string, string> = {
   ITEM_AUTO_DECLARED: 'An item was created for you because the script uses it.',
   VAR_AUTO_DECLARED: 'A variable was created for you because the script uses it.',
   INPUT_FORMAT_SNIFFED: 'Your file’s format was recognised from its contents.',
+  INPUT_CONVERTED: 'Your file was converted so Narrative Bridge can read it. All the words are kept.',
   INPUT_TOO_LARGE: 'This file is too large (over 5 MB).',
   INPUT_BINARY: 'This file isn’t plain text.',
   INPUT_ENCODING: 'Some characters in this file couldn’t be read.',

@@ -40,8 +40,8 @@ export function GettingStarted() {
       </div>
       <ol className="guide-steps">
         <li>
-          <strong>Bring your script.</strong> Drag in a screenplay (a Fountain file, or a plain-text .txt export from your screenwriting app), a
-          Markdown file, or paste text below. Not sure? Try a sample at the bottom first.
+          <strong>Bring your script.</strong> Drag in a screenplay (Final Draft, Word, Fountain or a plain-text export) or a prose document
+          (Word or Markdown), or paste text below. Not sure? Try a sample at the bottom first.
         </li>
         <li>
           <strong>Pick how interactive it should be.</strong> <em>Faithful</em> keeps your story exactly as written. <em>Interactive adaptation</em>{' '}

@@ -106,10 +106,10 @@ export function GraphView({ graph, start, selected, onOpen, endingsReached }: { 
           <span className="lg-line fallback" /> divert / fallback
         </span>
         <span className="spacer" />
-        <button className="btn tiny" onClick={() => setView((v) => ({ ...v, k: Math.min(2.5, v.k * 1.2) }))}>
+        <button className="btn tiny" aria-label="Zoom in" onClick={() => setView((v) => ({ ...v, k: Math.min(2.5, v.k * 1.2) }))}>
           +
         </button>
-        <button className="btn tiny" onClick={() => setView((v) => ({ ...v, k: Math.max(0.2, v.k / 1.2) }))}>
+        <button className="btn tiny" aria-label="Zoom out" onClick={() => setView((v) => ({ ...v, k: Math.max(0.2, v.k / 1.2) }))}>
           −
         </button>
         <button className="btn tiny" onClick={fit}>
@@ -119,6 +119,8 @@ export function GraphView({ graph, start, selected, onOpen, endingsReached }: { 
       <svg
         ref={svg}
         className="graph"
+        role="group"
+        aria-label={`Story map: ${graph.nodes.length} passages and ${graph.edges.length} links. Use Tab to move between passages and Enter to open one.`}
         onWheel={(e) => {
           const r = svg.current!.getBoundingClientRect();
           const mx = e.clientX - r.left;
@@ -204,6 +206,17 @@ export function GraphView({ graph, start, selected, onOpen, endingsReached }: { 
                 className={`node ${n.isStart ? 'start' : ''} ${n.isEnding ? 'ending' : ''} ${n.reachable ? '' : 'unreachable'} ${selected === n.id ? 'selected' : ''} origin-${n.origin}`}
                 transform={`translate(${p.x},${p.y})`}
                 onClick={() => onOpen(n.id)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' || e.key === ' ') {
+                    e.preventDefault();
+                    onOpen(n.id);
+                  }
+                }}
+                onFocus={() => setHover(n.id)}
+                onBlur={() => setHover(null)}
+                tabIndex={0}
+                role="button"
+                aria-description={`${n.isStart ? 'Start' : 'Passage'}${n.isEnding ? ', ending' : ''}${n.reachable ? '' : ', unreachable'}. ${graph.edges.filter((e) => e.from === n.id && !e.pending).length} outgoing links.`}
                 onPointerEnter={() => setHover(n.id)}
                 onPointerLeave={() => setHover(null)}
               >

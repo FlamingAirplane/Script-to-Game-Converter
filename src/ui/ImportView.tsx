@@ -1,7 +1,10 @@
 import { useRef, useState } from 'react';
 import type { SourceInput } from '../core/builder';
 import type { ConversionMode } from '../core/isr';
+import { BINARY_EXTENSIONS, CONVERTED_EXTENSIONS, prepareInput } from '../core/parsing/convert';
 import { SUPPORTED_EXTENSIONS } from '../core/parsing/registry';
+
+const ACCEPTED = [...SUPPORTED_EXTENSIONS, ...CONVERTED_EXTENSIONS];
 import { SAMPLES } from '../samples';
 import { GettingStarted } from './GettingStarted';
 
@@ -29,13 +32,20 @@ export function ImportView({ onConvert, busy }: { onConvert: (inputs: SourceInpu
     if (!list) return;
     setError('');
     const next: SourceInput[] = [];
+    const problems: string[] = [];
     for (const f of Array.from(list)) {
-      if (/\.(docx|fdx|pdf)$/i.test(f.name)) {
-        setError(`${f.name}: DOCX, FDX and PDF support is planned. Export the script as Fountain or plain text for now.`);
+      if (/\.(pdf|doc)$/i.test(f.name)) {
+        problems.push(`${f.name}: ${/\.doc$/i.test(f.name) ? 'old .doc files can’t be read — re-save it as .docx in Word.' : 'PDF isn’t supported yet — export the script as Final Draft, Word, Fountain or plain text.'}`);
         continue;
       }
-      next.push({ fileName: f.name, text: await f.text() });
+      try {
+        const binary = BINARY_EXTENSIONS.some((e) => f.name.toLowerCase().endsWith(e));
+        next.push(await prepareInput(f.name, binary ? new Uint8Array(await f.arrayBuffer()) : await f.text()));
+      } catch (e) {
+        problems.push(`${f.name}: ${e instanceof Error ? e.message : String(e)}`);
+      }
     }
+    if (problems.length) setError(problems.join(' '));
     setFiles((cur) => [...cur, ...next]);
   };
 
@@ -74,12 +84,18 @@ export function ImportView({ onConvert, busy }: { onConvert: (inputs: SourceInpu
               addFiles(e.dataTransfer.files);
             }}
             onClick={() => input.current?.click()}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' || e.key === ' ') {
+                e.preventDefault();
+                input.current?.click();
+              }
+            }}
             role="button"
             tabIndex={0}
           >
             <strong>Drop files here</strong> or click to browse
-            <span className="muted small">{SUPPORTED_EXTENSIONS.join(' ')}</span>
-            <input ref={input} type="file" multiple hidden accept={[...SUPPORTED_EXTENSIONS, '.text'].join(',')} onChange={(e) => addFiles(e.target.files)} />
+            <span className="muted small">Final Draft, Word, Fountain, Markdown, Ink or plain text</span>
+            <input ref={input} type="file" multiple hidden accept={[...ACCEPTED, '.text'].join(',')} onChange={(e) => addFiles(e.target.files)} />
           </div>
           {error && <p className="error-text">{error}</p>}
           {files.length > 0 && (
@@ -100,7 +116,7 @@ export function ImportView({ onConvert, busy }: { onConvert: (inputs: SourceInpu
               <label className="muted small">…or paste text as</label>
               <input className="input mono small" value={pasteName} onChange={(e) => setPasteName(e.target.value)} aria-label="File name for pasted text" />
             </div>
-            <textarea className="textarea mono" rows={9} placeholder={'INT. ARCHIVE - NIGHT\n\nMIRA\nThe archive is locked.'} value={paste} onChange={(e) => setPaste(e.target.value)} />
+            <textarea className="textarea mono" rows={9} aria-label="Script text" placeholder={'INT. ARCHIVE - NIGHT\n\nMIRA\nThe archive is locked.'} value={paste} onChange={(e) => setPaste(e.target.value)} />
           </div>
         </section>
 

@@ -1,0 +1,37 @@
+# When a GitHub release is published, build the offline writer edition from that release's tag
+# and attach it (plus WRITERS.md) so the download always matches the release.
+name: Attach writer edition to release
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Release tag to rebuild and re-upload (e.g. v0.2.0)
+        required: true
+
+permissions:
+  contents: write
+
+jobs:
+  attach:
+    runs-on: ubuntu-latest
+    env:
+      TAG: ${{ github.event.release.tag_name || inputs.tag }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ env.TAG }}
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - run: npm test
+      - run: npm run build:single
+      - name: Upload to the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release upload "$TAG" "release/Narrative-Bridge.html#Narrative Bridge (double-click to open)" "WRITERS.md#Guide for writers" --clobber

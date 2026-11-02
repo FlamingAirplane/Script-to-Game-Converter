@@ -4,7 +4,7 @@ import { blocksExport, diag, type Diagnostic } from './diagnostics';
 import { generateInk, type GeneratedInk } from './inkgen';
 import type { StoryProject } from './isr';
 import { validateSchema } from './schema';
-import { compileInk, smokeTest, type CompileResult, type SmokeTestReport } from './validate';
+import { compileInk, smokeTest, type CompileResult, type SmokeResult, type SmokeTestReport } from './validate';
 
 export type ConversionState =
   | 'Queued'
@@ -26,10 +26,26 @@ export interface ProcessedStory {
   diagnostics: Diagnostic[];
   state: ConversionState;
   exportBlocked: boolean;
+  /** True while the automated playthroughs for this version are still running (UI only). */
+  smokePending?: boolean;
 }
 
-/** Analyse → generate → compile → smoke test. Pure and synchronous; safe to re-run on every edit. */
-export function processProject(project: StoryProject, parseDiagnostics: Diagnostic[] = [], opts: { smokeRuns?: number } = {}): ProcessedStory {
+function withState<T extends Omit<ProcessedStory, 'state' | 'exportBlocked'>>(p: T): T & Pick<ProcessedStory, 'state' | 'exportBlocked'> {
+  const exportBlocked = blocksExport(p.diagnostics);
+  const needsReview = p.diagnostics.some((d) => d.severity === 'review');
+  return { ...p, exportBlocked, state: exportBlocked ? 'Failed' : needsReview ? 'ReviewRequired' : 'Succeeded' };
+}
+
+/** Adds automated-playthrough results to a story processed with `skipSmoke`. */
+export function attachSmoke(p: ProcessedStory, r: SmokeResult): ProcessedStory {
+  return withState({ ...p, smoke: r.report, smokePending: false, diagnostics: [...p.diagnostics, ...r.diagnostics] });
+}
+
+/**
+ * Analyse → generate → compile → smoke test. Pure and synchronous. With `skipSmoke` it returns the
+ * fast part only (the UI then runs playthroughs separately, see attachSmoke).
+ */
+export function processProject(project: StoryProject, parseDiagnostics: Diagnostic[] = [], opts: { smokeRuns?: number; skipSmoke?: boolean } = {}): ProcessedStory {
   const schemaDiagnostics = validateSchema(project);
   const analysis = analyze(project);
   const generated = generateInk(project);
@@ -37,17 +53,16 @@ export function processProject(project: StoryProject, parseDiagnostics: Diagnost
   let smoke: SmokeTestReport | undefined;
   const runtime: Diagnostic[] = [];
   if (compile.ok && compile.json) {
-    const r = smokeTest(compile.json, project, { runs: opts.smokeRuns ?? 120 });
-    smoke = r.report;
-    runtime.push(...r.diagnostics);
+    if (!opts.skipSmoke) {
+      const r = smokeTest(compile.json, project, { runs: opts.smokeRuns ?? 120 });
+      smoke = r.report;
+      runtime.push(...r.diagnostics);
+    }
   } else if (!compile.diagnostics.length) {
     runtime.push(diag('INK_COMPILE_ERROR', 'error', 'ink_compilation', 'The Ink compiler failed without a message.'));
   }
   const diagnostics = [...parseDiagnostics, ...schemaDiagnostics, ...analysis.diagnostics, ...compile.diagnostics, ...runtime];
-  const exportBlocked = blocksExport(diagnostics);
-  const needsReview = diagnostics.some((d) => d.severity === 'review');
-  const state: ConversionState = exportBlocked ? 'Failed' : needsReview ? 'ReviewRequired' : 'Succeeded';
-  return { project, analysis, generated, compile, smoke, diagnostics, state, exportBlocked };
+  return withState({ project, analysis, generated, compile, smoke, diagnostics, smokePending: !!opts.skipSmoke && compile.ok });
 }
 
 export async function convert(inputs: SourceInput[], options: BuildOptions): Promise<ProcessedStory> {
