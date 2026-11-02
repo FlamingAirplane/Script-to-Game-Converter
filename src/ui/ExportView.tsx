@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { isPinnedRef } from '../core/export/common';
-import { ADAPTERS, buildPlayableHtml, buildTwee, ExportBlockedError, playableFileName, twineFileName, zipExport, type EngineTarget, type ExportResult } from '../core/export';
+import { ADAPTERS, buildPlayableHtml, buildRecordingScript, recordingScriptFileName, buildTwee, ExportBlockedError, playableFileName, twineFileName, zipExport, type EngineTarget, type ExportResult } from '../core/export';
 // The engine-only Ink runtime (~125 KB), embedded in playable-story exports.
 import inkRuntime from '../../node_modules/inkjs/dist/ink.js?raw';
 import { referencedAudio } from '../core/audio';
@@ -232,6 +232,16 @@ function ShareSection({ processed, stale }: { processed: ProcessedStory; stale: 
             }
           >
             Download playable story (.html)
+          </button>
+        </div>
+        <div className="card share-card">
+          <h2>Recording script</h2>
+          <p className="muted small">
+            Every line of dialogue in story order, by character, with the file name each recording should be saved as. Opens in Excel, Numbers or
+            Google Sheets, ready for a voice session.
+          </p>
+          <button className="btn" disabled={stale} onClick={() => run(() => download(recordingScriptFileName(processed.project), buildRecordingScript(processed.project), 'text/csv'))}>
+            Download recording script (.csv)
           </button>
         </div>
         <div className="card share-card">

@@ -32,7 +32,17 @@ interface Snapshot {
   segment: Segment | null;
 }
 
-export function PlaytestView({ processed, onOpen }: { processed: ProcessedStory; onOpen: (id: string) => void }) {
+export function PlaytestView({
+  processed,
+  onOpen,
+  dialogueOnly,
+  onDialogueOnly,
+}: {
+  processed: ProcessedStory;
+  onOpen: (id: string) => void;
+  dialogueOnly: boolean;
+  onDialogueOnly: (on: boolean) => void;
+}) {
   const json = processed.compile.json;
   const version = fnv1a(processed.generated.ink);
   const story = useRef<Story | null>(null);
@@ -237,6 +247,9 @@ export function PlaytestView({ processed, onOpen }: { processed: ProcessedStory;
             >
               {voicesOn ? '🔊 Voices on' : '🔈 Voices off'}
             </button>
+            <button className={`btn tiny ${dialogueOnly ? 'ok' : ''}`} aria-pressed={dialogueOnly} title="Show only dialogue (D)" onClick={() => onDialogueOnly(!dialogueOnly)}>
+              {dialogueOnly ? 'dialogue only' : 'all text'}
+            </button>
             <button className="btn tiny" onClick={undo} disabled={!history.length}>
               ↶ Undo choice
             </button>
@@ -247,6 +260,7 @@ export function PlaytestView({ processed, onOpen }: { processed: ProcessedStory;
         </div>
         <div className="transcript" tabIndex={0} aria-label="Story text">
           {lines.map((l, i) =>
+            dialogueOnly && l.kind === 'text' && !l.speaker ? null :
             l.kind === 'choice' ? (
               <p key={i} className="t-choice">
                 › {l.text}

@@ -7,7 +7,7 @@ import { fileURLToPath } from 'node:url';
 import { reviewAll } from '../core/adapt';
 import { buildStory } from '../core/builder';
 import { sortDiagnostics, type Diagnostic } from '../core/diagnostics';
-import { ADAPTERS, buildPlayableHtml, buildTwee, ExportBlockedError, playableFileName, twineFileName, type EngineTarget } from '../core/export';
+import { ADAPTERS, buildPlayableHtml, buildRecordingScript, recordingScriptFileName, buildTwee, ExportBlockedError, playableFileName, twineFileName, type EngineTarget } from '../core/export';
 import type { ConversionMode, StoryProject } from '../core/isr';
 import { base64ToBytes, type AudioAssets } from '../core/audio';
 import { BINARY_EXTENSIONS, prepareInput } from '../core/parsing/convert';
@@ -19,7 +19,7 @@ Usage:
   narrative-bridge convert <files...>          (.fountain .txt .md .ink .fdx .docx) [--mode faithful|adaptation|structured] [--approve-all]
                                       [--out story.ink] [--project story.nbproj.json] [--title "Title"]
   narrative-bridge validate <files... | project.nbproj.json>
-  narrative-bridge export <files... | project.nbproj.json> --engine unity|unreal|web|twine --out <dir>
+  narrative-bridge export <files... | project.nbproj.json> --engine unity|unreal|web|twine|script --out <dir>
                                       [--name ProjectName] [--engine-version 2022.3.62f1] [--ref <tag|sha>] [--no-demo]
   narrative-bridge doctor [--engine unity|unreal]
 
@@ -125,15 +125,20 @@ async function main() {
       process.exit(story.exportBlocked ? 1 : 0);
     }
     case 'export': {
-      const engine = args.engine as EngineTarget | 'web' | 'twine';
+      const engine = args.engine as EngineTarget | 'web' | 'twine' | 'script';
       if (typeof args.out !== 'string') usage('--out <dir> is required');
-      if (engine === 'web' || engine === 'twine') {
+      if (engine === 'web' || engine === 'twine' || engine === 'script') {
         // Single-file exports that need no game engine.
         const story = await load(args);
         summary(story);
         try {
           const runtime = () => readFileSync(fileURLToPath(new URL('../../node_modules/inkjs/dist/ink.js', import.meta.url)), 'utf8');
-          const [name, content] = engine === 'web' ? [playableFileName(story), buildPlayableHtml(story, runtime(), audioAssets)] : [twineFileName(story), buildTwee(story)];
+          const [name, content] =
+            engine === 'web'
+              ? [playableFileName(story), buildPlayableHtml(story, runtime(), audioAssets)]
+              : engine === 'script'
+                ? [recordingScriptFileName(story.project), buildRecordingScript(story.project)]
+                : [twineFileName(story), buildTwee(story)];
           const outDir = resolve(args.out);
           mkdirSync(outDir, { recursive: true });
           writeFileSync(join(outDir, name), content);
@@ -147,7 +152,7 @@ async function main() {
           throw e;
         }
       }
-      if (!ADAPTERS[engine]) usage('--engine must be unity, unreal, web or twine');
+      if (!ADAPTERS[engine]) usage('--engine must be unity, unreal, web, twine or script');
       const adapter = ADAPTERS[engine];
       const story = await load(args);
       summary(story);

@@ -12,7 +12,21 @@ type Update = (fn: (draft: StoryProject) => void, group?: string) => void;
 
 export const STORY_SETTINGS = '__story__';
 
-export function ReviewView({ processed, selected, onSelect, update }: { processed: ProcessedStory; selected: string; onSelect: (id: string) => void; update: Update }) {
+export function ReviewView({
+  processed,
+  selected,
+  onSelect,
+  update,
+  dialogueOnly,
+  onDialogueOnly,
+}: {
+  processed: ProcessedStory;
+  selected: string;
+  onSelect: (id: string) => void;
+  update: Update;
+  dialogueOnly: boolean;
+  onDialogueOnly: (on: boolean) => void;
+}) {
   const project = processed.project;
   const [filter, setFilter] = useState('');
   const [showSource, setShowSource] = useState(true);
@@ -115,6 +129,8 @@ export function ReviewView({ processed, selected, onSelect, update }: { processe
             }}
             showSource={showSource}
             toggleSource={() => setShowSource(!showSource)}
+            dialogueOnly={dialogueOnly}
+            onDialogueOnly={onDialogueOnly}
           />
         ) : (
           <p className="muted">Select a passage.</p>
@@ -170,6 +186,8 @@ function PassageEditor({
   onFocusLine,
   showSource,
   toggleSource,
+  dialogueOnly,
+  onDialogueOnly,
 }: {
   passage: Passage;
   processed: ProcessedStory;
@@ -178,6 +196,8 @@ function PassageEditor({
   onFocusLine: (line: number) => void;
   showSource: boolean;
   toggleSource: () => void;
+  dialogueOnly: boolean;
+  onDialogueOnly: (on: boolean) => void;
 }) {
   const project = processed.project;
   const [idDraft, setIdDraft] = useState(passage.id);
@@ -219,6 +239,9 @@ function PassageEditor({
           <ProvenanceBadge origin={passage.origin} />
           {passage.sceneHeading && <span className="mono muted small">{passage.sceneHeading}</span>}
           <span className="spacer" />
+          <button className={`btn tiny ${dialogueOnly ? 'ok' : ''}`} aria-pressed={dialogueOnly} title="Show only dialogue (D)" onClick={() => onDialogueOnly(!dialogueOnly)}>
+            {dialogueOnly ? 'dialogue only' : 'all content'}
+          </button>
           {passage.source && (
             <button className="btn tiny" onClick={toggleSource}>
               {showSource ? 'Hide source' : 'Show source'}
@@ -261,7 +284,15 @@ function PassageEditor({
       <section className="blocks">
         <h3>Content</h3>
         {passage.content.length === 0 && <p className="muted small">No narrative content.</p>}
-        {passage.content.map((b, i) => (
+        {dialogueOnly && passage.content.some((b) => b.type !== 'dialogue') && (
+          <p className="muted small dialogue-only-note">
+            Showing dialogue only — {passage.content.filter((b) => b.type !== 'dialogue').length} other block(s) hidden.{' '}
+            <button className="link small" onClick={() => onDialogueOnly(false)}>
+              Show everything
+            </button>
+          </p>
+        )}
+        {passage.content.map((b, i) => (dialogueOnly && b.type !== 'dialogue' ? null : (
           <BlockRow
             key={i}
             block={b}
@@ -277,7 +308,7 @@ function PassageEditor({
               })
             }
           />
-        ))}
+        )))}
         <div className="row">
           <button className="btn tiny" onClick={() => edit((p) => p.content.push({ type: 'action', text: 'New line of narration.', origin: 'user_authored' }))}>
             + Narration

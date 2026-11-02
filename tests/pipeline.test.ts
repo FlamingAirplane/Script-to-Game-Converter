@@ -431,3 +431,17 @@ describe('dialogue audio', () => {
     expect(html).toContain('"voiceName":"Samantha"');
   });
 });
+
+describe('recording script', () => {
+  it('lists every line of dialogue with character, direction and clip file, CSV-escaped', async () => {
+    const { buildRecordingScript } = await import('../src/core/export');
+    const { project } = await build('INT. A - DAY\n\nMIRA\n(quietly)\nHello, "friend".\n\nTOMAS\nHi.\n', 'x.fountain');
+    const line = project.passages[0].content.find((b) => b.type === 'dialogue')!;
+    if (line.type === 'dialogue') line.audio = { id: 'vo_x', name: 't.wav', mime: 'audio/wav' };
+    const csv = buildRecordingScript(project);
+    const rows = csv.replace(/^﻿/, '').trim().split('\r\n');
+    expect(rows[0]).toBe('#,Passage,Character,Direction,Line,Clip,Recorded');
+    expect(rows[1]).toBe('1,A,MIRA,quietly,"Hello, ""friend"".",vo_x.wav,yes');
+    expect(rows[2]).toBe('2,A,TOMAS,,Hi.,a_002.wav,');
+  });
+});

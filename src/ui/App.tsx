@@ -67,7 +67,23 @@ export function App() {
   const [tab, setTab] = useState<Tab>(initial ? 'review' : 'import');
   const [soundOn, setSoundOn] = useState(sfx.enabled);
   const [showKeys, setShowKeys] = useState(false);
-  const keys = useRef<{ tab: Tab; save: () => void | Promise<void>; find: () => void; step: (dir: 1 | -1) => void }>({ tab: 'import', save: () => {}, find: () => {}, step: () => {} });
+  // "Dialogue only": hide narration, transitions, notes and effects in Review and Playtest.
+  const [dialogueOnly, setDialogueOnlyState] = useState(() => {
+    try {
+      return localStorage.getItem('narrative-bridge.dialogue-only') === 'on';
+    } catch {
+      return false;
+    }
+  });
+  const setDialogueOnly = (on: boolean) => {
+    setDialogueOnlyState(on);
+    try {
+      localStorage.setItem('narrative-bridge.dialogue-only', on ? 'on' : 'off');
+    } catch {
+      /* preference not saved */
+    }
+  };
+  const keys = useRef<{ tab: Tab; save: () => void | Promise<void>; find: () => void; step: (dir: 1 | -1) => void; dialogueOnly: () => void }>({ tab: 'import', save: () => {}, find: () => {}, step: () => {}, dialogueOnly: () => {} });
   // A page turns whenever the chapter changes (not on first load).
   const prevTab = useRef(tab);
   useEffect(() => {
@@ -166,6 +182,9 @@ export function App() {
       } else if (e.key === '?' && !typing && !mod) {
         e.preventDefault();
         setShowKeys(true);
+      } else if (e.key.toLowerCase() === 'd' && plainKey(e) && (h.tab === 'review' || h.tab === 'play')) {
+        e.preventDefault();
+        h.dialogueOnly();
       } else if ((e.key === '[' || e.key === ']') && plainKey(e) && h.tab === 'review' && project) {
         e.preventDefault();
         h.step(e.key === ']' ? 1 : -1);
@@ -232,6 +251,7 @@ export function App() {
   // Latest handlers for the keyboard shortcuts (the listener is registered once).
   keys.current = {
     tab,
+    dialogueOnly: () => setDialogueOnly(!dialogueOnly),
     save: saveProject,
     find: () => {
       if (tab === 'graph') return document.querySelector<HTMLInputElement>('.graph-search')?.focus();
@@ -357,7 +377,7 @@ export function App() {
         <div className="content" key={`page-${tab}`}>
           <Suspense fallback={<p className="muted pad">Turning the page…</p>}>
           {tab === 'import' && <ImportView onConvert={convert} busy={busy} />}
-          {processed && tab === 'review' && <ReviewView processed={{ ...processed, project: project! }} selected={selected} onSelect={setSelected} update={update} />}
+          {processed && tab === 'review' && <ReviewView processed={{ ...processed, project: project! }} selected={selected} onSelect={setSelected} update={update} dialogueOnly={dialogueOnly} onDialogueOnly={setDialogueOnly} />}
           {processed && tab === 'graph' && (
             <GraphView
               graph={processed.analysis.graph}
@@ -372,7 +392,7 @@ export function App() {
             />
           )}
           {processed && tab === 'ink' && <InkView processed={processed} onOpen={open} />}
-          {processed && tab === 'play' && <PlaytestView processed={processed} onOpen={open} />}
+          {processed && tab === 'play' && <PlaytestView processed={processed} onOpen={open} dialogueOnly={dialogueOnly} onDialogueOnly={setDialogueOnly} />}
           {processed && tab === 'export' && <ExportView processed={processed} stale={stale} onState={setExportState} />}
           </Suspense>
           {(tab === 'import' || tab === 'export') && <footer className="folio">— {TABS.find((t) => t.id === tab)!.numeral.toLowerCase()} —</footer>}

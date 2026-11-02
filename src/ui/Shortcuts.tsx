@@ -29,7 +29,13 @@ const GROUPS: { title: string; keys: [string, string][] }[] = [
       ['?', 'This card'],
     ],
   },
-  { title: 'Review', keys: [['[  /  ]', 'Previous / next passage']] },
+  {
+    title: 'Review',
+    keys: [
+      ['[  /  ]', 'Previous / next passage'],
+      ['D', 'Dialogue only (also in Playtest)'],
+    ],
+  },
   {
     title: 'Playtest',
     keys: [

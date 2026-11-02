@@ -16,3 +16,4 @@ export async function zipExport(result: ExportResult): Promise<Uint8Array> {
 
 export { buildPlayableHtml, playableFileName } from './playable';
 export { buildTwee, twineFileName } from './twine';
+export { buildRecordingScript, recordingScriptFileName } from './script';

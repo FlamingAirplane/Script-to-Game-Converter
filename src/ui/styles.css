@@ -595,7 +595,7 @@ input[type='checkbox'], input[type='radio'] { accent-color: var(--ink); }
 .edge-label text { fill: var(--ink); font: italic 12.5px var(--serif); }
 .section-title { font-size: 13px; font-variant: small-caps; text-transform: lowercase; letter-spacing: 0.16em; color: var(--rubric); font-weight: 600; margin: 4px 0 12px; }
 .section-title:not(:first-child) { margin-top: 30px; }
-.share-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; }
+.share-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 18px; }
 .share-card { display: flex; flex-direction: column; gap: 6px; }
 .share-card p { flex: 1; margin: 0 0 10px; }
 .share-card .btn { align-self: flex-start; }
@@ -788,3 +788,8 @@ input[type='checkbox'], input[type='radio'] { accent-color: var(--ink); }
 .key-row dd { margin: 0; color: var(--ink-2); }
 kbd { font: 12.5px var(--mono); padding: 1px 6px; border: 1px solid var(--rule-2); border-bottom-width: 2px; border-radius: 3px; background: var(--paper); color: var(--ink); }
 @media (max-width: 760px) { .sheet-grid { grid-template-columns: 1fr; } }
+
+.dialogue-only-note { margin: 0 0 8px; font-style: italic; }
+.stage-head { gap: 12px; }
+.stage-head h2 { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+.stage-head .row { flex: none; }
