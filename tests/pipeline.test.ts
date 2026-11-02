@@ -192,3 +192,14 @@ describe('engine exports', () => {
     });
   }
 });
+
+describe('hashing', () => {
+  it('pure SHA-256 matches Web Crypto (used when opened from file://)', async () => {
+    const { sha256 } = await import('../src/core/hash');
+    for (const text of ['', 'abc', 'Café ☕ '.repeat(40), 'x'.repeat(1000)]) {
+      const data = new TextEncoder().encode(text);
+      const expected = Buffer.from(await crypto.subtle.digest('SHA-256', data)).toString('hex');
+      expect(Buffer.from(sha256(data)).toString('hex')).toBe(expected);
+    }
+  });
+});

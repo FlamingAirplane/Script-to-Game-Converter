@@ -16,6 +16,16 @@ npm run dev        # web app at http://localhost:5173
 npm test           # unit, golden-file, compiler, runtime and export tests
 ```
 
+### For writers: a single file, no install
+
+```bash
+npm run build:single   # → release/Narrative Bridge.html
+```
+
+This produces one self-contained HTML file (~0.6 MB) with all scripts and styles inlined. Writers double-click it to run the
+whole app offline in any modern browser. Nothing is installed and nothing is uploaded. Send it together with
+[WRITERS.md](WRITERS.md), or attach it to a GitHub release. The `release/` folder is git-ignored, so rebuild the file for each release.
+
 CLI:
 
 ```bash

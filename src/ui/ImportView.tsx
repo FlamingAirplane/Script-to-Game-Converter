@@ -3,6 +3,7 @@ import type { SourceInput } from '../core/builder';
 import type { ConversionMode } from '../core/isr';
 import { SUPPORTED_EXTENSIONS } from '../core/parsing/registry';
 import { SAMPLES } from '../samples';
+import { GettingStarted } from './GettingStarted';
 
 const MODES: { id: ConversionMode; name: string; desc: string }[] = [
   { id: 'faithful', name: 'Faithful conversion', desc: 'Preserve content and order. Scenes become passages; nothing is invented.' },
@@ -44,6 +45,7 @@ export function ImportView({ onConvert, busy }: { onConvert: (inputs: SourceInpu
           Import a screenplay or structured prose, review what was understood, then export a validated Ink story packaged for Unity or Unreal Engine. Everything runs
           locally in your browser — nothing is uploaded.
         </p>
+        <GettingStarted />
       </section>
 
       <div className="import-grid">
