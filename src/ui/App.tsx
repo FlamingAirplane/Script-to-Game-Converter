@@ -13,6 +13,7 @@ import { InkView } from './InkView';
 import { PlaytestView } from './PlaytestView';
 import { passageForEntity } from './projectOps';
 import { ReviewView, STORY_SETTINGS } from './ReviewView';
+import { ThemeToggle } from './ThemeToggle';
 
 type Tab = 'import' | 'review' | 'graph' | 'ink' | 'play' | 'export';
 // Tabs read as chapters of the book, numbered in roman numerals.
@@ -229,6 +230,7 @@ export function App() {
         <button className="btn tiny ghost" onClick={redo} disabled={!redoStack.current.length} title="Redo (⇧⌘Z)">
           ↷
         </button>
+        <ThemeToggle />
         <button className="btn tiny ghost" onClick={() => openRef.current?.click()}>
           Open project
         </button>
