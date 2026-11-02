@@ -12,9 +12,17 @@ interface Line {
   kind: 'text' | 'choice' | 'system';
 }
 
+/** Story state at the start of the current stretch of text, so a state change can replay it. */
+interface Segment {
+  state: string;
+  prefix: Line[];
+  overrides: Record<string, boolean | number | string>;
+}
+
 interface Snapshot {
   state: string;
   lines: Line[];
+  segment: Segment | null;
 }
 
 export function PlaytestView({ processed, onOpen }: { processed: ProcessedStory; onOpen: (id: string) => void }) {
@@ -30,6 +38,7 @@ export function PlaytestView({ processed, onOpen }: { processed: ProcessedStory;
   const [errors, setErrors] = useState<string[]>([]);
   const [where, setWhere] = useState('');
   const bottom = useRef<HTMLDivElement>(null);
+  const segment = useRef<Segment | null>(null);
 
   const varNames = [...processed.project.items.map((i) => itemVar(i.id)), ...processed.project.variables.map((v) => v.id)].filter((n) =>
     new RegExp(`^VAR ${n} `, 'm').test(processed.generated.ink),
@@ -45,8 +54,10 @@ export function PlaytestView({ processed, onOpen }: { processed: ProcessedStory;
   }, [varNames.join()]);
 
   const advance = useCallback(
-    (prefix: Line[]) => {
+    (prefix: Line[], overrides: Segment['overrides'] = {}) => {
       const s = story.current!;
+      segment.current = { state: s.state.toJson(), prefix, overrides };
+      for (const [n, v] of Object.entries(overrides)) s.variablesState.$(n, v);
       const out = [...prefix];
       while (s.canContinue) {
         const raw = (s.Continue() ?? '').trim();
@@ -100,7 +111,7 @@ export function PlaytestView({ processed, onOpen }: { processed: ProcessedStory;
 
   const choose = (i: number, text: string) => {
     const s = story.current!;
-    setHistory((h) => [...h, { state: s.state.toJson(), lines }]);
+    setHistory((h) => [...h, { state: s.state.toJson(), lines, segment: segment.current }]);
     s.ChooseChoiceIndex(i);
     advance([...lines, { text, tags: [], kind: 'choice' }]);
   };
@@ -109,18 +120,26 @@ export function PlaytestView({ processed, onOpen }: { processed: ProcessedStory;
     const last = history[history.length - 1];
     if (!last || !story.current) return;
     story.current.state.LoadJson(last.state);
+    segment.current = last.segment;
     setHistory(history.slice(0, -1));
     setLines(last.lines);
     setChoices(story.current.currentChoices.map((c) => ({ text: c.text, index: c.index })));
     readVars();
   };
 
-  const setVar = (name: string, value: unknown) => {
+  // Like a host game changing its inventory: replay the current stretch of text from its start with
+  // the new value so choice conditions are re-evaluated straight away.
+  const setVar = (name: string, value: boolean | number | string) => {
     const s = story.current!;
-    s.variablesState.$(name, value as boolean | number | string);
-    // Re-evaluate choice conditions from the current point, like a host inventory change would.
-    setNotice(`Set ${name} = ${String(value)}. Conditions are re-checked at the next choice point.`);
-    readVars();
+    const seg = segment.current;
+    if (seg) {
+      s.state.LoadJson(seg.state);
+      advance(seg.prefix, { ...seg.overrides, [name]: value });
+    } else {
+      s.variablesState.$(name, value);
+      readVars();
+    }
+    setNotice(`Set ${name} to ${String(value)}. The choices below were re-checked.`);
   };
 
   const ended = choices.length === 0;

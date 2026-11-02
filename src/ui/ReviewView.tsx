@@ -4,9 +4,10 @@ import { conditionToInk, effectToInk } from '../core/inkgen';
 import { uniqueId, type Choice, type CompareOp, type Condition, type ContentBlock, type Effect, type Passage, type StoryProject } from '../core/isr';
 import type { ProcessedStory } from '../core/pipeline';
 import { Badge, ProvenanceBadge, SeverityIcon } from './common';
+import { friendly } from './friendly';
 import { addChoice, addPassage, deletePassage, renamePassage } from './projectOps';
 
-type Update = (fn: (draft: StoryProject) => void) => void;
+type Update = (fn: (draft: StoryProject) => void, group?: string) => void;
 
 export const STORY_SETTINGS = '__story__';
 
@@ -58,6 +59,7 @@ export function ReviewView({ processed, selected, onSelect, update }: { processe
           </div>
         )}
         <input className="input small" placeholder="Filter passages…" value={filter} onChange={(e) => setFilter(e.target.value)} />
+        <h3 className="contents-head">Contents</h3>
         <ol className="passages">
           {visible.map((p) => {
             const issues = issuesByPassage.get(p.id);
@@ -66,7 +68,10 @@ export function ReviewView({ processed, selected, onSelect, update }: { processe
             return (
               <li key={p.id}>
                 <button className={`passage-item ${selected === p.id ? 'active' : ''}`} onClick={() => onSelect(p.id)}>
-                  <span className="passage-title">{p.title}</span>
+                  <span className="toc-line">
+                    <span className="passage-title">{p.title}</span>
+                    <span className="toc-num">{project.passages.indexOf(p) + 1}</span>
+                  </span>
                   <span className="passage-meta">
                     <span className="mono muted small">{p.id}</span>
                     {project.project.startPassage === p.id && <Badge tone="accent">start</Badge>}
@@ -176,11 +181,11 @@ function PassageEditor({
   const [idDraft, setIdDraft] = useState(passage.id);
   const [idError, setIdError] = useState('');
   const pid = passage.id;
-  const edit = (fn: (p: Passage, d: StoryProject) => void) =>
+  const edit = (fn: (p: Passage, d: StoryProject) => void, group?: string) =>
     update((d) => {
       const p = d.passages.find((x) => x.id === pid);
       if (p) fn(p, d);
-    });
+    }, group);
   const diags = processed.diagnostics.filter(
     (d) => d.entityId === pid || d.details?.passageId === pid || passage.choices.some((c) => c.id === d.entityId),
   );
@@ -190,7 +195,7 @@ function PassageEditor({
   return (
     <div className="editor">
       <header className="editor-head">
-        <input className="title-input" value={passage.title} onChange={(e) => edit((p) => ((p.title = e.target.value), (p.origin = p.origin === 'source' ? 'user_authored' : p.origin)))} aria-label="Passage title" />
+        <input className="title-input" value={passage.title} onChange={(e) => edit((p) => ((p.title = e.target.value), (p.origin = p.origin === 'source' ? 'user_authored' : p.origin)), `title:${pid}`)} aria-label="Passage title" />
         <div className="row wrap">
           <label className="id-field">
             <span className="muted small">id</span>
@@ -238,7 +243,8 @@ function PassageEditor({
         <ul className="inline-diags">
           {diags.map((d, i) => (
             <li key={i}>
-              <SeverityIcon severity={d.severity} /> <span className="mono small">{d.code}</span> {d.message}
+              <SeverityIcon severity={d.severity} /> {friendly(d).title}
+              {friendly(d).detail && <span className="muted small"> — {d.message}</span>}
             </li>
           ))}
         </ul>
@@ -253,7 +259,7 @@ function PassageEditor({
             block={b}
             project={project}
             onFocusLine={onFocusLine}
-            onChange={(nb) => edit((p) => (p.content[i] = nb))}
+            onChange={(nb) => edit((p) => (p.content[i] = nb), `block:${pid}:${i}`)}
             onDelete={() => edit((p) => p.content.splice(i, 1))}
             onMove={(dir) =>
               edit((p) => {
@@ -311,7 +317,7 @@ function PassageEditor({
               edit((p) => {
                 fn(p.choices[i]);
                 if (p.choices[i].origin === 'source') p.choices[i].origin = 'user_authored';
-              })
+              }, `choice:${c.id}`)
             }
             onReview={(status) => edit((p) => (p.choices[i].review = status))}
             onDelete={() => edit((p) => p.choices.splice(i, 1))}
@@ -445,12 +451,27 @@ function BlockRow({
 
 function AutoText({ value, onChange, serif }: { value: string; onChange: (v: string) => void; serif?: boolean }) {
   const ref = useRef<HTMLTextAreaElement>(null);
-  useEffect(() => {
+  const fit = () => {
     const el = ref.current;
     if (!el) return;
     el.style.height = 'auto';
     el.style.height = `${el.scrollHeight}px`;
-  }, [value]);
+  };
+  useEffect(fit, [value]);
+  // Re-measure when the column width changes (panels opening/closing, window resize).
+  useEffect(() => {
+    const el = ref.current;
+    if (!el || typeof ResizeObserver === 'undefined') return;
+    let width = el.clientWidth;
+    const ro = new ResizeObserver(() => {
+      if (el.clientWidth !== width) {
+        width = el.clientWidth;
+        fit();
+      }
+    });
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
   return <textarea ref={ref} rows={1} className={`autotext ${serif ? 'serif' : 'mono small'}`} value={value} onChange={(e) => onChange(e.target.value)} />;
 }
 
@@ -610,11 +631,11 @@ function StorySettings({ project, update }: { project: StoryProject; update: Upd
       <div className="settings-grid">
         <label className="field">
           <span className="muted small">Title</span>
-          <input className="input" value={project.project.title} onChange={(e) => update((d) => (d.project.title = e.target.value))} />
+          <input className="input" value={project.project.title} onChange={(e) => update((d) => (d.project.title = e.target.value), `settings:project.title`)} />
         </label>
         <label className="field">
           <span className="muted small">Author</span>
-          <input className="input" value={project.project.author ?? ''} onChange={(e) => update((d) => (d.project.author = e.target.value || undefined))} />
+          <input className="input" value={project.project.author ?? ''} onChange={(e) => update((d) => (d.project.author = e.target.value || undefined), `settings:project.author`)} />
         </label>
         <label className="field">
           <span className="muted small">Start passage</span>
@@ -648,7 +669,7 @@ function StorySettings({ project, update }: { project: StoryProject; update: Upd
             <tr key={c.id}>
               <td className="mono small">{c.id}</td>
               <td>
-                <input className="input small" value={c.displayName} onChange={(e) => update((d) => (d.characters[i].displayName = e.target.value))} />
+                <input className="input small" value={c.displayName} onChange={(e) => update((d) => (d.characters[i].displayName = e.target.value), `settings:characters.displayName:${i}`)} />
               </td>
               <td className="muted small">{c.aliases.join(', ') || '—'}</td>
             </tr>
@@ -680,7 +701,7 @@ function StorySettings({ project, update }: { project: StoryProject; update: Upd
             <tr key={it.id}>
               <td className="mono small">{it.id}</td>
               <td>
-                <input className="input small" value={it.displayName} onChange={(e) => update((d) => (d.items[i].displayName = e.target.value))} />
+                <input className="input small" value={it.displayName} onChange={(e) => update((d) => (d.items[i].displayName = e.target.value), `settings:items.displayName:${i}`)} />
               </td>
               <td>
                 <input type="checkbox" checked={it.consumable} onChange={(e) => update((d) => (d.items[i].consumable = e.target.checked))} />

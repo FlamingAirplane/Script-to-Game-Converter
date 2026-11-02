@@ -192,3 +192,48 @@ describe('engine exports', () => {
     });
   }
 });
+
+describe('hashing', () => {
+  it('pure SHA-256 matches Web Crypto (used when opened from file://)', async () => {
+    const { sha256 } = await import('../src/core/hash');
+    for (const text of ['', 'abc', 'Café ☕ '.repeat(40), 'x'.repeat(1000)]) {
+      const data = new TextEncoder().encode(text);
+      const expected = Buffer.from(await crypto.subtle.digest('SHA-256', data)).toString('hex');
+      expect(Buffer.from(sha256(data)).toString('hex')).toBe(expected);
+    }
+  });
+});
+
+describe('share exports', () => {
+  const runtime = 'window.inkjs = {};';
+  it('playable HTML embeds the story safely, even with </script> in the text', async () => {
+    const { buildPlayableHtml } = await import('../src/core/export');
+    const text = '@passage start Start\nShe wrote </script><!-- on the wall.\n@end\n';
+    const { project } = await build(text, 'x.md', 'structured');
+    const html = buildPlayableHtml(processProject(project), runtime);
+    const json = /<script id="story-json" type="application\/json">([\s\S]*?)<\/script>/.exec(html)![1];
+    expect(json).not.toMatch(/<\/script|<!--/i);
+    expect(JSON.stringify(JSON.parse(json))).toContain('</script><!--');
+    expect(html.match(/<script/g)!.length).toBe(4);
+  });
+
+  it('Twine export maps conditions, setters, endings and stable IFIDs', async () => {
+    const { buildTwee } = await import('../src/core/export');
+    const { ifidFor } = await import('../src/core/export/twine');
+    const s = SAMPLES.find((x) => x.id === 'archive')!;
+    const { project } = await build(s.text, s.fileName, 'structured');
+    const twee = buildTwee(processProject(project));
+    expect(twee).toContain('"start": "Archive Entrance"');
+    expect(twee).toContain('<<set $has_archive_key to false>>');
+    expect(twee).toContain('<<if ($has_archive_key)>>[[Open the archive|The Vault][$has_archive_key to false]]<</if>>');
+    expect(twee).toContain(':: The Vault [ending]');
+    expect(ifidFor('x')).toBe(ifidFor('x'));
+    expect(ifidFor('x')).toMatch(/^[0-9A-F]{8}-[0-9A-F]{4}-4[0-9A-F]{3}-[89AB][0-9A-F]{3}-[0-9A-F]{12}$/);
+  });
+
+  it('Twine export refuses Ink passthrough projects', async () => {
+    const { buildTwee, ExportBlockedError } = await import('../src/core/export');
+    const { project, diagnostics } = await build('-> a\n=== a ===\nHi\n-> END\n', 'a.ink');
+    expect(() => buildTwee(processProject(project, diagnostics))).toThrow(ExportBlockedError);
+  });
+});

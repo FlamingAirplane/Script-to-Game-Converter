@@ -3,10 +3,11 @@ import { execSync } from 'node:child_process';
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { basename, dirname, join, resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { reviewAll } from '../core/adapt';
 import { buildStory } from '../core/builder';
 import { sortDiagnostics, type Diagnostic } from '../core/diagnostics';
-import { ADAPTERS, ExportBlockedError, type EngineTarget } from '../core/export';
+import { ADAPTERS, buildPlayableHtml, buildTwee, ExportBlockedError, playableFileName, twineFileName, type EngineTarget } from '../core/export';
 import type { ConversionMode, StoryProject } from '../core/isr';
 import { processProject } from '../core/pipeline';
 
@@ -16,7 +17,7 @@ Usage:
   narrative-bridge convert <files...> [--mode faithful|adaptation|structured] [--approve-all]
                                       [--out story.ink] [--project story.nbproj.json] [--title "Title"]
   narrative-bridge validate <files... | project.nbproj.json>
-  narrative-bridge export <files... | project.nbproj.json> --engine unity|unreal --out <dir>
+  narrative-bridge export <files... | project.nbproj.json> --engine unity|unreal|web|twine --out <dir>
                                       [--name ProjectName] [--engine-version 2022.3.62f1] [--ref <tag|sha>] [--no-demo]
   narrative-bridge doctor [--engine unity|unreal]
 
@@ -114,9 +115,29 @@ async function main() {
       process.exit(story.exportBlocked ? 1 : 0);
     }
     case 'export': {
-      const engine = args.engine as EngineTarget;
-      if (!ADAPTERS[engine]) usage('--engine must be unity or unreal');
+      const engine = args.engine as EngineTarget | 'web' | 'twine';
       if (typeof args.out !== 'string') usage('--out <dir> is required');
+      if (engine === 'web' || engine === 'twine') {
+        // Single-file exports that need no game engine.
+        const story = await load(args);
+        summary(story);
+        try {
+          const runtime = () => readFileSync(fileURLToPath(new URL('../../node_modules/inkjs/dist/ink.js', import.meta.url)), 'utf8');
+          const [name, content] = engine === 'web' ? [playableFileName(story), buildPlayableHtml(story, runtime())] : [twineFileName(story), buildTwee(story)];
+          const outDir = resolve(args.out);
+          mkdirSync(outDir, { recursive: true });
+          writeFileSync(join(outDir, name), content);
+          console.log(green(`\nWrote ${join(outDir, name)}`));
+          process.exit(0);
+        } catch (e) {
+          if (e instanceof ExportBlockedError) {
+            console.error(red(`\nExport blocked — ${e.message}`));
+            process.exit(1);
+          }
+          throw e;
+        }
+      }
+      if (!ADAPTERS[engine]) usage('--engine must be unity, unreal, web or twine');
       const adapter = ADAPTERS[engine];
       const story = await load(args);
       summary(story);

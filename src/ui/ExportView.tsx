@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useState } from 'react';
 import { isPinnedRef } from '../core/export/common';
-import { ADAPTERS, ExportBlockedError, zipExport, type EngineTarget, type ExportResult } from '../core/export';
+import { ADAPTERS, buildPlayableHtml, buildTwee, ExportBlockedError, playableFileName, twineFileName, zipExport, type EngineTarget, type ExportResult } from '../core/export';
+// The engine-only Ink runtime (~125 KB), embedded in playable-story exports.
+import inkRuntime from '../../node_modules/inkjs/dist/ink.js?raw';
 import type { ProcessedStory } from '../core/pipeline';
 import { Badge, SeverityIcon, download } from './common';
 
@@ -55,6 +57,9 @@ export function ExportView({ processed, onState }: { processed: ProcessedStory; 
 
   return (
     <div className="view export-view">
+      <ShareSection processed={processed} />
+
+      <h2 className="section-title">For a game engine</h2>
       <section className="engines">
         {(['unity', 'unreal'] as EngineTarget[]).map((e) => (
           <button key={e} className={`engine-card ${engine === e ? 'selected' : ''}`} onClick={() => setEngine(e)}>
@@ -178,4 +183,50 @@ export function ExportView({ processed, onState }: { processed: ProcessedStory; 
 
 function Pass({ ok }: { ok: boolean }) {
   return <span className={`sev ${ok ? 'sev-ok' : 'sev-error'}`}>{ok ? '✓' : '●'}</span>;
+}
+
+/** Exports that need no game engine: a playable web page for readers, and a Twine project. */
+function ShareSection({ processed }: { processed: ProcessedStory }) {
+  const [error, setError] = useState('');
+  const blocked = processed.diagnostics.some((d) => d.exportBlocked);
+  const run = (fn: () => void) => {
+    setError('');
+    try {
+      fn();
+    } catch (e) {
+      setError(e instanceof ExportBlockedError ? e.message : String(e));
+    }
+  };
+  return (
+    <>
+      <h2 className="section-title">Share without a game engine</h2>
+      <section className="share-grid">
+        <div className="card share-card">
+          <h2>Playable story</h2>
+          <p className="muted small">
+            One web page anyone can open to read and play your story, on a computer or phone. Send it by email or put it online. Readers' progress is saved
+            in their browser.
+          </p>
+          <button
+            className="btn primary"
+            disabled={blocked}
+            onClick={() => run(() => download(playableFileName(processed), buildPlayableHtml(processed, inkRuntime), 'text/html'))}
+          >
+            Download playable story (.html)
+          </button>
+        </div>
+        <div className="card share-card">
+          <h2>Twine</h2>
+          <p className="muted small">
+            A Twine project in the SugarCube format. In Twine 2, choose <em>Library → Import</em> and pick this file to keep editing the story visually.
+          </p>
+          <button className="btn" disabled={blocked} onClick={() => run(() => download(twineFileName(processed), buildTwee(processed)))}>
+            Download for Twine (.twee)
+          </button>
+        </div>
+      </section>
+      {blocked && <p className="error-text small">Fix the items marked “must fix” in Diagnostics to enable these downloads.</p>}
+      {error && <p className="error-text">{error}</p>}
+    </>
+  );
 }
