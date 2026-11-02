@@ -14,6 +14,7 @@ import {
   type Passage,
   type Provenance,
   type SourceDocument,
+  type SourceFormat,
   type StoryProject,
   type Variable,
 } from './isr';
@@ -24,7 +25,12 @@ import type { ParsedBlock } from './parsing/types';
 export interface SourceInput {
   fileName: string;
   text: string;
+  /** Set when the text was converted from another format (see parsing/convert.ts); skips detection. */
+  format?: SourceFormat;
+  convertedFrom?: 'fdx' | 'docx';
 }
+
+const CONVERTED_LABEL = { fdx: 'Final Draft', docx: 'Word' } as const;
 
 export interface BuildOptions {
   mode: ConversionMode;
@@ -68,7 +74,15 @@ export async function buildStory(inputs: SourceInput[], options: BuildOptions): 
         }),
       );
     }
-    const detected = detectFormat(input.fileName, input.text);
+    const detected = input.format ? { format: input.format, confidence: 1, by: 'extension' as const } : detectFormat(input.fileName, input.text);
+    if (input.convertedFrom) {
+      diagnostics.push(
+        diag('INPUT_CONVERTED', 'info', 'input_validation', `${input.fileName} was converted from ${CONVERTED_LABEL[input.convertedFrom]} to ${parserFor(detected.format).label}. Text and structure are kept; fonts, bold and italics are not.`, {
+          entityId: docId,
+          exportBlocked: false,
+        }),
+      );
+    }
     if (detected.by === 'content' && detected.format !== 'txt') {
       diagnostics.push(
         diag('INPUT_FORMAT_SNIFFED', 'info', 'input_validation', `${input.fileName} was detected as ${parserFor(detected.format).label} from its content.`, {

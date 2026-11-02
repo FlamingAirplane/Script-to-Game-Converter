@@ -12,11 +12,14 @@ That's it. It works without an internet connection, and your scripts are never u
 
 ## What to bring
 
-- A **Fountain** screenplay (`.fountain`), or
-- A **plain-text** export of your script (`.txt`). Most screenwriting apps can export one, or
+- A **Final Draft** script (`.fdx`), or
+- A **Word** document (`.docx`). Screenplays that use Word's screenplay styles keep their scene headings, characters and
+  dialogue; other documents become one passage per heading, or
+- A **Fountain** screenplay (`.fountain`) or a **plain-text** export (`.txt`), or
 - A **Markdown** file (`.md`), or just paste your text in.
 
-Word, Final Draft (`.fdx`) and PDF files aren't supported yet. Export to plain text or Fountain first.
+PDF and old `.doc` files aren't supported. Save as `.fdx`, `.docx` or plain text first. Bold, italics and fonts aren't
+kept; all of your words are.
 
 ## Keeping your work
 
