@@ -40,7 +40,7 @@ export function DiagnosticsPanel({ diagnostics, project, onJump, onClose }: { di
           </button>
         ))}
       </div>
-      {shown.length === 0 && <p className="muted small pad">{diagnostics.length ? 'Everything here is hidden by the filters above.' : 'Nothing to fix. The story is ready to export.'}</p>}
+      {shown.length === 0 && <p className="muted small pad">{diagnostics.length ? 'Everything here is hidden by the filters above.' : 'Nothing to fix — the proofs are clean and the story is ready to export.'}</p>}
       <ul className="diag-list">
         {shown.map((d, i) => {
           const f = friendly(d, project);

@@ -7,6 +7,7 @@ import { SUPPORTED_EXTENSIONS } from '../core/parsing/registry';
 const ACCEPTED = [...SUPPORTED_EXTENSIONS, ...CONVERTED_EXTENSIONS];
 import { SAMPLES } from '../samples';
 import { GettingStarted } from './GettingStarted';
+import { Logo } from './Logo';
 
 // The hosted site (GitHub Pages) also serves the offline writer edition next to index.html. Hidden in
 // development, where that file doesn't exist, and inside the offline edition itself (opened from file://).
@@ -54,7 +55,15 @@ export function ImportView({ onConvert, busy }: { onConvert: (inputs: SourceInpu
   return (
     <div className="view import-view">
       <section className="hero">
-        <h1>Turn a script into a playable Ink story.</h1>
+        <div className="title-page">
+          <Logo size={58} />
+          <p className="edition">The Workshop Edition</p>
+          <h1>Narrative Bridge</h1>
+          <p className="subtitle">Turn a script into a playable story</p>
+          <div className="orn-rule" aria-hidden>
+            <span>❦</span>
+          </div>
+        </div>
         <p className="lede">
           Import a screenplay or structured prose, review what was understood, then export a validated Ink story packaged for Unity or Unreal Engine. Everything runs
           locally in your browser — nothing is uploaded.

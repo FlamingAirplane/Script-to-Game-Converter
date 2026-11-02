@@ -143,6 +143,8 @@ export function PlaytestView({ processed, onOpen }: { processed: ProcessedStory;
   };
 
   const ended = choices.length === 0;
+  // The drop cap opens the first real paragraph of prose, not a short line like "FADE IN:".
+  const dropCapAt = lines.findIndex((l) => l.kind === 'text' && !l.speaker && !l.tags.includes('transition') && l.text.length >= 40);
   const smoke = processed.smoke;
 
   return (
@@ -172,7 +174,7 @@ export function PlaytestView({ processed, onOpen }: { processed: ProcessedStory;
                 <span className="t-text">{l.text}</span>
               </p>
             ) : (
-              <p key={i} className={l.tags.includes('transition') ? 't-transition' : 't-action'}>
+              <p key={i} className={l.tags.includes('transition') ? 't-transition' : `t-action${i === dropCapAt ? ' drop' : ''}`}>
                 {l.tags.find((t) => t.startsWith('scene:')) && <span className="t-scene">{l.tags.find((t) => t.startsWith('scene:'))!.slice(6)}</span>}
                 {l.text}
               </p>

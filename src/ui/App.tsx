@@ -13,6 +13,7 @@ import { InkView } from './InkView';
 import { PlaytestView } from './PlaytestView';
 import { passageForEntity } from './projectOps';
 import { ReviewView, STORY_SETTINGS } from './ReviewView';
+import { Logo } from './Logo';
 import { ThemeToggle } from './ThemeToggle';
 import { useProcessedStory } from './useProcessedStory';
 
@@ -202,10 +203,7 @@ export function App() {
     <div className={`app ${processed && showDiag && tab !== 'import' ? 'with-diag' : ''}`}>
       <header className="topbar">
         <div className="brand">
-          <svg width="22" height="22" viewBox="0 0 24 24" aria-hidden>
-            <path d="M2 17 C 7 7, 17 7, 22 17" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" />
-            <path d="M6 17 V 12 M12 17 V 9.5 M18 17 V 12" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
-          </svg>
+          <Logo size={26} />
           <span>Narrative Bridge</span>
         </div>
         {project && (
@@ -273,7 +271,11 @@ export function App() {
       </nav>
 
       <div className="workspace">
-        <div className="content">
+        {/* Silk ribbon bookmark marking the open chapter (decorative). */}
+        <div className="ribbon" aria-hidden key={tab}>
+          <span>{TABS.find((t) => t.id === tab)!.numeral}</span>
+        </div>
+        <div className="content" key={`page-${tab}`}>
           {tab === 'import' && <ImportView onConvert={convert} busy={busy} />}
           {processed && tab === 'review' && <ReviewView processed={{ ...processed, project: project! }} selected={selected} onSelect={setSelected} update={update} />}
           {processed && tab === 'graph' && <GraphView graph={processed.analysis.graph} start={processed.project.project.startPassage} selected={selected} onOpen={open} endingsReached={processed.smoke?.endingsReached} />}

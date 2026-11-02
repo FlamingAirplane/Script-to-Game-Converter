@@ -635,6 +635,14 @@ function StorySettings({ project, update }: { project: StoryProject; update: Upd
   return (
     <div className="editor settings">
       <h2>Story settings</h2>
+      <div className="ex-libris" aria-label="Bookplate">
+        <span className="ex-libris-label">Ex Libris</span>
+        <span className="ex-libris-title">{project.project.title || 'Untitled'}</span>
+        {project.project.author && <span className="ex-libris-by">by {project.project.author}</span>}
+        <span className="ex-libris-meta">
+          {project.passages.length} passages · {project.characters.length} characters · {project.project.mode} edition
+        </span>
+      </div>
       <div className="settings-grid">
         <label className="field">
           <span className="muted small">Title</span>

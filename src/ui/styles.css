@@ -22,7 +22,9 @@
   --err: #b3261e;
   --review: #5a4689;
   --teal: #255953;
-  --serif: 'Iowan Old Style', 'Palatino Linotype', Palatino, 'Book Antiqua', Georgia, serif;
+  --serif: 'EB Garamond', 'Iowan Old Style', 'Palatino Linotype', Palatino, 'Book Antiqua', Georgia, serif;
+  --display: 'IM Fell English SC', 'EB Garamond', 'Palatino Linotype', Georgia, serif;
+  --gilt: linear-gradient(180deg, #f3dc9a 0%, #c99a45 45%, #f0d48a 55%, #a87a32 100%);
   --mono: ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
   --grain: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='180' height='180'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='3' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 .35 0 0 0 0 .25 0 0 0 0 .12 0 0 0 .07 0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
   --shadow: #3c2814;
@@ -129,7 +131,7 @@ html, body, #root { height: 100%; margin: 0; }
 body {
   background: radial-gradient(ellipse at 50% 0%, var(--desk-2), var(--desk) 70%);
   color: var(--ink);
-  font: 15px/1.55 var(--serif);
+  font: 16.5px/1.55 var(--serif);
   -webkit-font-smoothing: antialiased;
   font-kerning: normal;
   font-variant-numeric: oldstyle-nums;
@@ -490,7 +492,8 @@ input[type='checkbox'], input[type='radio'] { accent-color: var(--ink); }
 .transcript { flex: 1; overflow: auto; font-size: 18px; line-height: 1.7; padding-right: 10px; text-align: justify; hyphens: auto; }
 .transcript p { margin: 0 0 4px; text-indent: 1.4em; }
 .transcript > p:first-child { text-indent: 0; }
-.transcript > p:first-child::first-letter { float: left; font-size: 3.3em; line-height: 0.9; padding: 4px 8px 0 0; color: var(--rubric); }
+.transcript p.drop { text-indent: 0; }
+.transcript p.drop::first-letter { float: left; font-size: 3.3em; line-height: 0.9; padding: 4px 8px 0 0; color: var(--rubric); }
 .t-scene { display: block; text-indent: 0; text-align: center; font-size: 12.5px; font-variant: small-caps; text-transform: lowercase; letter-spacing: 0.2em; color: var(--faded); margin: 22px 0 10px; }
 .t-scene::before { content: '❧'; display: block; color: var(--rubric); font-size: 18px; letter-spacing: 0; margin-bottom: 4px; }
 .t-action:has(.t-scene) { text-indent: 0; }
@@ -617,3 +620,113 @@ input[type='checkbox'], input[type='radio'] { accent-color: var(--ink); }
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { transition: none !important; animation: none !important; scroll-behavior: auto !important; }
 }
+
+
+/* ---------- The bound book: cover band, ribbon, page turns, title page, bookplate ---------- */
+.topbar {
+  background: linear-gradient(180deg, #3b2a1e, #2b1e15);
+  border-bottom: 1px solid #1a110b;
+  box-shadow: inset 0 -4px 0 -1px #2b1e15, inset 0 -5px 0 -1px #8a6a3a, inset 0 1px 0 rgba(255, 220, 160, 0.06);
+  padding-bottom: 9px;
+  margin-bottom: 8px;
+}
+.brand .logo { color: #d8b56d; filter: drop-shadow(0 1px 0 rgba(0, 0, 0, 0.6)); }
+.brand span {
+  font-family: var(--display);
+  font-variant: normal;
+  text-transform: none;
+  letter-spacing: 0.08em;
+  font-size: 21px;
+  background: var(--gilt);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  filter: drop-shadow(0 1px 0 rgba(0, 0, 0, 0.7));
+}
+.tab-num { font-family: var(--display); font-size: 13px; letter-spacing: 0.04em; }
+.tab { font-size: 16px; }
+
+.ribbon {
+  position: absolute;
+  top: -6px;
+  right: 54px;
+  width: 28px;
+  height: 74px;
+  z-index: 3;
+  pointer-events: none;
+  background: linear-gradient(90deg, #6e1d12, #a8321f 35%, #c44a33 50%, #a8321f 65%, #6e1d12);
+  clip-path: polygon(0 0, 100% 0, 100% 100%, 50% 82%, 0 100%);
+  box-shadow: 2px 3px 6px rgba(0, 0, 0, 0.35);
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  padding-bottom: 20px;
+  animation: ribbon-drop 0.35s ease-out;
+}
+.ribbon span { font-family: var(--display); font-size: 12px; color: #f3dc9a; text-shadow: 0 1px 0 rgba(0, 0, 0, 0.5); }
+.app.with-diag .ribbon { right: 374px; }
+@keyframes ribbon-drop { from { transform: translateY(-14px); opacity: 0.4; } to { transform: none; opacity: 1; } }
+
+.content { animation: page-turn 0.3s ease-out; transform-origin: left center; }
+@keyframes page-turn {
+  from { opacity: 0; transform: perspective(1400px) rotateY(-5deg) translateX(-6px); }
+  to { opacity: 1; transform: none; }
+}
+
+.hero::before { content: none; }
+.title-page { display: flex; flex-direction: column; align-items: center; gap: 2px; margin-bottom: 6px; }
+.title-page .logo { color: var(--rubric); margin-bottom: 4px; }
+.title-page .edition { font-size: 13px; font-variant: small-caps; text-transform: lowercase; letter-spacing: 0.3em; color: var(--faded); margin: 0; }
+.title-page h1 { font-family: var(--display); font-weight: 400; font-size: 58px; line-height: 1.05; margin: 4px 0 2px; letter-spacing: 0.01em; }
+.title-page .subtitle { font-style: italic; font-size: 21px; color: var(--ink-2); margin: 0; }
+.orn-rule { display: flex; align-items: center; gap: 14px; width: 260px; margin: 14px auto 6px; color: var(--rubric); }
+.orn-rule::before, .orn-rule::after { content: ''; flex: 1; border-top: 1px solid var(--rule-2); }
+.hero h1 + .lede, .lede { font-size: 17.5px; }
+
+.transcript p.drop::first-letter { font-family: var(--display); font-size: 3.6em; line-height: 0.85; padding-top: 6px; }
+.stage-head h2 { font-family: var(--display); font-variant: normal; text-transform: none; letter-spacing: 0.08em; font-size: 17px; color: var(--ink-2); }
+.engine-name, .sample-name { font-family: var(--display); font-style: normal; }
+.contents-head { font-family: var(--display); font-variant: normal; text-transform: none; letter-spacing: 0.2em; font-size: 17px; }
+.settings h2 { font-family: var(--display); }
+
+.ex-libris {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  gap: 2px;
+  max-width: 340px;
+  margin: 6px 0 20px;
+  padding: 16px 22px;
+  border: 2px solid var(--rubric);
+  outline: 1px solid var(--rubric);
+  outline-offset: -7px;
+  border-radius: 3px;
+  background: var(--paper-hi) var(--grain);
+}
+.ex-libris-label { font-family: var(--display); color: var(--rubric); letter-spacing: 0.24em; font-size: 14px; }
+.ex-libris-title { font-size: 22px; font-style: italic; }
+.ex-libris-by { color: var(--ink-2); }
+.ex-libris-meta { font-size: 12.5px; color: var(--faded); font-variant: small-caps; text-transform: lowercase; letter-spacing: 0.1em; margin-top: 4px; }
+
+/* A brass paper clip holding the errata slip. */
+.diagnostics { position: relative; }
+.diagnostics::before {
+  content: '';
+  position: absolute;
+  top: -14px;
+  left: 16px;
+  width: 16px;
+  height: 40px;
+  border: 2.5px solid #a88a4a;
+  border-radius: 8px;
+  border-bottom-color: transparent;
+  box-shadow: inset 0 0 0 3px transparent;
+  z-index: 2;
+  pointer-events: none;
+}
+
+@media (max-width: 1100px) { .app.with-diag .ribbon { right: 54px; } }
+@media (max-width: 760px) { .ribbon { display: none; } .title-page h1 { font-size: 42px; } }
+
+.diagnostics > .pane-head { padding-left: 46px; }
