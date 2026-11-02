@@ -78,13 +78,23 @@ export function App() {
     }
   }, [project, parseDiagnostics]);
 
-  const update = useCallback((fn: (draft: StoryProject) => void) => {
+  const lastEdit = useRef<{ group: string; at: number } | null>(null);
+  /**
+   * Applies an edit to a copy of the project. Edits sharing a `group` (e.g. keystrokes in one text
+   * field) within two seconds of each other become a single undo step.
+   */
+  const update = useCallback((fn: (draft: StoryProject) => void, group?: string) => {
+    const now = Date.now();
+    const merge = !!group && lastEdit.current?.group === group && now - lastEdit.current.at < 2000;
+    lastEdit.current = group ? { group, at: now } : null;
     setProject((cur) => {
       if (!cur) return cur;
       const next = structuredClone(cur);
       fn(next);
-      undoStack.current.push(cur);
-      if (undoStack.current.length > 100) undoStack.current.shift();
+      if (!merge) {
+        undoStack.current.push(cur);
+        if (undoStack.current.length > 100) undoStack.current.shift();
+      }
       redoStack.current = [];
       return next;
     });
@@ -92,6 +102,7 @@ export function App() {
   }, []);
 
   const undo = useCallback(() => {
+    lastEdit.current = null;
     const prev = undoStack.current.pop();
     if (!prev) return;
     setProject((cur) => {
@@ -269,7 +280,7 @@ export function App() {
           {processed && tab === 'export' && <ExportView processed={processed} onState={setExportState} />}
           {(tab === 'import' || tab === 'export') && <footer className="folio">— {TABS.find((t) => t.id === tab)!.numeral.toLowerCase()} —</footer>}
         </div>
-        {processed && showDiag && tab !== 'import' && <DiagnosticsPanel diagnostics={processed.diagnostics} onJump={jump} onClose={() => setShowDiag(false)} />}
+        {processed && showDiag && tab !== 'import' && <DiagnosticsPanel diagnostics={processed.diagnostics} project={project!} onJump={jump} onClose={() => setShowDiag(false)} />}
       </div>
     </div>
   );

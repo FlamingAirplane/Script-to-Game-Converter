@@ -19,7 +19,7 @@ npm test           # unit, golden-file, compiler, runtime and export tests
 ### For writers: a single file, no install
 
 ```bash
-npm run build:single   # → release/Narrative Bridge.html
+npm run build:single   # → release/Narrative-Bridge.html
 ```
 
 This produces one self-contained HTML file (~0.6 MB) with all scripts and styles inlined. Writers double-click it to run the
@@ -33,10 +33,20 @@ npm run cli -- convert script.fountain --mode faithful --out story.ink
 npm run cli -- validate story.md
 npm run cli -- export script.fountain --mode adaptation --approve-all --engine unity --out ./build
 npm run cli -- export story.nbproj.json --engine unreal --out ./build --ref <inkpot-tag-or-sha>
+npm run cli -- export story.md --engine web --out ./share      # one playable .html page for readers
+npm run cli -- export script.fountain --engine twine --out ./share   # Twee 3 / SugarCube for Twine 2
 npm run cli -- doctor              # checks Unity/Unreal, git, .NET and C++ toolchain
 ```
 
 Exit codes: `0` success, `1` validation errors or export blocked, `2` usage error.
+
+Browser end-to-end test of the writer file (opens it from disk in WebKit and Chromium, converts and plays a sample,
+exports a Unity zip and a playable story, then plays that story):
+
+```bash
+npx playwright-core install webkit chromium   # once
+npm run test:e2e
+```
 
 ## The workflow (web app)
 
@@ -92,6 +102,16 @@ See [`src/samples.ts`](src/samples.ts) for complete examples.
 5. Export verification: required files exist, shipped `.ink` is byte-identical to what was validated, JSON parses, paths are safe, and the integration ref is pinned.
 
 Fatal errors block export. The manifest records engine import and in-engine smoke tests as `pending` until you run them; it never marks something as passed that wasn't checked.
+
+## Sharing without a game engine
+
+- **Playable story** (Export → *Share without a game engine*, or `--engine web`): one self-contained HTML page with the
+  Ink runtime, the compiled story and a book-style reader. It works offline and on phones, saves each reader's progress in
+  their browser, and offers undo and start over. Saves are tied to the story version.
+- **Twine** (`--engine twine`): a Twee 3 file for SugarCube 2.37, generated from the story model. Items become
+  `$has_<item>` variables set in `StoryInit`, conditions wrap links in `<<if>>`, effects become link setters, once-only
+  choices track `$once_<choice>` flags, and the Ink fallback becomes a conditional "Continue" link. Prose is wrapped in
+  SugarCube's verbatim markup so script text is never read as code. Stories imported as raw Ink can't be exported to Twine.
 
 ## Engine exports
 

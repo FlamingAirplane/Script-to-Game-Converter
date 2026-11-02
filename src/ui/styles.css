@@ -484,3 +484,16 @@ input[type='checkbox'], input[type='radio'] { accent-color: var(--ink); }
   .view, .stage, .passage-editor { padding: 18px 16px 40px; }
   .hero h1 { font-size: 30px; }
 }
+.sev-word { font-size: 12px; font-variant: small-caps; text-transform: lowercase; letter-spacing: 0.1em; font-weight: 600; }
+.diag-where { font-style: italic; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.diag-fix { color: var(--ink-2); }
+.edge-hit { fill: none; stroke: transparent; stroke-width: 12; cursor: help; }
+.edge-label rect { fill: var(--paper-hi); stroke: var(--rule-2); filter: drop-shadow(1px 1px 0 rgba(60, 40, 20, 0.15)); }
+.edge-label text { fill: var(--ink); font: italic 12.5px var(--serif); }
+.section-title { font-size: 13px; font-variant: small-caps; text-transform: lowercase; letter-spacing: 0.16em; color: var(--rubric); font-weight: 600; margin: 4px 0 12px; }
+.section-title:not(:first-child) { margin-top: 30px; }
+.share-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; }
+.share-card { display: flex; flex-direction: column; gap: 6px; }
+.share-card p { flex: 1; margin: 0 0 10px; }
+.share-card .btn { align-self: flex-start; }
+@media (max-width: 760px) { .share-grid { grid-template-columns: 1fr; } }

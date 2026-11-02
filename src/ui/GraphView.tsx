@@ -49,12 +49,39 @@ function layout(graph: StoryGraph, start: string) {
   return { placed, width: (Math.max(...cols.keys()) + 1) * (W + GX), height: totalH };
 }
 
+const clampLane = (offset: number) => Math.max(-H / 2 + 8, Math.min(H / 2 - 8, offset));
+
+function EdgeLabel({ x, y, text }: { x: number; y: number; text: string }) {
+  const label = text.length > 34 ? `${text.slice(0, 33)}…` : text;
+  const w = label.length * 6.6 + 16;
+  return (
+    <g className="edge-label" transform={`translate(${x - w / 2},${y - 11})`} pointerEvents="none">
+      <rect width={w} height={22} rx={3} />
+      <text x={w / 2} y={15} textAnchor="middle">
+        {label}
+      </text>
+    </g>
+  );
+}
+
 export function GraphView({ graph, start, selected, onOpen, endingsReached }: { graph: StoryGraph; start: string; selected?: string; onOpen: (id: string) => void; endingsReached?: Record<string, number> }) {
   const { placed, width, height } = useMemo(() => layout(graph, start), [graph, start]);
   const [view, setView] = useState({ x: 40, y: 40, k: 1 });
   const drag = useRef<{ x: number; y: number; vx: number; vy: number } | null>(null);
   const svg = useRef<SVGSVGElement>(null);
   const [hover, setHover] = useState<string | null>(null);
+  const [hoverEdge, setHoverEdge] = useState<string | null>(null);
+  // Parallel edges between the same two passages get their own lane so they don't draw on top of each other.
+  const lanes = useMemo(() => {
+    const groups = new Map<string, string[]>();
+    for (const e of graph.edges) {
+      const key = `${e.from}->${e.to}`;
+      (groups.get(key) ?? groups.set(key, []).get(key)!).push(e.id);
+    }
+    const out = new Map<string, { i: number; n: number }>();
+    for (const ids of groups.values()) ids.forEach((id, i) => out.set(id, { i, n: ids.length }));
+    return out;
+  }, [graph.edges]);
 
   const fit = () => {
     const r = svg.current?.getBoundingClientRect();
@@ -127,34 +154,44 @@ export function GraphView({ graph, start, selected, onOpen, endingsReached }: { 
             const b = placed.get(e.to);
             if (!a) return null;
             const kind = e.pending ? 'pending' : e.kind === 'fallback' || e.kind === 'divert' ? 'fallback' : e.conditional ? 'cond' : 'edge';
-            const hl = hover && (e.from === hover || e.to === hover);
+            const hl = hover === e.from || hover === e.to || hoverEdge === e.id;
+            const showLabel = !!e.label && (hoverEdge === e.id || hover === e.from);
+            const { i, n } = lanes.get(e.id)!;
+            const lane = i - (n - 1) / 2; // 0 for a lone edge; spreads parallel edges apart
             if (!b) {
               // END or missing destination
               const x1 = a.x + W;
-              const y1 = a.y + H / 2;
+              const y1 = a.y + H / 2 + clampLane(lane * 10);
               const missing = e.to !== 'END';
               return (
-                <g key={e.id}>
-                  <line x1={x1} y1={y1} x2={x1 + 40} y2={y1} className={`edge ${missing ? 'missing' : kind}`} markerEnd={`url(#arrow-${kind})`} />
+                <g key={e.id} onPointerEnter={() => setHoverEdge(e.id)} onPointerLeave={() => setHoverEdge(null)}>
+                  <line x1={x1} y1={y1} x2={x1 + 40} y2={y1} className={`edge ${missing ? 'missing' : kind} ${hl ? 'hl' : ''}`} markerEnd={`url(#arrow-${hl ? 'hl' : kind})`} />
                   <text x={x1 + 44} y={y1 + 4} className={`edge-end ${missing ? 'missing' : ''}`}>
                     {missing ? `⚠ ${e.to}` : 'END'}
                   </text>
+                  {showLabel && <EdgeLabel x={x1 + 20} y={y1 - 14} text={e.label} />}
                 </g>
               );
             }
             const forward = b.x > a.x;
-            const x1 = forward ? a.x + W : a.x + W / 2;
-            const y1 = forward ? a.y + H / 2 : a.y + H;
-            const x2 = forward ? b.x : b.x + W / 2;
-            const y2 = forward ? b.y + H / 2 : b.y + H;
+            const x1 = forward ? a.x + W : a.x + W / 2 + lane * 18;
+            const y1 = forward ? a.y + H / 2 + clampLane(lane * 10) : a.y + H;
+            const x2 = forward ? b.x : b.x + W / 2 + lane * 18;
+            const y2 = forward ? b.y + H / 2 + clampLane(lane * 10) : b.y + H;
             const dx = Math.max(40, (x2 - x1) / 2);
-            const sag = Math.max(50, Math.abs(x2 - x1) * 0.25);
-            const d = forward ? `M${x1},${y1} C${x1 + dx},${y1} ${x2 - dx},${y2} ${x2},${y2}` : `M${x1},${y1} C${x1},${y1 + sag} ${x2},${y2 + sag} ${x2},${y2 + 2}`;
+            const sag = Math.max(50, Math.abs(x2 - x1) * 0.25) + (lane + (n - 1) / 2) * 24;
+            const c1 = forward ? [x1 + dx, y1 + lane * 26] : [x1, y1 + sag];
+            const c2 = forward ? [x2 - dx, y2 + lane * 26] : [x2, y2 + sag];
+            const end = forward ? [x2, y2] : [x2, y2 + 2];
+            const d = `M${x1},${y1} C${c1[0]},${c1[1]} ${c2[0]},${c2[1]} ${end[0]},${end[1]}`;
+            // Midpoint of the cubic Bézier (t = 0.5) for the label.
+            const mx = (x1 + 3 * c1[0] + 3 * c2[0] + end[0]) / 8;
+            const my = (y1 + 3 * c1[1] + 3 * c2[1] + end[1]) / 8;
             return (
-              <g key={e.id}>
-                <path d={d} className={`edge ${kind} ${hl ? 'hl' : ''}`} markerEnd={`url(#arrow-${hl ? 'hl' : kind})`}>
-                  <title>{e.label || e.kind}</title>
-                </path>
+              <g key={e.id} onPointerEnter={() => setHoverEdge(e.id)} onPointerLeave={() => setHoverEdge(null)}>
+                <path d={d} className="edge-hit" />
+                <path d={d} className={`edge ${kind} ${hl ? 'hl' : ''}`} markerEnd={`url(#arrow-${hl ? 'hl' : kind})`} />
+                {showLabel && <EdgeLabel x={mx} y={my} text={e.kind === 'fallback' ? 'otherwise' : e.label} />}
               </g>
             );
           })}
