@@ -40,6 +40,17 @@ for (const [name, type] of [['WebKit', webkit], ['Chromium', chromium]]) {
       await page.goto(url);
       await page.getByText('New here? Four steps.').waitFor({ timeout: 10000 });
     });
+    await step('theme toggle switches to dark and survives a reload', async () => {
+      const paper = () => page.evaluate(() => getComputedStyle(document.documentElement).getPropertyValue('--paper').trim());
+      const light = await paper();
+      await page.getByRole('button', { name: /Theme:/ }).click(); // auto → light
+      await page.getByRole('button', { name: /Theme:/ }).click(); // light → dark
+      if ((await paper()) === light) throw new Error('dark theme did not apply');
+      await page.reload();
+      await page.getByRole('button', { name: 'Theme: dark' }).waitFor({ timeout: 5000 });
+      if ((await paper()) === light) throw new Error('dark theme was not remembered');
+      await page.getByRole('button', { name: /Theme:/ }).click(); // dark → auto (system light in tests)
+    });
     await step('converts a sample', async () => {
       await page.getByText('The Locked Archive').first().click();
       await page.getByRole('button', { name: /Archive Entrance/ }).waitFor();

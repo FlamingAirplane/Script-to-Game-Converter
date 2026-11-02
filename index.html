@@ -3,8 +3,15 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <meta name="color-scheme" content="light" />
+    <meta name="color-scheme" content="light dark" />
     <title>Narrative Bridge</title>
+    <script>
+      // Apply the saved theme before first paint (see src/ui/ThemeToggle.tsx).
+      try {
+        var t = localStorage.getItem('narrative-bridge.theme');
+        if (t === 'light' || t === 'dark') document.documentElement.setAttribute('data-theme', t);
+      } catch (e) {}
+    </script>
     <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M2 17 C 7 7, 17 7, 22 17' fill='none' stroke='%238e2c1b' stroke-width='2.4' stroke-linecap='round'/%3E%3C/svg%3E" />
   </head>
   <body>
