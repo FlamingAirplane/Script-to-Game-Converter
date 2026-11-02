@@ -3,10 +3,27 @@ import { sortDiagnostics, type Diagnostic, type Severity } from '../core/diagnos
 import type { StoryProject } from '../core/isr';
 import { SeverityIcon } from './common';
 import { friendly, SEVERITY_LABEL } from './friendly';
+import { Logbook } from './Logbook';
 
 const SEVERITIES: Severity[] = ['error', 'review', 'warning', 'info'];
 
-export function DiagnosticsPanel({ diagnostics, project, onJump, onClose }: { diagnostics: Diagnostic[]; project: StoryProject; onJump: (d: Diagnostic) => void; onClose: () => void }) {
+export type PanelView = 'notes' | 'log';
+
+export function DiagnosticsPanel({
+  diagnostics,
+  project,
+  onJump,
+  onClose,
+  view,
+  onView,
+}: {
+  diagnostics: Diagnostic[];
+  project: StoryProject | null;
+  onJump: (d: Diagnostic) => void;
+  onClose: () => void;
+  view: PanelView;
+  onView: (v: PanelView) => void;
+}) {
   const [hidden, setHidden] = useState<Set<Severity>>(new Set(['info']));
   const [technical, setTechnical] = useState(false);
   const counts = Object.fromEntries(SEVERITIES.map((s) => [s, diagnostics.filter((d) => d.severity === s).length])) as Record<Severity, number>;
@@ -15,15 +32,28 @@ export function DiagnosticsPanel({ diagnostics, project, onJump, onClose }: { di
   return (
     <aside className="diagnostics">
       <div className="pane-head">
-        <strong>Diagnostics</strong>
+        <span className="pane-tabs" role="tablist" aria-label="Side panel">
+          <button role="tab" aria-selected={view === 'notes'} className={`pane-tab ${view === 'notes' ? 'active' : ''}`} onClick={() => onView('notes')}>
+            Diagnostics
+          </button>
+          <button role="tab" aria-selected={view === 'log'} className={`pane-tab ${view === 'log' ? 'active' : ''}`} onClick={() => onView('log')}>
+            Logbook
+          </button>
+        </span>
         <span className="spacer" />
-        <label className="check small muted" title="Show error codes and pipeline stages">
-          <input type="checkbox" checked={technical} onChange={(e) => setTechnical(e.target.checked)} /> details
-        </label>
-        <button className="icon" onClick={onClose} title="Close">
+        {view === 'notes' && (
+          <label className="check small muted" title="Show error codes and pipeline stages">
+            <input type="checkbox" checked={technical} onChange={(e) => setTechnical(e.target.checked)} /> details
+          </label>
+        )}
+        <button className="icon" onClick={onClose} title="Close" aria-label="Close side panel">
           ×
         </button>
       </div>
+      {view === 'log' ? (
+        <Logbook />
+      ) : (
+        <>
       <div className="sev-filters">
         {SEVERITIES.map((s) => (
           <button
@@ -43,7 +73,7 @@ export function DiagnosticsPanel({ diagnostics, project, onJump, onClose }: { di
       {shown.length === 0 && <p className="muted small pad">{diagnostics.length ? 'Everything here is hidden by the filters above.' : 'Nothing to fix — the proofs are clean and the story is ready to export.'}</p>}
       <ul className="diag-list">
         {shown.map((d, i) => {
-          const f = friendly(d, project);
+          const f = friendly(d, project ?? undefined);
           return (
             <li key={i}>
               <button className="diag" onClick={() => onJump(d)}>
@@ -68,6 +98,8 @@ export function DiagnosticsPanel({ diagnostics, project, onJump, onClose }: { di
           );
         })}
       </ul>
+        </>
+      )}
     </aside>
   );
 }

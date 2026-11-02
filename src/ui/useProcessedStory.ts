@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import type { Diagnostic } from '../core/diagnostics';
 import type { StoryProject } from '../core/isr';
+import { log, logbook, type LogEntry } from '../core/log';
 import type { ProcessedStory } from '../core/pipeline';
 // A separate file on the hosted site; inlined in the offline edition (see vite.config.ts).
 import PipelineWorker from '@pipeline-worker';
@@ -15,6 +16,11 @@ export interface PipelineResponse {
   id: number;
   processed: ProcessedStory;
 }
+
+/** Messages from the worker: a processing result, or a batch of its log entries. */
+export type WorkerMessage = ({ type: 'result' } & PipelineResponse) | { type: 'log'; entries: LogEntry[] };
+
+const logger = log('app');
 
 function startWorker(): Worker | null {
   try {
@@ -40,11 +46,15 @@ export function useProcessedStory(project: StoryProject | null, parseDiagnostics
     const w = startWorker();
     worker.current = w;
     document.documentElement.dataset.pipeline = w ? 'worker' : 'page';
+    logger.info(w ? 'Processing in a background worker' : 'Workers unavailable; processing on the page');
     if (!w) return;
-    w.onmessage = (e: MessageEvent<PipelineResponse>) => {
-      if (e.data.id === nextId.current) setResult(e.data);
+    w.onmessage = (e: MessageEvent<WorkerMessage>) => {
+      const m = e.data;
+      if (m.type === 'log') logbook.import(m.entries);
+      else if (m.id === nextId.current) setResult(m);
     };
-    w.onerror = () => {
+    w.onerror = (ev) => {
+      logger.error('Background worker failed; processing on the page instead', { message: ev.message });
       // Worker failed to load: fall back to the page for this and later edits.
       worker.current = null;
       document.documentElement.dataset.pipeline = 'page';

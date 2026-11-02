@@ -37,6 +37,19 @@ for (const theme of ['light', 'dark']) {
       for (const n of v.nodes.slice(0, 3)) console.log(`    ${n.target.join(' ')} — ${n.failureSummary.split('\n').slice(1, 2).join(' ').trim()}`);
     }
   }
+  // The Logbook side panel.
+  await page.keyboard.press('ControlOrMeta+l');
+  await page.getByRole('tab', { name: 'Logbook' }).waitFor();
+  await page.waitForTimeout(300);
+  const log = await page.evaluate(() =>
+    // eslint-disable-next-line no-undef
+    axe.run(document.querySelector('.diagnostics'), { runOnly: { type: 'tag', values: ['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa'] } }),
+  );
+  for (const v of log.violations) {
+    total += v.nodes.length;
+    console.log(`✗ ${theme} · Logbook · ${v.id} (${v.impact}) ×${v.nodes.length}: ${v.help}`);
+    for (const n of v.nodes.slice(0, 3)) console.log(`    ${n.target.join(' ')}`);
+  }
   await page.close();
 }
 await browser.close();

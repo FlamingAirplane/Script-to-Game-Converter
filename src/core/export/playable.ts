@@ -1,5 +1,6 @@
 import type { ProcessedStory } from '../pipeline';
 import { audioFileName, bytesToBase64, referencedAudio, type AudioAssets } from '../audio';
+import { log } from '../log';
 import { assertExportable, storyVersion } from './common';
 
 // "Playable story" export: one self-contained HTML file (Ink runtime + compiled story + a small
@@ -40,6 +41,7 @@ export function buildPlayableHtml(story: ProcessedStory, inkRuntimeJs: string, a
     JSON.stringify({ title, author: author ?? '', saveKey: `narrative-bridge.play.${id}.${storyVersion(story)}`, voices, hasClips: Object.keys(clips).length > 0 }),
   );
   const clipJson = jsonSafe(JSON.stringify(clips));
+  log('export').info('Built playable story', { clips: Object.keys(clips).length, voices: Object.keys(voices).length, storyBytes: story.compile.json!.length });
   return `<!doctype html>
 <html lang="en">
 <head>

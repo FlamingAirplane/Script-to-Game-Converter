@@ -445,3 +445,39 @@ describe('recording script', () => {
     expect(rows[2]).toBe('2,A,TOMAS,,Hi.,a_002.wav,');
   });
 });
+
+describe('logging', () => {
+  it('records levels, scopes and timings in a bounded buffer', async () => {
+    const { log, logbook, formatEntry } = await import('../src/core/log');
+    logbook.consoleLevel = 'off';
+    logbook.clear();
+    const l = log('test');
+    l.debug('quiet detail', { n: 1 });
+    l.warn('something odd');
+    const done = l.time('timed step', 'info');
+    const ms = done({ items: 3 });
+    const mine = logbook.all().filter((e) => e.scope === 'test');
+    expect(mine.map((e) => e.level)).toEqual(['debug', 'warn', 'info']);
+    expect(mine[2]).toMatchObject({ msg: 'timed step', data: { items: 3 }, ms });
+    expect(formatEntry(mine[2])).toMatch(/INFO .* test: timed step \(\d+(\.\d)? ms\) \{"items":3\}/);
+    for (let i = 0; i < 1200; i++) l.debug('flood');
+    expect(logbook.all().length).toBe(1000);
+  });
+
+  it('logs every pipeline stage without any story text', async () => {
+    const { logbook } = await import('../src/core/log');
+    logbook.consoleLevel = 'off';
+    logbook.clear();
+    const secret = 'The cipher is VELVET-ORCHID-7731';
+    const { project, diagnostics } = await build(`INT. VAULT - NIGHT\n\nMIRA\n${secret}\n\nShe whispers the phrase again.\n`, 'secret.fountain');
+    processProject(project, diagnostics);
+    const entries = logbook.all();
+    const msgs = entries.map((e) => e.msg);
+    for (const m of ['Parsed document', 'Built story', 'Analysed story graph', 'Generated Ink', 'Compiled Ink', 'Ran automated playthroughs', 'Processed story'])
+      expect(msgs).toContain(m);
+    const dump = JSON.stringify(entries);
+    expect(dump).not.toContain('VELVET');
+    expect(dump).not.toContain('whispers');
+    expect(entries.find((e) => e.msg === 'Compiled Ink')?.ms).toBeGreaterThanOrEqual(0);
+  });
+});

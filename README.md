@@ -104,6 +104,18 @@ See [`src/samples.ts`](src/samples.ts) for complete examples.
 - Choices are sticky (`+`) unless marked once-only (`*`). A passage's divert becomes an invisible fallback choice when the passage also has choices, so players never get stuck.
 - Output is deterministic: the same ISR always produces byte-identical Ink.
 
+## Logging
+
+Every stage logs a structured entry (level, scope, message, counts and timings) through `src/core/log.ts`, the same
+logger in the page, the background worker and the CLI. Logs never contain story text, only ids, counts, sizes and
+durations, so they are safe to attach to bug reports.
+
+- **Web app:** the **Logbook** tab beside Diagnostics (⌘L / Ctrl+L) shows entries live, including the worker's.
+  You can filter by level, search, copy, download or clear. Uncaught errors are logged, and a crashed view shows a
+  recovery page with a log download instead of a blank screen.
+- **CLI:** entries go to stderr (warn and up by default): `--verbose` for everything, `--quiet` for errors only, and
+  `--log-file run.jsonl` to save every entry as JSON lines.
+
 ## Validation
 
 1. ISR schema validation.

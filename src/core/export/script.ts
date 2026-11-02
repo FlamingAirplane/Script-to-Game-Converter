@@ -1,4 +1,5 @@
 import { audioFileName } from '../audio';
+import { log } from '../log';
 import type { StoryProject } from '../isr';
 
 // Recording script: every line of dialogue in story order, one row per line, as CSV (opens in
@@ -25,6 +26,7 @@ export function buildRecordingScript(project: StoryProject): string {
       const clip = b.audio ? audioFileName(b.audio) : `${p.id}_${String(i + 1).padStart(3, '0')}.wav`;
       rows.push([n, p.title, names.get(b.speakerId) ?? b.speakerId, b.parenthetical ?? '', b.text, clip, b.audio ? 'yes' : '']);
     });
+  log('export').info('Built recording script', { lines: n, recorded: rows.filter((r) => r[6] === 'yes').length });
   // A byte-order mark so spreadsheet apps read the file as UTF-8.
   return '﻿' + rows.map((r) => r.map(cell).join(',')).join('\r\n') + '\r\n';
 }

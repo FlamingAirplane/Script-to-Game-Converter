@@ -61,5 +61,7 @@ Press **?** anywhere to see every keyboard shortcut. The handy ones: ⌘S (Ctrl+
 
 - **The file opens as text or code instead of the app.** Right-click it → *Open With* → your web browser.
 - **Nothing appears.** Try a different browser, and make sure the whole file downloaded (it's about 0.6 MB).
+- **Reporting a problem:** press ⌘L (Ctrl+L on Windows) to open the **Logbook**, click **download**, and attach
+  the file to your report. It records what the app did, never your story's text.
 - **Something in Diagnostics is red.** Click it. It takes you to the scene that needs fixing and explains what to do. Red
   items stop the export; yellow and purple ones are suggestions.

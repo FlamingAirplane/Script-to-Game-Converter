@@ -1,4 +1,7 @@
 import { encodeWav, NATIVE_AUDIO, newAudioId, type AudioAssets, type AudioRef } from '../core/audio';
+import { errorData, log } from '../core/log';
+
+const logger = log('audio');
 
 // Clip storage in the browser (IndexedDB: recordings are too large for localStorage), plus
 // recording and conversion helpers. Everything stays on this computer.
@@ -67,6 +70,7 @@ export async function storeClip(blob: Blob, name: string, seed: string): Promise
   const raw = await blob.arrayBuffer();
   // Browsers name the same formats differently (WebKit: audio/x-wav); store one canonical type.
   let mime = (blob.type.split(';')[0] || 'audio/wav').replace(/^audio\/(x-wav|wave|vnd\.wave)$/, 'audio/wav').replace(/^audio\/mp3$/, 'audio/mpeg');
+  const originalMime = mime;
   let bytes: Uint8Array = new Uint8Array(raw);
   let durationMs: number | undefined;
   try {
@@ -77,10 +81,12 @@ export async function storeClip(blob: Blob, name: string, seed: string): Promise
       mime = 'audio/wav';
     }
   } catch {
+    logger.warn('Could not decode audio clip', { type: blob.type || 'unknown', bytes: raw.byteLength });
     if (!NATIVE_AUDIO.has(mime)) throw new Error('This audio file could not be read. Use WAV, MP3 or OGG.');
   }
   const id = newAudioId(seed);
   await putClip(id, mime, bytes);
+  logger.info('Stored voice clip', { id, mime, bytes: bytes.length, originalType: blob.type || 'unknown', converted: mime !== originalMime, durationMs });
   return { id, name, mime, durationMs };
 }
 
@@ -91,7 +97,14 @@ export interface Recorder {
 
 /** Records from the microphone (the browser asks permission the first time). */
 export async function startRecording(): Promise<Recorder> {
-  const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+  let stream: MediaStream;
+  try {
+    stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+  } catch (e) {
+    logger.warn('Microphone unavailable', errorData(e));
+    throw e;
+  }
+  logger.debug('Recording started');
   const rec = new MediaRecorder(stream);
   const chunks: Blob[] = [];
   rec.ondataavailable = (e) => e.data.size && chunks.push(e.data);

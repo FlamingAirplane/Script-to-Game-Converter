@@ -1,5 +1,6 @@
 import { diag, type Diagnostic } from './diagnostics';
 import { sha256Hex } from './hash';
+import { log } from './log';
 import {
   SCHEMA_VERSION,
   slugify,
@@ -43,8 +44,10 @@ export interface BuildResult {
 }
 
 const MAX_BYTES = 5 * 1024 * 1024;
+const logger = log('build');
 
 export async function buildStory(inputs: SourceInput[], options: BuildOptions): Promise<BuildResult> {
+  const done = logger.time('Built story', 'info');
   const diagnostics: Diagnostic[] = [];
   const sources: SourceDocument[] = [];
   const parsed: { doc: SourceDocument; blocks: ParsedBlock[] }[] = [];
@@ -100,7 +103,9 @@ export async function buildStory(inputs: SourceInput[], options: BuildOptions): 
       text: input.text,
     };
     sources.push(doc);
+    const parsed1 = logger.time('Parsed document');
     const result = parserFor(doc.format).parse(input.text, docId);
+    parsed1({ document: docId, format: doc.format, detectedBy: detected.by, converted: input.convertedFrom, bytes: byteLength, lines: input.text.split('\n').length, blocks: result.blocks.length, warnings: result.diagnostics.length });
     diagnostics.push(...result.diagnostics);
     parsed.push({ doc, blocks: result.blocks });
   }
@@ -108,6 +113,16 @@ export async function buildStory(inputs: SourceInput[], options: BuildOptions): 
   const project = assemble(parsed, options, diagnostics);
   project.sources = sources;
   if (options.mode === 'adaptation') proposeAdaptations(project);
+  done({
+    mode: options.mode,
+    documents: sources.length,
+    passages: project.passages.length,
+    characters: project.characters.length,
+    items: project.items.length,
+    variables: project.variables.length,
+    proposals: project.passages.reduce((n, p) => n + p.choices.filter((c) => c.review === 'pending').length, 0),
+    diagnostics: diagnostics.length,
+  });
   return { project, diagnostics };
 }
 

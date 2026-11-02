@@ -5,7 +5,7 @@ import type { ConversionMode, StoryProject } from '../core/isr';
 import type { ConversionState } from '../core/pipeline';
 import { validateSchema } from '../core/schema';
 import { download } from './common';
-import { DiagnosticsPanel } from './DiagnosticsPanel';
+import { DiagnosticsPanel, type PanelView } from './DiagnosticsPanel';
 import { GraphView } from './GraphView';
 import { ImportView } from './ImportView';
 import { InkView } from './InkView';
@@ -13,7 +13,10 @@ import { passageForEntity } from './projectOps';
 import { ReviewView, STORY_SETTINGS } from './ReviewView';
 import { base64ToBytes, bytesToBase64, referencedAudio } from '../core/audio';
 import { collectClips, putClip } from './audioStore';
+import { errorData, log } from '../core/log';
 import { Logo } from './Logo';
+
+const appLog = log('app');
 
 // Loaded on first use: Export carries the exporters, zip library and Ink runtime; Playtest the runtime.
 const ExportView = lazy(() => import('./ExportView').then((m) => ({ default: m.ExportView })));
@@ -67,6 +70,7 @@ export function App() {
   const [tab, setTab] = useState<Tab>(initial ? 'review' : 'import');
   const [soundOn, setSoundOn] = useState(sfx.enabled);
   const [showKeys, setShowKeys] = useState(false);
+  const [panelView, setPanelView] = useState<PanelView>('notes');
   // "Dialogue only": hide narration, transitions, notes and effects in Review and Playtest.
   const [dialogueOnly, setDialogueOnlyState] = useState(() => {
     try {
@@ -176,6 +180,10 @@ export function App() {
       } else if (mod && k === 'f' && project) {
         e.preventDefault();
         h.find();
+      } else if (mod && k === 'l') {
+        e.preventDefault();
+        setPanelView('log');
+        setShowDiag(true);
       } else if (mod && e.key === '.' && project) {
         e.preventDefault();
         setShowDiag((v) => !v);
@@ -228,13 +236,16 @@ export function App() {
     if (!project) return;
     const clips = await collectClips(referencedAudio(project));
     const audio = Object.fromEntries(Object.entries(clips).map(([id, c]) => [id, { mime: c.mime, data: bytesToBase64(c.bytes) }]));
-    download(`${project.project.id}.nbproj.json`, JSON.stringify({ project, parseDiagnostics, audio }, null, 2), 'application/json');
+    const json = JSON.stringify({ project, parseDiagnostics, audio }, null, 2);
+    download(`${project.project.id}.nbproj.json`, json, 'application/json');
+    appLog.info('Saved project file', { passages: project.passages.length, clips: Object.keys(audio).length, bytes: json.length });
   };
 
   const openProject = async (file: File) => {
     try {
       const data = JSON.parse(await file.text());
       for (const [id, c] of Object.entries((data.audio ?? {}) as Record<string, { mime: string; data: string }>)) await putClip(id, c.mime, base64ToBytes(c.data));
+      appLog.info('Opened project file', { bytes: file.size, clips: Object.keys(data.audio ?? {}).length });
       const p: StoryProject = data.project?.schemaVersion ? data.project : data;
       const errs = validateSchema(p).filter((d) => d.severity === 'error');
       if (errs.length) return alert(`Not a valid Narrative Bridge project:\n${errs.map((e) => e.message).join('\n')}`);
@@ -244,6 +255,7 @@ export function App() {
       setSelected(p.project.startPassage);
       setTab('review');
     } catch (e) {
+      appLog.error('Could not open project file', errorData(e));
       alert(`Could not open project: ${e}`);
     }
   };
@@ -284,7 +296,7 @@ export function App() {
     : null;
 
   return (
-    <div className={`app ${processed && showDiag && tab !== 'import' ? 'with-diag' : ''}`}>
+    <div className={`app ${showDiag && ((processed && tab !== 'import') || panelView === 'log') ? 'with-diag' : ''}`}>
       <header className="topbar">
         <div className="brand">
           <Logo size={26} />
@@ -397,7 +409,16 @@ export function App() {
           </Suspense>
           {(tab === 'import' || tab === 'export') && <footer className="folio">— {TABS.find((t) => t.id === tab)!.numeral.toLowerCase()} —</footer>}
         </div>
-        {processed && showDiag && tab !== 'import' && <DiagnosticsPanel diagnostics={processed.diagnostics} project={project!} onJump={jump} onClose={() => setShowDiag(false)} />}
+        {showDiag && ((processed && tab !== 'import') || panelView === 'log') && (
+          <DiagnosticsPanel
+            diagnostics={processed?.diagnostics ?? []}
+            project={project}
+            onJump={jump}
+            onClose={() => setShowDiag(false)}
+            view={panelView}
+            onView={setPanelView}
+          />
+        )}
       </div>
       {showKeys && <ShortcutSheet onClose={() => setShowKeys(false)} />}
     </div>
