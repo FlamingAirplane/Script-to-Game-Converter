@@ -253,9 +253,9 @@ export function App() {
         )}
       </header>
 
-      <nav className="tabs">
+      <nav className="tabs" aria-label="Chapters">
         {TABS.map((t) => (
-          <button key={t.id} className={`tab ${tab === t.id ? 'active' : ''}`} disabled={t.id !== 'import' && !processed} onClick={() => setTab(t.id)} title={`⌘${t.key}`}>
+          <button key={t.id} className={`tab ${tab === t.id ? 'active' : ''}`} aria-current={tab === t.id ? 'page' : undefined} disabled={t.id !== 'import' && !processed} onClick={() => setTab(t.id)} title={`⌘${t.key}`}>
             <span className="tab-num">{t.numeral}</span>
             {t.label}
             {t.id === 'review' && counts && counts.review > 0 && <span className="tab-count review">{counts.review}</span>}

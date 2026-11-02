@@ -63,7 +63,7 @@ export function InkView({ processed, onOpen }: { processed: ProcessedStory; onOp
           Download compiled .json
         </button>
       </div>
-      <pre className="code mono">
+      <pre className="code mono" tabIndex={0} aria-label="Generated Ink source">
         {lines.map((l, i) => {
           const n = i + 1;
           const err = errorLines.get(n);

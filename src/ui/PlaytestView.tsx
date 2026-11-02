@@ -159,7 +159,7 @@ export function PlaytestView({ processed, onOpen }: { processed: ProcessedStory;
             </button>
           </div>
         </div>
-        <div className="transcript">
+        <div className="transcript" tabIndex={0} aria-label="Story text">
           {lines.map((l, i) =>
             l.kind === 'choice' ? (
               <p key={i} className="t-choice">

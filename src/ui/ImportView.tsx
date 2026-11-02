@@ -84,6 +84,12 @@ export function ImportView({ onConvert, busy }: { onConvert: (inputs: SourceInpu
               addFiles(e.dataTransfer.files);
             }}
             onClick={() => input.current?.click()}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' || e.key === ' ') {
+                e.preventDefault();
+                input.current?.click();
+              }
+            }}
             role="button"
             tabIndex={0}
           >
@@ -110,7 +116,7 @@ export function ImportView({ onConvert, busy }: { onConvert: (inputs: SourceInpu
               <label className="muted small">…or paste text as</label>
               <input className="input mono small" value={pasteName} onChange={(e) => setPasteName(e.target.value)} aria-label="File name for pasted text" />
             </div>
-            <textarea className="textarea mono" rows={9} placeholder={'INT. ARCHIVE - NIGHT\n\nMIRA\nThe archive is locked.'} value={paste} onChange={(e) => setPaste(e.target.value)} />
+            <textarea className="textarea mono" rows={9} aria-label="Script text" placeholder={'INT. ARCHIVE - NIGHT\n\nMIRA\nThe archive is locked.'} value={paste} onChange={(e) => setPaste(e.target.value)} />
           </div>
         </section>
 

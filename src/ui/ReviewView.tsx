@@ -416,7 +416,7 @@ function BlockRow({
           </div>
         )}
         {'text' in block && block.type !== 'unsupported' && (
-          <AutoText value={block.text} onChange={(text) => onChange(touched({ ...block, text } as ContentBlock))} serif={block.type !== 'note'} />
+          <AutoText value={block.text} onChange={(text) => onChange(touched({ ...block, text } as ContentBlock))} serif={block.type !== 'note'} label={`${block.type === 'dialogue' ? 'Dialogue' : block.type === 'note' ? 'Note' : block.type === 'transition' ? 'Transition' : 'Narration'} text`} />
         )}
         {block.type === 'unsupported' && (
           <div>
@@ -456,7 +456,7 @@ function BlockRow({
   );
 }
 
-function AutoText({ value, onChange, serif }: { value: string; onChange: (v: string) => void; serif?: boolean }) {
+function AutoText({ value, onChange, serif, label }: { value: string; onChange: (v: string) => void; serif?: boolean; label: string }) {
   const ref = useRef<HTMLTextAreaElement>(null);
   const fit = () => {
     const el = ref.current;
@@ -479,7 +479,7 @@ function AutoText({ value, onChange, serif }: { value: string; onChange: (v: str
     ro.observe(el);
     return () => ro.disconnect();
   }, []);
-  return <textarea ref={ref} rows={1} className={`autotext ${serif ? 'serif' : 'mono small'}`} value={value} onChange={(e) => onChange(e.target.value)} />;
+  return <textarea ref={ref} rows={1} aria-label={label} className={`autotext ${serif ? 'serif' : 'mono small'}`} value={value} onChange={(e) => onChange(e.target.value)} />;
 }
 
 function ChoiceEditor({
