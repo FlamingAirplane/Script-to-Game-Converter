@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { buildStory, type SourceInput } from '../core/builder';
 import type { Diagnostic } from '../core/diagnostics';
 import type { ConversionMode, StoryProject } from '../core/isr';
@@ -6,16 +6,18 @@ import type { ConversionState } from '../core/pipeline';
 import { validateSchema } from '../core/schema';
 import { download } from './common';
 import { DiagnosticsPanel } from './DiagnosticsPanel';
-import { ExportView } from './ExportView';
 import { GraphView } from './GraphView';
 import { ImportView } from './ImportView';
 import { InkView } from './InkView';
-import { PlaytestView } from './PlaytestView';
 import { passageForEntity } from './projectOps';
 import { ReviewView, STORY_SETTINGS } from './ReviewView';
 import { base64ToBytes, bytesToBase64, referencedAudio } from '../core/audio';
 import { collectClips, putClip } from './audioStore';
 import { Logo } from './Logo';
+
+// Loaded on first use: Export carries the exporters, zip library and Ink runtime; Playtest the runtime.
+const ExportView = lazy(() => import('./ExportView').then((m) => ({ default: m.ExportView })));
+const PlaytestView = lazy(() => import('./PlaytestView').then((m) => ({ default: m.PlaytestView })));
 import { ThemeToggle } from './ThemeToggle';
 import { useProcessedStory } from './useProcessedStory';
 
@@ -287,6 +289,7 @@ export function App() {
           <span>{TABS.find((t) => t.id === tab)!.numeral}</span>
         </div>
         <div className="content" key={`page-${tab}`}>
+          <Suspense fallback={<p className="muted pad">Turning the page…</p>}>
           {tab === 'import' && <ImportView onConvert={convert} busy={busy} />}
           {processed && tab === 'review' && <ReviewView processed={{ ...processed, project: project! }} selected={selected} onSelect={setSelected} update={update} />}
           {processed && tab === 'graph' && (
@@ -305,6 +308,7 @@ export function App() {
           {processed && tab === 'ink' && <InkView processed={processed} onOpen={open} />}
           {processed && tab === 'play' && <PlaytestView processed={processed} onOpen={open} />}
           {processed && tab === 'export' && <ExportView processed={processed} stale={stale} onState={setExportState} />}
+          </Suspense>
           {(tab === 'import' || tab === 'export') && <footer className="folio">— {TABS.find((t) => t.id === tab)!.numeral.toLowerCase()} —</footer>}
         </div>
         {processed && showDiag && tab !== 'import' && <DiagnosticsPanel diagnostics={processed.diagnostics} project={project!} onJump={jump} onClose={() => setShowDiag(false)} />}

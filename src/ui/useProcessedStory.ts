@@ -1,10 +1,9 @@
 import { useEffect, useRef, useState } from 'react';
 import type { Diagnostic } from '../core/diagnostics';
 import type { StoryProject } from '../core/isr';
-import { attachSmoke, processProject, type ProcessedStory } from '../core/pipeline';
-import { smokeTestAsync } from '../core/validate';
-// Inlined so the worker also works in the single-file writer edition opened from disk.
-import PipelineWorker from './pipeline.worker?worker&inline';
+import type { ProcessedStory } from '../core/pipeline';
+// A separate file on the hosted site; inlined in the offline edition (see vite.config.ts).
+import PipelineWorker from '@pipeline-worker';
 
 export interface PipelineRequest {
   id: number;
@@ -61,15 +60,23 @@ export function useProcessedStory(project: StoryProject | null, parseDiagnostics
       worker.current.postMessage({ id, project, parseDiagnostics } satisfies PipelineRequest);
       return;
     }
-    // Page fallback.
-    const quick = processProject(project, parseDiagnostics, { skipSmoke: true });
-    setResult({ id, processed: quick });
-    if (!quick.smokePending || !quick.compile.json) return;
-    const timer = setTimeout(async () => {
-      const r = await smokeTestAsync(quick.compile.json!, project, { shouldContinue: () => id === nextId.current });
-      if (r && id === nextId.current) setResult({ id, processed: attachSmoke(quick, r) });
-    }, 250);
-    return () => clearTimeout(timer);
+    // Page fallback: the pipeline (with the Ink compiler) is only loaded if it is needed.
+    let cancelled = false;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    void Promise.all([import('../core/pipeline'), import('../core/validate')]).then(([{ processProject, attachSmoke }, { smokeTestAsync }]) => {
+      if (cancelled || id !== nextId.current) return;
+      const quick = processProject(project, parseDiagnostics, { skipSmoke: true });
+      setResult({ id, processed: quick });
+      if (!quick.smokePending || !quick.compile.json) return;
+      timer = setTimeout(async () => {
+        const r = await smokeTestAsync(quick.compile.json!, project, { shouldContinue: () => id === nextId.current });
+        if (r && id === nextId.current) setResult({ id, processed: attachSmoke(quick, r) });
+      }, 250);
+    });
+    return () => {
+      cancelled = true;
+      if (timer) clearTimeout(timer);
+    };
   }, [project, parseDiagnostics, sentId]);
 
   const current = result && project ? result.processed : null;

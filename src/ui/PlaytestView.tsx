@@ -1,4 +1,5 @@
-import { Story } from 'inkjs/full';
+// Engine-only runtime: the compiler isn't needed to play an already compiled story.
+import { Story } from 'inkjs';
 import { Fragment, useCallback, useEffect, useRef, useState } from 'react';
 import { fnv1a } from '../core/hash';
 import { itemVar } from '../core/isr';
