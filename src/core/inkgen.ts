@@ -1,3 +1,4 @@
+import { audioFileName } from './audio';
 import { GENERATOR_VERSION } from './version';
 import { isActive, itemVar, type Condition, type Effect, type Passage, type StoryProject } from './isr';
 
@@ -5,7 +6,8 @@ import { isActive, itemVar, type Condition, type Effect, type Passage, type Stor
 //
 // Conventions (documented in docs/InkConventions.md):
 //  - Items are Boolean VARs named has_<item_id>.
-//  - Dialogue lines are "NAME: text" with a #speaker:<id> tag; parentheticals add #paren:<text>.
+//  - Dialogue lines are "NAME: text" with a #speaker:<id> tag; parentheticals add #paren:<text>, and
+//    a recorded clip adds #audio:<file> (the file ships with the export).
 //  - Transitions carry a #transition tag; scene headings are a #scene tag on the first line.
 //  - Notes and unsupported constructs are preserved as Ink comments.
 //  - Choices are sticky (+) unless marked once-only (*). A passage divert becomes an invisible
@@ -129,7 +131,8 @@ export function generateInk(project: StoryProject): GeneratedInk {
           const who = speakers.get(b.speakerId);
           const name = (who?.displayName ?? b.speakerId).toUpperCase();
           const paren = b.parenthetical ? ` #paren:${escapeTagValue(b.parenthetical)}` : '';
-          emit(`${escapeInk(`${name}: ${b.text}`)} #speaker:${b.speakerId}${paren}${sceneTag()}`, p.id);
+          const audio = b.audio ? ` #audio:${audioFileName(b.audio)}` : '';
+          emit(`${escapeInk(`${name}: ${b.text}`)} #speaker:${b.speakerId}${paren}${audio}${sceneTag()}`, p.id);
           break;
         }
         case 'transition':

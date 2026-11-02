@@ -5,6 +5,7 @@ import { uniqueId, type Choice, type CompareOp, type Condition, type ContentBloc
 import type { ProcessedStory } from '../core/pipeline';
 import { Badge, ProvenanceBadge, SeverityIcon } from './common';
 import { friendly } from './friendly';
+import { VoiceClip, VoicePicker } from './VoiceControls';
 import { addChoice, addPassage, deletePassage, findText, mergeCharacter, movePassage, renamePassage, replaceText } from './projectOps';
 
 type Update = (fn: (draft: StoryProject) => void, group?: string) => void;
@@ -413,6 +414,7 @@ function BlockRow({
               value={block.parenthetical ?? ''}
               onChange={(e) => onChange(touched({ ...block, parenthetical: e.target.value || undefined }))}
             />
+            <VoiceClip block={block} voice={project.characters.find((c) => c.id === block.speakerId)?.voice} onChange={(audio) => onChange({ ...block, audio })} />
           </div>
         )}
         {'text' in block && block.type !== 'unsupported' && (
@@ -678,6 +680,7 @@ function StorySettings({ project, update }: { project: StoryProject; update: Upd
             <th>Display name</th>
             <th>Aliases seen in source</th>
             <th>Same person as…</th>
+            <th>Voice</th>
           </tr>
         </thead>
         <tbody>
@@ -711,11 +714,14 @@ function StorySettings({ project, update }: { project: StoryProject; update: Upd
                   </select>
                 )}
               </td>
+              <td>
+                <VoicePicker voice={c.voice} name={c.displayName} onChange={(voice) => update((d) => (d.characters[i].voice = voice), `settings:voice:${i}`)} />
+              </td>
             </tr>
           ))}
           {!project.characters.length && (
             <tr>
-              <td colSpan={4} className="muted small">
+              <td colSpan={5} className="muted small">
                 No characters detected.
               </td>
             </tr>

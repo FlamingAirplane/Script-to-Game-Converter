@@ -730,3 +730,10 @@ input[type='checkbox'], input[type='radio'] { accent-color: var(--ink); }
 @media (max-width: 760px) { .ribbon { display: none; } .title-page h1 { font-size: 42px; } }
 
 .diagnostics > .pane-head { padding-left: 46px; }
+
+/* ---------- Voices ---------- */
+.voice-clip { display: inline-flex; align-items: center; gap: 2px; flex-wrap: wrap; }
+.voice-clip .rec { color: var(--err); border-color: var(--err); }
+.clip-name { color: var(--teal); font-variant-numeric: lining-nums; }
+.voice-picker { display: inline-flex; align-items: center; gap: 4px; flex-wrap: wrap; }
+.voice-picker select:first-child { max-width: 170px; }

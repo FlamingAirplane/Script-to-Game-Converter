@@ -3,10 +3,13 @@ import { isPinnedRef } from '../core/export/common';
 import { ADAPTERS, buildPlayableHtml, buildTwee, ExportBlockedError, playableFileName, twineFileName, zipExport, type EngineTarget, type ExportResult } from '../core/export';
 // The engine-only Ink runtime (~125 KB), embedded in playable-story exports.
 import inkRuntime from '../../node_modules/inkjs/dist/ink.js?raw';
+import { referencedAudio } from '../core/audio';
 import type { ProcessedStory } from '../core/pipeline';
+import { collectClips } from './audioStore';
 import { Badge, SeverityIcon, download } from './common';
 
-export function ExportView({ processed, onState }: { processed: ProcessedStory; onState: (s: 'Exporting' | 'Succeeded' | 'Failed' | null) => void }) {
+// `stale`: an edit is still being processed, so exports wait for it rather than packaging the previous version.
+export function ExportView({ processed, stale, onState }: { processed: ProcessedStory; stale: boolean; onState: (s: 'Exporting' | 'Succeeded' | 'Failed' | null) => void }) {
   const [engine, setEngine] = useState<EngineTarget>('unity');
   const adapter = ADAPTERS[engine];
   const defaultName = processed.project.project.title.replace(/[^\w]+/g, '') || 'NarrativeProject';
@@ -37,7 +40,8 @@ export function ExportView({ processed, onState }: { processed: ProcessedStory; 
     setError('');
     onState('Exporting');
     try {
-      const r = await adapter.export(processed, { engine, ...opts });
+      const audio = await collectClips(referencedAudio(processed.project));
+      const r = await adapter.export(processed, { engine, ...opts, audio });
       setResult(r);
       setZip(await zipExport(r));
       setPreview(r.files.find((f) => f.path.endsWith('narrative-bridge.manifest.json'))?.path ?? null);
@@ -57,7 +61,7 @@ export function ExportView({ processed, onState }: { processed: ProcessedStory; 
 
   return (
     <div className="view export-view">
-      <ShareSection processed={processed} />
+      <ShareSection processed={processed} stale={stale} />
 
       <h2 className="section-title">For a game engine</h2>
       <section className="engines">
@@ -117,7 +121,7 @@ export function ExportView({ processed, onState }: { processed: ProcessedStory; 
               </li>
             )}
           </ul>
-          <button className="btn primary big" disabled={busy || blocking.length > 0 || !!processed.smokePending} onClick={build}>
+          <button className="btn primary big" disabled={busy || stale || blocking.length > 0 || !!processed.smokePending} onClick={build}>
             {busy ? 'Building…' : `Build ${adapter.label} package`}
           </button>
           {blocking.length > 0 && <p className="error-text small">Fix the errors in the Diagnostics panel to enable export.</p>}
@@ -181,7 +185,7 @@ export function ExportView({ processed, onState }: { processed: ProcessedStory; 
                 </li>
               ))}
             </ul>
-            <pre className="file-preview mono small">{preview ? result.files.find((f) => f.path === preview)?.content.slice(0, 20000) : ''}</pre>
+            <pre className="file-preview mono small">{preview ? previewText(result.files.find((f) => f.path === preview)?.content) : ''}</pre>
           </div>
         </section>
       )}
@@ -194,13 +198,13 @@ function Pass({ ok }: { ok: boolean }) {
 }
 
 /** Exports that need no game engine: a playable web page for readers, and a Twine project. */
-function ShareSection({ processed }: { processed: ProcessedStory }) {
+function ShareSection({ processed, stale }: { processed: ProcessedStory; stale: boolean }) {
   const [error, setError] = useState('');
-  const blocked = processed.diagnostics.some((d) => d.exportBlocked);
-  const run = (fn: () => void) => {
+  const blocked = processed.diagnostics.some((d) => d.exportBlocked) || stale;
+  const run = async (fn: () => void | Promise<void>) => {
     setError('');
     try {
-      fn();
+      await fn();
     } catch (e) {
       setError(e instanceof ExportBlockedError ? e.message : String(e));
     }
@@ -218,7 +222,12 @@ function ShareSection({ processed }: { processed: ProcessedStory }) {
           <button
             className="btn primary"
             disabled={blocked}
-            onClick={() => run(() => download(playableFileName(processed), buildPlayableHtml(processed, inkRuntime), 'text/html'))}
+            onClick={() =>
+              run(async () => {
+                const audio = await collectClips(referencedAudio(processed.project));
+                download(playableFileName(processed), buildPlayableHtml(processed, inkRuntime, audio), 'text/html');
+              })
+            }
           >
             Download playable story (.html)
           </button>
@@ -233,8 +242,14 @@ function ShareSection({ processed }: { processed: ProcessedStory }) {
           </button>
         </div>
       </section>
-      {blocked && <p className="error-text small">Fix the items marked “must fix” in Diagnostics to enable these downloads.</p>}
+      {blocked && !stale && <p className="error-text small">Fix the items marked “must fix” in Diagnostics to enable these downloads.</p>}
       {error && <p className="error-text">{error}</p>}
     </>
   );
+}
+
+function previewText(content: string | Uint8Array | undefined): string {
+  if (content === undefined) return '';
+  if (typeof content === 'string') return content.slice(0, 20000);
+  return `(audio file, ${(content.length / 1024).toFixed(1)} KB)`;
 }

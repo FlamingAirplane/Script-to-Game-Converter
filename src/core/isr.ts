@@ -1,6 +1,8 @@
 // Intermediate Story Representation (ISR) — the canonical, engine-independent story model.
 // Versioned independently of the application (see SCHEMA_VERSION).
 
+import type { AudioRef, VoiceSettings } from './audio';
+
 export const SCHEMA_VERSION = '1.0';
 
 export type Provenance = 'source' | 'transformed' | 'generated' | 'user_authored';
@@ -28,6 +30,8 @@ export interface Character {
   id: string;
   displayName: string;
   aliases: string[];
+  /** Browser text-to-speech voice used in Playtest and the playable story. */
+  voice?: VoiceSettings;
 }
 
 export interface Item {
@@ -61,7 +65,7 @@ export type Effect =
   | { type: 'add_var'; variableId: string; amount: number };
 
 export type ContentBlock =
-  | { type: 'dialogue'; speakerId: string; text: string; parenthetical?: string; origin: Provenance; source?: SourceRef }
+  | { type: 'dialogue'; speakerId: string; text: string; parenthetical?: string; audio?: AudioRef; origin: Provenance; source?: SourceRef }
   | { type: 'action'; text: string; origin: Provenance; source?: SourceRef }
   | { type: 'transition'; text: string; origin: Provenance; source?: SourceRef }
   | { type: 'note'; text: string; origin: Provenance; source?: SourceRef } // preserved, emitted as Ink comment

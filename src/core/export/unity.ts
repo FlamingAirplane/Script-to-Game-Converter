@@ -1,5 +1,5 @@
 import type { ProcessedStory } from '../pipeline';
-import { assertExportable, buildManifest, commonFiles, itemVarNames, json, sourceFiles, storyVersion, verifyExport } from './common';
+import { assertExportable, audioFiles, buildManifest, commonFiles, itemVarNames, json, sourceFiles, storyVersion, verifyExport } from './common';
 import type { EngineAdapter, ExportFile, ExportOptions, ExportResult } from './types';
 
 // Unity adapter. Uses inkle's Ink Unity Integration (com.inkle.ink-unity-integration) as a
@@ -26,9 +26,11 @@ export const unityAdapter: EngineAdapter = {
     assertExportable(story);
     const root = `${options.projectName}/`;
     const manifest = await buildManifest(story, options, this);
+    const voice = audioFiles(story, options.audio, `${root}${NB}/Resources/NarrativeBridgeAudio/`);
     const files: ExportFile[] = [
       { path: `${root}${NB}/Ink/MainStory.ink`, content: story.generated.ink },
       { path: `${root}${NB}/Resources/MainStory.compiled.json`, content: story.compile.json! },
+      ...voice.files,
       { path: `${root}${NB}/Scripts/StoryInfo.cs`, content: storyInfoCs(story) },
       { path: `${root}${NB}/Scripts/IInventoryAuthority.cs`, content: INVENTORY_CS },
       { path: `${root}${NB}/Scripts/NarrativeController.cs`, content: CONTROLLER_CS },
@@ -56,6 +58,7 @@ export const unityAdapter: EngineAdapter = {
         diagnostics: [],
       },
     };
+    for (const name of voice.missing) result.report.warnings.push(`Voice clip "${name}" is missing from this browser, so it was left out of the package.`);
     finalize(result, story, [`${root}${NB}/Ink/MainStory.ink`, `${root}${NB}/Resources/MainStory.compiled.json`, `${root}Packages/manifest.json`]);
     return result;
   },
@@ -66,6 +69,7 @@ export function finalize(result: ExportResult, story: ProcessedStory, required: 
   result.report.diagnostics = ds;
   result.report.errors = ds.filter((d) => d.severity === 'error').map((d) => d.message);
   result.report.warnings = [
+    ...result.report.warnings,
     ...ds.filter((d) => d.severity === 'warning').map((d) => d.message),
     ...story.diagnostics.filter((d) => d.severity === 'warning' || d.severity === 'review').map((d) => d.message),
   ];
@@ -85,6 +89,7 @@ function packageManifest(o: ExportOptions) {
   return {
     dependencies: {
       'com.inkle.ink-unity-integration': unityPackageUrl(o.integrationRef),
+      'com.unity.modules.audio': '1.0.0',
       'com.unity.modules.imgui': '1.0.0',
       'com.unity.modules.jsonserialize': '1.0.0',
     },
@@ -200,6 +205,9 @@ namespace NarrativeBridge
         public bool startOnAwake = true;
         public bool drawDemoUI = true;
 
+        [Tooltip("Play recorded dialogue clips (#audio tags) from Resources/NarrativeBridgeAudio.")]
+        public bool playVoiceClips = true;
+
         public struct Line
         {
             public string Speaker;
@@ -219,6 +227,8 @@ namespace NarrativeBridge
         const string SaveKey = "NarrativeBridge.Save." + StoryInfo.ProjectId;
         readonly List<Line> transcript = new List<Line>();
         IInventoryAuthority authority;
+        AudioSource voice;
+        readonly Queue<AudioClip> voiceQueue = new Queue<AudioClip>();
         bool syncing;
         string status = "";
         Vector2 scroll;
@@ -235,6 +245,9 @@ namespace NarrativeBridge
             authority = inventoryAuthority as IInventoryAuthority;
             if (inventoryAuthority != null && authority == null)
                 Debug.LogError("[NarrativeBridge] inventoryAuthority does not implement IInventoryAuthority.", this);
+            voice = GetComponent<AudioSource>();
+            if (voice == null) voice = gameObject.AddComponent<AudioSource>();
+            voice.playOnAwake = false;
             if (startOnAwake) StartStory();
         }
 
@@ -263,6 +276,7 @@ namespace NarrativeBridge
             transcript.Clear();
             HasEnded = false;
             status = "";
+            StopVoice();
             Advance();
         }
 
@@ -271,6 +285,7 @@ namespace NarrativeBridge
             if (Story == null || index < 0 || index >= Story.currentChoices.Count) return;
             transcript.Add(new Line { Speaker = null, Text = "> " + Story.currentChoices[index].text, Tags = new List<string> { "choice" } });
             Story.ChooseChoiceIndex(index);
+            StopVoice();
             Advance();
         }
 
@@ -283,6 +298,7 @@ namespace NarrativeBridge
                 if (raw.Length == 0) continue;
                 var line = ParseLine(raw, new List<string>(Story.currentTags));
                 transcript.Add(line);
+                QueueVoice(line);
                 LineShown?.Invoke(line);
             }
             if (Story.currentChoices.Count > 0) ChoicesShown?.Invoke(Story.currentChoices);
@@ -290,6 +306,37 @@ namespace NarrativeBridge
             {
                 HasEnded = true;
                 StoryEnded?.Invoke();
+            }
+        }
+
+        // ---- Voice clips: lines tagged #audio:<file> play in order --------------------------
+
+        void QueueVoice(Line line)
+        {
+            if (!playVoiceClips || voice == null) return;
+            foreach (var t in line.Tags)
+            {
+                if (!t.StartsWith("audio:")) continue;
+                var file = t.Substring(6).Trim();
+                var dot = file.LastIndexOf('.');
+                var clip = Resources.Load<AudioClip>("NarrativeBridgeAudio/" + (dot > 0 ? file.Substring(0, dot) : file));
+                if (clip != null) voiceQueue.Enqueue(clip);
+                else Debug.LogWarning("[NarrativeBridge] Voice clip not found: " + file);
+            }
+        }
+
+        void StopVoice()
+        {
+            voiceQueue.Clear();
+            if (voice != null) voice.Stop();
+        }
+
+        void Update()
+        {
+            if (voice != null && !voice.isPlaying && voiceQueue.Count > 0)
+            {
+                voice.clip = voiceQueue.Dequeue();
+                voice.Play();
             }
         }
 
@@ -509,6 +556,7 @@ namespace NarrativeBridge.EditorTools
             var source = imported ? "Ink Unity Integration import" : "preflight JSON";
             if (json == null) { log = "[NarrativeBridge] Smoke test failed: compiled story not found."; return false; }
             var errors = new List<string>();
+            var clipsHeard = new HashSet<string>();
             int completed = 0;
             var rng = new System.Random(1234);
             const int runs = 50;
@@ -519,12 +567,24 @@ namespace NarrativeBridge.EditorTools
                 int steps = 0;
                 while (steps++ < 400)
                 {
-                    while (story.canContinue) story.Continue();
+                    while (story.canContinue)
+                    {
+                        story.Continue();
+                        foreach (var t in story.currentTags)
+                            if (t.StartsWith("audio:")) clipsHeard.Add(t.Substring(6).Trim());
+                    }
                     if (story.currentChoices.Count == 0) { completed++; break; }
                     story.ChooseChoiceIndex(rng.Next(story.currentChoices.Count));
                 }
             }
-            log = "[NarrativeBridge] Smoke test (" + source + "): " + completed + "/" + runs + " playthroughs reached an ending, " + errors.Count + " runtime errors." +
+            // Every voice clip a line refers to must have imported as an AudioClip.
+            foreach (var file in clipsHeard)
+            {
+                var dot = file.LastIndexOf('.');
+                if (Resources.Load<AudioClip>("NarrativeBridgeAudio/" + (dot > 0 ? file.Substring(0, dot) : file)) == null)
+                    errors.Add("Voice clip did not import: " + file);
+            }
+            log = "[NarrativeBridge] Smoke test (" + source + "): " + clipsHeard.Count + " voice clip(s) checked, " + completed + "/" + runs + " playthroughs reached an ending, " + errors.Count + " runtime errors." +
                   (errors.Count > 0 ? "\\n" + string.Join("\\n", errors) : "");
             return errors.Count == 0 && completed > 0;
         }

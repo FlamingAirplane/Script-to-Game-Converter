@@ -1,10 +1,11 @@
 // End-to-end check of the writer edition opened straight from disk (file://), in WebKit (Safari's
 // engine) and Chromium. Run with `npm run test:e2e` (builds the file first).
 // One-time setup: npx playwright-core install webkit chromium
-import { existsSync, mkdtempSync, readFileSync } from 'node:fs';
+import { existsSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import JSZip from 'jszip';
 import { chromium, webkit } from 'playwright-core';
 
 const file = fileURLToPath(new URL('../../release/Narrative-Bridge.html', import.meta.url));
@@ -107,6 +108,37 @@ for (const [name, type] of [['WebKit', webkit], ['Chromium', chromium]]) {
       await page.getByText('archive.fdx').waitFor({ timeout: 5000 });
       await page.getByRole('button', { name: /^Convert/ }).click();
       await page.locator('.passage-item', { hasText: 'Cliff Path' }).waitFor({ timeout: 5000 });
+    });
+    await step('attaches a voice clip to a line and ships it in the exports', async () => {
+      // A one-second 8 kHz silent WAV.
+      const n = 8000;
+      const wav = Buffer.alloc(44 + n * 2);
+      wav.write('RIFF', 0);
+      wav.writeUInt32LE(36 + n * 2, 4);
+      wav.write('WAVEfmt ', 8);
+      wav.writeUInt32LE(16, 16);
+      wav.writeUInt16LE(1, 20);
+      wav.writeUInt16LE(1, 22);
+      wav.writeUInt32LE(8000, 24);
+      wav.writeUInt32LE(16000, 28);
+      wav.writeUInt16LE(2, 32);
+      wav.writeUInt16LE(16, 34);
+      wav.write('data', 36);
+      wav.writeUInt32LE(n * 2, 40);
+      const wavPath = join(mkdtempSync(join(tmpdir(), 'nb-wav-')), 'take1.wav');
+      writeFileSync(wavPath, wav);
+      await page.locator('.passage-item').first().click();
+      await page.locator('.block-dialogue .voice-clip input[type=file]').first().setInputFiles(wavPath);
+      await page.locator('.block-dialogue .clip-name').first().waitFor({ timeout: 5000 });
+      await page.getByRole('button', { name: /Export/ }).click();
+      const [dl] = await Promise.all([page.waitForEvent('download'), page.getByRole('button', { name: /Download playable story/ }).click()]);
+      const html = readFileSync(await dl.path(), 'utf8');
+      if (!/#audio:vo_|"vo_[^"]+\.wav":"data:audio\/wav;base64,/.test(html)) throw new Error('playable story does not embed the clip');
+      await page.getByRole('button', { name: 'Build Unity package' }).click();
+      await page.getByText('package verified').waitFor({ timeout: 15000 });
+      const [zipDl] = await Promise.all([page.waitForEvent('download'), page.getByRole('button', { name: 'Download .zip' }).click()]);
+      const zip = await JSZip.loadAsync(readFileSync(await zipDl.path()));
+      if (!Object.keys(zip.files).some((f) => /Resources\/NarrativeBridgeAudio\/vo_.+\.wav$/.test(f))) throw new Error('Unity zip has no voice clip');
     });
     if (errors.length) throw new Error(`console errors: ${errors.join(' | ')}`);
     console.log(`✓ ${name}: all checks passed (zip ${(zipBytes / 1024).toFixed(1)} KB)`);

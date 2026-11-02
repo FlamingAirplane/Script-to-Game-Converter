@@ -1,3 +1,4 @@
+import { audioFileName, referencedAudio, type AudioAssets } from '../audio';
 import { blocksExport, diag, type Diagnostic } from '../diagnostics';
 import { fnv1a, sha256Hex } from '../hash';
 import { itemVar } from '../isr';
@@ -141,7 +142,7 @@ export function verifyExport(result: ExportResult, story: ProcessedStory, requir
   for (const f of result.files) {
     if (f.path.endsWith('.ink') && f.path.includes('MainStory') && f.content !== story.generated.ink)
       ds.push(diag('EXPORT_INK_MISMATCH', 'error', 'export', `${f.path} differs from the validated Ink.`));
-    if (/\.(json|uproject|asmdef)$/.test(f.path)) {
+    if (/\.(json|uproject|asmdef)$/.test(f.path) && typeof f.content === 'string') {
       try {
         JSON.parse(f.content);
       } catch {
@@ -158,4 +159,16 @@ export function verifyExport(result: ExportResult, story: ProcessedStory, requir
       }),
     );
   return ds;
+}
+
+/** Audio files for every clip the story's dialogue refers to, plus diagnostics for missing ones. */
+export function audioFiles(story: ProcessedStory, assets: AudioAssets | undefined, dir: string): { files: ExportFile[]; missing: string[] } {
+  const files: ExportFile[] = [];
+  const missing: string[] = [];
+  for (const ref of referencedAudio(story.project)) {
+    const a = assets?.[ref.id];
+    if (a) files.push({ path: `${dir}${audioFileName(ref)}`, content: a.bytes });
+    else missing.push(ref.name);
+  }
+  return { files, missing };
 }

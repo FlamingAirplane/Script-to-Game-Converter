@@ -13,6 +13,8 @@ import { InkView } from './InkView';
 import { PlaytestView } from './PlaytestView';
 import { passageForEntity } from './projectOps';
 import { ReviewView, STORY_SETTINGS } from './ReviewView';
+import { base64ToBytes, bytesToBase64, referencedAudio } from '../core/audio';
+import { collectClips, putClip } from './audioStore';
 import { Logo } from './Logo';
 import { ThemeToggle } from './ThemeToggle';
 import { useProcessedStory } from './useProcessedStory';
@@ -170,9 +172,18 @@ export function App() {
     else if (project.items.some((i) => i.id === d.entityId) || project.variables.some((v) => v.id === d.entityId)) open(STORY_SETTINGS);
   };
 
+  /** Saves the project as one .nbproj.json file, with voice clips embedded so it is complete on its own. */
+  const saveProject = async () => {
+    if (!project) return;
+    const clips = await collectClips(referencedAudio(project));
+    const audio = Object.fromEntries(Object.entries(clips).map(([id, c]) => [id, { mime: c.mime, data: bytesToBase64(c.bytes) }]));
+    download(`${project.project.id}.nbproj.json`, JSON.stringify({ project, parseDiagnostics, audio }, null, 2), 'application/json');
+  };
+
   const openProject = async (file: File) => {
     try {
       const data = JSON.parse(await file.text());
+      for (const [id, c] of Object.entries((data.audio ?? {}) as Record<string, { mime: string; data: string }>)) await putClip(id, c.mime, base64ToBytes(c.data));
       const p: StoryProject = data.project?.schemaVersion ? data.project : data;
       const errs = validateSchema(p).filter((d) => d.severity === 'error');
       if (errs.length) return alert(`Not a valid Narrative Bridge project:\n${errs.map((e) => e.message).join('\n')}`);
@@ -234,7 +245,7 @@ export function App() {
         </button>
         <input ref={openRef} type="file" accept=".json" hidden onChange={(e) => e.target.files?.[0] && openProject(e.target.files[0])} />
         {project && (
-          <button className="btn tiny ghost" onClick={() => download(`${project.project.id}.nbproj.json`, JSON.stringify({ project, parseDiagnostics }, null, 2), 'application/json')}>
+          <button className="btn tiny ghost" onClick={() => void saveProject()}>
             Save project
           </button>
         )}
@@ -281,7 +292,7 @@ export function App() {
           {processed && tab === 'graph' && <GraphView graph={processed.analysis.graph} start={processed.project.project.startPassage} selected={selected} onOpen={open} endingsReached={processed.smoke?.endingsReached} />}
           {processed && tab === 'ink' && <InkView processed={processed} onOpen={open} />}
           {processed && tab === 'play' && <PlaytestView processed={processed} onOpen={open} />}
-          {processed && tab === 'export' && <ExportView processed={processed} onState={setExportState} />}
+          {processed && tab === 'export' && <ExportView processed={processed} stale={stale} onState={setExportState} />}
           {(tab === 'import' || tab === 'export') && <footer className="folio">— {TABS.find((t) => t.id === tab)!.numeral.toLowerCase()} —</footer>}
         </div>
         {processed && showDiag && tab !== 'import' && <DiagnosticsPanel diagnostics={processed.diagnostics} project={project!} onJump={jump} onClose={() => setShowDiag(false)} />}

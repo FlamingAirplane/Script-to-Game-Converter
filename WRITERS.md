@@ -21,6 +21,16 @@ That's it. It works without an internet connection, and your scripts are never u
 PDF and old `.doc` files aren't supported. Save as `.fdx`, `.docx` or plain text first. Bold, italics and fonts aren't
 kept; all of your words are.
 
+## Hearing your dialogue
+
+- **Voices:** in *Review → Story settings*, give each character a voice, speed and pitch, then press ▷ to hear it. In
+  *Playtest*, switch **Voices on** to have every line read aloud as you play.
+- **Recordings:** next to any line of dialogue, press **●** to record it with your microphone, or **♪** to attach an
+  audio file (WAV, MP3, OGG; other formats are converted). Press ▶ to play it back. A line with a recording uses the
+  recording instead of the voice.
+- Recordings go along with every export: the playable story, the Twine-free web page, and the Unity and Unreal
+  packages. **Save project** keeps them inside the project file too.
+
 ## Keeping your work
 
 Your project is remembered in the browser you used. To keep a copy you can reopen on another computer or send to someone,

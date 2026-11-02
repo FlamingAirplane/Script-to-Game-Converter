@@ -1,4 +1,5 @@
 import type { ProcessedStory } from '../pipeline';
+import { audioFileName, bytesToBase64, referencedAudio, type AudioAssets } from '../audio';
 import { assertExportable, storyVersion } from './common';
 
 // "Playable story" export: one self-contained HTML file (Ink runtime + compiled story + a small
@@ -24,11 +25,21 @@ export function playableFileName(story: ProcessedStory): string {
   return `${story.project.project.id || 'story'}.html`;
 }
 
-export function buildPlayableHtml(story: ProcessedStory, inkRuntimeJs: string): string {
+export function buildPlayableHtml(story: ProcessedStory, inkRuntimeJs: string, audio: AudioAssets = {}): string {
   assertExportable(story);
   const { title, author, id } = story.project.project;
   const runtime = scriptSafe(inkRuntimeJs.replace(/\/\/# sourceMappingURL=.*$/m, ''));
-  const meta = jsonSafe(JSON.stringify({ title, author: author ?? '', saveKey: `narrative-bridge.play.${id}.${storyVersion(story)}` }));
+  // Recorded clips are embedded as data URIs keyed by the file name used in #audio tags.
+  const clips: Record<string, string> = {};
+  for (const ref of referencedAudio(story.project)) {
+    const a = audio[ref.id];
+    if (a) clips[audioFileName(ref)] = `data:${a.mime};base64,${bytesToBase64(a.bytes)}`;
+  }
+  const voices = Object.fromEntries(story.project.characters.filter((c) => c.voice).map((c) => [c.id, c.voice]));
+  const meta = jsonSafe(
+    JSON.stringify({ title, author: author ?? '', saveKey: `narrative-bridge.play.${id}.${storyVersion(story)}`, voices, hasClips: Object.keys(clips).length > 0 }),
+  );
+  const clipJson = jsonSafe(JSON.stringify(clips));
   return `<!doctype html>
 <html lang="en">
 <head>
@@ -53,7 +64,7 @@ export function buildPlayableHtml(story: ProcessedStory, inkRuntimeJs: string): 
     <p class="colophon">An interactive story. Your progress is saved in this browser.</p>
   </section>
   <section id="reader" class="reader" hidden>
-    <header class="running-head"><span id="rh-title"></span><span class="tools"><button id="undo" class="link" disabled>Undo</button><button id="restart" class="link">Start over</button></span></header>
+    <header class="running-head"><span id="rh-title"></span><span class="tools"><button id="voice" class="link" aria-pressed="false">Voices off</button><button id="undo" class="link" disabled>Undo</button><button id="restart" class="link">Start over</button></span></header>
     <div id="text" class="text" aria-live="polite"></div>
     <nav id="choices" class="choices"></nav>
   </section>
@@ -61,6 +72,7 @@ export function buildPlayableHtml(story: ProcessedStory, inkRuntimeJs: string): 
 <script>${runtime}</script>
 <script id="story-json" type="application/json">${jsonSafe(story.compile.json!)}</script>
 <script id="story-meta" type="application/json">${meta}</script>
+<script id="story-audio" type="application/json">${clipJson}</script>
 <script>${PLAYER_JS}</script>
 </body>
 </html>
@@ -134,12 +146,50 @@ const PLAYER_JS = `
     return null;
   }
 
+  // ---- Voices: recorded clips, else the browser's speech voice set for the character ----
+  var clips = JSON.parse(document.getElementById('story-audio').textContent);
+  var voiceOn = meta.hasClips;
+  try { var pref = localStorage.getItem('narrative-bridge.play.voices'); if (pref) voiceOn = pref === 'on'; } catch (e) {}
+  var queue = [], playing = null;
+  function voiceLabel() { $('voice').textContent = voiceOn ? 'Voices on' : 'Voices off'; $('voice').setAttribute('aria-pressed', String(voiceOn)); }
+  function stopVoices() {
+    queue = [];
+    if (playing && playing.pause) playing.pause();
+    playing = null;
+    if (window.speechSynthesis) speechSynthesis.cancel();
+  }
+  function nextVoice() {
+    playing = null;
+    var item = queue.shift();
+    if (!item) return;
+    if (item.audio && clips[item.audio]) {
+      var a = new Audio(clips[item.audio]);
+      playing = a;
+      a.onended = a.onerror = nextVoice;
+      a.play().catch(nextVoice);
+    } else if (window.speechSynthesis && item.who) {
+      var u = new SpeechSynthesisUtterance(item.text), v = meta.voices[item.who] || {};
+      if (v.voiceName) u.voice = speechSynthesis.getVoices().filter(function (x) { return x.name === v.voiceName; })[0] || null;
+      if (v.rate) u.rate = v.rate;
+      if (v.pitch) u.pitch = v.pitch;
+      u.onend = u.onerror = nextVoice;
+      playing = u;
+      speechSynthesis.speak(u);
+    } else nextVoice();
+  }
+  function speak(newLines) {
+    if (!voiceOn) return;
+    newLines.forEach(function (l) { if (l.speaker) queue.push(l); });
+    if (!playing) nextVoice();
+  }
+
   function continueStory() {
+    var from = lines.length;
     while (story.canContinue) {
       var raw = (story.Continue() || '').trim();
       if (!raw) continue;
       var tags = story.currentTags || [];
-      var line = { text: raw, scene: tag(tags, 'scene'), transition: tags.indexOf('transition') >= 0 };
+      var line = { text: raw, scene: tag(tags, 'scene'), transition: tags.indexOf('transition') >= 0, audio: tag(tags, 'audio'), who: tag(tags, 'speaker') };
       if (tag(tags, 'speaker') !== null) {
         var i = raw.indexOf(': ');
         if (i > 0) { line.speaker = raw.slice(0, i); line.text = raw.slice(i + 2); }
@@ -147,6 +197,7 @@ const PLAYER_JS = `
       }
       lines.push(line);
     }
+    speak(lines.slice(from));
   }
 
   function el(tagName, cls, text) {
@@ -194,6 +245,7 @@ const PLAYER_JS = `
   function choose(index, text) {
     history.push({ state: story.state.toJson(), lines: lines.slice() });
     if (history.length > 50) history.shift();
+    stopVoices();
     story.ChooseChoiceIndex(index);
     lines.push({ chosen: text });
     continueStory();
@@ -215,6 +267,7 @@ const PLAYER_JS = `
   function open() { $('cover').hidden = true; $('reader').hidden = false; window.scrollTo(0, 0); }
 
   function begin() {
+    stopVoices();
     newStory(); lines = []; history = [];
     continueStory(); render(); save(); open();
   }
@@ -241,5 +294,12 @@ const PLAYER_JS = `
   $('begin').onclick = begin;
   $('undo').onclick = undo;
   $('restart').onclick = startOver;
+  voiceLabel();
+  $('voice').onclick = function () {
+    voiceOn = !voiceOn;
+    try { localStorage.setItem('narrative-bridge.play.voices', voiceOn ? 'on' : 'off'); } catch (e) {}
+    if (!voiceOn) stopVoices();
+    voiceLabel();
+  };
 })();
 `;

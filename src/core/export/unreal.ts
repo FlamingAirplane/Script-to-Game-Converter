@@ -1,5 +1,5 @@
 import type { ProcessedStory } from '../pipeline';
-import { assertExportable, buildManifest, commonFiles, isPinnedRef, itemVarNames, json, pascalCase, sourceFiles, storyVersion } from './common';
+import { assertExportable, audioFiles, buildManifest, commonFiles, isPinnedRef, itemVarNames, json, pascalCase, sourceFiles, storyVersion } from './common';
 import type { EngineAdapter, ExportFile, ExportOptions, ExportResult } from './types';
 import { finalize } from './unity';
 
@@ -28,10 +28,13 @@ export const unrealAdapter: EngineAdapter = {
     const name = pascalCase(options.projectName);
     const root = `${name}/`;
     const manifest = await buildManifest(story, options, this);
+    // Unreal imports audio through the editor, so clips ship next to the story source to drag in.
+    const voice = audioFiles(story, options.audio, `${root}StorySource/VoiceClips/`);
     const files: ExportFile[] = [
       { path: `${root}${name}.uproject`, content: json(uproject(name, options)) },
       { path: `${root}StorySource/MainStory.ink`, content: story.generated.ink },
       { path: `${root}StorySource/MainStory.compiled.json`, content: story.compile.json! },
+      ...voice.files,
       { path: `${root}Config/DefaultGame.ini`, content: `[/Script/EngineSettings.GeneralProjectSettings]\nProjectName=${story.project.project.title.replace(/\n/g, ' ')}\n` },
       { path: `${root}Config/DefaultEngine.ini`, content: '[/Script/Engine.Engine]\n+ActiveGameNameRedirects=(OldGameName="TP_Blank",NewGameName="/Script/' + name + '")\n' },
       { path: `${root}Source/${name}.Target.cs`, content: target(name, 'Game') },
@@ -70,6 +73,7 @@ export const unrealAdapter: EngineAdapter = {
         diagnostics: [],
       },
     };
+    for (const n of voice.missing) result.report.warnings.push(`Voice clip "${n}" is missing from this browser, so it was left out of the package.`);
     finalize(result, story, [`${root}${name}.uproject`, `${root}StorySource/MainStory.ink`, `${root}Source/${name}/${name}.Build.cs`]);
     return result;
   },
@@ -331,6 +335,10 @@ ${setupSteps(o, name).map((s, i) => `${i + 1}. ${s}`).join('\n')}
 - The component targets Inkpot's \`UInkpot::BeginStory\` / \`UInkpotStory\` API. Header paths and method names can change between
   Inkpot releases; if the build fails, compare against \`Plugins/Inkpot/Source\` and the InkpotDemo project.
 - Engine import and in-editor smoke tests are recorded as \`pending\` in the manifest until run.
+
+## Voice clips
+Recorded dialogue ships in \`StorySource/VoiceClips/\`. Drag the folder into \`Content/NarrativeBridge/Audio\` to import the clips as
+Sound Waves. Lines with a clip carry an \`audio:<file>\` tag in \`OnLine\`'s Tags; play the matching Sound Wave from Blueprint.
 
 ## Inventory and saves
 Items are Ink Booleans \`has_<item>\`. Keep the game inventory authoritative and call \`SetItemOwned\` before continuing.

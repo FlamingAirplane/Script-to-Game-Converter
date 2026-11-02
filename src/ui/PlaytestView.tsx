@@ -3,7 +3,11 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { fnv1a } from '../core/hash';
 import { itemVar } from '../core/isr';
 import type { ProcessedStory } from '../core/pipeline';
+import { audioFileName, referencedAudio } from '../core/audio';
 import { Badge, Empty } from './common';
+import { VoiceQueue, type VoiceItem } from './voice';
+
+const VOICES_KEY = 'narrative-bridge.voices';
 
 interface Line {
   text: string;
@@ -38,6 +42,32 @@ export function PlaytestView({ processed, onOpen }: { processed: ProcessedStory;
   const [errors, setErrors] = useState<string[]>([]);
   const [where, setWhere] = useState('');
   const bottom = useRef<HTMLDivElement>(null);
+  const voiceQueue = useRef(new VoiceQueue());
+  const [voicesOn, setVoicesOn] = useState(() => {
+    try {
+      return localStorage.getItem(VOICES_KEY) === 'on';
+    } catch {
+      return false;
+    }
+  });
+  const voicesRef = useRef(voicesOn);
+  voicesRef.current = voicesOn;
+  // Clips by the file name used in #audio tags, and voices by speaker id.
+  const clipsByFile = new Map(referencedAudio(processed.project).map((r) => [audioFileName(r), r]));
+  const voicesBySpeaker = new Map(processed.project.characters.map((c) => [c.id, c.voice]));
+  const speakRef = useRef<(l: Line[]) => void>(() => {});
+  speakRef.current = (newLines: Line[]) => {
+    if (!voicesRef.current) return;
+    const items: VoiceItem[] = newLines
+      .filter((l) => l.speaker)
+      .map((l) => {
+        const file = l.tags.find((t) => t.startsWith('audio:'))?.slice(6);
+        const who = l.tags.find((t) => t.startsWith('speaker:'))?.slice(8);
+        return { text: l.text, audio: file ? clipsByFile.get(file) : undefined, voice: who ? voicesBySpeaker.get(who) : undefined };
+      });
+    voiceQueue.current.enqueue(items);
+  };
+  useEffect(() => () => voiceQueue.current.stop(), []);
   const segment = useRef<Segment | null>(null);
 
   const varNames = [...processed.project.items.map((i) => itemVar(i.id)), ...processed.project.variables.map((v) => v.id)].filter((n) =>
@@ -70,6 +100,7 @@ export function PlaytestView({ processed, onOpen }: { processed: ProcessedStory;
         } else out.push({ text: raw, tags, kind: 'text' });
       }
       setLines(out);
+      speakRef.current(out.slice(prefix.length));
       setChoices(s.currentChoices.map((c) => ({ text: c.text, index: c.index })));
       setWhere((s.currentChoices[0]?.sourcePath ?? '').split('.')[0]);
       readVars();
@@ -78,6 +109,7 @@ export function PlaytestView({ processed, onOpen }: { processed: ProcessedStory;
   );
 
   const restart = useCallback(() => {
+    voiceQueue.current.stop();
     if (!json) return;
     const s = new Story(json);
     const errs: string[] = [];
@@ -110,6 +142,7 @@ export function PlaytestView({ processed, onOpen }: { processed: ProcessedStory;
     );
 
   const choose = (i: number, text: string) => {
+    voiceQueue.current.stop();
     const s = story.current!;
     setHistory((h) => [...h, { state: s.state.toJson(), lines, segment: segment.current }]);
     s.ChooseChoiceIndex(i);
@@ -117,6 +150,7 @@ export function PlaytestView({ processed, onOpen }: { processed: ProcessedStory;
   };
 
   const undo = () => {
+    voiceQueue.current.stop();
     const last = history[history.length - 1];
     if (!last || !story.current) return;
     story.current.state.LoadJson(last.state);
@@ -153,6 +187,23 @@ export function PlaytestView({ processed, onOpen }: { processed: ProcessedStory;
         <div className="stage-head">
           <h2>{processed.project.project.title}</h2>
           <div className="row">
+            <button
+              className={`btn tiny ${voicesOn ? 'ok' : ''}`}
+              aria-pressed={voicesOn}
+              title="Read dialogue aloud: recorded clips, or each character's voice from Story settings"
+              onClick={() => {
+                const on = !voicesOn;
+                setVoicesOn(on);
+                if (!on) voiceQueue.current.stop();
+                try {
+                  localStorage.setItem(VOICES_KEY, on ? 'on' : 'off');
+                } catch {
+                  /* preference not saved */
+                }
+              }}
+            >
+              {voicesOn ? '🔊 Voices on' : '🔈 Voices off'}
+            </button>
             <button className="btn tiny" onClick={undo} disabled={!history.length}>
               ↶ Undo choice
             </button>
