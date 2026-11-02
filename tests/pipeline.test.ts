@@ -186,7 +186,7 @@ describe('engine exports', () => {
       expect(res.manifest.integration.pinned).toBe(true);
       const ink = res.files.find((f) => f.path.endsWith('MainStory.ink'))!;
       expect(ink.content).toBe(story.generated.ink);
-      const manifest = JSON.parse(res.files.find((f) => f.path.endsWith('narrative-bridge.manifest.json'))!.content);
+      const manifest = JSON.parse(res.files.find((f) => f.path.endsWith('narrative-bridge.manifest.json'))!.content as string);
       expect(manifest.sourceHash).toMatch(/^sha256:[0-9a-f]{64}$/);
       expect(manifest.validation.engineSmokeTest).toBe('pending');
     });
@@ -214,7 +214,7 @@ describe('share exports', () => {
     const json = /<script id="story-json" type="application\/json">([\s\S]*?)<\/script>/.exec(html)![1];
     expect(json).not.toMatch(/<\/script|<!--/i);
     expect(JSON.stringify(JSON.parse(json))).toContain('</script><!--');
-    expect(html.match(/<script/g)!.length).toBe(4);
+    expect(html.match(/<script/g)!.length).toBe(5);
   });
 
   it('Twine export maps conditions, setters, endings and stable IFIDs', async () => {
@@ -383,5 +383,65 @@ describe('review tools', () => {
     expect(project.passages.map((p) => p.id)).toEqual(['roadside_motel', 'parking_lot', 'motel_office']);
     expect(movePassage(project, 'roadside_motel', -1)).toBe(false);
     expect(processProject(project).smoke!.endingsReached).toEqual(before);
+  });
+});
+
+describe('dialogue audio', () => {
+  const withClip = async () => {
+    const { project } = await build(SAMPLES.find((x) => x.id === 'archive')!.text, 'a.md', 'structured');
+    const line = project.passages[0].content.find((b) => b.type === 'dialogue')!;
+    if (line.type !== 'dialogue') throw new Error();
+    line.audio = { id: 'vo_mira_1', name: 'take1.wav', mime: 'audio/wav', durationMs: 1200 };
+    project.characters[0].voice = { voiceName: 'Samantha', rate: 1.2, pitch: 0.75 };
+    return processProject(project);
+  };
+
+  it('encodes a valid mono 16-bit WAV', async () => {
+    const { encodeWav } = await import('../src/core/audio');
+    const wav = encodeWav([new Float32Array([0, 0.5, -0.5, 1]), new Float32Array([0, 0.5, -0.5, -1])], 22050);
+    const v = new DataView(wav.buffer);
+    expect(new TextDecoder().decode(wav.subarray(0, 4))).toBe('RIFF');
+    expect(new TextDecoder().decode(wav.subarray(8, 12))).toBe('WAVE');
+    expect(v.getUint16(22, true)).toBe(1); // mono
+    expect(v.getUint32(24, true)).toBe(22050);
+    expect(v.getUint32(40, true)).toBe(8); // 4 samples × 2 bytes
+    expect(v.getInt16(46, true)).toBe(Math.round(0.5 * 0x7fff)); // averaged channels
+    expect(v.getInt16(50, true)).toBe(0); // 1 and -1 mixed to silence
+  });
+
+  it('tags clipped lines in Ink and ships the clip with every export', async () => {
+    const story = await withClip();
+    expect(story.generated.ink).toContain('#audio:vo_mira_1.wav');
+    expect(story.compile.ok).toBe(true);
+    const bytes = new Uint8Array([82, 73, 70, 70]);
+    const audio = { vo_mira_1: { mime: 'audio/wav', bytes } };
+    for (const engine of ['unity', 'unreal'] as const) {
+      const a = ADAPTERS[engine];
+      const r = await a.export(story, { engine, projectName: 'A', engineVersion: a.defaultEngineVersion, integrationRef: 'v1.0.0', includeDemo: true, audio });
+      const clip = r.files.find((f) => f.path.endsWith('vo_mira_1.wav'))!;
+      expect(clip.content).toBe(bytes);
+      expect(clip.path).toContain(engine === 'unity' ? 'Resources/NarrativeBridgeAudio/' : 'StorySource/VoiceClips/');
+      expect(r.report.errors).toEqual([]);
+    }
+    const missing = await ADAPTERS.unity.export(story, { engine: 'unity', projectName: 'A', engineVersion: '6000.0', integrationRef: 'v1.0.0', includeDemo: true });
+    expect(missing.report.warnings.join(' ')).toContain('take1.wav');
+    const { buildPlayableHtml } = await import('../src/core/export');
+    const html = buildPlayableHtml(story, 'window.inkjs={};', audio);
+    expect(html).toContain('"vo_mira_1.wav":"data:audio/wav;base64,UklGRg=="');
+    expect(html).toContain('"voiceName":"Samantha"');
+  });
+});
+
+describe('recording script', () => {
+  it('lists every line of dialogue with character, direction and clip file, CSV-escaped', async () => {
+    const { buildRecordingScript } = await import('../src/core/export');
+    const { project } = await build('INT. A - DAY\n\nMIRA\n(quietly)\nHello, "friend".\n\nTOMAS\nHi.\n', 'x.fountain');
+    const line = project.passages[0].content.find((b) => b.type === 'dialogue')!;
+    if (line.type === 'dialogue') line.audio = { id: 'vo_x', name: 't.wav', mime: 'audio/wav' };
+    const csv = buildRecordingScript(project);
+    const rows = csv.replace(/^﻿/, '').trim().split('\r\n');
+    expect(rows[0]).toBe('#,Passage,Character,Direction,Line,Clip,Recorded');
+    expect(rows[1]).toBe('1,A,MIRA,quietly,"Hello, ""friend"".",vo_x.wav,yes');
+    expect(rows[2]).toBe('2,A,TOMAS,,Hi.,a_002.wav,');
   });
 });

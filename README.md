@@ -1,3 +1,7 @@
+<p align="center"><a href="https://flamingairplane.github.io/Script-to-Game-Converter/"><img src="public/og.png" alt="Narrative Bridge — turn a script into a playable story" width="720"></a></p>
+
+<p align="center"><b><a href="https://flamingairplane.github.io/Script-to-Game-Converter/">Open Narrative Bridge</a></b> · <a href="https://github.com/FlamingAirplane/Script-to-Game-Converter/releases">Download the offline edition</a> · <a href="WRITERS.md">Guide for writers</a></p>
+
 # Narrative Bridge
 
 Turn screenplays and prose into validated [Ink](https://github.com/inkle/ink) stories, then package them for **Unity**
@@ -57,11 +61,14 @@ npm run test:e2e
 | Tab | What it does |
 | --- | --- |
 | **Import** | Drop `.fountain`, `.txt`, `.md` or `.ink` files (or paste), choose a conversion mode, or start from a sample. |
-| **Review** | Every passage with its content, provenance (`source` / `transformed` / `generated` / `edited`) and the original source lines side by side. Edit text, choices, conditions, effects, items and variables. Approve or reject proposed branches. |
-| **Graph** | The story as a directed graph: start, endings, unreachable passages, conditional and proposed edges. Click a node to edit it. |
+| **Review** | Every passage with its content, provenance (`source` / `transformed` / `generated` / `edited`) and the original source lines side by side. Edit text, choices, conditions, effects, items and variables; approve or reject proposed branches; find & replace, merge duplicate characters, reorder passages. Give characters voices, and record or attach a clip for any line. *Dialogue only* (D) hides everything but spoken lines. |
+| **Graph** | The story as an old map: start, endings, unreachable passages, conditional and proposed routes. Drag passages to arrange them (saved with the project), search, minimap; click a passage to edit it. |
 | **Ink** | The deterministic generated Ink, compiled live with the pinned inkjs compiler; compile errors are mapped back to passages. |
-| **Playtest** | Play the compiled story, undo choices, toggle inventory to simulate the host game, save/load with story-version checks, and see the automated playthrough report. |
-| **Export** | Build a verified Unity or Unreal package (.zip) with a manifest, validation report, ISR, source map and the original sources. |
+| **Playtest** | Play the compiled story, undo choices, toggle inventory to simulate the host game, save/load with story-version checks, hear the dialogue (recorded clips or character voices), and see the automated playthrough report. |
+| **Export** | A playable web page, a Twine file, a recording script (.csv) for voice sessions, or a verified Unity / Unreal package (.zip) with manifest, validation report, ISR, source map, voice clips and the original sources. |
+
+Press **?** for keyboard shortcuts. Book sounds (page turns, a bell at endings) and the light/dark theme switch
+are on the cover band.
 
 The **Diagnostics** panel lists every issue with a stable code, severity, stage, remediation, and whether it blocks export. Click one to jump to it.
 

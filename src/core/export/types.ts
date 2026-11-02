@@ -1,3 +1,4 @@
+import type { AudioAssets } from '../audio';
 import type { Diagnostic } from '../diagnostics';
 import type { ProcessedStory } from '../pipeline';
 
@@ -13,11 +14,13 @@ export interface ExportOptions {
   /** Git ref (tag or commit) of the integration. Branch names are allowed but recorded as unpinned. */
   integrationRef: string;
   includeDemo: boolean;
+  /** Recorded dialogue clips referenced by #audio tags; shipped with the export. */
+  audio?: AudioAssets;
 }
 
 export interface ExportFile {
   path: string;
-  content: string;
+  content: string | Uint8Array;
 }
 
 export interface EnvironmentRequirement {

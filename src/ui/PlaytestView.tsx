@@ -1,9 +1,16 @@
-import { Story } from 'inkjs/full';
-import { useCallback, useEffect, useRef, useState } from 'react';
+// Engine-only runtime: the compiler isn't needed to play an already compiled story.
+import { Story } from 'inkjs';
+import { Fragment, useCallback, useEffect, useRef, useState } from 'react';
 import { fnv1a } from '../core/hash';
 import { itemVar } from '../core/isr';
 import type { ProcessedStory } from '../core/pipeline';
+import { audioFileName, referencedAudio } from '../core/audio';
 import { Badge, Empty } from './common';
+import { sfx } from './sfx';
+import { plainKey } from './Shortcuts';
+import { VoiceQueue, type VoiceItem } from './voice';
+
+const VOICES_KEY = 'narrative-bridge.voices';
 
 interface Line {
   text: string;
@@ -25,7 +32,17 @@ interface Snapshot {
   segment: Segment | null;
 }
 
-export function PlaytestView({ processed, onOpen }: { processed: ProcessedStory; onOpen: (id: string) => void }) {
+export function PlaytestView({
+  processed,
+  onOpen,
+  dialogueOnly,
+  onDialogueOnly,
+}: {
+  processed: ProcessedStory;
+  onOpen: (id: string) => void;
+  dialogueOnly: boolean;
+  onDialogueOnly: (on: boolean) => void;
+}) {
   const json = processed.compile.json;
   const version = fnv1a(processed.generated.ink);
   const story = useRef<Story | null>(null);
@@ -38,6 +55,32 @@ export function PlaytestView({ processed, onOpen }: { processed: ProcessedStory;
   const [errors, setErrors] = useState<string[]>([]);
   const [where, setWhere] = useState('');
   const bottom = useRef<HTMLDivElement>(null);
+  const voiceQueue = useRef(new VoiceQueue());
+  const [voicesOn, setVoicesOn] = useState(() => {
+    try {
+      return localStorage.getItem(VOICES_KEY) === 'on';
+    } catch {
+      return false;
+    }
+  });
+  const voicesRef = useRef(voicesOn);
+  voicesRef.current = voicesOn;
+  // Clips by the file name used in #audio tags, and voices by speaker id.
+  const clipsByFile = new Map(referencedAudio(processed.project).map((r) => [audioFileName(r), r]));
+  const voicesBySpeaker = new Map(processed.project.characters.map((c) => [c.id, c.voice]));
+  const speakRef = useRef<(l: Line[]) => void>(() => {});
+  speakRef.current = (newLines: Line[]) => {
+    if (!voicesRef.current) return;
+    const items: VoiceItem[] = newLines
+      .filter((l) => l.speaker)
+      .map((l) => {
+        const file = l.tags.find((t) => t.startsWith('audio:'))?.slice(6);
+        const who = l.tags.find((t) => t.startsWith('speaker:'))?.slice(8);
+        return { text: l.text, audio: file ? clipsByFile.get(file) : undefined, voice: who ? voicesBySpeaker.get(who) : undefined };
+      });
+    voiceQueue.current.enqueue(items);
+  };
+  useEffect(() => () => voiceQueue.current.stop(), []);
   const segment = useRef<Segment | null>(null);
 
   const varNames = [...processed.project.items.map((i) => itemVar(i.id)), ...processed.project.variables.map((v) => v.id)].filter((n) =>
@@ -70,6 +113,7 @@ export function PlaytestView({ processed, onOpen }: { processed: ProcessedStory;
         } else out.push({ text: raw, tags, kind: 'text' });
       }
       setLines(out);
+      speakRef.current(out.slice(prefix.length));
       setChoices(s.currentChoices.map((c) => ({ text: c.text, index: c.index })));
       setWhere((s.currentChoices[0]?.sourcePath ?? '').split('.')[0]);
       readVars();
@@ -78,6 +122,7 @@ export function PlaytestView({ processed, onOpen }: { processed: ProcessedStory;
   );
 
   const restart = useCallback(() => {
+    voiceQueue.current.stop();
     if (!json) return;
     const s = new Story(json);
     const errs: string[] = [];
@@ -99,6 +144,28 @@ export function PlaytestView({ processed, onOpen }: { processed: ProcessedStory;
   useEffect(() => {
     bottom.current?.scrollIntoView({ behavior: 'smooth', block: 'end' });
   }, [lines.length]);
+  // A small bell when the story reaches an ending.
+  const isEnd = choices.length === 0 && lines.length > 0;
+  useEffect(() => {
+    if (isEnd) sfx.chime();
+  }, [isEnd]);
+
+  // Playtest keys: 1–9 choose, Backspace undoes, R restarts, V toggles voices.
+  const actions = useRef<{ choose: (n: number) => void; undo: () => void; restart: () => void; voices: () => void } | null>(null);
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      const a = actions.current;
+      if (!a || !plainKey(e)) return;
+      if (/^[1-9]$/.test(e.key)) a.choose(+e.key - 1);
+      else if (e.key === 'Backspace') a.undo();
+      else if (e.key.toLowerCase() === 'r') a.restart();
+      else if (e.key.toLowerCase() === 'v') a.voices();
+      else return;
+      e.preventDefault();
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, []);
 
   if (!json)
     return (
@@ -110,13 +177,16 @@ export function PlaytestView({ processed, onOpen }: { processed: ProcessedStory;
     );
 
   const choose = (i: number, text: string) => {
+    voiceQueue.current.stop();
     const s = story.current!;
     setHistory((h) => [...h, { state: s.state.toJson(), lines, segment: segment.current }]);
+    sfx.choice();
     s.ChooseChoiceIndex(i);
     advance([...lines, { text, tags: [], kind: 'choice' }]);
   };
 
   const undo = () => {
+    voiceQueue.current.stop();
     const last = history[history.length - 1];
     if (!last || !story.current) return;
     story.current.state.LoadJson(last.state);
@@ -142,7 +212,25 @@ export function PlaytestView({ processed, onOpen }: { processed: ProcessedStory;
     setNotice(`Set ${name} to ${String(value)}. The choices below were re-checked.`);
   };
 
+  const toggleVoices = () => {
+    const on = !voicesOn;
+    setVoicesOn(on);
+    if (!on) voiceQueue.current.stop();
+    try {
+      localStorage.setItem(VOICES_KEY, on ? 'on' : 'off');
+    } catch {
+      /* preference not saved */
+    }
+  };
+  actions.current = {
+    choose: (n) => choices[n] && choose(choices[n].index, choices[n].text),
+    undo,
+    restart,
+    voices: toggleVoices,
+  };
   const ended = choices.length === 0;
+  // The drop cap opens the first real paragraph of prose, not a short line like "FADE IN:".
+  const dropCapAt = lines.findIndex((l) => l.kind === 'text' && !l.speaker && !l.tags.includes('transition') && l.text.length >= 40);
   const smoke = processed.smoke;
 
   return (
@@ -151,6 +239,17 @@ export function PlaytestView({ processed, onOpen }: { processed: ProcessedStory;
         <div className="stage-head">
           <h2>{processed.project.project.title}</h2>
           <div className="row">
+            <button
+              className={`btn tiny ${voicesOn ? 'ok' : ''}`}
+              aria-pressed={voicesOn}
+              title="Read dialogue aloud: recorded clips, or each character's voice from Story settings"
+              onClick={toggleVoices}
+            >
+              {voicesOn ? '🔊 Voices on' : '🔈 Voices off'}
+            </button>
+            <button className={`btn tiny ${dialogueOnly ? 'ok' : ''}`} aria-pressed={dialogueOnly} title="Show only dialogue (D)" onClick={() => onDialogueOnly(!dialogueOnly)}>
+              {dialogueOnly ? 'dialogue only' : 'all text'}
+            </button>
             <button className="btn tiny" onClick={undo} disabled={!history.length}>
               ↶ Undo choice
             </button>
@@ -161,6 +260,7 @@ export function PlaytestView({ processed, onOpen }: { processed: ProcessedStory;
         </div>
         <div className="transcript" tabIndex={0} aria-label="Story text">
           {lines.map((l, i) =>
+            dialogueOnly && l.kind === 'text' && !l.speaker ? null :
             l.kind === 'choice' ? (
               <p key={i} className="t-choice">
                 › {l.text}
@@ -172,10 +272,10 @@ export function PlaytestView({ processed, onOpen }: { processed: ProcessedStory;
                 <span className="t-text">{l.text}</span>
               </p>
             ) : (
-              <p key={i} className={l.tags.includes('transition') ? 't-transition' : 't-action'}>
+              <Fragment key={i}>
                 {l.tags.find((t) => t.startsWith('scene:')) && <span className="t-scene">{l.tags.find((t) => t.startsWith('scene:'))!.slice(6)}</span>}
-                {l.text}
-              </p>
+                <p className={l.tags.includes('transition') ? 't-transition' : `t-action${i === dropCapAt ? ' drop' : ''}`}>{l.text}</p>
+              </Fragment>
             ),
           )}
           {ended && <p className="t-end">— The End —</p>}

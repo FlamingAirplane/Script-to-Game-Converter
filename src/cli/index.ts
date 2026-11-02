@@ -7,8 +7,9 @@ import { fileURLToPath } from 'node:url';
 import { reviewAll } from '../core/adapt';
 import { buildStory } from '../core/builder';
 import { sortDiagnostics, type Diagnostic } from '../core/diagnostics';
-import { ADAPTERS, buildPlayableHtml, buildTwee, ExportBlockedError, playableFileName, twineFileName, type EngineTarget } from '../core/export';
+import { ADAPTERS, buildPlayableHtml, buildRecordingScript, recordingScriptFileName, buildTwee, ExportBlockedError, playableFileName, twineFileName, type EngineTarget } from '../core/export';
 import type { ConversionMode, StoryProject } from '../core/isr';
+import { base64ToBytes, type AudioAssets } from '../core/audio';
 import { BINARY_EXTENSIONS, prepareInput } from '../core/parsing/convert';
 import { processProject } from '../core/pipeline';
 
@@ -18,7 +19,7 @@ Usage:
   narrative-bridge convert <files...>          (.fountain .txt .md .ink .fdx .docx) [--mode faithful|adaptation|structured] [--approve-all]
                                       [--out story.ink] [--project story.nbproj.json] [--title "Title"]
   narrative-bridge validate <files... | project.nbproj.json>
-  narrative-bridge export <files... | project.nbproj.json> --engine unity|unreal|web|twine --out <dir>
+  narrative-bridge export <files... | project.nbproj.json> --engine unity|unreal|web|twine|script --out <dir>
                                       [--name ProjectName] [--engine-version 2022.3.62f1] [--ref <tag|sha>] [--no-demo]
   narrative-bridge doctor [--engine unity|unreal]
 
@@ -59,12 +60,17 @@ function printDiagnostics(ds: Diagnostic[]) {
   }
 }
 
+const audioAssets: AudioAssets = {};
+
 async function load(args: Args) {
   const files = args._.slice(1);
   if (!files.length) usage('No input files given.');
   if (files.length === 1 && files[0].endsWith('.nbproj.json')) {
-    const project = JSON.parse(readFileSync(files[0], 'utf8')) as StoryProject;
-    return processProject(project);
+    const data = JSON.parse(readFileSync(files[0], 'utf8'));
+    const project = (data.project?.schemaVersion ? data.project : data) as StoryProject;
+    // Voice clips saved inside the project file travel into exports.
+    for (const [id, c] of Object.entries((data.audio ?? {}) as Record<string, { mime: string; data: string }>)) audioAssets[id] = { mime: c.mime, bytes: base64ToBytes(c.data) };
+    return processProject(project, data.parseDiagnostics ?? []);
   }
   const inputs = await Promise.all(
     files.map((f) => {
@@ -119,15 +125,20 @@ async function main() {
       process.exit(story.exportBlocked ? 1 : 0);
     }
     case 'export': {
-      const engine = args.engine as EngineTarget | 'web' | 'twine';
+      const engine = args.engine as EngineTarget | 'web' | 'twine' | 'script';
       if (typeof args.out !== 'string') usage('--out <dir> is required');
-      if (engine === 'web' || engine === 'twine') {
+      if (engine === 'web' || engine === 'twine' || engine === 'script') {
         // Single-file exports that need no game engine.
         const story = await load(args);
         summary(story);
         try {
           const runtime = () => readFileSync(fileURLToPath(new URL('../../node_modules/inkjs/dist/ink.js', import.meta.url)), 'utf8');
-          const [name, content] = engine === 'web' ? [playableFileName(story), buildPlayableHtml(story, runtime())] : [twineFileName(story), buildTwee(story)];
+          const [name, content] =
+            engine === 'web'
+              ? [playableFileName(story), buildPlayableHtml(story, runtime(), audioAssets)]
+              : engine === 'script'
+                ? [recordingScriptFileName(story.project), buildRecordingScript(story.project)]
+                : [twineFileName(story), buildTwee(story)];
           const outDir = resolve(args.out);
           mkdirSync(outDir, { recursive: true });
           writeFileSync(join(outDir, name), content);
@@ -141,7 +152,7 @@ async function main() {
           throw e;
         }
       }
-      if (!ADAPTERS[engine]) usage('--engine must be unity, unreal, web or twine');
+      if (!ADAPTERS[engine]) usage('--engine must be unity, unreal, web, twine or script');
       const adapter = ADAPTERS[engine];
       const story = await load(args);
       summary(story);
@@ -152,6 +163,7 @@ async function main() {
           engineVersion: typeof args['engine-version'] === 'string' ? args['engine-version'] : adapter.defaultEngineVersion,
           integrationRef: typeof args.ref === 'string' ? args.ref : adapter.integration.defaultRef,
           includeDemo: !args['no-demo'],
+          audio: audioAssets,
         });
         const outDir = resolve(args.out);
         for (const f of result.files) {

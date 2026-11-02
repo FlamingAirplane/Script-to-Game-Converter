@@ -1,4 +1,4 @@
-import JSZip from 'jszip';
+import type JSZip from 'jszip';
 import type { SourceInput } from '../builder';
 import type { SourceFormat } from '../isr';
 
@@ -143,7 +143,9 @@ function docxKind(styleId: string, styleName: string): DocxKind {
 export async function docxToText(bytes: Uint8Array | ArrayBuffer): Promise<{ text: string; format: SourceFormat }> {
   let zip: JSZip;
   try {
-    zip = await JSZip.loadAsync(bytes);
+    // Loaded on demand: only Word imports need the zip reader.
+    const { default: JSZipLib } = await import('jszip');
+    zip = await JSZipLib.loadAsync(bytes);
   } catch {
     throw new Error('This file is not a Word (.docx) document. Older .doc files must be re-saved as .docx.');
   }

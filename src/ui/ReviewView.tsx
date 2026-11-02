@@ -5,13 +5,28 @@ import { uniqueId, type Choice, type CompareOp, type Condition, type ContentBloc
 import type { ProcessedStory } from '../core/pipeline';
 import { Badge, ProvenanceBadge, SeverityIcon } from './common';
 import { friendly } from './friendly';
+import { VoiceClip, VoicePicker } from './VoiceControls';
 import { addChoice, addPassage, deletePassage, findText, mergeCharacter, movePassage, renamePassage, replaceText } from './projectOps';
 
 type Update = (fn: (draft: StoryProject) => void, group?: string) => void;
 
 export const STORY_SETTINGS = '__story__';
 
-export function ReviewView({ processed, selected, onSelect, update }: { processed: ProcessedStory; selected: string; onSelect: (id: string) => void; update: Update }) {
+export function ReviewView({
+  processed,
+  selected,
+  onSelect,
+  update,
+  dialogueOnly,
+  onDialogueOnly,
+}: {
+  processed: ProcessedStory;
+  selected: string;
+  onSelect: (id: string) => void;
+  update: Update;
+  dialogueOnly: boolean;
+  onDialogueOnly: (on: boolean) => void;
+}) {
   const project = processed.project;
   const [filter, setFilter] = useState('');
   const [showSource, setShowSource] = useState(true);
@@ -114,6 +129,8 @@ export function ReviewView({ processed, selected, onSelect, update }: { processe
             }}
             showSource={showSource}
             toggleSource={() => setShowSource(!showSource)}
+            dialogueOnly={dialogueOnly}
+            onDialogueOnly={onDialogueOnly}
           />
         ) : (
           <p className="muted">Select a passage.</p>
@@ -169,6 +186,8 @@ function PassageEditor({
   onFocusLine,
   showSource,
   toggleSource,
+  dialogueOnly,
+  onDialogueOnly,
 }: {
   passage: Passage;
   processed: ProcessedStory;
@@ -177,6 +196,8 @@ function PassageEditor({
   onFocusLine: (line: number) => void;
   showSource: boolean;
   toggleSource: () => void;
+  dialogueOnly: boolean;
+  onDialogueOnly: (on: boolean) => void;
 }) {
   const project = processed.project;
   const [idDraft, setIdDraft] = useState(passage.id);
@@ -218,6 +239,9 @@ function PassageEditor({
           <ProvenanceBadge origin={passage.origin} />
           {passage.sceneHeading && <span className="mono muted small">{passage.sceneHeading}</span>}
           <span className="spacer" />
+          <button className={`btn tiny ${dialogueOnly ? 'ok' : ''}`} aria-pressed={dialogueOnly} title="Show only dialogue (D)" onClick={() => onDialogueOnly(!dialogueOnly)}>
+            {dialogueOnly ? 'dialogue only' : 'all content'}
+          </button>
           {passage.source && (
             <button className="btn tiny" onClick={toggleSource}>
               {showSource ? 'Hide source' : 'Show source'}
@@ -260,7 +284,15 @@ function PassageEditor({
       <section className="blocks">
         <h3>Content</h3>
         {passage.content.length === 0 && <p className="muted small">No narrative content.</p>}
-        {passage.content.map((b, i) => (
+        {dialogueOnly && passage.content.some((b) => b.type !== 'dialogue') && (
+          <p className="muted small dialogue-only-note">
+            Showing dialogue only — {passage.content.filter((b) => b.type !== 'dialogue').length} other block(s) hidden.{' '}
+            <button className="link small" onClick={() => onDialogueOnly(false)}>
+              Show everything
+            </button>
+          </p>
+        )}
+        {passage.content.map((b, i) => (dialogueOnly && b.type !== 'dialogue' ? null : (
           <BlockRow
             key={i}
             block={b}
@@ -276,7 +308,7 @@ function PassageEditor({
               })
             }
           />
-        ))}
+        )))}
         <div className="row">
           <button className="btn tiny" onClick={() => edit((p) => p.content.push({ type: 'action', text: 'New line of narration.', origin: 'user_authored' }))}>
             + Narration
@@ -413,6 +445,7 @@ function BlockRow({
               value={block.parenthetical ?? ''}
               onChange={(e) => onChange(touched({ ...block, parenthetical: e.target.value || undefined }))}
             />
+            <VoiceClip block={block} voice={project.characters.find((c) => c.id === block.speakerId)?.voice} onChange={(audio) => onChange({ ...block, audio })} />
           </div>
         )}
         {'text' in block && block.type !== 'unsupported' && (
@@ -470,14 +503,19 @@ function AutoText({ value, onChange, serif, label }: { value: string; onChange: 
     const el = ref.current;
     if (!el || typeof ResizeObserver === 'undefined') return;
     let width = el.clientWidth;
+    let frame = 0;
     const ro = new ResizeObserver(() => {
-      if (el.clientWidth !== width) {
-        width = el.clientWidth;
-        fit();
-      }
+      if (el.clientWidth === width) return;
+      width = el.clientWidth;
+      // Resize on the next frame so changing the height doesn't re-trigger this observer in the same frame.
+      cancelAnimationFrame(frame);
+      frame = requestAnimationFrame(fit);
     });
     ro.observe(el);
-    return () => ro.disconnect();
+    return () => {
+      cancelAnimationFrame(frame);
+      ro.disconnect();
+    };
   }, []);
   return <textarea ref={ref} rows={1} aria-label={label} className={`autotext ${serif ? 'serif' : 'mono small'}`} value={value} onChange={(e) => onChange(e.target.value)} />;
 }
@@ -635,6 +673,14 @@ function StorySettings({ project, update }: { project: StoryProject; update: Upd
   return (
     <div className="editor settings">
       <h2>Story settings</h2>
+      <div className="ex-libris" aria-label="Bookplate">
+        <span className="ex-libris-label">Ex Libris</span>
+        <span className="ex-libris-title">{project.project.title || 'Untitled'}</span>
+        {project.project.author && <span className="ex-libris-by">by {project.project.author}</span>}
+        <span className="ex-libris-meta">
+          {project.passages.length} passages · {project.characters.length} characters · {project.project.mode} edition
+        </span>
+      </div>
       <div className="settings-grid">
         <label className="field">
           <span className="muted small">Title</span>
@@ -670,6 +716,7 @@ function StorySettings({ project, update }: { project: StoryProject; update: Upd
             <th>Display name</th>
             <th>Aliases seen in source</th>
             <th>Same person as…</th>
+            <th>Voice</th>
           </tr>
         </thead>
         <tbody>
@@ -703,11 +750,14 @@ function StorySettings({ project, update }: { project: StoryProject; update: Upd
                   </select>
                 )}
               </td>
+              <td>
+                <VoicePicker voice={c.voice} name={c.displayName} onChange={(voice) => update((d) => (d.characters[i].voice = voice), `settings:voice:${i}`)} />
+              </td>
             </tr>
           ))}
           {!project.characters.length && (
             <tr>
-              <td colSpan={4} className="muted small">
+              <td colSpan={5} className="muted small">
                 No characters detected.
               </td>
             </tr>

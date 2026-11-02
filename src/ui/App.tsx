@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { buildStory, type SourceInput } from '../core/builder';
 import type { Diagnostic } from '../core/diagnostics';
 import type { ConversionMode, StoryProject } from '../core/isr';
@@ -6,13 +6,20 @@ import type { ConversionState } from '../core/pipeline';
 import { validateSchema } from '../core/schema';
 import { download } from './common';
 import { DiagnosticsPanel } from './DiagnosticsPanel';
-import { ExportView } from './ExportView';
 import { GraphView } from './GraphView';
 import { ImportView } from './ImportView';
 import { InkView } from './InkView';
-import { PlaytestView } from './PlaytestView';
 import { passageForEntity } from './projectOps';
 import { ReviewView, STORY_SETTINGS } from './ReviewView';
+import { base64ToBytes, bytesToBase64, referencedAudio } from '../core/audio';
+import { collectClips, putClip } from './audioStore';
+import { Logo } from './Logo';
+
+// Loaded on first use: Export carries the exporters, zip library and Ink runtime; Playtest the runtime.
+const ExportView = lazy(() => import('./ExportView').then((m) => ({ default: m.ExportView })));
+const PlaytestView = lazy(() => import('./PlaytestView').then((m) => ({ default: m.PlaytestView })));
+import { sfx } from './sfx';
+import { isTyping, plainKey, ShortcutSheet } from './Shortcuts';
 import { ThemeToggle } from './ThemeToggle';
 import { useProcessedStory } from './useProcessedStory';
 
@@ -58,6 +65,31 @@ export function App() {
   const [project, setProject] = useState<StoryProject | null>(initial?.project ?? null);
   const [parseDiagnostics, setParseDiagnostics] = useState<Diagnostic[]>(initial?.parseDiagnostics ?? []);
   const [tab, setTab] = useState<Tab>(initial ? 'review' : 'import');
+  const [soundOn, setSoundOn] = useState(sfx.enabled);
+  const [showKeys, setShowKeys] = useState(false);
+  // "Dialogue only": hide narration, transitions, notes and effects in Review and Playtest.
+  const [dialogueOnly, setDialogueOnlyState] = useState(() => {
+    try {
+      return localStorage.getItem('narrative-bridge.dialogue-only') === 'on';
+    } catch {
+      return false;
+    }
+  });
+  const setDialogueOnly = (on: boolean) => {
+    setDialogueOnlyState(on);
+    try {
+      localStorage.setItem('narrative-bridge.dialogue-only', on ? 'on' : 'off');
+    } catch {
+      /* preference not saved */
+    }
+  };
+  const keys = useRef<{ tab: Tab; save: () => void | Promise<void>; find: () => void; step: (dir: 1 | -1) => void; dialogueOnly: () => void }>({ tab: 'import', save: () => {}, find: () => {}, step: () => {}, dialogueOnly: () => {} });
+  // A page turns whenever the chapter changes (not on first load).
+  const prevTab = useRef(tab);
+  useEffect(() => {
+    if (prevTab.current !== tab) sfx.pageTurn();
+    prevTab.current = tab;
+  }, [tab]);
   const [selected, setSelected] = useState<string>(initial?.project.project.startPassage ?? '');
   const [showDiag, setShowDiag] = useState(true);
   const [busy, setBusy] = useState(false);
@@ -125,15 +157,37 @@ export function App() {
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       const mod = e.metaKey || e.ctrlKey;
-      const typing = (e.target as HTMLElement).closest('input, textarea, select');
-      if (mod && e.key.toLowerCase() === 'z' && !typing) {
+      const typing = isTyping(e);
+      const k = e.key.toLowerCase();
+      const h = keys.current;
+      if (mod && k === 'z' && !typing) {
         e.preventDefault();
         if (e.shiftKey) redo();
         else undo();
-      }
-      if (mod && /^[1-6]$/.test(e.key) && project) {
+      } else if (mod && /^[1-6]$/.test(e.key) && project) {
         e.preventDefault();
         setTab(TABS[+e.key - 1].id);
+      } else if (mod && k === 's' && project) {
+        e.preventDefault();
+        void h.save();
+      } else if (mod && k === 'o') {
+        e.preventDefault();
+        openRef.current?.click();
+      } else if (mod && k === 'f' && project) {
+        e.preventDefault();
+        h.find();
+      } else if (mod && e.key === '.' && project) {
+        e.preventDefault();
+        setShowDiag((v) => !v);
+      } else if (e.key === '?' && !typing && !mod) {
+        e.preventDefault();
+        setShowKeys(true);
+      } else if (e.key.toLowerCase() === 'd' && plainKey(e) && (h.tab === 'review' || h.tab === 'play')) {
+        e.preventDefault();
+        h.dialogueOnly();
+      } else if ((e.key === '[' || e.key === ']') && plainKey(e) && h.tab === 'review' && project) {
+        e.preventDefault();
+        h.step(e.key === ']' ? 1 : -1);
       }
     };
     window.addEventListener('keydown', onKey);
@@ -169,9 +223,18 @@ export function App() {
     else if (project.items.some((i) => i.id === d.entityId) || project.variables.some((v) => v.id === d.entityId)) open(STORY_SETTINGS);
   };
 
+  /** Saves the project as one .nbproj.json file, with voice clips embedded so it is complete on its own. */
+  const saveProject = async () => {
+    if (!project) return;
+    const clips = await collectClips(referencedAudio(project));
+    const audio = Object.fromEntries(Object.entries(clips).map(([id, c]) => [id, { mime: c.mime, data: bytesToBase64(c.bytes) }]));
+    download(`${project.project.id}.nbproj.json`, JSON.stringify({ project, parseDiagnostics, audio }, null, 2), 'application/json');
+  };
+
   const openProject = async (file: File) => {
     try {
       const data = JSON.parse(await file.text());
+      for (const [id, c] of Object.entries((data.audio ?? {}) as Record<string, { mime: string; data: string }>)) await putClip(id, c.mime, base64ToBytes(c.data));
       const p: StoryProject = data.project?.schemaVersion ? data.project : data;
       const errs = validateSchema(p).filter((d) => d.severity === 'error');
       if (errs.length) return alert(`Not a valid Narrative Bridge project:\n${errs.map((e) => e.message).join('\n')}`);
@@ -183,6 +246,28 @@ export function App() {
     } catch (e) {
       alert(`Could not open project: ${e}`);
     }
+  };
+
+  // Latest handlers for the keyboard shortcuts (the listener is registered once).
+  keys.current = {
+    tab,
+    dialogueOnly: () => setDialogueOnly(!dialogueOnly),
+    save: saveProject,
+    find: () => {
+      if (tab === 'graph') return document.querySelector<HTMLInputElement>('.graph-search')?.focus();
+      if (tab !== 'review') setTab('review');
+      setTimeout(() => {
+        const panel = document.querySelector<HTMLDetailsElement>('.find-panel');
+        if (panel) panel.open = true;
+        panel?.querySelector<HTMLInputElement>('input')?.focus();
+      }, 50);
+    },
+    step: (dir: 1 | -1) => {
+      const ids = project?.passages.map((p) => p.id) ?? [];
+      const i = ids.indexOf(selected);
+      const next = ids[Math.max(0, Math.min(ids.length - 1, (i < 0 ? 0 : i) + dir))];
+      if (next) setSelected(next);
+    },
   };
 
   const state: ConversionState = busy ? 'Parsing' : exportState ?? (stale || processed?.smokePending ? 'Validating' : processed?.state ?? 'Queued');
@@ -202,10 +287,7 @@ export function App() {
     <div className={`app ${processed && showDiag && tab !== 'import' ? 'with-diag' : ''}`}>
       <header className="topbar">
         <div className="brand">
-          <svg width="22" height="22" viewBox="0 0 24 24" aria-hidden>
-            <path d="M2 17 C 7 7, 17 7, 22 17" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" />
-            <path d="M6 17 V 12 M12 17 V 9.5 M18 17 V 12" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
-          </svg>
+          <Logo size={26} />
           <span>Narrative Bridge</span>
         </div>
         {project && (
@@ -230,13 +312,28 @@ export function App() {
         <button className="btn tiny ghost" onClick={redo} disabled={!redoStack.current.length} title="Redo (⇧⌘Z)">
           ↷
         </button>
+        <button className="btn tiny ghost" onClick={() => setShowKeys(true)} title="Keyboard shortcuts (?)">
+          ⌨ keys
+        </button>
         <ThemeToggle />
+        <button
+          className="btn tiny ghost"
+          aria-pressed={soundOn}
+          title={soundOn ? 'Book sounds on (page turns, choices, endings). Click to mute.' : 'Book sounds off. Click to turn on.'}
+          onClick={() => {
+            sfx.setEnabled(!soundOn);
+            setSoundOn(!soundOn);
+            if (!soundOn) sfx.choice();
+          }}
+        >
+          {soundOn ? '♪ sounds' : '♪ muted'}
+        </button>
         <button className="btn tiny ghost" onClick={() => openRef.current?.click()}>
           Open project
         </button>
         <input ref={openRef} type="file" accept=".json" hidden onChange={(e) => e.target.files?.[0] && openProject(e.target.files[0])} />
         {project && (
-          <button className="btn tiny ghost" onClick={() => download(`${project.project.id}.nbproj.json`, JSON.stringify({ project, parseDiagnostics }, null, 2), 'application/json')}>
+          <button className="btn tiny ghost" onClick={() => void saveProject()}>
             Save project
           </button>
         )}
@@ -273,17 +370,36 @@ export function App() {
       </nav>
 
       <div className="workspace">
-        <div className="content">
+        {/* Silk ribbon bookmark marking the open chapter (decorative). */}
+        <div className="ribbon" aria-hidden key={tab}>
+          <span>{TABS.find((t) => t.id === tab)!.numeral}</span>
+        </div>
+        <div className="content" key={`page-${tab}`}>
+          <Suspense fallback={<p className="muted pad">Turning the page…</p>}>
           {tab === 'import' && <ImportView onConvert={convert} busy={busy} />}
-          {processed && tab === 'review' && <ReviewView processed={{ ...processed, project: project! }} selected={selected} onSelect={setSelected} update={update} />}
-          {processed && tab === 'graph' && <GraphView graph={processed.analysis.graph} start={processed.project.project.startPassage} selected={selected} onOpen={open} endingsReached={processed.smoke?.endingsReached} />}
+          {processed && tab === 'review' && <ReviewView processed={{ ...processed, project: project! }} selected={selected} onSelect={setSelected} update={update} dialogueOnly={dialogueOnly} onDialogueOnly={setDialogueOnly} />}
+          {processed && tab === 'graph' && (
+            <GraphView
+              graph={processed.analysis.graph}
+              start={processed.project.project.startPassage}
+              selected={selected}
+              onOpen={open}
+              endingsReached={processed.smoke?.endingsReached}
+              title={project!.project.title}
+              layout={project!.layout}
+              onMove={(id, pos) => update((d) => (d.layout = { ...d.layout, [id]: pos }))}
+              onResetLayout={() => update((d) => delete d.layout)}
+            />
+          )}
           {processed && tab === 'ink' && <InkView processed={processed} onOpen={open} />}
-          {processed && tab === 'play' && <PlaytestView processed={processed} onOpen={open} />}
-          {processed && tab === 'export' && <ExportView processed={processed} onState={setExportState} />}
+          {processed && tab === 'play' && <PlaytestView processed={processed} onOpen={open} dialogueOnly={dialogueOnly} onDialogueOnly={setDialogueOnly} />}
+          {processed && tab === 'export' && <ExportView processed={processed} stale={stale} onState={setExportState} />}
+          </Suspense>
           {(tab === 'import' || tab === 'export') && <footer className="folio">— {TABS.find((t) => t.id === tab)!.numeral.toLowerCase()} —</footer>}
         </div>
         {processed && showDiag && tab !== 'import' && <DiagnosticsPanel diagnostics={processed.diagnostics} project={project!} onJump={jump} onClose={() => setShowDiag(false)} />}
       </div>
+      {showKeys && <ShortcutSheet onClose={() => setShowKeys(false)} />}
     </div>
   );
 }
