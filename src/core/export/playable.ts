@@ -80,20 +80,20 @@ export function buildPlayableHtml(story: ProcessedStory, inkRuntimeJs: string, a
 }
 
 const PLAYER_CSS = `
-:root{--paper:#f6efdc;--ink:#2b2018;--ink2:#4b3d30;--faded:#7d6c58;--rule:#d4c4a0;--rubric:#8e2c1b;--pen:#2c4a6e;
+:root{--paper:#fefae0;--ink:#283618;--ink2:#3d4a24;--faded:#5d6440;--rule:#c9b97f;--rubric:#8f4f16;--pen:#606c38;
 --serif:'Iowan Old Style','Palatino Linotype',Palatino,'Book Antiqua',Georgia,serif}
 *{box-sizing:border-box}html,body{margin:0;min-height:100%}
-body{background:radial-gradient(ellipse at 50% 0%,#3a2b20,#2a1f17 70%);color:var(--ink);font:18px/1.7 var(--serif);padding:28px 16px;
+body{background:radial-gradient(ellipse at 50% 0%,#2d3c1a,#1d270f 70%);color:var(--ink);font:18px/1.7 var(--serif);padding:28px 16px;
 -webkit-font-smoothing:antialiased;font-variant-numeric:oldstyle-nums}
 .book{max-width:720px;margin:0 auto;background:var(--paper);min-height:calc(100vh - 56px);padding:56px 64px 48px;border-radius:2px 4px 4px 2px;
-box-shadow:1px 1px 0 #e9dfc6,2px 2px 0 #d5c6a2,3px 3px 0 #ebe1c8,4px 4px 0 #cfbe98,0 18px 40px rgba(0,0,0,.5)}
+box-shadow:1px 1px 0 #f3ecc9,2px 2px 0 #ddd1a0,3px 3px 0 #f3ecc9,4px 4px 0 #cbbd84,0 18px 40px rgba(0,0,0,.5)}
 .cover{text-align:center;padding-top:12vh}.orn{color:var(--rubric);font-size:30px}
 h1{font-weight:400;font-size:42px;line-height:1.15;margin:10px 0 6px}.author{font-style:italic;color:var(--ink2);margin:0}
 .rule{width:120px;border-top:1px solid var(--rule);margin:30px auto}
 .cover-actions{display:flex;gap:12px;justify-content:center;flex-wrap:wrap}
 .colophon{margin-top:40px;font-size:14px;color:var(--faded);font-style:italic}
 .btn{font:inherit;font-size:17px;font-variant:small-caps;text-transform:lowercase;letter-spacing:.08em;padding:8px 22px;border:1px solid var(--ink2);
-background:transparent;color:var(--ink);border-radius:3px;cursor:pointer}.btn:hover{background:#fffaf0}
+background:transparent;color:var(--ink);border-radius:3px;cursor:pointer}.btn:hover{background:#fffdf1}
 .btn.primary{background:var(--ink);color:var(--paper)}.btn.primary:hover{background:var(--rubric);border-color:var(--rubric)}
 .running-head{display:flex;justify-content:space-between;gap:12px;border-bottom:1px solid var(--rule);padding-bottom:8px;margin-bottom:22px;
 font-size:13px;font-variant:small-caps;text-transform:lowercase;letter-spacing:.2em;color:var(--faded)}
@@ -111,7 +111,7 @@ font-size:13px;font-variant:small-caps;text-transform:lowercase;letter-spacing:.
 .choices{margin-top:22px;border-top:1px solid var(--rule);padding-top:12px;display:flex;flex-direction:column}
 .choice{position:relative;text-align:left;font:italic 18px var(--serif);color:var(--ink);background:none;border:0;border-bottom:1px dotted var(--rule);
 padding:10px 8px 10px 30px;cursor:pointer}.choice:before{content:'❧';position:absolute;left:4px;color:var(--rubric);font-style:normal}
-.choice:hover,.choice:focus-visible{color:var(--pen);background:rgba(44,74,110,.08);outline:none}
+.choice:hover,.choice:focus-visible{color:var(--pen);background:rgba(96,108,56,.1);outline:none}
 .end{text-align:center;color:var(--rubric);font-style:italic;font-size:22px;margin:30px 0 10px;letter-spacing:.1em}
 .end-actions{text-align:center}
 @media (max-width:600px){body{padding:0;font-size:17px}.book{padding:34px 22px;min-height:100vh;border-radius:0}h1{font-size:32px}}

@@ -196,15 +196,15 @@ const END_MARKUP = '<span class="end">❦ The End ❦</span>';
 
 const STYLESHEET = `
 /* Narrative Bridge book style for SugarCube */
-body { background: #2a1f17; color: #2b2018; font-family: 'Iowan Old Style', 'Palatino Linotype', Palatino, Georgia, serif; }
+body { background: #1d270f; color: #283618; font-family: 'Iowan Old Style', 'Palatino Linotype', Palatino, Georgia, serif; }
 #story { margin: 0 auto; max-width: 46em; }
-#passages { background: #f6efdc; padding: 3em 3.5em; border-radius: 2px; box-shadow: 0 18px 40px rgba(0,0,0,.5); line-height: 1.7; font-size: 1.1em; }
-#passages a { color: #2c4a6e; font-style: italic; }
-.scene { display: block; text-align: center; font-variant: small-caps; letter-spacing: .2em; color: #7d6c58; margin: 1em 0; }
+#passages { background: #fefae0; padding: 3em 3.5em; border-radius: 2px; box-shadow: 0 18px 40px rgba(0,0,0,.5); line-height: 1.7; font-size: 1.1em; }
+#passages a { color: #606c38; font-style: italic; }
+.scene { display: block; text-align: center; font-variant: small-caps; letter-spacing: .2em; color: #5d6440; margin: 1em 0; }
 .dialogue { display: block; margin: .8em 0 .8em 2em; }
 .speaker { display: block; font-variant: small-caps; letter-spacing: .14em; font-weight: 600; }
-.paren { display: block; font-style: italic; color: #7d6c58; }
-.transition { display: block; text-align: right; font-variant: small-caps; color: #7d6c58; }
-.end { display: block; text-align: center; color: #8e2c1b; font-style: italic; margin-top: 1.5em; }
-#ui-bar { background: #3a2b20; color: #e9dcc0; border-color: #2a1f17; }
+.paren { display: block; font-style: italic; color: #5d6440; }
+.transition { display: block; text-align: right; font-variant: small-caps; color: #5d6440; }
+.end { display: block; text-align: center; color: #8f4f16; font-style: italic; margin-top: 1.5em; }
+#ui-bar { background: #2d3c1a; color: #fefae0; border-color: #1d270f; }
 `;

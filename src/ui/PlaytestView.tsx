@@ -1,5 +1,5 @@
 import { Story } from 'inkjs/full';
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { Fragment, useCallback, useEffect, useRef, useState } from 'react';
 import { fnv1a } from '../core/hash';
 import { itemVar } from '../core/isr';
 import type { ProcessedStory } from '../core/pipeline';
@@ -225,10 +225,10 @@ export function PlaytestView({ processed, onOpen }: { processed: ProcessedStory;
                 <span className="t-text">{l.text}</span>
               </p>
             ) : (
-              <p key={i} className={l.tags.includes('transition') ? 't-transition' : `t-action${i === dropCapAt ? ' drop' : ''}`}>
+              <Fragment key={i}>
                 {l.tags.find((t) => t.startsWith('scene:')) && <span className="t-scene">{l.tags.find((t) => t.startsWith('scene:'))!.slice(6)}</span>}
-                {l.text}
-              </p>
+                <p className={l.tags.includes('transition') ? 't-transition' : `t-action${i === dropCapAt ? ' drop' : ''}`}>{l.text}</p>
+              </Fragment>
             ),
           )}
           {ended && <p className="t-end">— The End —</p>}
