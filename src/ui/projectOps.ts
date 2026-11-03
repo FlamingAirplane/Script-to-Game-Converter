@@ -56,10 +56,6 @@ export function addChoice(p: StoryProject, passageId: string): Choice | null {
   return choice;
 }
 
-export function findPassage(p: StoryProject, id: string | undefined): Passage | undefined {
-  return p.passages.find((x) => x.id === id);
-}
-
 /** Resolve a diagnostic's entity id to the passage that contains it. */
 export function passageForEntity(p: StoryProject, entityId?: string, passageHint?: unknown): string | undefined {
   if (typeof passageHint === 'string' && p.passages.some((x) => x.id === passageHint)) return passageHint;

@@ -22,6 +22,9 @@
     "url": "git+https://github.com/FlamingAirplane/Script-to-Game-Converter.git"
   },
   "license": "MIT",
+  "engines": {
+    "node": ">=22.13.0"
+  },
   "type": "module",
   "bugs": {
     "url": "https://github.com/FlamingAirplane/Script-to-Game-Converter/issues"
@@ -47,7 +50,7 @@
     "typescript": "^7.0.2",
     "vite": "^6.4.5",
     "vite-plugin-singlefile": "^2.3.4",
-    "vitest": "^3.2.7"
+    "vitest": "^4.1.12"
   },
   "private": true,
   "bin": {
