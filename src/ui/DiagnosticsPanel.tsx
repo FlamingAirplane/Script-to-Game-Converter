@@ -70,7 +70,13 @@ export function DiagnosticsPanel({
           </button>
         ))}
       </div>
-      {shown.length === 0 && <p className="muted small pad">{diagnostics.length ? 'Everything here is hidden by the filters above.' : 'Nothing to fix — the proofs are clean and the story is ready to export.'}</p>}
+      {shown.length === 0 && (
+        <p className="muted small pad">
+          {counts.error + counts.review + counts.warning === 0
+            ? `Nothing to fix — the proofs are clean and the story is ready to export.${counts.info ? ` ${counts.info === 1 ? '1 note is' : `${counts.info} notes are`} hidden; click “note” above to read ${counts.info === 1 ? 'it' : 'them'}.` : ''}`
+            : 'Everything here is hidden by the filters above. Click a filter to show it again.'}
+        </p>
+      )}
       <ul className="diag-list">
         {shown.map((d, i) => {
           const f = friendly(d, project ?? undefined);

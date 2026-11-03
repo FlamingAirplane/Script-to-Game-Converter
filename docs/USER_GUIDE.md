@@ -135,10 +135,22 @@ every match, and **Replace all** changes them in one step. Undo ↶ reverses it.
 
 ## 5. Graph: the story map
 
-![The story map with passages, routes, a minimap and a compass](images/graph.jpg)
+![The story map with passages, routes, the key below, a minimap and a compass](images/graph.jpg)
 
-Every passage is a card and every choice a line. The key at the top explains the marks: start, ending, unreachable,
-choice, conditional (needs an item or value), proposed (not yet approved) and divert (continues automatically).
+Every passage is a card and every choice a route between cards. The **key** under the map explains the marks:
+
+| Mark | Means |
+| --- | --- |
+| **Start** tag | The story begins here. |
+| **Ending** tag | The story can end here. |
+| **Can't be reached** tag (dashed) | No route leads here yet. Add a choice to it, or delete it. |
+| Solid route | A choice the player can make. |
+| Dashed route with a padlock | A choice that needs an item or value, such as having the key. |
+| Dotted route | The story continues on its own. |
+| Dashed route with ◆ | A suggested choice, waiting for your OK in Review. |
+
+Hover over a route to read its choice, and over a passage for a summary, including how many automated test plays ended
+there. **Key** in the toolbar hides or shows the key; your choice is remembered.
 
 - **Click** a passage to open it in Review. **Drag** it to rearrange the map; your layout is saved with the project.
   **Reset layout** returns to automatic placement.
