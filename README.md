@@ -32,7 +32,7 @@ npm test           # unit, golden-file, compiler, runtime and export tests
 npm run build:single   # → release/Narrative-Bridge.html
 ```
 
-This produces one self-contained HTML file (~0.6 MB) with all scripts and styles inlined. Writers double-click it to run the
+This produces one self-contained HTML file (~3 MB, most of it the PDF reader) with all scripts and styles inlined. Writers double-click it to run the
 whole app offline in any modern browser. Nothing is installed and nothing is uploaded. Send it together with
 [WRITERS.md](WRITERS.md), or attach it to a GitHub release. The `release/` folder is git-ignored, so rebuild the file for each release.
 
@@ -64,7 +64,7 @@ npm run test:offline    # the website opens, converts, plays and exports offline
 
 | Tab | What it does |
 | --- | --- |
-| **Import** | Drop Fountain, Final Draft (`.fdx`), Word (`.docx`), plain text, Markdown or Ink files (or paste), choose a conversion mode, or start from a sample. |
+| **Import** | Drop Fountain, Final Draft (`.fdx`), Word (`.docx`), PDF, plain text, Markdown or Ink files (or paste), choose a conversion mode, or start from a sample. |
 | **Review** | Every passage with its content, provenance (`source` / `transformed` / `generated` / `edited`) and the original source lines side by side. Edit text, choices, conditions, effects, items and variables; approve or reject proposed branches; find & replace, merge duplicate characters, reorder passages. Give characters voices, and record or attach a clip for any line. *Dialogue only* (D) hides everything but spoken lines. **Story settings** shows the story at a glance (words, reading time, choices, endings, spoken minutes and lines per character) and keeps **drafts**. |
 | **Graph** | The story as an old map: start, endings, unreachable passages, conditional and proposed routes. Drag passages to arrange them (saved with the project), search, minimap; click a passage to edit it. *Save map* downloads the whole map as SVG or PNG. |
 | **Ink** | The deterministic generated Ink, compiled live with the pinned inkjs compiler; compile errors are mapped back to passages. |
@@ -178,5 +178,5 @@ tests/               unit, golden-file, compiler, runtime and export tests
 
 ## Not yet supported
 
-PDF import (export the script as Final Draft, Word, Fountain or text instead); AI-assisted adaptation (would require explicit consent before sending scripts anywhere);
+scanned PDFs (PDF import reads the text layer) and dual dialogue in PDFs; AI-assisted adaptation (would require explicit consent before sending scripts anywhere);
 save migration between story versions (incompatible saves are rejected with a clear message instead).

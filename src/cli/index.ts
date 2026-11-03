@@ -17,7 +17,7 @@ import { processProject } from '../core/pipeline';
 const HELP = `Narrative Bridge — screenplays and prose → Ink → Unity / Unreal
 
 Usage:
-  narrative-bridge convert <files...>          (.fountain .txt .md .ink .fdx .docx) [--mode faithful|adaptation|structured] [--approve-all]
+  narrative-bridge convert <files...>          (.fountain .txt .md .ink .fdx .docx .pdf) [--mode faithful|adaptation|structured] [--approve-all]
                                       [--out story.ink] [--project story.nbproj.json] [--title "Title"]
   narrative-bridge validate <files... | project.nbproj.json>
   narrative-bridge export <files... | project.nbproj.json> --engine unity|unreal|web|twine|script --out <dir>

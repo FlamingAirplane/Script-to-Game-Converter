@@ -135,6 +135,14 @@ for (const [name, type] of [['WebKit', webkit], ['Chromium', chromium]]) {
       await page.getByRole('button', { name: /^Convert/ }).click();
       await page.locator('.passage-item', { hasText: 'Cliff Path' }).waitFor({ timeout: 5000 });
     });
+    await step('imports a screenplay PDF', async () => {
+      await page.getByRole('button', { name: /Import/ }).first().click();
+      await page.locator('.dropzone input[type=file]').setInputFiles(fileURLToPath(new URL('../fixtures/lighthouse.pdf', import.meta.url)));
+      await page.getByText('lighthouse.pdf').waitFor({ timeout: 15000 });
+      await page.getByRole('button', { name: /^Convert/ }).click();
+      await page.locator('.passage-item', { hasText: /lamp room/i }).waitFor({ timeout: 10000 });
+      await page.locator('.project-name', { hasText: 'THE LIGHTHOUSE KEEPER' }).waitFor();
+    });
     await step('the replaced story waits on the Import page as earlier work', async () => {
       await page.getByRole('button', { name: /Import/ }).first().click();
       await page.locator('.drafts .draft', { hasText: 'The Locked Archive' }).waitFor({ timeout: 5000 });

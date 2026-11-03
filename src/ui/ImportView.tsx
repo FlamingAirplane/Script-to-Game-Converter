@@ -44,8 +44,8 @@ export function ImportView({
     const next: SourceInput[] = [];
     const problems: string[] = [];
     for (const f of Array.from(list)) {
-      if (/\.(pdf|doc)$/i.test(f.name)) {
-        problems.push(`${f.name}: ${/\.doc$/i.test(f.name) ? 'old .doc files can’t be read — re-save it as .docx in Word.' : 'PDF isn’t supported yet — export the script as Final Draft, Word, Fountain or plain text.'}`);
+      if (/\.doc$/i.test(f.name)) {
+        problems.push(`${f.name}: old .doc files can’t be read — re-save it as .docx in Word.`);
         continue;
       }
       try {
@@ -112,7 +112,7 @@ export function ImportView({
             tabIndex={0}
           >
             <strong>Drop files here</strong> or click to browse
-            <span className="muted small">Final Draft, Word, Fountain, Markdown, Ink or plain text</span>
+            <span className="muted small">Final Draft, Word, PDF, Fountain, Markdown, Ink or plain text</span>
             <input ref={input} type="file" multiple hidden accept={[...ACCEPTED, '.text'].join(',')} onChange={(e) => addFiles(e.target.files)} />
           </div>
           {error && <p className="error-text">{error}</p>}

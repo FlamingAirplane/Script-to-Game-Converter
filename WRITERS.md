@@ -15,11 +15,14 @@ That's it. It works without an internet connection, and your scripts are never u
 - A **Final Draft** script (`.fdx`), or
 - A **Word** document (`.docx`). Screenplays that use Word's screenplay styles keep their scene headings, characters and
   dialogue; other documents become one passage per heading, or
+- A **PDF** (`.pdf`). A screenplay in standard layout keeps its scene headings, characters, dialogue and transitions
+  (page numbers and MORE / CONT'D are tidied away); a novel or story becomes one passage per chapter heading, or
 - A **Fountain** screenplay (`.fountain`) or a **plain-text** export (`.txt`), or
 - A **Markdown** file (`.md`), or just paste your text in.
 
-PDF and old `.doc` files aren't supported. Save as `.fdx`, `.docx` or plain text first. Bold, italics and fonts aren't
-kept; all of your words are.
+Scanned PDFs (pictures of pages) and old `.doc` files can't be read. Export the script from your writing app, or save as
+`.docx`, instead. If you have both, an `.fdx` or `.docx` is more exact than a PDF. Bold, italics and fonts aren't kept;
+all of your words are.
 
 ## Hearing your dialogue
 
