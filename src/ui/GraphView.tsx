@@ -104,7 +104,6 @@ function mapSvg(live: SVGSVGElement, title: string): { svg: string; width: numbe
     target.removeAttribute('class');
     for (const a of ['tabindex', 'role', 'aria-description', 'data-id']) target.removeAttribute(a);
   });
-  out.querySelectorAll(':scope > g')[1]?.remove(); // the compass is pinned to the screen, not the map
   hitAreas.forEach((el) => el.remove()); // wide invisible strokes for hovering
   const g = out.querySelector(':scope > g')!;
   g.setAttribute('transform', `translate(${pad - box.x},${pad + head - box.y})`);
@@ -151,17 +150,80 @@ async function svgToPng(svg: string, width: number, height: number): Promise<Uin
   return new Uint8Array(await blob.arrayBuffer());
 }
 
+/** Decorative compass rose, pinned to the frame's corner (outside the panned drawing, so it never clips). */
 function Compass() {
   return (
-    <g className="compass" aria-hidden>
+    <svg className="compass" viewBox="-40 -54 80 94" width="58" height="68" aria-hidden>
       <circle r="30" className="compass-ring" />
       <circle r="24" className="compass-ring thin" />
       <path d="M0 -36 L6 0 L0 36 L-6 0 Z" className="compass-ns" />
       <path d="M-36 0 L0 -6 L36 0 L0 6 Z" className="compass-ew" />
-      <text y="-40" textAnchor="middle" className="compass-n">
+      <text y="-42" textAnchor="middle" className="compass-n">
         N
       </text>
+    </svg>
+  );
+}
+
+type TagKind = 'start' | 'ending' | 'unreachable';
+const TAG_LABEL: Record<TagKind, string> = { start: 'Start', ending: 'Ending', unreachable: 'Can’t be reached' };
+const tagWidth = (kind: TagKind) => Math.round(TAG_LABEL[kind].length * 6.2 + 18);
+
+/** A plain-word tag pinned to the top edge of a passage card. */
+function NodeTag({ kind, x, y = -9 }: { kind: TagKind; x: number; y?: number }) {
+  const w = tagWidth(kind);
+  return (
+    <g className={`node-tag tag-${kind}`} transform={`translate(${x},${y})`}>
+      <rect width={w} height={18} rx={9} />
+      <text x={w / 2} y={12.5} textAnchor="middle">
+        {TAG_LABEL[kind]}
+      </text>
     </g>
+  );
+}
+
+/** Small sign at the middle of a route: a padlock (needs an item or value) or ◆ (suggested, waiting for approval). */
+function RouteSign({ kind, x, y }: { kind: 'cond' | 'pending'; x: number; y: number }) {
+  return (
+    <g className={`route-sign ${kind}`} transform={`translate(${x},${y})`} pointerEvents="none">
+      <circle r={9.5} />
+      {kind === 'cond' ? (
+        <>
+          <path d="M-3.2 -0.5 V-3 A3.2 3.2 0 0 1 3.2 -3 V-0.5" className="sign-line" />
+          <rect x={-4.6} y={-0.8} width={9.2} height={6.6} rx={1.3} className="sign-fill" />
+        </>
+      ) : (
+        <path d="M0 -4.8 L4.8 0 L0 4.8 L-4.8 0 Z" className="sign-fill" />
+      )}
+    </g>
+  );
+}
+
+const KEY_STORE = 'narrative-bridge.map-key';
+
+/** The map's key, in plain words, drawn with the same marks as the map. */
+function MapKey() {
+  const line = (kind: string, sign?: 'cond' | 'pending') => (
+    <svg width="58" height="20" aria-hidden>
+      <path d="M2 10 H50" className={`edge ${kind}`} markerEnd={`url(#arrow-${kind})`} />
+      {sign && <RouteSign kind={sign} x={26} y={10} />}
+    </svg>
+  );
+  const tag = (kind: TagKind) => (
+    <svg width={tagWidth(kind) + 2} height="20" aria-hidden>
+      <NodeTag kind={kind} x={1} y={1} />
+    </svg>
+  );
+  return (
+    <ul className="map-key" aria-label="Map key">
+      <li>{tag('start')} the story begins here</li>
+      <li>{tag('ending')} the story can end here</li>
+      <li>{tag('unreachable')} no route leads here yet</li>
+      <li>{line('edge')} a choice</li>
+      <li>{line('cond', 'cond')} a choice that needs an item or value</li>
+      <li>{line('fallback')} continues on its own</li>
+      <li>{line('pending', 'pending')} suggested, waiting for your OK</li>
+    </ul>
   );
 }
 
@@ -228,26 +290,76 @@ export function GraphView({
     return out;
   }, [graph.edges]);
 
+  // Whether the reader has panned or zoomed since the last fit; if not, the map refits on resize.
+  const moved = useRef(false);
   const fit = () => {
     const r = svg.current?.getBoundingClientRect();
     if (!r) return;
+    moved.current = false;
     setSize({ w: r.width, h: r.height });
-    const k = Math.min(1.2, Math.max(0.25, Math.min((r.width - 120) / bounds.width, (r.height - 120) / bounds.height)));
+    const pad = Math.min(60, Math.max(14, r.width * 0.05)); // smaller margins on small screens
+    const k = Math.min(1.2, Math.max(0.25, Math.min((r.width - 2 * pad) / bounds.width, (r.height - 2 * pad) / bounds.height)));
     setView({ x: (r.width - bounds.width * k) / 2 - bounds.minX * k, y: (r.height - bounds.height * k) / 2 - bounds.minY * k, k });
   };
   const centerOn = (id: string) => {
     const p = placed.get(id);
     const r = svg.current?.getBoundingClientRect();
     if (!p || !r) return;
+    moved.current = true;
     setView((v) => ({ ...v, x: r.width / 2 - (p.x + W / 2) * v.k, y: r.height / 2 - (p.y + H / 2) * v.k }));
   };
   // Fit when the map's overall size changes (not on every edit, so panning is preserved).
   // eslint-disable-next-line react-hooks/exhaustive-deps
   useLayoutEffect(fit, [Math.round(bounds.width), Math.round(bounds.height)]);
+  // Follow the frame's size (window resizes, the side panel opening), so the overlays and the
+  // minimap's view box stay right. Deferred a frame to avoid resize-observer loops in WebKit.
+  const fitRef = useRef(fit);
+  fitRef.current = fit;
+  useEffect(() => {
+    const el = svg.current;
+    if (!el || typeof ResizeObserver === 'undefined') return;
+    let frame = 0;
+    const ro = new ResizeObserver(() => {
+      cancelAnimationFrame(frame);
+      frame = requestAnimationFrame(() => {
+        const r = el.getBoundingClientRect();
+        if (!r.width || !r.height) return;
+        if (moved.current) setSize({ w: r.width, h: r.height });
+        else fitRef.current();
+      });
+    });
+    ro.observe(el);
+    return () => {
+      ro.disconnect();
+      cancelAnimationFrame(frame);
+    };
+  }, []);
+  const zoomBy = (f: number) => {
+    moved.current = true;
+    setView((v) => ({ ...v, k: Math.min(2.5, Math.max(0.2, v.k * f)) }));
+  };
+  // The key starts open, except on phones where it would crowd the map; the choice is remembered.
+  const [showKey, setShowKey] = useState(() => {
+    const wide = typeof window === 'undefined' || window.innerWidth > 760;
+    try {
+      const saved = localStorage.getItem(KEY_STORE);
+      return saved ? saved === 'shown' : wide;
+    } catch {
+      return wide;
+    }
+  });
+  const toggleKey = () => {
+    setShowKey(!showKey);
+    try {
+      localStorage.setItem(KEY_STORE, showKey ? 'hidden' : 'shown');
+    } catch {
+      /* remembered for this visit only */
+    }
+  };
 
   // Map keys: / find, F fit, + and − zoom.
-  const mapKeys = useRef({ fit, zoom: (f: number) => setView((v) => ({ ...v, k: Math.min(2.5, Math.max(0.2, v.k * f)) })) });
-  mapKeys.current = { fit, zoom: (f: number) => setView((v) => ({ ...v, k: Math.min(2.5, Math.max(0.2, v.k * f)) })) };
+  const mapKeys = useRef({ fit, zoom: zoomBy });
+  mapKeys.current = { fit, zoom: zoomBy };
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (!plainKey(e)) return;
@@ -297,31 +409,24 @@ export function GraphView({
           onKeyDown={(e) => e.key === 'Enter' && matches[0] && centerOn(matches[0])}
         />
         {query && <span className="muted small">{matches.length ? `${matches.length} found · Enter to go` : 'none found'}</span>}
-        <span className="legend">
-          <span className="lg lg-start" /> start
-          <span className="lg lg-end" /> ending
-          <span className="lg lg-unreach" /> unreachable
-          <span className="lg-line" /> choice
-          <span className="lg-line dashed" /> conditional
-          <span className="lg-line pending" /> proposed
-          <span className="lg-line fallback" /> divert
-        </span>
         <span className="spacer" />
+        <span className="tool-group" role="group" aria-label="Zoom">
+          <button className="btn tiny" aria-label="Zoom out" title="Zoom out (−)" onClick={() => zoomBy(1 / 1.2)}>
+            −
+          </button>
+          <button className="btn tiny" aria-label="Zoom in" title="Zoom in (+)" onClick={() => zoomBy(1.2)}>
+            +
+          </button>
+          <button className="btn tiny" onClick={fit} title="Show the whole map (F)">
+            Fit
+          </button>
+        </span>
         {layout && Object.keys(layout).length > 0 && (
           <button className="btn tiny" onClick={onResetLayout} title="Forget dragged positions and arrange automatically">
             Reset layout
           </button>
         )}
-        <button className="btn tiny" aria-label="Zoom in" onClick={() => setView((v) => ({ ...v, k: Math.min(2.5, v.k * 1.2) }))}>
-          +
-        </button>
-        <button className="btn tiny" aria-label="Zoom out" onClick={() => setView((v) => ({ ...v, k: Math.max(0.2, v.k / 1.2) }))}>
-          −
-        </button>
-        <button className="btn tiny" onClick={fit}>
-          Fit
-        </button>
-        <span className="map-save">
+        <span className="tool-group" role="group" aria-label="Save the map">
           <button className="btn tiny" onClick={() => saveMap('svg')} title="Save the whole map as a scalable image (SVG)">
             Save map
           </button>
@@ -329,6 +434,9 @@ export function GraphView({
             PNG
           </button>
         </span>
+        <button className="btn tiny" aria-pressed={showKey} onClick={toggleKey} title="Show or hide what the marks on the map mean">
+          Key
+        </button>
       </div>
       <div className="map-frame">
         <svg
@@ -341,6 +449,7 @@ export function GraphView({
             const mx = e.clientX - r.left;
             const my = e.clientY - r.top;
             const f = e.deltaY < 0 ? 1.1 : 1 / 1.1;
+            moved.current = true;
             setView((v) => {
               const k = Math.min(2.5, Math.max(0.2, v.k * f));
               return { k, x: mx - ((mx - v.x) * k) / v.k, y: my - ((my - v.y) * k) / v.k };
@@ -367,6 +476,7 @@ export function GraphView({
             }
             if (!pan.current) return;
             const d = pan.current;
+            moved.current = true;
             setView((v) => ({ ...v, x: d.vx + e.clientX - d.x, y: d.vy + e.clientY - d.y }));
           }}
           onPointerUp={() => {
@@ -405,8 +515,9 @@ export function GraphView({
                   <g key={e.id} onPointerEnter={() => setHoverEdge(e.id)} onPointerLeave={() => setHoverEdge(null)}>
                     <line x1={x1} y1={y1} x2={x1 + 40} y2={y1} className={`edge ${missing ? 'missing' : kind} ${hl ? 'hl' : ''}`} markerEnd={`url(#arrow-${hl ? 'hl' : kind})`} />
                     <text x={x1 + 44} y={y1 + 4} className={`edge-end ${missing ? 'missing' : ''}`}>
-                      {missing ? `⚠ ${e.to}` : 'Finis'}
+                      {missing ? `⚠ Missing: ${e.to}` : 'The End'}
                     </text>
+                    {(kind === 'cond' || kind === 'pending') && !missing && <RouteSign kind={kind} x={x1 + 20} y={y1} />}
                     {showLabel && <EdgeLabel x={x1 + 20} y={y1 - 14} text={e.label} />}
                   </g>
                 );
@@ -429,6 +540,7 @@ export function GraphView({
                 <g key={e.id} onPointerEnter={() => setHoverEdge(e.id)} onPointerLeave={() => setHoverEdge(null)}>
                   <path d={d} className="edge-hit" />
                   <path d={d} className={`edge ${kind} ${hl ? 'hl' : ''}`} markerEnd={`url(#arrow-${hl ? 'hl' : kind})`} />
+                  {(kind === 'cond' || kind === 'pending') && !showLabel && <RouteSign kind={kind} x={mx} y={my} />}
                   {showLabel && <EdgeLabel x={mx} y={my} text={e.kind === 'fallback' ? 'otherwise' : e.label} />}
                 </g>
               );
@@ -436,6 +548,18 @@ export function GraphView({
             {graph.nodes.map((n) => {
               const p = placed.get(n.id)!;
               const reached = endingsReached?.[n.id];
+              const tags: TagKind[] = [...(n.isStart ? ['start' as const] : []), ...(n.isEnding ? ['ending' as const] : []), ...(n.reachable ? [] : ['unreachable' as const])];
+              const out = graph.edges.filter((e) => e.from === n.id && !e.pending).length;
+              const about = [
+                n.isStart ? 'The story begins here.' : '',
+                n.isEnding ? 'The story can end here.' : '',
+                n.reachable ? '' : 'No route leads here yet.',
+                out ? `${out} route${out === 1 ? '' : 's'} lead${out === 1 ? 's' : ''} on.` : '',
+                reached ? `Reached in ${reached} automated test play${reached === 1 ? '' : 's'}.` : '',
+              ]
+                .filter(Boolean)
+                .join(' ');
+              let tagX = 10;
               return (
                 <g
                   key={n.id}
@@ -452,31 +576,35 @@ export function GraphView({
                   onBlur={() => setHover(null)}
                   tabIndex={0}
                   role="button"
-                  aria-description={`${n.isStart ? 'Start' : 'Passage'}${n.isEnding ? ', ending' : ''}${n.reachable ? '' : ', unreachable'}. ${graph.edges.filter((e) => e.from === n.id && !e.pending).length} outgoing links.`}
+                  aria-description={about}
                   onPointerEnter={() => setHover(n.id)}
                   onPointerLeave={() => setHover(null)}
                 >
+                  <title>{`${n.title}${about ? ` — ${about}` : ''} Click to edit, drag to move.`}</title>
                   <rect width={W} height={H} rx={3} />
                   <rect x={3} y={3} width={W - 6} height={H - 6} rx={2} className="node-inner" />
-                  <text x={12} y={23} className="node-title">
+                  <text x={12} y={tags.length ? 26 : 24} className="node-title">
                     {n.title.length > 24 ? n.title.slice(0, 23) + '…' : n.title}
                   </text>
-                  <text x={12} y={41} className="node-id">
+                  <text x={12} y={tags.length ? 43 : 41} className="node-id">
                     {n.id.length > 26 ? n.id.slice(0, 25) + '…' : n.id}
-                    {reached ? `  · ${reached} runs` : ''}
                   </text>
+                  {tags.map((t) => {
+                    const x = tagX;
+                    tagX += tagWidth(t) + 5;
+                    return <NodeTag key={t} kind={t} x={x} />;
+                  })}
                 </g>
               );
             })}
           </g>
-          <g transform={`translate(64, ${Math.max(120, size.h - 70)})`}>
-            <Compass />
-          </g>
         </svg>
+        {size.w >= 560 && size.h >= 300 && <Compass />}
         <div className="cartouche" aria-hidden>
           <span className="cartouche-kicker">A Map of</span>
           <span className="cartouche-title">{title}</span>
         </div>
+        {size.w >= 520 && size.h >= 400 && (
         <svg
           className="minimap"
           width={MW}
@@ -487,6 +615,7 @@ export function GraphView({
             const r = (e.currentTarget as SVGSVGElement).getBoundingClientRect();
             const x = (e.clientX - r.left - mox) / mk + bounds.minX;
             const y = (e.clientY - r.top - moy) / mk + bounds.minY;
+            moved.current = true;
             setView((v) => ({ ...v, x: size.w / 2 - x * v.k, y: size.h / 2 - y * v.k }));
           }}
         >
@@ -496,7 +625,9 @@ export function GraphView({
           })}
           <rect x={vp.x} y={vp.y} width={(size.w / view.k) * mk} height={(size.h / view.k) * mk} className="mini-view" />
         </svg>
+        )}
       </div>
+      {showKey && <MapKey />}
     </div>
   );
 }
