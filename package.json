@@ -14,7 +14,8 @@
     "test:a11y": "npm run build:single && node tests/e2e/a11y.mjs",
     "test:overflow": "npm run build:single && node tests/e2e/overflow.mjs",
     "test:offline": "npm run build && node tests/e2e/offline.mjs",
-    "icons": "node scripts/icons.mjs"
+    "icons": "node scripts/icons.mjs",
+    "guide:screenshots": "npm run build:single && node scripts/guide-screenshots.mjs"
   },
   "repository": {
     "type": "git",

@@ -2,6 +2,8 @@
 
 Turn your script into a playable, interactive story, with nothing to install.
 
+This page is the short version. The [full user guide](https://github.com/FlamingAirplane/Script-to-Game-Converter/blob/main/docs/USER_GUIDE.md) explains every screen, with pictures.
+
 ## Getting started
 
 1. Get the file **`Narrative-Bridge.html`** from whoever sent you this, and save it somewhere easy, such as your Documents folder.
@@ -76,7 +78,7 @@ Press **?** anywhere to see every keyboard shortcut. The handy ones: ⌘S (Ctrl+
 ## Troubleshooting
 
 - **The file opens as text or code instead of the app.** Right-click it → *Open With* → your web browser.
-- **Nothing appears.** Try a different browser, and make sure the whole file downloaded (it's about 0.6 MB).
+- **Nothing appears.** Try a different browser, and make sure the whole file downloaded (it's about 3 MB).
 - **Reporting a problem:** press ⌘L (Ctrl+L on Windows) to open the **Logbook**, click **download**, and attach
   the file to your report. It records what the app did, never your story's text.
 - **Something in Diagnostics is red.** Click it. It takes you to the scene that needs fixing and explains what to do. Red
