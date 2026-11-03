@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { isPinnedRef } from '../core/export/common';
-import { ADAPTERS, buildPlayableHtml, buildRecordingScript, recordingScriptFileName, buildTwee, ExportBlockedError, playableFileName, twineFileName, zipExport, type EngineTarget, type ExportResult } from '../core/export';
+import { ADAPTERS, buildPlayableHtml, buildRecordingScript, recordingScriptFileName, buildTwee, ExportBlockedError, playableFileName, twineFileName, zipExport, type EngineTarget, type ExportResult, type TwineKind } from '../core/export';
 // The engine-only Ink runtime (~125 KB), embedded in playable-story exports.
 import inkRuntime from '../../node_modules/inkjs/dist/ink.js?raw';
 import { referencedAudio } from '../core/audio';
@@ -202,6 +202,7 @@ function Pass({ ok }: { ok: boolean }) {
 /** Exports that need no game engine: a playable web page for readers, and a Twine project. */
 function ShareSection({ processed, stale }: { processed: ProcessedStory; stale: boolean }) {
   const [error, setError] = useState('');
+  const [twineKind, setTwineKind] = useState<TwineKind>('sugarcube');
   const blocked = processed.diagnostics.some((d) => d.exportBlocked) || stale;
   const run = async (fn: () => void | Promise<void>) => {
     setError('');
@@ -247,9 +248,26 @@ function ShareSection({ processed, stale }: { processed: ProcessedStory; stale: 
         <div className="card share-card">
           <h2>Twine</h2>
           <p className="muted small">
-            A Twine project in the SugarCube format. In Twine 2, choose <em>Library → Import</em> and pick this file to keep editing the story visually.
+            A Twine project to keep editing the story visually. In Twine 2, choose <em>Library → Import</em> and pick the file.
           </p>
-          <button className="btn" disabled={blocked} onClick={() => run(() => download(twineFileName(processed), buildTwee(processed)))}>
+          <fieldset className="twine-kind">
+            <legend className="muted small">What to include</legend>
+            <label>
+              <input type="radio" name="twine-kind" checked={twineKind === 'sugarcube'} onChange={() => setTwineKind('sugarcube')} />
+              <span>
+                <strong>Story and game logic</strong>
+                <span className="muted small">Choices that need items, effects and a book style, for the SugarCube format.</span>
+              </span>
+            </label>
+            <label>
+              <input type="radio" name="twine-kind" checked={twineKind === 'plain'} onChange={() => setTwineKind('plain')} />
+              <span>
+                <strong>Story only</strong>
+                <span className="muted small">Just passages, their text and links. Nothing added, so it works in any Twine format; every choice is always shown.</span>
+              </span>
+            </label>
+          </fieldset>
+          <button className="btn" disabled={blocked} onClick={() => run(() => download(twineFileName(processed, twineKind), buildTwee(processed, twineKind)))}>
             Download for Twine (.twee)
           </button>
         </div>

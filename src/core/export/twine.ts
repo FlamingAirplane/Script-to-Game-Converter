@@ -1,71 +1,89 @@
 import { fnv1a } from '../hash';
+import { storyLayout } from '../layout';
 import { log } from '../log';
 import { isActive, itemVar, type Choice, type Condition, type Effect, type Passage, type StoryProject } from '../isr';
 import type { ProcessedStory } from '../pipeline';
 import { GENERATOR_VERSION } from '../version';
 import { assertExportable, ExportBlockedError } from './common';
 
-// Twine export: a Twee 3 source file for the SugarCube 2 story format, built from the ISR (not from
-// the Ink). Import it in Twine 2 via Library → Import, or compile it with Tweego.
+// Twine export: a Twee 3 file, built from the ISR (not from the Ink). Import it in Twine 2 via
+// Library → Import, or compile it with Tweego. Two kinds:
 //
-// Mapping (mirrors the Ink conventions):
-//  - Items are Boolean story variables $has_<item>; other variables keep their names. Both are set in StoryInit.
-//  - Prose is emitted inside """…""" (SugarCube's verbatim markup), so script text is never parsed as markup.
-//  - Choices are links; conditions wrap them in <<if>>, effects become link setters.
-//  - Once-only choices track a $once_<choice> flag. A passage's divert becomes a "Continue" link that only
-//    appears when none of its conditional choices are available (Ink's invisible fallback).
+// - "sugarcube" (the default): the story with its logic, for the SugarCube 2 story format.
+//   Items are Boolean variables $has_<item>, set up in StoryInit with the story's other variables.
+//   Choices are links; conditions wrap them in <<if>>, effects become link setters, once-only
+//   choices track a $once_<choice> flag. A passage's divert becomes a "Continue" link offered when
+//   none of its conditional choices are (Ink's invisible fallback). A small stylesheet sets the
+//   scene headings, speakers and transitions like the playable story.
+// - "plain": only the story. Passages, their text and the links between them, with no code,
+//   styling, variables or notes, so it opens in any story format (Harlowe, SugarCube, Chapbook…).
+//   Every choice is always offered.
+//
+// Passage text is written as plain prose that reads well in Twine's editor: paragraphs separated by
+// blank lines, dialogue as a speaker line followed by the speech. Passages are placed on Twine's
+// story map the way they are on the Graph chapter's map.
 
 export const SUGARCUBE_VERSION = '2.37.3';
 
-export function twineFileName(story: ProcessedStory): string {
-  return `${story.project.project.id || 'story'}.twee`;
+export type TwineKind = 'sugarcube' | 'plain';
+
+export function twineFileName(story: ProcessedStory, kind: TwineKind = 'sugarcube'): string {
+  return `${story.project.project.id || 'story'}${kind === 'plain' ? '-story-only' : ''}.twee`;
 }
 
 /** Twine passage and link names can't contain these characters. */
 function clean(s: string): string {
-  return s.replace(/[[\]{}|<>]/g, ' ').replace(/\s+/g, ' ').trim() || 'Untitled';
+  return s.replace(/[[\]{}|<>]/g, ' ').replace(/->|<-/g, ' ').replace(/\s+/g, ' ').trim() || 'Untitled';
 }
 
-function verbatim(text: string): string {
+// Text that SugarCube would read as markup or code: links, macros, formatting, HTML, variables,
+// comments, entities, and markup that only counts at the start of a line (headings, lists, rules).
+const SUGARCUBE_MARKUP = /\[\[|<<|>>|\/\/|''|__|==|\^\^|~~|@@|\{\{\{|\}\}\}|\/\*|\*\/|<\/?[A-Za-z!]|\$[A-Za-z_]|(?:^|[^\w])_[A-Za-z]|&[A-Za-z#]\w*;|\\$|"""|^\s*(?:[!*#>]|----)/m;
+
+/** Prose for SugarCube: as it is, unless it contains something SugarCube would read as markup. */
+function sugarText(text: string): string {
+  if (!SUGARCUBE_MARKUP.test(text)) return text;
   // """ starts/ends a verbatim run, so a literal """ in the text is broken up with a zero-width space.
-  return `"""${text.replace(/"""/g, '"\u200b""')}"""`;
+  return `"""${text.replace(/"""/g, '"​""')}"""`;
 }
 
 function literal(v: boolean | number | string): string {
   return typeof v === 'string' ? JSON.stringify(v) : String(v);
 }
 
-function sugarVar(id: string): string {
-  return `$${id}`;
-}
-
 const OPS: Record<string, string> = { '==': 'is', '!=': 'isnot', '>': 'gt', '>=': 'gte', '<': 'lt', '<=': 'lte' };
 
+/** A SugarCube expression, with parentheses only where they are needed. */
 export function conditionToSugarCube(c: Condition): string {
+  const inner = (x: Condition, parent: 'and' | 'or' | 'not') => {
+    const s = conditionToSugarCube(x);
+    const needs = parent === 'not' ? x.type !== 'has_item' && x.type !== 'not' : (x.type === 'and' || x.type === 'or') && x.type !== parent;
+    return needs ? `(${s})` : s;
+  };
   switch (c.type) {
     case 'has_item':
-      return sugarVar(itemVar(c.itemId));
+      return `$${itemVar(c.itemId)}`;
     case 'not':
-      return `not (${conditionToSugarCube(c.condition)})`;
+      return `not ${inner(c.condition, 'not')}`;
     case 'and':
-      return c.conditions.map((x) => `(${conditionToSugarCube(x)})`).join(' and ');
+      return c.conditions.map((x) => inner(x, 'and')).join(' and ');
     case 'or':
-      return c.conditions.map((x) => `(${conditionToSugarCube(x)})`).join(' or ');
+      return c.conditions.map((x) => inner(x, 'or')).join(' or ');
     case 'compare':
-      return `${sugarVar(c.variableId)} ${OPS[c.op]} ${literal(c.value)}`;
+      return `$${c.variableId} ${OPS[c.op]} ${literal(c.value)}`;
   }
 }
 
 export function effectToSugarCube(e: Effect): string {
   switch (e.type) {
     case 'give_item':
-      return `${sugarVar(itemVar(e.itemId))} to true`;
+      return `$${itemVar(e.itemId)} to true`;
     case 'take_item':
-      return `${sugarVar(itemVar(e.itemId))} to false`;
+      return `$${itemVar(e.itemId)} to false`;
     case 'set_var':
-      return `${sugarVar(e.variableId)} to ${literal(e.value)}`;
+      return `$${e.variableId} to ${literal(e.value)}`;
     case 'add_var':
-      return `${sugarVar(e.variableId)} ${e.amount >= 0 ? '+=' : '-='} ${Math.abs(e.amount)}`;
+      return `$${e.variableId} ${e.amount >= 0 ? '+=' : '-='} ${Math.abs(e.amount)}`;
   }
 }
 
@@ -76,11 +94,24 @@ export function ifidFor(projectId: string): string {
   return v.toUpperCase();
 }
 
-export function buildTwee(story: ProcessedStory): string {
+/** Passage positions on Twine's map, from the story map (the writer's arrangement, if they made one). */
+function twinePositions(story: ProcessedStory): Map<string, string> {
+  const auto = storyLayout(story.analysis.graph, story.project.project.startPassage);
+  const pos = new Map([...auto].map(([id, p]) => [id, story.project.layout?.[id] ?? p]));
+  const xs = [...pos.values()].map((p) => p.x);
+  const ys = [...pos.values()].map((p) => p.y);
+  const minX = Math.min(0, ...xs);
+  const minY = Math.min(0, ...ys);
+  // Twine's cards are 100 × 100; these scales keep cards that don't overlap on the story map apart.
+  return new Map([...pos].map(([id, p]) => [id, `${Math.round(100 + (p.x - minX) * 0.75)},${Math.round(100 + (p.y - minY) * 1.85)}`]));
+}
+
+export function buildTwee(story: ProcessedStory, kind: TwineKind = 'sugarcube'): string {
   assertExportable(story);
   const project: StoryProject = story.project;
   if (project.inkPassthrough !== undefined)
     throw new ExportBlockedError('Twine export works from converted scripts. This story was imported as Ink, so export it as Ink or to an engine instead.');
+  const plain = kind === 'plain';
 
   // Unique, readable passage names (Twine links by name).
   const names = new Map<string, string>();
@@ -97,116 +128,173 @@ export function buildTwee(story: ProcessedStory): string {
   names.set('END', endName);
   const nameOf = (id: string) => names.get(id) ?? clean(id);
   const speakers = new Map(project.characters.map((c) => [c.id, c.displayName]));
+  const positions = twinePositions(story);
   const out: string[] = [];
 
   out.push(':: StoryTitle', project.project.title, '');
-  out.push(
-    ':: StoryData',
-    JSON.stringify(
-      { ifid: ifidFor(project.project.id), format: 'SugarCube', 'format-version': SUGARCUBE_VERSION, start: nameOf(project.project.startPassage), zoom: 1 },
-      null,
-      2,
-    ),
-    '',
-  );
+  // Without a format, Twine uses its default story format (Harlowe) for the story-only file.
+  // The story-only file has its own IFID, so Twine keeps both versions instead of offering to replace one.
+  const data = plain
+    ? { ifid: ifidFor(`${project.project.id}:story-only`), start: nameOf(project.project.startPassage), zoom: 1 }
+    : { ifid: ifidFor(project.project.id), format: 'SugarCube', 'format-version': SUGARCUBE_VERSION, start: nameOf(project.project.startPassage), zoom: 1 };
+  out.push(':: StoryData', JSON.stringify(data, null, 2), '');
 
-  const init = [
-    `/* Generated by Narrative Bridge ${GENERATOR_VERSION}. Items are $has_<item> Booleans. */`,
-    ...project.items.map((i) => `<<set ${sugarVar(itemVar(i.id))} to false>> /* ${i.displayName.replace(/\*\//g, '')} */`),
-    ...project.variables.map((v) => `<<set ${sugarVar(v.id)} to ${literal(v.initial)}>>`),
-  ];
-  out.push(':: StoryInit', ...init, '');
-  out.push(':: StoryStylesheet [stylesheet]', STYLESHEET.trim(), '');
+  if (!plain) {
+    const onceIds = project.passages.flatMap((p) => p.choices.filter((c) => isActive(c.review) && c.once).map((c) => c.id));
+    const init = [
+      `/* Made with Narrative Bridge ${GENERATOR_VERSION}. Each item is a true/false variable named $has_<item>. */`,
+      ...project.items.map((i) => `<<set $${itemVar(i.id)} to false>> /* ${i.displayName.replace(/\*\//g, '')} */`),
+      ...project.variables.map((v) => `<<set $${v.id} to ${literal(v.initial)}>>`),
+      ...(onceIds.length ? ['/* Choices that can only be made once. */', ...onceIds.map((id) => `<<set $once_${id} to false>>`)] : []),
+    ];
+    if (init.length > 1) out.push(':: StoryInit', ...init, ''); // nothing to set up: no StoryInit
+    out.push(':: StoryStylesheet [stylesheet]', STYLESHEET.trim(), '');
+  }
 
-  project.passages.forEach((p, i) => {
-    const position = `${100 + (i % 6) * 200},${100 + Math.floor(i / 6) * 150}`;
-    const tags = [p.isEnding ? 'ending' : '', p.origin === 'generated' ? 'generated' : ''].filter(Boolean);
-    out.push(`:: ${nameOf(p.id)}${tags.length ? ` [${tags.join(' ')}]` : ''} {"position":"${position}"}`);
-    out.push(...passageBody(p, speakers, nameOf), '');
-  });
+  for (const p of project.passages) {
+    const tags = !plain && p.isEnding ? ' [ending]' : '';
+    out.push(`:: ${nameOf(p.id)}${tags} {"position":"${positions.get(p.id) ?? '100,100'}"}`);
+    out.push(...(plain ? plainBody(p, speakers, nameOf) : sugarBody(p, speakers, nameOf)), '');
+  }
   const endsByChoice = project.passages.some((p) => p.choices.some((c) => isActive(c.review) && (c.target === 'END' || !c.target)));
-  if (endsByChoice) out.push(`:: ${endName} [ending] {"position":"100,${150 + Math.ceil(project.passages.length / 6) * 150}"}`, END_MARKUP, '');
-  log('export').info('Built Twine file', { passages: project.passages.length, items: project.items.length, variables: project.variables.length });
-  return out.join('\n');
+  if (endsByChoice) {
+    const bottom = Math.max(100, ...[...positions.values()].map((v) => Number(v.split(',')[1]))) + 200;
+    out.push(`:: ${endName}${plain ? '' : ' [ending]'} {"position":"100,${bottom}"}`, plain ? 'The End' : END_MARKUP, '');
+  }
+  log('export').info('Built Twine file', { kind, passages: project.passages.length, items: project.items.length, variables: project.variables.length });
+  return out.join('\n').replace(/\n{3,}/g, '\n\n');
 }
 
-function passageBody(p: Passage, speakers: Map<string, string>, nameOf: (id: string) => string): string[] {
-  const lines: string[] = [];
-  if (p.sceneHeading) lines.push(`<span class="scene">${verbatim(p.sceneHeading)}</span>`);
+/** Paragraphs of a block: blank lines separate them; single line breaks (verse, lyrics) are kept. */
+function paragraphs(text: string): string[] {
+  return text
+    .split(/\n\s*\n/)
+    .map((p) => p.split('\n').map((l) => l.trim()).filter(Boolean).join('\n'))
+    .filter(Boolean);
+}
+
+/** The story with its logic, for SugarCube. */
+function sugarBody(p: Passage, speakers: Map<string, string>, nameOf: (id: string) => string): string[] {
+  const blocks: string[] = [];
+  // Lines that print nothing (effects, notes) end with "\" so they leave no empty line behind.
+  const silent: string[] = [];
+  const flushSilent = () => {
+    if (silent.length) blocks.push(`${silent.join('')}\\`);
+    silent.length = 0;
+  };
+  const add = (text: string) => {
+    flushSilent();
+    blocks.push(text);
+  };
+  if (p.sceneHeading) add(`@@.scene;${sugarText(p.sceneHeading)}@@`);
   for (const b of p.content) {
     switch (b.type) {
       case 'action':
-        for (const para of b.text.split('\n').map((s) => s.trim()).filter(Boolean)) lines.push(verbatim(para));
+        for (const para of paragraphs(b.text)) add(sugarText(para));
         break;
       case 'dialogue': {
         const name = (speakers.get(b.speakerId) ?? b.speakerId).toUpperCase();
-        const paren = b.parenthetical ? `<span class="paren">${verbatim(`(${b.parenthetical})`)}</span>` : '';
-        lines.push(`<span class="dialogue"><span class="speaker">${verbatim(name)}</span>${paren}${verbatim(b.text)}</span>`);
+        const paren = b.parenthetical ? ` //(${sugarText(b.parenthetical)})//` : '';
+        add(`@@.speaker;${sugarText(name)}@@${paren}\n${sugarText(paragraphs(b.text).join('\n'))}`);
         break;
       }
       case 'transition':
-        lines.push(`<span class="transition">${verbatim(b.text)}</span>`);
+        add(`@@.transition;${sugarText(b.text)}@@`);
         break;
       case 'note':
-        lines.push(`/* ${b.text.replace(/\*\//g, '* /')} */`);
+        silent.push(`/* Note: ${b.text.replace(/\*\//g, '* /')} */`);
         break;
       case 'unsupported':
-        lines.push(`/* [unsupported: ${b.reason}] ${b.text.replace(/\*\//g, '* /')} */`);
+        silent.push(`/* Not converted (${b.reason}): ${b.text.replace(/\*\//g, '* /')} */`);
         break;
       case 'effect':
-        if (isActive(b.review ?? 'approved')) lines.push(`<<set ${effectToSugarCube(b.effect)}>>`);
+        if (isActive(b.review ?? 'approved')) silent.push(`<<set ${effectToSugarCube(b.effect)}>>`);
         break;
     }
   }
+  // Effects and notes after the last paragraph sit just above the links.
+  flushSilent();
 
   const choices = p.choices.filter((c) => isActive(c.review));
   if (choices.length === 0) {
-    if (p.divert && p.divert !== 'END') lines.push('', `[[Continue|${nameOf(p.divert)}]]`);
-    else lines.push('', END_MARKUP);
-    return lines;
+    blocks.push(p.divert && p.divert !== 'END' ? `[[Continue->${nameOf(p.divert)}]]` : END_MARKUP);
+    return joinBlocks(blocks);
   }
-  lines.push('');
-  for (const c of choices) lines.push(choiceLink(c, nameOf));
+  const links = choices.map((c) => choiceLink(c, nameOf));
   // Ink's invisible fallback: offered only when every choice is conditional and none is available.
   const fallback = p.divert ?? (p.isEnding ? 'END' : undefined);
   if (fallback && choices.every((c) => c.conditions.length || c.once)) {
-    const none = choices.map((c) => `not (${guard(c)})`).join(' and ');
-    const link = fallback === 'END' ? END_MARKUP : `[[Continue|${nameOf(fallback)}]]`;
-    lines.push(`<<if ${none}>>${link}<</if>>`);
+    const none = choices.map((c) => negate(guard(c))).join(' and ');
+    links.push(`<<if ${none}>>${fallback === 'END' ? END_MARKUP : `[[Continue->${nameOf(fallback)}]]`}<</if>>`);
   }
-  return lines;
+  // Hidden choices would leave empty lines; inside the choices block the stylesheet removes them.
+  blocks.push(links.some((l) => l.startsWith('<<if')) ? `@@.choices;\n${links.join('\n')}\n@@` : links.join('\n'));
+  return joinBlocks(blocks);
+}
+
+/** Blocks separated by a blank line, except after a silent line (which already swallows its line break). */
+function joinBlocks(blocks: string[]): string[] {
+  const out: string[] = [];
+  blocks.forEach((b, i) => {
+    out.push(b);
+    if (i < blocks.length - 1 && !b.endsWith('\\')) out.push('');
+  });
+  return out;
+}
+
+/** Only the story: text and links, nothing that depends on a story format. */
+function plainBody(p: Passage, speakers: Map<string, string>, nameOf: (id: string) => string): string[] {
+  const blocks: string[] = [];
+  if (p.sceneHeading) blocks.push(p.sceneHeading);
+  for (const b of p.content) {
+    if (b.type === 'action') blocks.push(...paragraphs(b.text));
+    else if (b.type === 'transition') blocks.push(b.text);
+    else if (b.type === 'dialogue') {
+      const name = (speakers.get(b.speakerId) ?? b.speakerId).toUpperCase();
+      blocks.push(`${name}${b.parenthetical ? ` (${b.parenthetical})` : ''}: ${paragraphs(b.text).join('\n')}`);
+    }
+  }
+  const choices = p.choices.filter((c) => isActive(c.review));
+  if (choices.length) blocks.push(choices.map((c) => `[[${linkText(c.text)}->${nameOf(c.target || 'END')}]]`).join('\n'));
+  else blocks.push(p.divert && p.divert !== 'END' ? `[[Continue->${nameOf(p.divert)}]]` : 'The End');
+  return blocks.flatMap((b, i) => (i ? ['', b] : [b]));
+}
+
+function linkText(text: string): string {
+  return text.replace(/[[\]|]/g, ' ').replace(/->|<-/g, '–').replace(/\s+/g, ' ').trim() || 'Continue';
 }
 
 function guard(c: Choice): string {
-  const parts = c.conditions.map((x) => `(${conditionToSugarCube(x)})`);
+  const parts = c.conditions.map((x) => (x.type === 'or' ? `(${conditionToSugarCube(x)})` : conditionToSugarCube(x)));
   if (c.once) parts.push(`not $once_${c.id}`);
   return parts.join(' and ') || 'true';
+}
+
+function negate(expr: string): string {
+  return /^\$\w+$/.test(expr) ? `not ${expr}` : `not (${expr})`;
 }
 
 function choiceLink(c: Choice, nameOf: (id: string) => string): string {
   const setters = c.effects.map(effectToSugarCube);
   if (c.once) setters.push(`$once_${c.id} to true`);
-  const text = c.text.replace(/[[\]|]/g, ' ').trim() || 'Continue';
-  const target = nameOf(c.target || 'END');
-  // SugarCube setter links: [[Text|Target][$a to 1, $b to 2]]
-  const link = `[[${text}|${target}]${setters.length ? `[${setters.join(', ')}]` : ''}]`;
-  const g = c.conditions.length || c.once ? guard(c) : '';
-  return g ? `<<if ${g}>>${link}<</if>>` : link;
+  // SugarCube setter links: [[Text->Target][$a to 1, $b to 2]]
+  const link = `[[${linkText(c.text)}->${nameOf(c.target || 'END')}]${setters.length ? `[${setters.join(', ')}]` : ''}]`;
+  return c.conditions.length || c.once ? `<<if ${guard(c)}>>${link}<</if>>` : link;
 }
 
-const END_MARKUP = '<span class="end">❦ The End ❦</span>';
+const END_MARKUP = '@@.end;❦ The End ❦@@';
 
 const STYLESHEET = `
-/* Narrative Bridge book style for SugarCube */
+/* Book style from Narrative Bridge. Delete this passage to use SugarCube's own look. */
 body { background: #1d270f; color: #283618; font-family: 'Iowan Old Style', 'Palatino Linotype', Palatino, Georgia, serif; }
-#story { margin: 0 auto; max-width: 46em; }
-#passages { background: #fefae0; padding: 3em 3.5em; border-radius: 2px; box-shadow: 0 18px 40px rgba(0,0,0,.5); line-height: 1.7; font-size: 1.1em; }
+#passages { max-width: 46em; margin: 2.5em 0; background: #fefae0; padding: 3em 3.5em; border-radius: 2px; box-shadow: 0 18px 40px rgba(0, 0, 0, 0.5); line-height: 1.7; font-size: 1.1em; }
+@media (max-width: 40em) { #passages { padding: 1.5em 1.25em; margin: 1em 0; } }
 #passages a { color: #606c38; font-style: italic; }
-.scene { display: block; text-align: center; font-variant: small-caps; letter-spacing: .2em; color: #5d6440; margin: 1em 0; }
-.dialogue { display: block; margin: .8em 0 .8em 2em; }
-.speaker { display: block; font-variant: small-caps; letter-spacing: .14em; font-weight: 600; }
-.paren { display: block; font-style: italic; color: #5d6440; }
+.scene { display: block; text-align: center; font-variant: small-caps; letter-spacing: 0.2em; color: #5d6440; }
+.speaker { font-variant: small-caps; letter-spacing: 0.14em; font-weight: 600; }
 .transition { display: block; text-align: right; font-variant: small-caps; color: #5d6440; }
-.end { display: block; text-align: center; color: #8f4f16; font-style: italic; margin-top: 1.5em; }
+.choices br { display: none; }
+.choices a { display: block; margin: 0.15em 0; }
+.end { display: block; text-align: center; color: #8f4f16; font-style: italic; margin-top: 1em; }
 #ui-bar { background: #2d3c1a; color: #fefae0; border-color: #1d270f; }
 `;

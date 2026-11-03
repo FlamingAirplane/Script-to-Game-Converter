@@ -113,6 +113,19 @@ for (const [name, type] of [['WebKit', webkit], ['Chromium', chromium]]) {
       await reader.getByText('❦ The End ❦').waitFor();
       await reader.close();
     });
+    await step('Twine: story and logic by default, or the story only', async () => {
+      await page.getByRole('button', { name: /Export/ }).click();
+      const twine = async () => {
+        const [dl] = await Promise.all([page.waitForEvent('download'), page.getByRole('button', { name: /Download for Twine/ }).click()]);
+        return { name: dl.suggestedFilename(), text: readFileSync(await dl.path(), 'utf8') };
+      };
+      const full = await twine();
+      if (!/<<if \$has_archive_key>>/.test(full.text) || /<span|"""/.test(full.text)) throw new Error('SugarCube file is missing its logic or still cluttered');
+      await page.getByLabel(/Story only/).check();
+      const only = await twine();
+      if (only.name !== 'the_locked_archive-story-only.twee') throw new Error(`unexpected file name ${only.name}`);
+      if (/<<|@@|\$|StoryInit|"format"/.test(only.text) || !only.text.includes('MIRA: The archive is locked.')) throw new Error('story-only file has extras or is missing text');
+    });
     await step('restores the project after a reload', async () => {
       await page.reload();
       await page.getByRole('button', { name: /Archive Entrance/ }).waitFor({ timeout: 5000 });

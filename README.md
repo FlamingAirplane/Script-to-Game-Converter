@@ -50,6 +50,7 @@ npm run cli -- export script.fountain --mode adaptation --approve-all --engine u
 npm run cli -- export story.nbproj.json --engine unreal --out ./build --ref <inkpot-tag-or-sha>
 npm run cli -- export story.md --engine web --out ./share      # one playable .html page for readers
 npm run cli -- export script.fountain --engine twine --out ./share   # Twee 3 / SugarCube for Twine 2
+npm run cli -- export script.fountain --engine twine --story-only --out ./share   # just passages, text and links
 npm run cli -- doctor              # checks Unity/Unreal, git, .NET and C++ toolchain
 ```
 
@@ -147,10 +148,18 @@ Fatal errors block export. The manifest records engine import and in-engine smok
   their browser, and offers undo and start over. When you send readers a revised edition, their place carries over: the
 reader replays their earlier choices (matched by text) in the new edition, so its text and variables apply, and if a
 choice was cut they resume just before it.
-- **Twine** (`--engine twine`): a Twee 3 file for SugarCube 2.37, generated from the story model. Items become
-  `$has_<item>` variables set in `StoryInit`, conditions wrap links in `<<if>>`, effects become link setters, once-only
-  choices track `$once_<choice>` flags, and the Ink fallback becomes a conditional "Continue" link. Prose is wrapped in
-  SugarCube's verbatim markup so script text is never read as code. Stories imported as raw Ink can't be exported to Twine.
+- **Twine** (`--engine twine`): a Twee 3 file generated from the story model, written to read well in Twine's editor:
+  plain paragraphs separated by blank lines, dialogue as the speaker followed by the line, and passages placed on Twine's
+  map the way they are on the story map. Two kinds:
+  - *Story and game logic* (default), for SugarCube 2.37. Items become `$has_<item>` variables set in `StoryInit`,
+    conditions wrap links in `<<if>>`, effects become link setters, once-only choices track `$once_<choice>` flags, and
+    the Ink fallback becomes a conditional "Continue" link. Scene headings, speakers and transitions use SugarCube's
+    `@@.class;…@@` markup with a small book stylesheet; only text SugarCube would misread is wrapped in `"""…"""`.
+  - *Story only* (`--story-only`): passages, their text and links, nothing else (no code, styling, variables or notes),
+    so it works in any story format, including Twine's default, Harlowe. Every choice is always offered.
+
+  Both were checked by importing them into Twine 2 and playing them (SugarCube and Harlowe). Stories imported as raw Ink
+  can't be exported to Twine.
 
 ## Engine exports
 

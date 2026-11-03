@@ -22,6 +22,7 @@ Usage:
   narrative-bridge validate <files... | project.nbproj.json>
   narrative-bridge export <files... | project.nbproj.json> --engine unity|unreal|web|twine|script --out <dir>
                                       [--name ProjectName] [--engine-version 2022.3.62f1] [--ref <tag|sha>] [--no-demo]
+                                      [--story-only]  (twine: just passages, text and links; no code, styling or variables)
   narrative-bridge doctor [--engine unity|unreal]
 
 Logging (to stderr): --verbose shows everything, --quiet only errors, --log-file <path> writes JSON lines.
@@ -160,7 +161,7 @@ async function main() {
               ? [playableFileName(story), buildPlayableHtml(story, runtime(), audioAssets)]
               : engine === 'script'
                 ? [recordingScriptFileName(story.project), buildRecordingScript(story.project)]
-                : [twineFileName(story), buildTwee(story)];
+                : [twineFileName(story, args['story-only'] ? 'plain' : 'sugarcube'), buildTwee(story, args['story-only'] ? 'plain' : 'sugarcube')];
           const outDir = resolve(args.out);
           mkdirSync(outDir, { recursive: true });
           writeFileSync(join(outDir, name), content);
