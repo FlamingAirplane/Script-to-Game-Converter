@@ -24,7 +24,7 @@ export interface SourceDocument {
   text: string; // original source is preserved verbatim
 }
 
-export type SourceFormat = 'txt' | 'fountain' | 'md' | 'ink';
+export type SourceFormat = 'txt' | 'fountain' | 'md' | 'ink' | 'twee';
 
 export interface Character {
   id: string;

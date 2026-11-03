@@ -17,7 +17,9 @@ import { processProject } from '../core/pipeline';
 const HELP = `Narrative Bridge — screenplays and prose → Ink → Unity / Unreal
 
 Usage:
-  narrative-bridge convert <files...>          (.fountain .txt .md .ink .fdx .docx .pdf) [--mode faithful|adaptation|structured] [--approve-all]
+  narrative-bridge convert <files...>          (.fountain .txt .md .fdx .docx .pdf, or a story: .ink .twee .tw .html) [--mode faithful|adaptation|structured] [--approve-all]
+                                      [--edit-ink | --keep-ink]  (Ink: make it editable, or keep it exactly as written;
+                                       default: editable unless it uses Ink the editor can't show)
                                       [--out story.ink] [--project story.nbproj.json] [--title "Title"]
   narrative-bridge validate <files... | project.nbproj.json>
   narrative-bridge export <files... | project.nbproj.json> --engine unity|unreal|web|twine|script --out <dir>
@@ -83,6 +85,9 @@ async function load(args: Args) {
       return prepareInput(basename(f), binary ? new Uint8Array(readFileSync(f)) : readFileSync(f, 'utf8'));
     }),
   );
+  // Ink: editable when possible unless told otherwise (see SourceInput.inkMode).
+  const inkMode = args['keep-ink'] ? 'keep' : args['edit-ink'] ? 'edit' : undefined;
+  if (inkMode) for (const i of inputs) if (/\.ink$/i.test(i.fileName)) i.inkMode = inkMode;
   const mode = (args.mode as ConversionMode) ?? 'faithful';
   if (!['faithful', 'adaptation', 'structured'].includes(mode)) usage(`Unknown mode ${mode}`);
   const { project, diagnostics } = await buildStory(inputs, { mode, title: typeof args.title === 'string' ? args.title : undefined });

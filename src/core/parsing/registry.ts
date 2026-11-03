@@ -3,10 +3,11 @@ import { fountainParser } from './fountain';
 import { inkParser } from './ink';
 import { markdownParser } from './markdown';
 import { plainTextParser } from './plaintext';
+import { tweeParser } from './twee';
 import type { Parser } from './types';
 
 // Independent parser implementations, selected by extension first, then by content sniffing.
-export const PARSERS: Parser[] = [fountainParser, markdownParser, inkParser, plainTextParser];
+export const PARSERS: Parser[] = [fountainParser, markdownParser, inkParser, tweeParser, plainTextParser];
 
 export const SUPPORTED_EXTENSIONS = PARSERS.flatMap((p) => p.extensions);
 

@@ -44,7 +44,7 @@ export function GettingStarted() {
       <ol className="guide-steps">
         <li>
           <strong>Bring your script.</strong> Drag in a screenplay (Final Draft, Word, PDF, Fountain or a plain-text export) or a prose
-          document (Word, PDF or Markdown), or paste text below. Not sure? Try a sample at the bottom first.
+          document (Word, PDF or Markdown), or paste text below. You can also open a Twine or Ink story to keep working on it. Not sure? Try a sample at the bottom first.
         </li>
         <li>
           <strong>Pick how interactive it should be.</strong> <em>Faithful</em> keeps your story exactly as written. <em>Interactive adaptation</em>{' '}

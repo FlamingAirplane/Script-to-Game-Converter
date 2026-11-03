@@ -7,6 +7,8 @@ export type Marker =
   | { type: 'start'; id: string }
   | { type: 'end' }
   | { type: 'divert'; target: string }
+  /** The passage's scene heading (Ink #scene tags, Twine scene lines). */
+  | { type: 'heading'; text: string }
   | { type: 'item'; id: string; displayName?: string; consumable: boolean }
   | { type: 'var'; id: string; value: boolean | number | string }
   | { type: 'effect'; effect: Effect }

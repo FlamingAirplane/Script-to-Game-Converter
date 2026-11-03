@@ -9,7 +9,7 @@ import type { SourceFormat } from '../isr';
 
 export interface ConvertedInput extends SourceInput {
   format: SourceFormat;
-  convertedFrom: 'fdx' | 'docx' | 'pdf';
+  convertedFrom: 'fdx' | 'docx' | 'pdf' | 'twine';
 }
 
 const ENTITIES: Record<string, string> = { amp: '&', lt: '<', gt: '>', quot: '"', apos: "'", nbsp: ' ' };
@@ -221,6 +221,40 @@ function docxScreenplayToFountain(paras: { kind: DocxKind; text: string }[]): st
   return lines.join('\n').replace(/\n{3,}/g, '\n\n').trim() + '\n';
 }
 
+// ---------------------------------------------------------------------------------------------
+// Twine 2 HTML: a published story or a library archive (<tw-storydata> with <tw-passagedata>).
+
+const attr = (tag: string, name: string) => decodeXml(new RegExp(`\\s${name}="([^"]*)"`, 'i').exec(tag)?.[1] ?? '');
+const escapeTweeName = (s: string) => s.replace(/([\\[\]{}])/g, '\\$1');
+
+/** Converts a Twine 2 HTML file to Twee 3. An archive may hold several stories: the first is used. */
+export function twineHtmlToTwee(html: string): { text: string; stories: number; title: string } {
+  const stories = [...html.matchAll(/<tw-storydata\b([^>]*)>([\s\S]*?)<\/tw-storydata>/gi)];
+  if (!stories.length) throw new Error('This web page is not a Twine story. In Twine, use Build → Publish to File, or Library → Archive.');
+  const [, head, inner] = stories[0];
+  const passages = [...inner.matchAll(/<tw-passagedata\b([^>]*)>([\s\S]*?)<\/tw-passagedata>/gi)].map(([, a, body]) => ({
+    pid: attr(a, 'pid'),
+    name: attr(a, 'name'),
+    tags: attr(a, 'tags').split(/\s+/).filter(Boolean),
+    position: attr(a, 'position'),
+    text: decodeXml(body),
+  }));
+  const startPid = attr(head, 'startnode');
+  const start = passages.find((p) => p.pid === startPid)?.name ?? passages[0]?.name ?? '';
+  const title = attr(head, 'name') || 'Untitled Story';
+  const data = { ifid: attr(head, 'ifid'), format: attr(head, 'format'), 'format-version': attr(head, 'format-version'), start };
+  const out = [':: StoryTitle', title, '', ':: StoryData', JSON.stringify(data, null, 2), ''];
+  const css = /<style[^>]*role="stylesheet"[^>]*>([\s\S]*?)<\/style>/i.exec(inner)?.[1].trim();
+  if (css) out.push(':: StoryStylesheet [stylesheet]', decodeXml(css), '');
+  const js = /<script[^>]*role="script"[^>]*>([\s\S]*?)<\/script>/i.exec(inner)?.[1].trim();
+  if (js) out.push(':: StoryScript [script]', decodeXml(js), '');
+  for (const p of passages) {
+    const meta = p.position ? ` {"position":"${p.position}"}` : '';
+    out.push(`:: ${escapeTweeName(p.name)}${p.tags.length ? ` [${p.tags.join(' ')}]` : ''}${meta}`, p.text, '');
+  }
+  return { text: out.join('\n'), stories: stories.length, title };
+}
+
 /** Turn any supported file into parser-ready text. Text formats pass through unchanged. */
 export async function prepareInput(fileName: string, data: string | Uint8Array | ArrayBuffer): Promise<SourceInput> {
   const lower = fileName.toLowerCase();
@@ -240,8 +274,14 @@ export async function prepareInput(fileName: string, data: string | Uint8Array |
     const { text, format } = await pdfToText(data);
     return { fileName, text, format, convertedFrom: 'pdf' } satisfies ConvertedInput;
   }
+  if (lower.endsWith('.html') || lower.endsWith('.htm')) {
+    const html = typeof data === 'string' ? data : new TextDecoder().decode(data);
+    const { text, stories, title } = twineHtmlToTwee(html);
+    const note = stories > 1 ? `${fileName} holds ${stories} Twine stories; "${title}" was imported. Publish the others to their own files to import them.` : undefined;
+    return { fileName, text, format: 'twee', convertedFrom: 'twine', note } satisfies ConvertedInput;
+  }
   return { fileName, text: typeof data === 'string' ? data : new TextDecoder().decode(data) };
 }
 
 export const BINARY_EXTENSIONS = ['.docx', '.pdf'];
-export const CONVERTED_EXTENSIONS = ['.fdx', '.docx', '.pdf'];
+export const CONVERTED_EXTENSIONS = ['.fdx', '.docx', '.pdf', '.html', '.htm'];
