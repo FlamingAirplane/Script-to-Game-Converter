@@ -16,6 +16,15 @@ export function plainKey(e: KeyboardEvent): boolean {
   return !e.metaKey && !e.ctrlKey && !e.altKey && !isTyping(e);
 }
 
+/**
+ * The app's ⌘ shortcuts (Ctrl on Windows and Linux): exactly ⌘ + key, with ⇧ only where a shortcut
+ * uses it (redo). Any other combination (⌘⇧F, ⌘⌥I, Ctrl+F on a Mac…) is left to the browser and the system.
+ */
+export function modKey(e: KeyboardEvent, { shift = false }: { shift?: boolean } = {}): boolean {
+  const mod = IS_MAC ? e.metaKey && !e.ctrlKey : e.ctrlKey && !e.metaKey;
+  return mod && !e.altKey && (shift || !e.shiftKey);
+}
+
 const GROUPS: { title: string; keys: [string, string][] }[] = [
   {
     title: 'Anywhere',

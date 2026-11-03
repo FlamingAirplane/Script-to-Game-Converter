@@ -122,18 +122,6 @@ export function itemVar(itemId: string): string {
   return `has_${itemId}`;
 }
 
-export function emptyProject(title = 'Untitled Story'): StoryProject {
-  return {
-    schemaVersion: SCHEMA_VERSION,
-    project: { id: slugify(title) || 'story', title, startPassage: '', mode: 'faithful' },
-    sources: [],
-    characters: [],
-    items: [],
-    variables: [],
-    passages: [],
-  };
-}
-
 /** Deterministic, Ink-safe identifier (letters, digits, underscore; cannot start with a digit). */
 export function slugify(s: string): string {
   let out = s
@@ -187,8 +175,4 @@ export function conditionVarIds(c: Condition, out = new Set<string>()): Set<stri
 /** Choices and effects that are not rejected. Pending generated content is still emitted only when approved. */
 export function isActive(r: ReviewStatus): boolean {
   return r === 'approved';
-}
-
-export function cloneProject(p: StoryProject): StoryProject {
-  return structuredClone(p);
 }

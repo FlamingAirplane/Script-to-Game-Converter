@@ -22,6 +22,9 @@ The site also offers the offline single-file edition for writers. It is rebuilt 
 
 New to the app? The [user guide](docs/USER_GUIDE.md) walks through every chapter with screenshots.
 
+For development and the CLI you need [Node.js](https://nodejs.org) 22.13 or later (the PDF reader requires it). Writers
+using the website or the offline file need nothing installed.
+
 ```bash
 npm install
 npm run dev        # web app at http://localhost:5173

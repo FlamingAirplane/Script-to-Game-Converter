@@ -56,6 +56,21 @@ for (const [name, type] of [['WebKit', webkit], ['Chromium', chromium]]) {
       await page.getByText('The Locked Archive').first().click();
       await page.getByRole('button', { name: /Archive Entrance/ }).waitFor();
     });
+    await step('browser shortcuts with extra keys (⌘⇧F, ⌘⇧O…) reach the browser; ⌘F still finds', async () => {
+      // Record, after the app's own listener, whether each key press was taken by the app.
+      await page.evaluate(() => {
+        window.__taken = [];
+        window.addEventListener('keydown', (e) => e.key.length === 1 && window.__taken.push(`${e.shiftKey ? 'shift+' : ''}${e.altKey ? 'alt+' : ''}${e.key.toLowerCase()}:${e.defaultPrevented}`));
+      });
+      await page.locator('body').click({ position: { x: 5, y: 5 } });
+      for (const k of ['ControlOrMeta+Shift+f', 'ControlOrMeta+Shift+o', 'ControlOrMeta+Shift+s', 'ControlOrMeta+Alt+f', 'ControlOrMeta+Shift+l']) await page.keyboard.press(k);
+      const taken = await page.evaluate(() => window.__taken);
+      if (taken.length !== 5 || taken.some((t) => t.endsWith(':true'))) throw new Error(`the app took a browser shortcut: ${taken.join(', ')}`);
+      if (await page.locator('details.find-panel[open]').count()) throw new Error('⌘⇧F opened the app’s Find');
+      await page.keyboard.press('ControlOrMeta+f');
+      await page.locator('details.find-panel[open]').waitFor({ timeout: 3000 });
+      await page.locator('details.find-panel summary').click(); // close it again
+    });
     await step('playtest: toggling an item unlocks its choice immediately', async () => {
       await page.getByRole('button', { name: /Playtest/ }).click();
       const open = page.getByRole('button', { name: 'Open the archive' });

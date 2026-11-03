@@ -23,7 +23,7 @@ const appLog = log('app');
 const ExportView = lazy(() => import('./ExportView').then((m) => ({ default: m.ExportView })));
 const PlaytestView = lazy(() => import('./PlaytestView').then((m) => ({ default: m.PlaytestView })));
 import { sfx } from './sfx';
-import { isTyping, plainKey, ShortcutSheet } from './Shortcuts';
+import { isTyping, modKey, plainKey, ShortcutSheet } from './Shortcuts';
 import { ThemeToggle } from './ThemeToggle';
 import { useProcessedStory } from './useProcessedStory';
 
@@ -170,11 +170,11 @@ export function App() {
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      const mod = e.metaKey || e.ctrlKey;
+      const mod = modKey(e);
       const typing = isTyping(e);
       const k = e.key.toLowerCase();
       const h = keys.current;
-      if (mod && k === 'z' && !typing) {
+      if (modKey(e, { shift: true }) && k === 'z' && !typing) {
         e.preventDefault();
         if (e.shiftKey) redo();
         else undo();
@@ -197,7 +197,7 @@ export function App() {
       } else if (mod && e.key === '.' && project) {
         e.preventDefault();
         setShowDiag((v) => !v);
-      } else if (e.key === '?' && !typing && !mod) {
+      } else if (e.key === '?' && !typing && !e.metaKey && !e.ctrlKey && !e.altKey) {
         e.preventDefault();
         setShowKeys(true);
       } else if (e.key.toLowerCase() === 'd' && plainKey(e) && (h.tab === 'review' || h.tab === 'play')) {
