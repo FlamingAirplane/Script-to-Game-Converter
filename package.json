@@ -1,6 +1,6 @@
 {
   "name": "narrative-bridge",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "Convert screenplays and prose into Ink stories and package them for Unity or Unreal Engine.",
   "scripts": {
     "dev": "vite",
