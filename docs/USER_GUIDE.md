@@ -199,7 +199,11 @@ The panel beside the story shows:
 
 - **Download recording script (.csv):** every line of dialogue in story order, by character, with the file name each
   recording should be saved as. Opens in Excel, Numbers or Google Sheets.
-- **Download for Twine (.twee):** to keep editing in [Twine](https://twinery.org) (Library → Import).
+- **Download for Twine (.twee):** to keep editing in [Twine](https://twinery.org) (Library → Import). Passages are
+  laid out on Twine's map like your story map, and their text reads like your script. Choose what to include:
+  - **Story and game logic:** choices that need items, effects and a book style, for Twine's SugarCube format.
+  - **Story only:** just the passages, their text and the links between them. Nothing is added, so it works in any
+    Twine format (including the default, Harlowe); every choice is always shown.
 
 ### For a game engine
 

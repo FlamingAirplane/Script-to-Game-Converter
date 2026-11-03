@@ -229,7 +229,15 @@ describe('share exports', () => {
     expect(html.match(/<script/g)!.length).toBe(5);
   });
 
-  it('Twine export maps conditions, setters, endings and stable IFIDs', async () => {
+  /** Passages of a Twee file by name, and the targets of every [[link]] in them. */
+  const parseTwee = (twee: string) => {
+    const passages = new Map<string, string>();
+    for (const m of twee.matchAll(/^:: ([^\n[{]+?)\s*(?:\[[^\]]*\])?\s*(?:\{[^\n]*\})?\n([\s\S]*?)(?=\n:: |$)/gm)) passages.set(m[1].trim(), m[2]);
+    const targets = [...twee.matchAll(/\[\[[^\]]*?->([^\]]+)\](?:\[[^\]]*\])?\]/g)].map((m) => m[1]);
+    return { passages, targets };
+  };
+
+  it('Twine export (SugarCube) reads as plain prose and keeps the story logic', async () => {
     const { buildTwee } = await import('../src/core/export');
     const { ifidFor } = await import('../src/core/export/twine');
     const s = SAMPLES.find((x) => x.id === 'archive')!;
@@ -237,10 +245,55 @@ describe('share exports', () => {
     const twee = buildTwee(processProject(project));
     expect(twee).toContain('"start": "Archive Entrance"');
     expect(twee).toContain('<<set $has_archive_key to false>>');
-    expect(twee).toContain('<<if ($has_archive_key)>>[[Open the archive|The Vault][$has_archive_key to false]]<</if>>');
+    expect(twee).toContain('<<if $has_archive_key>>[[Open the archive->The Vault][$has_archive_key to false]]<</if>>');
+    expect(twee).toContain('<<if not $has_archive_key>>[[Lift the loose floorboard->Under the Floorboard]]<</if>>');
     expect(twee).toContain(':: The Vault [ending]');
+    // Readable in Twine's editor: no HTML, no verbatim wrapping of ordinary text, paragraphs apart.
+    expect(twee).not.toMatch(/<span|"""/);
+    expect(twee).toContain('Rows of shelves vanish into the dark. A steel door blocks the inner vault.\n\n@@.speaker;MIRA@@\nThe archive is locked.');
+    // Effects leave no empty line behind.
+    expect(twee).toContain('<<set $has_archive_key to true>>\\\n[[Continue->Reading Room]]');
+    // Hidden choices sit in a block whose stray line breaks the stylesheet removes.
+    expect(twee).toMatch(/@@\.choices;\n<<if \$has_archive_key>>/);
+    const { passages, targets } = parseTwee(twee);
+    expect(targets.length).toBeGreaterThan(4);
+    for (const t of targets) expect(passages.has(t), t).toBe(true);
+    for (const body of passages.values()) {
+      expect((body.match(/<<if /g) ?? []).length).toBe((body.match(/<<\/if>>/g) ?? []).length);
+      expect((body.match(/@@/g) ?? []).length % 2).toBe(0);
+    }
     expect(ifidFor('x')).toBe(ifidFor('x'));
     expect(ifidFor('x')).toMatch(/^[0-9A-F]{8}-[0-9A-F]{4}-4[0-9A-F]{3}-[89AB][0-9A-F]{3}-[0-9A-F]{12}$/);
+  });
+
+  it('Twine export (story only) has just passages, text and links', async () => {
+    const { buildTwee, twineFileName } = await import('../src/core/export');
+    const s = SAMPLES.find((x) => x.id === 'archive')!;
+    const { project } = await build(s.text, s.fileName, 'structured');
+    const story = processProject(project);
+    const twee = buildTwee(story, 'plain');
+    expect(twineFileName(story, 'plain')).toBe('the_locked_archive-story-only.twee');
+    expect(twee).not.toMatch(/<<|@@|\$|\/\*|StoryInit|Stylesheet|"format"|\[ending\]/);
+    expect(twee).toContain('MIRA: The archive is locked.');
+    // Every choice is offered (conditions are part of the game logic, which is left out).
+    expect(twee).toContain('[[Open the archive->The Vault]]\n[[Search the reading room->Reading Room]]\n[[Leave->Outside]]');
+    const { passages, targets } = parseTwee(twee);
+    expect(targets.length).toBeGreaterThan(4);
+    for (const t of targets) expect(passages.has(t), t).toBe(true);
+    // Its own IFID, so Twine keeps it beside the full version.
+    const ifid = (t: string) => /"ifid": "([^"]+)"/.exec(t)![1];
+    expect(ifid(twee)).not.toBe(ifid(buildTwee(story)));
+  });
+
+  it('Twine export escapes only text SugarCube would misread, and lays passages out like the story map', async () => {
+    const { buildTwee } = await import('../src/core/export');
+    const { project } = await build('@passage a Start\nPrices: $money and [[not a link]] here.\n\nPlain line.\n-> b\n@passage b Next\nThe end.\n@end\n', 'x.md', 'structured');
+    const twee = buildTwee(processProject(project));
+    expect(twee).toContain('"""Prices: $money and [[not a link]] here."""');
+    expect(twee).toContain('\nPlain line.\n');
+    expect(twee).toContain('\nThe end.\n');
+    const pos = (name: string) => JSON.parse(new RegExp(`:: ${name}[^\\n]*?(\\{.*\\})`).exec(twee)![1]).position.split(',').map(Number);
+    expect(pos('Start')[0]).toBeLessThan(pos('Next')[0]);
   });
 
   it('Twine export refuses Ink passthrough projects', async () => {
