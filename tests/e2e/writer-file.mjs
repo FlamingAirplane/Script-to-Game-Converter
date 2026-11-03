@@ -253,6 +253,34 @@ for (const [name, type] of [['WebKit', webkit], ['Chromium', chromium]]) {
       const zip = await JSZip.loadAsync(readFileSync(await zipDl.path()));
       if (!Object.keys(zip.files).some((f) => /Resources\/NarrativeBridgeAudio\/vo_.+\.wav$/.test(f))) throw new Error('Unity zip has no voice clip');
     });
+    await step('opens a Twine story to keep working on it', async () => {
+      await page.getByRole('button', { name: /Import/ }).first().click();
+      await page.locator('.dropzone input[type=file]').setInputFiles(fileURLToPath(new URL('../fixtures/orchard.twee', import.meta.url)));
+      await page.locator('.file-list li', { hasText: 'orchard.twee' }).getByText(/Twine story/).waitFor({ timeout: 5000 });
+      await page.getByRole('button', { name: /^Convert/ }).click();
+      await page.locator('.passage-item', { hasText: 'Trees' }).waitFor({ timeout: 10000 });
+      await page.locator('.project-name', { hasText: 'The Orchard' }).waitFor();
+    });
+    await step('opens Ink: editable when it can be, kept as written when it uses more', async () => {
+      await page.getByRole('button', { name: /Import/ }).first().click();
+      await page.locator('.dropzone input[type=file]').setInputFiles([
+        fileURLToPath(new URL('../fixtures/gate.ink', import.meta.url)),
+        fileURLToPath(new URL('../fixtures/tunnels.ink', import.meta.url)),
+      ]);
+      const gate = page.locator('.file-list li', { hasText: 'gate.ink' });
+      const tunnels = page.locator('.file-list li', { hasText: 'tunnels.ink' });
+      if ((await gate.getByLabel(/How to import/).inputValue()) !== 'edit') throw new Error('plain Ink should default to editable');
+      await gate.getByText('Everything in it can be edited here.').waitFor();
+      if ((await tunnels.getByLabel(/How to import/).inputValue()) !== 'keep') throw new Error('Ink with tunnels should default to kept as written');
+      await tunnels.getByText(/tunnels/).waitFor();
+      await tunnels.getByRole('button', { name: 'remove' }).click();
+      await page.getByRole('button', { name: /^Convert/ }).click();
+      await page.locator('.passage-item', { hasText: 'gate' }).first().waitFor({ timeout: 10000 });
+      // Editable: the Ink chapter is generated from the story, not passed through.
+      await page.getByRole('button', { name: /Ink/ }).first().click();
+      if (await page.getByText(/passthrough/).count()) throw new Error('editable Ink was passed through');
+      await page.getByRole('button', { name: /Review/ }).click();
+    });
     if (errors.length) throw new Error(`console errors: ${errors.join(' | ')}`);
     console.log(`✓ ${name}: all checks passed (zip ${(zipBytes / 1024).toFixed(1)} KB)`);
   } catch (e) {

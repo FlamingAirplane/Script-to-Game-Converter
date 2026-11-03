@@ -67,7 +67,13 @@ Drop files onto the box, click it to choose files, or paste text into the box be
 | **PDF** (`.pdf`) | A screenplay in standard layout keeps its structure; page numbers and (MORE) / (CONT'D) are removed. A novel becomes one passage per chapter heading. |
 | **Fountain** (`.fountain`) or plain text (`.txt`) | Read as a screenplay. |
 | **Markdown** (`.md`) | Each heading becomes a passage. |
-| **Ink** (`.ink`) | Used as it is, for checking, playtesting and exporting. |
+| **Twine** (`.twee`, `.tw`, or `.html` from *Publish to File*) | Passages, links, and the common SugarCube and Harlowe logic (conditions on links, variables being set) come in ready to edit. Other code is kept as notes. |
+| **Ink** (`.ink`) | Becomes an editable story when it uses only what the editor can show. Otherwise it is kept exactly as written (see below). |
+
+**Ink files** get a choice on their row: **Edit in Narrative Bridge** or **Keep the Ink exactly as written**. If the Ink
+uses things the editor can't show (such as tunnels, gathers or `{inline|alternatives}`), the row lists them with their line
+numbers and starts on *Keep exactly as written*: the story then plays and exports as before, but edits in Review don't
+change it. Choosing *Edit* anyway keeps those lines as notes, which stop working in play.
 
 You can add several files; they become one story in the order listed. Old `.doc` files and scanned PDFs (pictures of
 pages) can't be read. Save as `.docx`, or export from your writing app, instead. If you have both an `.fdx` and a PDF,

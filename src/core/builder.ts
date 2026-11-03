@@ -20,6 +20,7 @@ import {
   type Variable,
 } from './isr';
 import { proposeAdaptations } from './adapt';
+import { inkUnsupported } from './parsing/ink';
 import { detectFormat, parserFor } from './parsing/registry';
 import type { ParsedBlock } from './parsing/types';
 
@@ -28,10 +29,18 @@ export interface SourceInput {
   text: string;
   /** Set when the text was converted from another format (see parsing/convert.ts); skips detection. */
   format?: SourceFormat;
-  convertedFrom?: 'fdx' | 'docx' | 'pdf';
+  convertedFrom?: 'fdx' | 'docx' | 'pdf' | 'twine';
+  /**
+   * Ink only: 'edit' turns it into an editable story; 'keep' keeps the Ink exactly as written
+   * (passthrough: playable and exportable, but edits in Review don't change it). Unset: 'edit' when
+   * the editor can represent everything in it, otherwise 'keep' (see inkUnsupported).
+   */
+  inkMode?: 'edit' | 'keep';
+  /** Something the writer should know about the conversion (shown as a note in Diagnostics). */
+  note?: string;
 }
 
-const CONVERTED_LABEL = { fdx: 'Final Draft', docx: 'Word', pdf: 'PDF' } as const;
+const CONVERTED_LABEL = { fdx: 'Final Draft', docx: 'Word', pdf: 'PDF', twine: "Twine's web page format" } as const;
 
 export interface BuildOptions {
   mode: ConversionMode;
@@ -50,7 +59,7 @@ export async function buildStory(inputs: SourceInput[], options: BuildOptions): 
   const done = logger.time('Built story', 'info');
   const diagnostics: Diagnostic[] = [];
   const sources: SourceDocument[] = [];
-  const parsed: { doc: SourceDocument; blocks: ParsedBlock[] }[] = [];
+  const parsed: { doc: SourceDocument; blocks: ParsedBlock[]; keepInk?: boolean }[] = [];
 
   for (const [index, input] of inputs.entries()) {
     const docId = `doc_${index + 1}`;
@@ -86,6 +95,7 @@ export async function buildStory(inputs: SourceInput[], options: BuildOptions): 
         }),
       );
     }
+    if (input.note) diagnostics.push(diag('INPUT_NOTE', 'info', 'input_validation', input.note, { entityId: docId, exportBlocked: false }));
     if (detected.by === 'content' && detected.format !== 'txt') {
       diagnostics.push(
         diag('INPUT_FORMAT_SNIFFED', 'info', 'input_validation', `${input.fileName} was detected as ${parserFor(detected.format).label} from its content.`, {
@@ -107,7 +117,29 @@ export async function buildStory(inputs: SourceInput[], options: BuildOptions): 
     const result = parserFor(doc.format).parse(input.text, docId);
     parsed1({ document: docId, format: doc.format, detectedBy: detected.by, converted: input.convertedFrom, bytes: byteLength, lines: input.text.split('\n').length, blocks: result.blocks.length, warnings: result.diagnostics.length });
     diagnostics.push(...result.diagnostics);
-    parsed.push({ doc, blocks: result.blocks });
+    let keepInk: boolean | undefined;
+    if (doc.format === 'ink') {
+      const features = inkUnsupported(input.text);
+      keepInk = input.inkMode ? input.inkMode === 'keep' : features.length > 0;
+      const kinds = [...new Set(features.map((f) => f.feature.replace(/ \(.*$|\s\{.*$/, '')))];
+      if (keepInk)
+        diagnostics.push(
+          diag('INK_KEPT_AS_WRITTEN', 'info', 'input_validation', `${input.fileName} is kept exactly as written, so it plays as before but edits in Review don't change it.${features.length ? ` It uses Ink the editor can't show: ${kinds.slice(0, 4).join(', ')}${kinds.length > 4 ? '…' : ''}.` : ''}`, {
+            entityId: docId,
+            remediation: 'To edit it here, import it again and choose "Edit in Narrative Bridge"; those parts are then kept as notes.',
+            exportBlocked: false,
+          }),
+        );
+      else if (features.length)
+        diagnostics.push(
+          diag('INK_CONVERTED_PARTLY', 'warning', 'input_validation', `${input.fileName} was made editable, but ${features.length} line${features.length === 1 ? '' : 's'} use Ink the editor can't show (${kinds.slice(0, 4).join(', ')}${kinds.length > 4 ? '…' : ''}). They are kept as notes.`, {
+            entityId: docId,
+            remediation: 'Check those passages in Review, or import the file again and choose "Keep the Ink exactly as written".',
+            exportBlocked: false,
+          }),
+        );
+    }
+    parsed.push({ doc, blocks: result.blocks, keepInk });
   }
 
   const project = assemble(parsed, options, diagnostics);
@@ -138,12 +170,15 @@ function titleCase(s: string): string {
 }
 
 function assemble(
-  parsed: { doc: SourceDocument; blocks: ParsedBlock[] }[],
+  parsed: { doc: SourceDocument; blocks: ParsedBlock[]; keepInk?: boolean }[],
   options: BuildOptions,
   diagnostics: Diagnostic[],
 ): StoryProject {
   const all = parsed.flatMap(({ doc, blocks }) => blocks.map((b) => ({ doc, b })));
-  const isInk = parsed.length > 0 && parsed.every((p) => p.doc.format === 'ink');
+  // Ink kept exactly as written is passed through to generation; the parsed structure only drives review.
+  const isInk = parsed.length > 0 && parsed.every((p) => p.doc.format === 'ink' && p.keepInk);
+  // Ink and Twine say where every passage goes; a passage that says nothing is an ending (scripts flow on).
+  const explicitFlow = parsed.length > 0 && parsed.every((p) => p.doc.format === 'ink' || p.doc.format === 'twee');
   const hasPassageMarkers = all.some(({ b }) => b.kind === 'marker' && b.marker.type === 'passage');
   const scenes = all.filter(({ b }) => b.kind === 'scene').length;
   const sections = all.filter(({ b }) => b.kind === 'section');
@@ -270,13 +305,15 @@ function assemble(
       case 'note':
         return { type: 'note', text: b.text, origin: 'source', source: s };
       case 'unsupported':
-        diagnostics.push(
-          diag('UNSUPPORTED_CONSTRUCT', 'review', 'parsing', `${b.reason} cannot be represented in Ink and was preserved as a comment.`, {
-            entityId: p.id,
-            source: s,
-            exportBlocked: false,
-          }),
-        );
+        // (Ink kept as written still runs these lines; they only can't be shown in the editor.)
+        if (!isInk)
+          diagnostics.push(
+            diag('UNSUPPORTED_CONSTRUCT', 'review', 'parsing', `${b.reason} cannot be represented in the story model and was preserved as a comment.`, {
+              entityId: p.id,
+              source: s,
+              exportBlocked: false,
+            }),
+          );
         return { type: 'unsupported', text: b.text, reason: b.reason, origin: 'source', source: s };
       case 'marker': {
         const m = b.marker;
@@ -286,6 +323,9 @@ function assemble(
             return null;
           case 'end':
             p.isEnding = true;
+            return null;
+          case 'heading':
+            if (!p.sceneHeading) p.sceneHeading = m.text;
             return null;
           case 'divert':
             if (p.divert) diagnostics.push(diag('MULTIPLE_DIVERTS', 'warning', 'parsing', `Passage "${p.id}" has more than one divert; the last one wins.`, { entityId: p.id, source: s, exportBlocked: false }));
@@ -340,7 +380,7 @@ function assemble(
   // Linear flow: passages without explicit control flow continue to the next passage.
   passages.forEach((p, i) => {
     if (p.choices.length || p.divert || p.isEnding) return;
-    if (i + 1 < passages.length && !isInk) p.divert = passages[i + 1].id;
+    if (i + 1 < passages.length && !explicitFlow) p.divert = passages[i + 1].id;
     else p.isEnding = true;
   });
   if (passages.length === 0) {

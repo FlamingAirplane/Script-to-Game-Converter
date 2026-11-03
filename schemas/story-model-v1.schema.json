@@ -25,7 +25,7 @@
         "properties": {
           "id": { "type": "string" },
           "fileName": { "type": "string" },
-          "format": { "enum": ["txt", "fountain", "md", "ink"] },
+          "format": { "enum": ["txt", "fountain", "md", "ink", "twee"] },
           "sha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
           "byteLength": { "type": "integer", "minimum": 0 },
           "text": { "type": "string" }

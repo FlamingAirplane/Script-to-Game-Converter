@@ -45,6 +45,7 @@ CLI:
 
 ```bash
 npm run cli -- convert script.fountain --mode faithful --out story.ink
+npm run cli -- convert my-story.twee --out story.ink        # open a Twine story (also .html) or Ink (.ink)
 npm run cli -- validate story.md
 npm run cli -- export script.fountain --mode adaptation --approve-all --engine unity --out ./build
 npm run cli -- export story.nbproj.json --engine unreal --out ./build --ref <inkpot-tag-or-sha>
@@ -70,7 +71,7 @@ npm run test:offline    # the website opens, converts, plays and exports offline
 
 | Tab | What it does |
 | --- | --- |
-| **Import** | Drop Fountain, Final Draft (`.fdx`), Word (`.docx`), PDF, plain text, Markdown or Ink files (or paste), choose a conversion mode, or start from a sample. |
+| **Import** | Drop Fountain, Final Draft (`.fdx`), Word (`.docx`), PDF, plain text or Markdown files (or paste), or open a Twine (`.twee`, `.html`) or Ink (`.ink`) story to keep working on it; choose a conversion mode, or start from a sample. |
 | **Review** | Every passage with its content, provenance (`source` / `transformed` / `generated` / `edited`) and the original source lines side by side. Edit text, choices, conditions, effects, items and variables; approve or reject proposed branches; find & replace, merge duplicate characters, reorder passages. Give characters voices, and record or attach a clip for any line. *Dialogue only* (D) hides everything but spoken lines. **Story settings** shows the story at a glance (words, reading time, choices, endings, spoken minutes and lines per character) and keeps **drafts**. |
 | **Graph** | The story as an old map: start, endings, unreachable passages, conditional and proposed routes. Drag passages to arrange them (saved with the project), search, minimap; click a passage to edit it. *Save map* downloads the whole map as SVG or PNG. |
 | **Ink** | The deterministic generated Ink, compiled live with the pinned inkjs compiler; compile errors are mapped back to passages. |
@@ -86,6 +87,23 @@ Press **?** for keyboard shortcuts. Book sounds (page turns, a bell at endings) 
 are on the cover band.
 
 The **Diagnostics** panel lists every issue with a stable code, severity, stage, remediation, and whether it blocks export. Click one to jump to it.
+
+## Opening Twine and Ink stories
+
+Existing interactive stories can be opened and worked on like any other project.
+
+- **Twine**: Twee 3 or 1 (`.twee`, `.tw`, from Twine's *Export as Twee* or Tweego) and Twine 2 HTML (`.html`: *Publish to
+  File*, or a library archive, whose first story is used). Passages, links (`->`, `<-`, `|`, setter links, `<<link>>`,
+  `(link-goto:)`), SugarCube `<<if>>` / `<<set>>` and Harlowe `(if:)` / `(set:)` become passages, choices, conditions and
+  effects; `StoryInit` (or Harlowe `startup` passages) declares variables, and `$has_<item>` variables become items.
+  Narrative Bridge's own Twine exports come back as they were made. Other macros, multi-line conditional text and code
+  passages are kept as notes or left out with a diagnostic; nothing is dropped silently.
+- **Ink** (`.ink`): Ink that uses only what the story model can represent (knots and stitches, `VAR`s, text and dialogue,
+  `#speaker` / `#paren` / `#scene` / `#transition` tags, choices with `{conditions}`, `~` effects and diverts, fallback
+  choices) becomes an editable story; Narrative Bridge's own Ink comes back byte for byte. Ink that uses more (gathers,
+  tunnels, threads, inline logic and alternatives, functions, visit counts, other tags…) is kept **exactly as written** by
+  default: it plays and exports as before, but edits in Review don't change it. The Import page says which features
+  decided that and lets you convert anyway, keeping those lines as notes. CLI: `--edit-ink` / `--keep-ink`.
 
 ## Conversion modes
 
@@ -158,7 +176,7 @@ choice was cut they resume just before it.
   - *Story only* (`--story-only`): passages, their text and links, nothing else (no code, styling, variables or notes),
     so it works in any story format, including Twine's default, Harlowe. Every choice is always offered.
 
-  Both were checked by importing them into Twine 2 and playing them (SugarCube and Harlowe). Stories imported as raw Ink
+  Both were checked by importing them into Twine 2 and playing them (SugarCube and Harlowe). Ink kept exactly as written
   can't be exported to Twine.
 
 ## Engine exports

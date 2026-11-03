@@ -2,6 +2,7 @@ import { useRef, useState } from 'react';
 import type { SourceInput } from '../core/builder';
 import type { ConversionMode } from '../core/isr';
 import { BINARY_EXTENSIONS, CONVERTED_EXTENSIONS, prepareInput } from '../core/parsing/convert';
+import { inkUnsupported, type InkFeature } from '../core/parsing/ink';
 import { SUPPORTED_EXTENSIONS } from '../core/parsing/registry';
 
 const ACCEPTED = [...SUPPORTED_EXTENSIONS, ...CONVERTED_EXTENSIONS];
@@ -20,6 +21,17 @@ const MODES: { id: ConversionMode; name: string; desc: string }[] = [
   { id: 'structured', name: 'Structured import', desc: 'Interpret explicit @passage, choice, @item and @var markers.' },
 ];
 
+/** "tunnels, gathers (lines 4, 9)…": the kinds of Ink the editor can't show, briefly. */
+function inkSummary(features: InkFeature[]): string {
+  const kinds = new Map<string, number[]>();
+  for (const f of features) {
+    const k = f.feature.replace(/ \(.*$|\s\{.*$/, '');
+    kinds.set(k, [...(kinds.get(k) ?? []), f.line]);
+  }
+  const list = [...kinds].slice(0, 3).map(([k, lines]) => `${k}, line${lines.length === 1 ? '' : 's'} ${lines.slice(0, 3).join(', ')}${lines.length > 3 ? '…' : ''}`);
+  return list.join('; ') + (kinds.size > 3 ? `; and ${kinds.size - 3} more` : '');
+}
+
 export function ImportView({
   onConvert,
   busy,
@@ -29,7 +41,8 @@ export function ImportView({
   busy: boolean;
   onRestoreDraft: (id: number) => void;
 }) {
-  const [files, setFiles] = useState<SourceInput[]>([]);
+  // Ink files carry how to import them, and what in them the editor can't show.
+  const [files, setFiles] = useState<(SourceInput & { inkFeatures?: InkFeature[] })[]>([]);
   const [paste, setPaste] = useState('');
   const [pasteName, setPasteName] = useState('script.fountain');
   const [mode, setMode] = useState<ConversionMode>('faithful');
@@ -41,7 +54,7 @@ export function ImportView({
   const addFiles = async (list: FileList | null) => {
     if (!list) return;
     setError('');
-    const next: SourceInput[] = [];
+    const next: (SourceInput & { inkFeatures?: InkFeature[] })[] = [];
     const problems: string[] = [];
     for (const f of Array.from(list)) {
       if (/\.doc$/i.test(f.name)) {
@@ -50,7 +63,11 @@ export function ImportView({
       }
       try {
         const binary = BINARY_EXTENSIONS.some((e) => f.name.toLowerCase().endsWith(e));
-        next.push(await prepareInput(f.name, binary ? new Uint8Array(await f.arrayBuffer()) : await f.text()));
+        const prepared = await prepareInput(f.name, binary ? new Uint8Array(await f.arrayBuffer()) : await f.text());
+        if (/\.ink$/i.test(f.name)) {
+          const inkFeatures = inkUnsupported(prepared.text);
+          next.push({ ...prepared, inkFeatures, inkMode: inkFeatures.length ? 'keep' : 'edit' });
+        } else next.push(prepared);
       } catch (e) {
         problems.push(`${f.name}: ${e instanceof Error ? e.message : String(e)}`);
       }
@@ -59,7 +76,7 @@ export function ImportView({
     setFiles((cur) => [...cur, ...next]);
   };
 
-  const inputs: SourceInput[] = [...files, ...(paste.trim() ? [{ fileName: pasteName || 'pasted.txt', text: paste }] : [])];
+  const inputs: SourceInput[] = [...files.map(({ inkFeatures: _, ...f }) => f), ...(paste.trim() ? [{ fileName: pasteName || 'pasted.txt', text: paste }] : [])];
 
   return (
     <div className="view import-view">
@@ -112,7 +129,7 @@ export function ImportView({
             tabIndex={0}
           >
             <strong>Drop files here</strong> or click to browse
-            <span className="muted small">Final Draft, Word, PDF, Fountain, Markdown, Ink or plain text</span>
+            <span className="muted small">Final Draft, Word, PDF, Fountain, Markdown or plain text — or a Twine or Ink story to keep working on</span>
             <input ref={input} type="file" multiple hidden accept={[...ACCEPTED, '.text'].join(',')} onChange={(e) => addFiles(e.target.files)} />
           </div>
           {error && <p className="error-text">{error}</p>}
@@ -121,10 +138,30 @@ export function ImportView({
               {files.map((f, i) => (
                 <li key={i}>
                   <span className="mono">{f.fileName}</span>
-                  <span className="muted small">{f.text.split('\n').length} lines</span>
+                  <span className="muted small">{f.convertedFrom === 'twine' || /\.(twee|tw)$/i.test(f.fileName) ? 'Twine story · ' : /\.ink$/i.test(f.fileName) ? 'Ink story · ' : ''}{f.text.split('\n').length} lines</span>
                   <button className="link" onClick={() => setFiles(files.filter((_, j) => j !== i))}>
                     remove
                   </button>
+                  {f.inkFeatures && (
+                    <div className="ink-mode">
+                      <select
+                        className="input tiny-select"
+                        aria-label={`How to import ${f.fileName}`}
+                        value={f.inkMode}
+                        onChange={(e) => setFiles(files.map((x, j) => (j === i ? { ...x, inkMode: e.target.value as 'edit' | 'keep' } : x)))}
+                      >
+                        <option value="edit">Edit in Narrative Bridge</option>
+                        <option value="keep">Keep the Ink exactly as written</option>
+                      </select>
+                      <span className="muted small">
+                        {f.inkFeatures.length === 0
+                          ? 'Everything in it can be edited here.'
+                          : f.inkMode === 'keep'
+                            ? `Kept as written because it uses Ink the editor can’t show (${inkSummary(f.inkFeatures)}). It plays and exports as before, but edits in Review won’t change it.`
+                            : `Editable, but ${f.inkFeatures.length} line${f.inkFeatures.length === 1 ? '' : 's'} (${inkSummary(f.inkFeatures)}) will be kept as notes and stop working in play.`}
+                      </span>
+                    </div>
+                  )}
                 </li>
               ))}
             </ul>

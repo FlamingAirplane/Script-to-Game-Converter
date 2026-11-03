@@ -20,7 +20,9 @@ That's it. It works without an internet connection, and your scripts are never u
 - A **PDF** (`.pdf`). A screenplay in standard layout keeps its scene headings, characters, dialogue and transitions
   (page numbers and MORE / CONT'D are tidied away); a novel or story becomes one passage per chapter heading, or
 - A **Fountain** screenplay (`.fountain`) or a **plain-text** export (`.txt`), or
-- A **Markdown** file (`.md`), or just paste your text in.
+- A **Markdown** file (`.md`), or just paste your text in, or
+- A story you started in **Twine** (`.twee`, or the `.html` from *Publish to File*) or **Ink** (`.ink`), to keep working
+  on it here.
 
 Scanned PDFs (pictures of pages) and old `.doc` files can't be read. Export the script from your writing app, or save as
 `.docx`, instead. If you have both, an `.fdx` or `.docx` is more exact than a PDF. Bold, italics and fonts aren't kept;
