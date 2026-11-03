@@ -1,4 +1,5 @@
 import { fnv1a } from '../hash';
+import { log } from '../log';
 import { isActive, itemVar, type Choice, type Condition, type Effect, type Passage, type StoryProject } from '../isr';
 import type { ProcessedStory } from '../pipeline';
 import { GENERATOR_VERSION } from '../version';
@@ -125,6 +126,7 @@ export function buildTwee(story: ProcessedStory): string {
   });
   const endsByChoice = project.passages.some((p) => p.choices.some((c) => isActive(c.review) && (c.target === 'END' || !c.target)));
   if (endsByChoice) out.push(`:: ${endName} [ending] {"position":"100,${150 + Math.ceil(project.passages.length / 6) * 150}"}`, END_MARKUP, '');
+  log('export').info('Built Twine file', { passages: project.passages.length, items: project.items.length, variables: project.variables.length });
   return out.join('\n');
 }
 

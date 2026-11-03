@@ -796,3 +796,39 @@ kbd { font: 12.5px var(--mono); padding: 1px 6px; border: 1px solid var(--rule-2
 
 .colophon-note { text-align: center; color: var(--faded); font-style: italic; margin: 30px 0 0; }
 .colophon-note a { color: var(--pen); }
+
+/* ---------- Crash page ---------- */
+.crash { min-height: 100%; display: flex; align-items: center; justify-content: center; padding: 24px; }
+.crash .card { max-width: 520px; }
+.crash h2 { font-family: var(--display); font-size: 26px; text-transform: none; font-variant: normal; letter-spacing: 0.02em; }
+
+/* ---------- Side panel tabs and the Logbook ---------- */
+.pane-tabs { display: flex; gap: 14px; }
+.pane-tab { background: none; border: 0; padding: 0 0 2px; cursor: pointer; font-variant: small-caps; text-transform: lowercase; letter-spacing: 0.12em; font-weight: 600; color: var(--faded); border-bottom: 1.5px solid transparent; }
+.pane-tab.active { color: var(--rubric); border-bottom-color: var(--copper); }
+.logbook { display: flex; flex-direction: column; min-height: 0; flex: 1; }
+.logbook-tools { display: flex; align-items: center; gap: 6px; padding: 8px 12px 0; }
+.logbook-tools .input.small { flex: 1; }
+.logbook-note { padding: 6px 12px 4px; margin: 0; font-style: italic; }
+.log-list { list-style: none; margin: 0; padding: 4px 8px 12px; overflow: auto; flex: 1;
+  background-image: repeating-linear-gradient(transparent 0 25px, color-mix(in srgb, var(--rule) 70%, transparent) 25px 26px); background-attachment: local; }
+.log-entry { display: grid; grid-template-columns: auto auto 1fr; gap: 0 8px; padding: 5px 4px; border-bottom: 1px dotted var(--rule-2); font-size: 13px; line-height: 1.35; }
+.log-time { color: var(--faded); font-size: 11px; }
+.log-level { font-variant: small-caps; text-transform: lowercase; letter-spacing: 0.08em; font-size: 12px; font-weight: 600; }
+.log-scope { color: var(--ink-2); font-style: italic; text-align: right; }
+.log-msg { grid-column: 1 / -1; color: var(--ink); }
+.log-ms { color: var(--teal); font-variant-numeric: lining-nums; }
+.log-data { grid-column: 1 / -1; color: var(--faded); font-size: 11px; word-break: break-word; }
+.log-error { background: color-mix(in srgb, var(--err) 7%, transparent); }
+.log-warn { background: color-mix(in srgb, var(--warn) 7%, transparent); }
+
+/* The page never grows wider than the window: the cover band wraps instead, and the stage list
+   (Parse · Review · …) makes way for the buttons on narrower screens. */
+.app { grid-template-columns: minmax(0, 1fr); }
+.topbar { flex-wrap: wrap; row-gap: 4px; min-width: 0; }
+.project-name { min-width: 0; flex-shrink: 1; }
+@media (max-width: 1500px) { .stages { display: none; } }
+.diagnostics > .pane-head { padding: 12px 10px 12px 40px; gap: 6px; min-width: 0; }
+.pane-tabs { gap: 10px; min-width: 0; }
+.pane-tab { letter-spacing: 0.06em; }
+.diagnostics > .pane-head .check { gap: 4px; }

@@ -1,3 +1,4 @@
+import { log } from '../log';
 import type { ProcessedStory } from '../pipeline';
 import { assertExportable, audioFiles, buildManifest, commonFiles, itemVarNames, json, sourceFiles, storyVersion, verifyExport } from './common';
 import type { EngineAdapter, ExportFile, ExportOptions, ExportResult } from './types';
@@ -77,6 +78,14 @@ export function finalize(result: ExportResult, story: ProcessedStory, required: 
   const manifestPath = result.files.find((f) => f.path.endsWith('narrative-bridge.manifest.json'));
   if (manifestPath) manifestPath.content = json(result.manifest);
   result.files.push({ path: `${result.rootName}/NarrativeBridge/export-report.json`, content: json(result.report) });
+  log('export').info(`Built ${result.report.engine} package`, {
+    files: result.files.length,
+    bytes: result.files.reduce((n, f) => n + (typeof f.content === 'string' ? f.content.length : f.content.byteLength), 0),
+    voiceClips: result.files.filter((f) => /\.(wav|mp3|ogg)$/.test(f.path)).length,
+    warnings: result.report.warnings.length,
+    errors: result.report.errors.length,
+    integration: result.report.integration,
+  });
 }
 
 /** UPM git URL. Releases 2.x keep the package in a subfolder; the legacy "upm" branches have it at the root. */

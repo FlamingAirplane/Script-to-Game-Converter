@@ -26,6 +26,7 @@ const GROUPS: { title: string; keys: [string, string][] }[] = [
       [`${MOD} Z  /  ⇧ ${MOD} Z`, 'Undo / redo'],
       [`${MOD} F`, 'Find (passages, text, map)'],
       [`${MOD} .`, 'Show or hide Diagnostics'],
+      [`${MOD} L`, 'Open the Logbook'],
       ['?', 'This card'],
     ],
   },

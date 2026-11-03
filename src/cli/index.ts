@@ -11,6 +11,7 @@ import { ADAPTERS, buildPlayableHtml, buildRecordingScript, recordingScriptFileN
 import type { ConversionMode, StoryProject } from '../core/isr';
 import { base64ToBytes, type AudioAssets } from '../core/audio';
 import { BINARY_EXTENSIONS, prepareInput } from '../core/parsing/convert';
+import { formatEntry, LEVELS, log, logbook, type LogLevel } from '../core/log';
 import { processProject } from '../core/pipeline';
 
 const HELP = `Narrative Bridge — screenplays and prose → Ink → Unity / Unreal
@@ -22,6 +23,8 @@ Usage:
   narrative-bridge export <files... | project.nbproj.json> --engine unity|unreal|web|twine|script --out <dir>
                                       [--name ProjectName] [--engine-version 2022.3.62f1] [--ref <tag|sha>] [--no-demo]
   narrative-bridge doctor [--engine unity|unreal]
+
+Logging (to stderr): --verbose shows everything, --quiet only errors, --log-file <path> writes JSON lines.
 
 Exit codes: 0 success, 1 validation errors / export blocked, 2 usage error.`;
 
@@ -101,8 +104,27 @@ function summary(story: Awaited<ReturnType<typeof load>>) {
   printDiagnostics(story.diagnostics);
 }
 
+/**
+ * Logging: entries go to stderr (so they never mix with Ink printed to stdout) at warn+ by default,
+ * everything with --verbose, errors only with --quiet; --log-file writes every entry as JSON lines.
+ */
+function setUpLogging(args: Args) {
+  logbook.src = 'cli';
+  logbook.consoleLevel = 'off';
+  const min: LogLevel = args.verbose ? 'debug' : args.quiet ? 'error' : 'warn';
+  logbook.subscribe((e) => {
+    if (LEVELS[e.level] >= LEVELS[min]) process.stderr.write(`${dim(formatEntry(e))}\n`);
+  });
+  if (typeof args['log-file'] === 'string') {
+    const file = resolve(args['log-file']);
+    process.on('exit', () => writeFileSync(file, logbook.all().map((e) => JSON.stringify(e)).join('\n') + '\n'));
+  }
+  log('cli').debug('Command', { command: args._[0], files: args._.length - 1, mode: args.mode, engine: args.engine });
+}
+
 async function main() {
   const args = parseArgs(process.argv.slice(2));
+  setUpLogging(args);
   const cmd = args._[0];
   switch (cmd) {
     case 'convert': {

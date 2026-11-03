@@ -109,6 +109,19 @@ for (const [name, type] of [['WebKit', webkit], ['Chromium', chromium]]) {
       await page.getByRole('button', { name: /^Convert/ }).click();
       await page.locator('.passage-item', { hasText: 'Cliff Path' }).waitFor({ timeout: 5000 });
     });
+    await step('Logbook shows page and worker entries, and its download has no story text', async () => {
+      await page.locator('body').click({ position: { x: 5, y: 5 } });
+      await page.keyboard.press('ControlOrMeta+l');
+      await page.getByRole('tab', { name: 'Logbook' }).waitFor();
+      await page.getByLabel('Show log entries from this level up').selectOption('debug');
+      await page.locator('.log-entry', { hasText: 'Built story' }).first().waitFor({ timeout: 5000 });
+      await page.locator('.log-entry', { hasText: 'Compiled Ink' }).filter({ hasText: 'worker' }).first().waitFor({ timeout: 5000 });
+      const [dl] = await Promise.all([page.waitForEvent('download'), page.getByRole('button', { name: 'download' }).click()]);
+      const text = readFileSync(await dl.path(), 'utf8');
+      if (!/Processed story/.test(text)) throw new Error('downloaded log is missing pipeline entries');
+      if (/Rows of shelves|archive is locked|Wrapped in oilcloth/.test(text)) throw new Error('log contains story text');
+      await page.getByRole('tab', { name: 'Diagnostics' }).click();
+    });
     await step('attaches a voice clip to a line and ships it in the exports', async () => {
       // A one-second 8 kHz silent WAV.
       const n = 8000;
