@@ -6,6 +6,7 @@ import { SUPPORTED_EXTENSIONS } from '../core/parsing/registry';
 
 const ACCEPTED = [...SUPPORTED_EXTENSIONS, ...CONVERTED_EXTENSIONS];
 import { SAMPLES } from '../samples';
+import { DraftShelf } from './Drafts';
 import { GettingStarted } from './GettingStarted';
 import { Logo } from './Logo';
 
@@ -19,7 +20,15 @@ const MODES: { id: ConversionMode; name: string; desc: string }[] = [
   { id: 'structured', name: 'Structured import', desc: 'Interpret explicit @passage, choice, @item and @var markers.' },
 ];
 
-export function ImportView({ onConvert, busy }: { onConvert: (inputs: SourceInput[], mode: ConversionMode, title?: string) => void; busy: boolean }) {
+export function ImportView({
+  onConvert,
+  busy,
+  onRestoreDraft,
+}: {
+  onConvert: (inputs: SourceInput[], mode: ConversionMode, title?: string) => void;
+  busy: boolean;
+  onRestoreDraft: (id: number) => void;
+}) {
   const [files, setFiles] = useState<SourceInput[]>([]);
   const [paste, setPaste] = useState('');
   const [pasteName, setPasteName] = useState('script.fountain');
@@ -166,6 +175,8 @@ export function ImportView({ onConvert, busy }: { onConvert: (inputs: SourceInpu
           ))}
         </div>
       </section>
+
+      <DraftShelf onRestore={onRestoreDraft} />
 
       <details className="card markers-help">
         <summary>Structured marker reference</summary>

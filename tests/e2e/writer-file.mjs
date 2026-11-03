@@ -102,12 +102,43 @@ for (const [name, type] of [['WebKit', webkit], ['Chromium', chromium]]) {
       await page.reload();
       await page.getByRole('button', { name: /Archive Entrance/ }).waitFor({ timeout: 5000 });
     });
+    await step('story settings show statistics and keep a draft that can be restored', async () => {
+      page.on('dialog', (d) => d.accept());
+      await page.getByRole('button', { name: /Review/ }).click();
+      await page.locator('.story-entry').click();
+      await page.getByRole('heading', { name: 'At a glance' }).waitFor();
+      if (!/MIRA/.test(await page.locator('.glance-cast').innerText())) throw new Error('lines per character missing');
+      await page.getByLabel('Draft name').fill('First pass');
+      await page.getByRole('button', { name: 'Keep a draft' }).click();
+      await page.locator('.draft', { hasText: 'First pass' }).waitFor({ timeout: 5000 });
+      const title = page.locator('.settings-grid label', { hasText: 'Title' }).locator('input');
+      await title.fill('Renamed Archive');
+      await page.locator('.project-name', { hasText: 'Renamed Archive' }).waitFor();
+      await page.locator('.draft', { hasText: 'First pass' }).getByRole('button', { name: 'Restore' }).click();
+      await page.locator('.project-name', { hasText: 'The Locked Archive' }).waitFor({ timeout: 5000 });
+      await page.locator('.draft', { hasText: 'Before restoring' }).waitFor({ timeout: 5000 });
+    });
+    await step('saves the story map as SVG and PNG', async () => {
+      await page.getByRole('button', { name: /Graph/ }).click();
+      const [svgDl] = await Promise.all([page.waitForEvent('download'), page.getByRole('button', { name: 'Save map' }).click()]);
+      const svg = readFileSync(await svgDl.path(), 'utf8');
+      if (!/^<\?xml[\s\S]*<svg[\s\S]*A Map of The Locked Archive[\s\S]*Archive Entrance/.test(svg)) throw new Error('map SVG is missing its title or passages');
+      if (/class="/.test(svg)) throw new Error('map SVG still depends on the app stylesheet');
+      const [pngDl] = await Promise.all([page.waitForEvent('download'), page.getByRole('button', { name: 'PNG' }).click()]);
+      const png = readFileSync(await pngDl.path());
+      if (png.subarray(1, 4).toString() !== 'PNG' || png.length < 5000) throw new Error('map PNG is empty or invalid');
+    });
     await step('imports a Final Draft (.fdx) file through the file picker', async () => {
       await page.getByRole('button', { name: /Import/ }).first().click();
       await page.locator('.dropzone input[type=file]').setInputFiles(fileURLToPath(new URL('../fixtures/archive.fdx', import.meta.url)));
       await page.getByText('archive.fdx').waitFor({ timeout: 5000 });
       await page.getByRole('button', { name: /^Convert/ }).click();
       await page.locator('.passage-item', { hasText: 'Cliff Path' }).waitFor({ timeout: 5000 });
+    });
+    await step('the replaced story waits on the Import page as earlier work', async () => {
+      await page.getByRole('button', { name: /Import/ }).first().click();
+      await page.locator('.drafts .draft', { hasText: 'The Locked Archive' }).waitFor({ timeout: 5000 });
+      await page.getByRole('button', { name: /Review/ }).click();
     });
     await step('Logbook shows page and worker entries, and its download has no story text', async () => {
       await page.locator('body').click({ position: { x: 5, y: 5 } });

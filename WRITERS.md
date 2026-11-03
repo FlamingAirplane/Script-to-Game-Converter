@@ -37,6 +37,18 @@ Your project is remembered in the browser you used. To keep a copy you can reope
 click **Save project** (top right). This downloads a `.nbproj.json` file. Use **Open project** to load it again.
 
 If you clear your browser history or use a private window, the remembered copy is lost, so save a project file you want to keep.
+The top of the page says *kept in this browser* while autosave works, and warns you if the browser runs out of room.
+
+**Drafts.** Before a big rewrite, open **Story settings** (top of the Review list), name a draft and click **Keep a draft**.
+**Restore** brings it back, and the undo button takes you back again if you change your mind. Converting a new script
+keeps the old story as a draft automatically; find it on the Import page under *Or pick up earlier work*.
+
+**At a glance** (also in Story settings) shows the word count, reading time, choices, endings, and how many lines each
+character speaks, which helps when you plan a voice recording session.
+
+**Using the website offline.** After you have opened the website once, it also opens without an internet connection.
+Your browser may offer to install it as an app (in Chrome or Edge, the install icon in the address bar; on iPhone or iPad,
+Share → *Add to Home Screen*).
 
 ## Sharing your story
 

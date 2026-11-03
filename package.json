@@ -12,7 +12,9 @@
     "build:single": "tsc --noEmit && vite build --mode single && node scripts/package-single.mjs",
     "test:e2e": "npm run build:single && node tests/e2e/writer-file.mjs",
     "test:a11y": "npm run build:single && node tests/e2e/a11y.mjs",
-    "test:overflow": "npm run build:single && node tests/e2e/overflow.mjs"
+    "test:overflow": "npm run build:single && node tests/e2e/overflow.mjs",
+    "test:offline": "npm run build && node tests/e2e/offline.mjs",
+    "icons": "node scripts/icons.mjs"
   },
   "repository": {
     "type": "git",

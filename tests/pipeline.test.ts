@@ -9,6 +9,7 @@ import { fountainParser } from '../src/core/parsing/fountain';
 import { parseCondition, parseMarker } from '../src/core/parsing/markers';
 import { detectFormat } from '../src/core/parsing/registry';
 import { processProject } from '../src/core/pipeline';
+import { countWords, formatMinutes, storyStats } from '../src/core/stats';
 import { compileInk } from '../src/core/validate';
 import { SAMPLES } from '../src/samples';
 
@@ -479,5 +480,31 @@ describe('logging', () => {
     expect(dump).not.toContain('VELVET');
     expect(dump).not.toContain('whispers');
     expect(entries.find((e) => e.msg === 'Compiled Ink')?.ms).toBeGreaterThanOrEqual(0);
+  });
+});
+
+describe('story statistics', () => {
+  it('counts words, choices, endings and lines per character, skipping rejected proposals', async () => {
+    expect(countWords("Don't move — the keeper's lamp is lit, 3 times.")).toBe(9);
+    const { project } = await build(SAMPLES[0].text, SAMPLES[0].fileName, 'structured');
+    const st = storyStats(project);
+    expect(st.passages).toBe(project.passages.length);
+    expect(st.endings).toBeGreaterThan(0);
+    expect(st.choices).toBe(project.passages.flatMap((p) => p.choices).length);
+    expect(st.characters.reduce((n, c) => n + c.lines, 0)).toBe(project.passages.flatMap((p) => p.content).filter((b) => b.type === 'dialogue').length);
+    expect(st.words).toBeGreaterThan(st.dialogueWords);
+    // A rejected passage drops out of every count.
+    const lines = st.characters.reduce((n, c) => n + c.lines, 0);
+    const withDialogue = project.passages.find((p) => p.content.some((b) => b.type === 'dialogue'))!;
+    withDialogue.review = 'rejected';
+    const after = storyStats(project);
+    expect(after.passages).toBe(st.passages - 1);
+    expect(after.characters.reduce((n, c) => n + c.lines, 0)).toBeLessThan(lines);
+  });
+  it('formats durations for writers', () => {
+    expect(formatMinutes(0.4)).toBe('under a minute');
+    expect(formatMinutes(1.2)).toBe('about 1 minute');
+    expect(formatMinutes(80)).toBe('about 1 hour 20 minutes');
+    expect(formatMinutes(120)).toBe('about 2 hours');
   });
 });

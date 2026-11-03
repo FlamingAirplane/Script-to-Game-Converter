@@ -3,6 +3,7 @@ import { createRoot } from 'react-dom/client';
 import { errorData, formatEntry, log, logbook } from '../core/log';
 import { GENERATOR_VERSION } from '../core/version';
 import { App } from './App';
+import { OfflineUpdate } from './OfflineUpdate';
 import './fonts.css';
 import './styles.css';
 
@@ -60,6 +61,7 @@ createRoot(document.getElementById('root')!).render(
   <StrictMode>
     <ErrorBoundary>
       <App />
+      <OfflineUpdate />
     </ErrorBoundary>
   </StrictMode>,
 );

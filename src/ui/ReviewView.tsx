@@ -6,6 +6,8 @@ import type { ProcessedStory } from '../core/pipeline';
 import { Badge, ProvenanceBadge, SeverityIcon } from './common';
 import { friendly } from './friendly';
 import { VoiceClip, VoicePicker } from './VoiceControls';
+import { formatMinutes, storyStats } from '../core/stats';
+import { DraftShelf } from './Drafts';
 import { addChoice, addPassage, deletePassage, findText, mergeCharacter, movePassage, renamePassage, replaceText } from './projectOps';
 
 type Update = (fn: (draft: StoryProject) => void, group?: string) => void;
@@ -19,6 +21,8 @@ export function ReviewView({
   update,
   dialogueOnly,
   onDialogueOnly,
+  onKeepDraft,
+  onRestoreDraft,
 }: {
   processed: ProcessedStory;
   selected: string;
@@ -26,6 +30,8 @@ export function ReviewView({
   update: Update;
   dialogueOnly: boolean;
   onDialogueOnly: (on: boolean) => void;
+  onKeepDraft: (label: string) => Promise<void>;
+  onRestoreDraft: (id: number) => void;
 }) {
   const project = processed.project;
   const [filter, setFilter] = useState('');
@@ -115,7 +121,7 @@ export function ReviewView({
 
       <main className="passage-editor">
         {selected === STORY_SETTINGS ? (
-          <StorySettings project={project} update={update} />
+          <StorySettings project={project} update={update} onKeepDraft={onKeepDraft} onRestoreDraft={onRestoreDraft} />
         ) : passage ? (
           <PassageEditor
             key={passage.id}
@@ -669,7 +675,7 @@ function EffectEditor({ effect, project, onChange }: { effect: Effect; project: 
   return <code className="small">{effectToInk(effect)}</code>;
 }
 
-function StorySettings({ project, update }: { project: StoryProject; update: Update }) {
+function StorySettings({ project, update, onKeepDraft, onRestoreDraft }: { project: StoryProject; update: Update; onKeepDraft: (label: string) => Promise<void>; onRestoreDraft: (id: number) => void }) {
   return (
     <div className="editor settings">
       <h2>Story settings</h2>
@@ -707,6 +713,9 @@ function StorySettings({ project, update }: { project: StoryProject; update: Upd
           </span>
         </div>
       </div>
+
+      <AtAGlance project={project} />
+      <DraftShelf projectId={project.project.id} onKeep={onKeepDraft} onRestore={onRestoreDraft} />
 
       <h3>Characters</h3>
       <table className="table">
@@ -856,6 +865,67 @@ function StorySettings({ project, update }: { project: StoryProject; update: Upd
         }
       />
     </div>
+  );
+}
+
+/** Length, branching and who speaks how much, for planning reading time and voice sessions. */
+function AtAGlance({ project }: { project: StoryProject }) {
+  const st = useMemo(() => storyStats(project), [project]);
+  const n = (v: number) => v.toLocaleString();
+  return (
+    <section className="glance" aria-labelledby="glance-head">
+      <h3 id="glance-head">At a glance</h3>
+      <dl className="glance-grid">
+        <div>
+          <dt>Words</dt>
+          <dd>{n(st.words)}</dd>
+        </div>
+        <div>
+          <dt>Reading time</dt>
+          <dd>{formatMinutes(st.readingMinutes)}</dd>
+        </div>
+        <div>
+          <dt>Choices</dt>
+          <dd>
+            {n(st.choices)}
+            {st.conditionalChoices > 0 && <span className="muted small"> · {n(st.conditionalChoices)} conditional</span>}
+          </dd>
+        </div>
+        <div>
+          <dt>Endings</dt>
+          <dd>{n(st.endings)}</dd>
+        </div>
+        <div>
+          <dt>Spoken dialogue</dt>
+          <dd>{formatMinutes(st.spokenMinutes)}</dd>
+        </div>
+      </dl>
+      {st.characters.length > 0 && (
+        <table className="table glance-cast">
+          <caption className="muted small">Lines per character (rejected passages are not counted)</caption>
+          <thead>
+            <tr>
+              <th scope="col">Character</th>
+              <th scope="col">Lines</th>
+              <th scope="col">Words</th>
+              <th scope="col">Clips</th>
+            </tr>
+          </thead>
+          <tbody>
+            {st.characters.map((c) => (
+              <tr key={c.id}>
+                <td>{c.name}</td>
+                <td>{n(c.lines)}</td>
+                <td>{n(c.words)}</td>
+                <td>
+                  {c.clips}/{c.lines}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      )}
+    </section>
   );
 }
 

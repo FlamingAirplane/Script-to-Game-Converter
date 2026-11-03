@@ -13,7 +13,9 @@ One source-processing pipeline → one canonical story model (ISR) → one gener
 Everything runs locally. Scripts never leave your machine.
 
 **Try it online:** https://flamingairplane.github.io/Script-to-Game-Converter/ (the page runs entirely in your browser;
-nothing is uploaded). The site also offers the offline single-file edition for writers. It is rebuilt and redeployed by
+nothing is uploaded). After one visit it also works with no connection, and browsers offer to install it as an app
+(see [`scripts/offline-site.ts`](scripts/offline-site.ts)); when a new version is deployed, the app offers to reload into it.
+The site also offers the offline single-file edition for writers. It is rebuilt and redeployed by
 [`.github/workflows/pages.yml`](.github/workflows/pages.yml) on every push to `main`.
 
 ## Quick start
@@ -55,18 +57,24 @@ exports a Unity zip and a playable story, then plays that story):
 npx playwright-core install webkit chromium   # once
 npm run test:e2e
 npm run test:overflow   # no chapter scrolls sideways at 360–1920 px (WIDTHS=… to choose)
+npm run test:offline    # the website opens, converts, plays and exports offline after one visit
 ```
 
 ## The workflow (web app)
 
 | Tab | What it does |
 | --- | --- |
-| **Import** | Drop `.fountain`, `.txt`, `.md` or `.ink` files (or paste), choose a conversion mode, or start from a sample. |
-| **Review** | Every passage with its content, provenance (`source` / `transformed` / `generated` / `edited`) and the original source lines side by side. Edit text, choices, conditions, effects, items and variables; approve or reject proposed branches; find & replace, merge duplicate characters, reorder passages. Give characters voices, and record or attach a clip for any line. *Dialogue only* (D) hides everything but spoken lines. |
-| **Graph** | The story as an old map: start, endings, unreachable passages, conditional and proposed routes. Drag passages to arrange them (saved with the project), search, minimap; click a passage to edit it. |
+| **Import** | Drop Fountain, Final Draft (`.fdx`), Word (`.docx`), plain text, Markdown or Ink files (or paste), choose a conversion mode, or start from a sample. |
+| **Review** | Every passage with its content, provenance (`source` / `transformed` / `generated` / `edited`) and the original source lines side by side. Edit text, choices, conditions, effects, items and variables; approve or reject proposed branches; find & replace, merge duplicate characters, reorder passages. Give characters voices, and record or attach a clip for any line. *Dialogue only* (D) hides everything but spoken lines. **Story settings** shows the story at a glance (words, reading time, choices, endings, spoken minutes and lines per character) and keeps **drafts**. |
+| **Graph** | The story as an old map: start, endings, unreachable passages, conditional and proposed routes. Drag passages to arrange them (saved with the project), search, minimap; click a passage to edit it. *Save map* downloads the whole map as SVG or PNG. |
 | **Ink** | The deterministic generated Ink, compiled live with the pinned inkjs compiler; compile errors are mapped back to passages. |
 | **Playtest** | Play the compiled story, undo choices, toggle inventory to simulate the host game, save/load with story-version checks, hear the dialogue (recorded clips or character voices), and see the automated playthrough report. |
 | **Export** | A playable web page, a Twine file, a recording script (.csv) for voice sessions, or a verified Unity / Unreal package (.zip) with manifest, validation report, ISR, source map, voice clips and the original sources. |
+
+**Drafts** are named copies of a story kept in this browser: keep one before a big change and restore it later
+(restoring can be undone). A draft is also kept automatically before a story is replaced by a new conversion or an opened
+project file, and the Import page lists earlier stories to pick up again. The cover band shows whether the project is
+autosaved, and warns if the browser has run out of room.
 
 Press **?** for keyboard shortcuts. Book sounds (page turns, a bell at endings) and the light/dark theme switch
 are on the cover band.
@@ -170,5 +178,5 @@ tests/               unit, golden-file, compiler, runtime and export tests
 
 ## Not yet supported
 
-DOCX, FDX and PDF import; AI-assisted adaptation (would require explicit consent before sending scripts anywhere);
+PDF import (export the script as Final Draft, Word, Fountain or text instead); AI-assisted adaptation (would require explicit consent before sending scripts anywhere);
 save migration between story versions (incompatible saves are rejected with a clear message instead).
