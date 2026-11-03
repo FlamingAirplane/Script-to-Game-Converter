@@ -102,6 +102,39 @@ for (const [name, type] of [['WebKit', webkit], ['Chromium', chromium]]) {
       await page.reload();
       await page.getByRole('button', { name: /Archive Entrance/ }).waitFor({ timeout: 5000 });
     });
+    await step('a reader’s place carries over to a revised edition of the playable story', async () => {
+      const exportPlayable = async (path) => {
+        await page.getByRole('button', { name: /Export/ }).click();
+        const [dl] = await Promise.all([page.waitForEvent('download'), page.getByRole('button', { name: /Download playable story/ }).click()]);
+        await dl.saveAs(path);
+      };
+      const path = join(mkdtempSync(join(tmpdir(), 'nb-edition-')), 'archive.html');
+      await exportPlayable(path);
+      const reader = await browser.newPage();
+      reader.on('pageerror', (e) => errors.push(`reader: ${e.message}`));
+      await reader.goto(`file://${encodeURI(path)}`);
+      await reader.getByRole('button', { name: 'Begin' }).click();
+      await reader.getByRole('button', { name: 'Search the reading room' }).click();
+      await reader.getByRole('button', { name: 'Lift the loose floorboard' }).waitFor();
+      // Revise the story: the reader's next visit opens the new edition.
+      await page.getByRole('button', { name: /Review/ }).click();
+      await page.locator('.find-panel summary').click();
+      await page.getByLabel('Find text').fill('The archive is locked.');
+      await page.getByLabel('Replace with').fill('The archive is sealed with wax.');
+      await page.getByRole('button', { name: 'Replace all' }).click();
+      await exportPlayable(path);
+      await reader.reload();
+      await reader.getByRole('button', { name: 'Continue reading' }).click();
+      await reader.getByText('You are back where you left off.').waitFor({ timeout: 5000 });
+      await reader.getByText('The archive is sealed with wax.').waitFor();
+      await reader.getByRole('button', { name: 'Lift the loose floorboard' }).waitFor();
+      await reader.getByRole('button', { name: 'Undo' }).click();
+      await reader.getByRole('button', { name: 'Search the reading room' }).waitFor();
+      await reader.close();
+      await page.locator('button[title^="Undo"]').click(); // put the sample text back
+      await page.getByRole('button', { name: /Review/ }).click();
+      await page.getByText('The archive is locked.').first().waitFor();
+    });
     await step('story settings show statistics and keep a draft that can be restored', async () => {
       page.on('dialog', (d) => d.accept());
       await page.getByRole('button', { name: /Review/ }).click();

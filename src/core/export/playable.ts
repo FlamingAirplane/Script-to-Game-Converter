@@ -38,7 +38,7 @@ export function buildPlayableHtml(story: ProcessedStory, inkRuntimeJs: string, a
   }
   const voices = Object.fromEntries(story.project.characters.filter((c) => c.voice).map((c) => [c.id, c.voice]));
   const meta = jsonSafe(
-    JSON.stringify({ title, author: author ?? '', saveKey: `narrative-bridge.play.${id}.${storyVersion(story)}`, voices, hasClips: Object.keys(clips).length > 0 }),
+    JSON.stringify({ title, author: author ?? '', saveKey: `narrative-bridge.play.${id}`, version: storyVersion(story), voices, hasClips: Object.keys(clips).length > 0 }),
   );
   const clipJson = jsonSafe(JSON.stringify(clips));
   log('export').info('Built playable story', { clips: Object.keys(clips).length, voices: Object.keys(voices).length, storyBytes: story.compile.json!.length });
@@ -67,6 +67,7 @@ export function buildPlayableHtml(story: ProcessedStory, inkRuntimeJs: string, a
   </section>
   <section id="reader" class="reader" hidden>
     <header class="running-head"><span id="rh-title"></span><span class="tools"><button id="sounds" class="link" aria-pressed="true">Sounds on</button><button id="voice" class="link" aria-pressed="false">Voices off</button><button id="undo" class="link" disabled>Undo</button><button id="restart" class="link">Start over</button></span></header>
+    <p id="notice" class="notice" role="status" hidden></p>
     <div id="text" class="text" aria-live="polite"></div>
     <nav id="choices" class="choices"></nav>
   </section>
@@ -116,6 +117,7 @@ padding:10px 8px 10px 30px;cursor:pointer}.choice:before{content:'❧';position:
 .choice:hover,.choice:focus-visible{color:var(--pen);background:rgba(96,108,56,.1);outline:none}
 .end{text-align:center;color:var(--rubric);font-style:italic;font-size:22px;margin:30px 0 10px;letter-spacing:.1em}
 .end-actions{text-align:center}
+.notice{font-size:15px;font-style:italic;color:var(--ink2);background:rgba(221,161,94,.16);border-left:2px solid var(--rubric);padding:8px 12px;margin:0 0 18px}
 @media (max-width:600px){body{padding:0;font-size:17px}.book{padding:34px 22px;min-height:100vh;border-radius:0}h1{font-size:32px}}
 `;
 
@@ -130,9 +132,26 @@ const PLAYER_JS = `
   $('rh-title').textContent = meta.title;
   $('author').textContent = meta.author ? 'by ' + meta.author : '';
 
+  // One save per story (not per version), so a revised edition of the story finds the reader's
+  // place. Editions before this kept one key per version: "<saveKey>.<version>".
   function store(get, value) {
     try {
-      if (get) return JSON.parse(localStorage.getItem(meta.saveKey) || 'null');
+      if (get) {
+        var s = JSON.parse(localStorage.getItem(meta.saveKey) || 'null');
+        if (s) return s;
+        for (var i = 0; i < localStorage.length; i++) {
+          var k = localStorage.key(i);
+          if (k && k.indexOf(meta.saveKey + '.') === 0) {
+            s = JSON.parse(localStorage.getItem(k) || 'null');
+            if (s) { s.version = k.slice(meta.saveKey.length + 1); return s; }
+          }
+        }
+        return null;
+      }
+      for (var j = localStorage.length - 1; j >= 0; j--) {
+        var old = localStorage.key(j);
+        if (old && old.indexOf(meta.saveKey + '.') === 0) localStorage.removeItem(old);
+      }
       if (value === null) localStorage.removeItem(meta.saveKey);
       else localStorage.setItem(meta.saveKey, JSON.stringify(value));
     } catch (e) { return null; }
@@ -179,8 +198,9 @@ const PLAYER_JS = `
       speechSynthesis.speak(u);
     } else nextVoice();
   }
+  var replaying = false;
   function speak(newLines) {
-    if (!voiceOn) return;
+    if (!voiceOn || replaying) return;
     newLines.forEach(function (l) { if (l.speaker) queue.push(l); });
     if (!playing) nextVoice();
   }
@@ -269,12 +289,40 @@ const PLAYER_JS = `
     $('undo').disabled = !history.length;
   }
 
-  function save() { store(false, { state: story.state.toJson(), lines: lines, history: history }); }
+  function save() { store(false, { version: meta.version, state: story.state.toJson(), lines: lines, history: history }); }
+
+  // A save from another version of the story: read it again from the start, making the same
+  // choices, so the new version's text and variables apply. Stops at the first choice the new
+  // version no longer offers. Returns true if every choice was found.
+  function replay(saved) {
+    var chosen = (saved.lines || []).filter(function (l) { return l.chosen; }).map(function (l) { return l.chosen; });
+    newStory(); lines = []; history = [];
+    replaying = true;
+    try {
+      continueStory();
+      for (var i = 0; i < chosen.length; i++) {
+        var match = story.currentChoices.filter(function (c) { return c.text === chosen[i]; })[0];
+        if (!match) return false;
+        history.push({ state: story.state.toJson(), lines: lines.slice() });
+        if (history.length > 50) history.shift();
+        story.ChooseChoiceIndex(match.index);
+        lines.push({ chosen: match.text });
+        continueStory();
+      }
+      return true;
+    } finally { replaying = false; }
+  }
+
+  function notice(text) {
+    $('notice').textContent = text || '';
+    $('notice').hidden = !text;
+  }
 
   function choose(index, text) {
     history.push({ state: story.state.toJson(), lines: lines.slice() });
     if (history.length > 50) history.shift();
     stopVoices();
+    notice('');
     pageTurn();
     story.ChooseChoiceIndex(index);
     lines.push({ chosen: text });
@@ -298,6 +346,7 @@ const PLAYER_JS = `
 
   function begin() {
     stopVoices();
+    notice('');
     newStory(); lines = []; history = [];
     continueStory(); render(); save(); open();
   }
@@ -314,9 +363,16 @@ const PLAYER_JS = `
     $('begin').textContent = 'Start over';
     $('resume').onclick = function () {
       try {
-        newStory();
-        story.state.LoadJson(saved.state);
-        lines = saved.lines || []; history = saved.history || [];
+        if (saved.version === meta.version) {
+          newStory();
+          story.state.LoadJson(saved.state);
+          lines = saved.lines || []; history = saved.history || [];
+        } else {
+          notice(replay(saved)
+            ? 'This story has been revised since you last read it. You are back where you left off.'
+            : 'This story has been revised since you last read it. Some of your earlier choices are no longer in it, so you pick up from the last part that still matches.');
+          save();
+        }
         render(); open();
       } catch (e) { begin(); }
     };

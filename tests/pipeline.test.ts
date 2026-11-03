@@ -193,6 +193,16 @@ describe('engine exports', () => {
       expect(manifest.validation.engineSmokeTest).toBe('pending');
     });
   }
+  it('Unity saves record the choices made, so they carry over to a revised story (C# strings stay escaped)', async () => {
+    const s = SAMPLES.find((x) => x.id === 'archive')!;
+    const { project } = await build(s.text, s.fileName, 'structured');
+    const res = await ADAPTERS.unity.export(processProject(project), { engine: 'unity', projectName: 'Locked Archive', engineVersion: ADAPTERS.unity.defaultEngineVersion, integrationRef: 'v1.2.3', includeDemo: true });
+    const file = (name: string) => res.files.find((f) => f.path.endsWith(name))!.content as string;
+    const controller = file('NarrativeController.cs');
+    expect(controller).toContain('choicePath.Add(Story.currentChoices[index].text);');
+    expect(controller).toContain('saveJson.IndexOf("\\"choicePath\\"", StringComparison.Ordinal)');
+    expect(file('NarrativeBridgeEditor.cs')).toContain('save.Replace("\\"storyVersion\\":\\"" + StoryInfo.StoryVersion');
+  });
 });
 
 describe('hashing', () => {

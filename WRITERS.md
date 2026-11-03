@@ -58,7 +58,8 @@ Share → *Add to Home Screen*).
 In the **Export** tab, under *Share without a game engine*:
 
 - **Download playable story** gives you one web page. Anyone can open it on a computer or phone to read and play your
-  story, with no installs. Email it, or put it on any website.
+  story, with no installs. Email it, or put it on any website. If you fix something and send a new copy, readers keep
+  their place: the page finds where they were in the new version (or the nearest point, if you cut that choice).
 - **Download for Twine** gives you a file to open in [Twine](https://twinery.org) (Library → Import), if you'd like to
   keep editing the story there.
 
