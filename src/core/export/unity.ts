@@ -168,8 +168,11 @@ inventory the single source of truth: the controller copies possession into Ink 
 story-driven gains/losses to the authority instead of letting both sides edit independently.
 
 ## Saves
-\`SaveState()\` records \`StoryInfo.StoryVersion\`. \`TryLoadState()\` refuses saves from a different story version
-with a clear message rather than loading invalid state; call \`StartStory()\` to restart the narrative.
+\`SaveState()\` records \`StoryInfo.StoryVersion\` and the text of every choice made. \`TryLoadState()\` loads a save
+from the same version exactly. A save from a different version (after you revise the story) is carried over: the new
+version is played from the start, making the same choices, so its text and variables apply; if a choice no longer exists,
+the player resumes just before it. \`LoadNote\` then describes what happened. Saves without a choice record are refused
+with a clear message; call \`StartStory()\` to restart the narrative.
 `;
 }
 
@@ -242,11 +245,18 @@ namespace NarrativeBridge
         string status = "";
         Vector2 scroll;
 
+        // The text of every choice made since the start, so a save can carry over to a revised story.
+        readonly List<string> choicePath = new List<string>();
+
+        /// <summary>Set by TryLoadState when it carried a save over from another story version; null otherwise.</summary>
+        public string LoadNote { get; private set; }
+
         [Serializable]
         class SaveData
         {
             public string storyVersion;
             public string inkState;
+            public List<string> choicePath;
         }
 
         void Awake()
@@ -282,6 +292,7 @@ namespace NarrativeBridge
                 else Debug.LogWarning("[NarrativeBridge] " + message);
             };
             foreach (var v in StoryInfo.ItemVariables) Story.ObserveVariable(v, OnItemVariableChanged);
+            choicePath.Clear();
             transcript.Clear();
             HasEnded = false;
             status = "";
@@ -293,6 +304,7 @@ namespace NarrativeBridge
         {
             if (Story == null || index < 0 || index >= Story.currentChoices.Count) return;
             transcript.Add(new Line { Speaker = null, Text = "> " + Story.currentChoices[index].text, Tags = new List<string> { "choice" } });
+            choicePath.Add(Story.currentChoices[index].text);
             Story.ChooseChoiceIndex(index);
             StopVoice();
             Advance();
@@ -405,26 +417,68 @@ namespace NarrativeBridge
 
         public string SaveState()
         {
-            return JsonUtility.ToJson(new SaveData { storyVersion = StoryInfo.StoryVersion, inkState = Story.state.ToJson() });
+            return JsonUtility.ToJson(new SaveData { storyVersion = StoryInfo.StoryVersion, inkState = Story.state.ToJson(), choicePath = new List<string>(choicePath) });
         }
 
         public bool TryLoadState(string saveJson, out string error)
         {
             error = null;
+            LoadNote = null;
             SaveData data = null;
             try { data = JsonUtility.FromJson<SaveData>(saveJson); } catch (Exception e) { error = "Save data is corrupt: " + e.Message; return false; }
             if (data == null || string.IsNullOrEmpty(data.inkState)) { error = "Save data is empty."; return false; }
             if (data.storyVersion != StoryInfo.StoryVersion)
             {
-                error = "This save was made with story version " + data.storyVersion + " but the game now has " + StoryInfo.StoryVersion + ". Restart the narrative.";
-                return false;
+                // Saves from before choices were recorded can't be carried over (JsonUtility turns a
+                // missing list into an empty one, so look for the field itself).
+                if (data.choicePath == null || saveJson.IndexOf("\\"choicePath\\"", StringComparison.Ordinal) < 0)
+                {
+                    error = "This save was made with story version " + data.storyVersion + " but the game now has " + StoryInfo.StoryVersion + ". Restart the narrative.";
+                    return false;
+                }
+                ReplayChoices(data.choicePath, data.storyVersion);
+                return true;
             }
             Story.state.LoadJson(data.inkState);
+            choicePath.Clear();
+            if (data.choicePath != null) choicePath.AddRange(data.choicePath);
             transcript.Clear();
             HasEnded = false;
             if (Story.canContinue) Advance();
             else if (Story.currentChoices.Count > 0) ChoicesShown?.Invoke(Story.currentChoices);
             return true;
+        }
+
+        // A save from another version of the story: play the new version from the start, silently,
+        // making the same choices (matched by their text), so its text and variables apply. Stops at
+        // the first choice the new version no longer offers.
+        void ReplayChoices(List<string> path, string savedVersion)
+        {
+            Story.ResetState();
+            choicePath.Clear();
+            transcript.Clear();
+            HasEnded = false;
+            StopVoice();
+            var followed = 0;
+            syncing = true; // the host's inventory is already where the save left it
+            try
+            {
+                foreach (var text in path)
+                {
+                    var before = Story.state.ToJson();
+                    while (Story.canContinue) Story.Continue();
+                    var match = Story.currentChoices.Find(c => c.text == text);
+                    if (match == null) { Story.state.LoadJson(before); break; }
+                    Story.ChooseChoiceIndex(match.index);
+                    choicePath.Add(text);
+                    followed++;
+                }
+            }
+            finally { syncing = false; }
+            LoadNote = followed == path.Count
+                ? "Carried this save over from story version " + savedVersion + ": all " + path.Count + " choices replayed."
+                : "Carried this save over from story version " + savedVersion + ": " + followed + " of " + path.Count + " choices still exist, so it resumes after the last one that does.";
+            Advance();
         }
 
         void ReportError(string message)
@@ -462,7 +516,7 @@ namespace NarrativeBridge
             if (Story != null && GUILayout.Button("Save")) { PlayerPrefs.SetString(SaveKey, SaveState()); status = "Saved."; }
             if (Story != null && GUILayout.Button("Load"))
             {
-                status = TryLoadState(PlayerPrefs.GetString(SaveKey, ""), out var err) ? "Loaded." : err;
+                status = TryLoadState(PlayerPrefs.GetString(SaveKey, ""), out var err) ? LoadNote ?? "Loaded." : err;
             }
             GUILayout.EndHorizontal();
             if (!string.IsNullOrEmpty(status)) GUILayout.Label(status);
@@ -593,9 +647,33 @@ namespace NarrativeBridge.EditorTools
                 if (Resources.Load<AudioClip>("NarrativeBridgeAudio/" + (dot > 0 ? file.Substring(0, dot) : file)) == null)
                     errors.Add("Voice clip did not import: " + file);
             }
-            log = "[NarrativeBridge] Smoke test (" + source + "): " + clipsHeard.Count + " voice clip(s) checked, " + completed + "/" + runs + " playthroughs reached an ending, " + errors.Count + " runtime errors." +
+            var carry = SaveCarryOverCheck(errors);
+            log = "[NarrativeBridge] Smoke test (" + source + "): " + clipsHeard.Count + " voice clip(s) checked, " + completed + "/" + runs + " playthroughs reached an ending, " + carry + ", " + errors.Count + " runtime errors." +
                   (errors.Count > 0 ? "\\n" + string.Join("\\n", errors) : "");
             return errors.Count == 0 && completed > 0;
+        }
+
+        /// Saves part-way through, then loads that save as if it came from an earlier story version:
+        /// the controller must replay the choices and land on the same choices as an exact load.
+        static string SaveCarryOverCheck(List<string> errors)
+        {
+            var go = new GameObject("NarrativeBridge smoke test");
+            try
+            {
+                var c = go.AddComponent<NarrativeController>();
+                c.StartStory();
+                if (c.Story == null) { errors.Add("Save carry-over: the controller could not start the story."); return "save carry-over not run"; }
+                for (int i = 0; i < 3 && c.Story.currentChoices.Count > 0; i++) c.Choose(0);
+                var expected = string.Join(" | ", c.Story.currentChoices.ConvertAll(x => x.text));
+                var save = c.SaveState();
+                var older = save.Replace("\\"storyVersion\\":\\"" + StoryInfo.StoryVersion + "\\"", "\\"storyVersion\\":\\"earlier\\"");
+                c.StartStory();
+                if (!c.TryLoadState(older, out var err)) { errors.Add("Save carry-over: " + err); return "save carry-over failed"; }
+                var got = string.Join(" | ", c.Story.currentChoices.ConvertAll(x => x.text));
+                if (got != expected || c.LoadNote == null) { errors.Add("Save carry-over: expected choices [" + expected + "] but got [" + got + "]"); return "save carry-over failed"; }
+                return "save carry-over passed";
+            }
+            finally { UnityEngine.Object.DestroyImmediate(go); }
         }
     }
 }

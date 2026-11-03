@@ -9,7 +9,7 @@ import type { SourceFormat } from '../isr';
 
 export interface ConvertedInput extends SourceInput {
   format: SourceFormat;
-  convertedFrom: 'fdx' | 'docx';
+  convertedFrom: 'fdx' | 'docx' | 'pdf';
 }
 
 const ENTITIES: Record<string, string> = { amp: '&', lt: '<', gt: '>', quot: '"', apos: "'", nbsp: ' ' };
@@ -24,11 +24,11 @@ export function decodeXml(s: string): string {
   });
 }
 
-const SCENE_START = /^(?:INT|EXT|EST|INT\.?\/EXT|I\/E)[.\s]/i;
+export const SCENE_START = /^(?:INT|EXT|EST|INT\.?\/EXT|I\/E)[.\s]/i;
 const MARKER_START = /^(?:@[a-z]|->|[*+-]\s*[[{])/;
 
 /** An action paragraph is forced with "!" whenever Fountain would otherwise read it as something else. */
-function fountainAction(text: string): string {
+export function fountainAction(text: string): string {
   const t = text.trim();
   if (!t) return '';
   const caps = /[A-Z]/.test(t) && t === t.toUpperCase() && t.length < 60;
@@ -36,7 +36,7 @@ function fountainAction(text: string): string {
   return caps || special ? t.split('\n').map((l) => `!${l}`).join('\n') : t;
 }
 
-function block(lines: string[], text: string) {
+export function block(lines: string[], text: string) {
   if (lines.length && lines[lines.length - 1] !== '') lines.push('');
   lines.push(text);
 }
@@ -233,8 +233,15 @@ export async function prepareInput(fileName: string, data: string | Uint8Array |
     const { text, format } = await docxToText(data);
     return { fileName, text, format, convertedFrom: 'docx' } satisfies ConvertedInput;
   }
+  if (lower.endsWith('.pdf')) {
+    if (typeof data === 'string') throw new Error('PDF files must be read as binary data.');
+    // Loaded on demand: pdf.js is large and only PDF imports need it.
+    const { pdfToText } = await import('./pdf');
+    const { text, format } = await pdfToText(data);
+    return { fileName, text, format, convertedFrom: 'pdf' } satisfies ConvertedInput;
+  }
   return { fileName, text: typeof data === 'string' ? data : new TextDecoder().decode(data) };
 }
 
-export const BINARY_EXTENSIONS = ['.docx'];
-export const CONVERTED_EXTENSIONS = ['.fdx', '.docx'];
+export const BINARY_EXTENSIONS = ['.docx', '.pdf'];
+export const CONVERTED_EXTENSIONS = ['.fdx', '.docx', '.pdf'];

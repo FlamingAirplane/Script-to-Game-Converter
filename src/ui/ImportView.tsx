@@ -6,6 +6,7 @@ import { SUPPORTED_EXTENSIONS } from '../core/parsing/registry';
 
 const ACCEPTED = [...SUPPORTED_EXTENSIONS, ...CONVERTED_EXTENSIONS];
 import { SAMPLES } from '../samples';
+import { DraftShelf } from './Drafts';
 import { GettingStarted } from './GettingStarted';
 import { Logo } from './Logo';
 
@@ -19,7 +20,15 @@ const MODES: { id: ConversionMode; name: string; desc: string }[] = [
   { id: 'structured', name: 'Structured import', desc: 'Interpret explicit @passage, choice, @item and @var markers.' },
 ];
 
-export function ImportView({ onConvert, busy }: { onConvert: (inputs: SourceInput[], mode: ConversionMode, title?: string) => void; busy: boolean }) {
+export function ImportView({
+  onConvert,
+  busy,
+  onRestoreDraft,
+}: {
+  onConvert: (inputs: SourceInput[], mode: ConversionMode, title?: string) => void;
+  busy: boolean;
+  onRestoreDraft: (id: number) => void;
+}) {
   const [files, setFiles] = useState<SourceInput[]>([]);
   const [paste, setPaste] = useState('');
   const [pasteName, setPasteName] = useState('script.fountain');
@@ -35,8 +44,8 @@ export function ImportView({ onConvert, busy }: { onConvert: (inputs: SourceInpu
     const next: SourceInput[] = [];
     const problems: string[] = [];
     for (const f of Array.from(list)) {
-      if (/\.(pdf|doc)$/i.test(f.name)) {
-        problems.push(`${f.name}: ${/\.doc$/i.test(f.name) ? 'old .doc files can’t be read — re-save it as .docx in Word.' : 'PDF isn’t supported yet — export the script as Final Draft, Word, Fountain or plain text.'}`);
+      if (/\.doc$/i.test(f.name)) {
+        problems.push(`${f.name}: old .doc files can’t be read — re-save it as .docx in Word.`);
         continue;
       }
       try {
@@ -103,7 +112,7 @@ export function ImportView({ onConvert, busy }: { onConvert: (inputs: SourceInpu
             tabIndex={0}
           >
             <strong>Drop files here</strong> or click to browse
-            <span className="muted small">Final Draft, Word, Fountain, Markdown, Ink or plain text</span>
+            <span className="muted small">Final Draft, Word, PDF, Fountain, Markdown, Ink or plain text</span>
             <input ref={input} type="file" multiple hidden accept={[...ACCEPTED, '.text'].join(',')} onChange={(e) => addFiles(e.target.files)} />
           </div>
           {error && <p className="error-text">{error}</p>}
@@ -166,6 +175,8 @@ export function ImportView({ onConvert, busy }: { onConvert: (inputs: SourceInpu
           ))}
         </div>
       </section>
+
+      <DraftShelf onRestore={onRestoreDraft} />
 
       <details className="card markers-help">
         <summary>Structured marker reference</summary>

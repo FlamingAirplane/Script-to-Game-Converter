@@ -15,11 +15,14 @@ That's it. It works without an internet connection, and your scripts are never u
 - A **Final Draft** script (`.fdx`), or
 - A **Word** document (`.docx`). Screenplays that use Word's screenplay styles keep their scene headings, characters and
   dialogue; other documents become one passage per heading, or
+- A **PDF** (`.pdf`). A screenplay in standard layout keeps its scene headings, characters, dialogue and transitions
+  (page numbers and MORE / CONT'D are tidied away); a novel or story becomes one passage per chapter heading, or
 - A **Fountain** screenplay (`.fountain`) or a **plain-text** export (`.txt`), or
 - A **Markdown** file (`.md`), or just paste your text in.
 
-PDF and old `.doc` files aren't supported. Save as `.fdx`, `.docx` or plain text first. Bold, italics and fonts aren't
-kept; all of your words are.
+Scanned PDFs (pictures of pages) and old `.doc` files can't be read. Export the script from your writing app, or save as
+`.docx`, instead. If you have both, an `.fdx` or `.docx` is more exact than a PDF. Bold, italics and fonts aren't kept;
+all of your words are.
 
 ## Hearing your dialogue
 
@@ -37,13 +40,26 @@ Your project is remembered in the browser you used. To keep a copy you can reope
 click **Save project** (top right). This downloads a `.nbproj.json` file. Use **Open project** to load it again.
 
 If you clear your browser history or use a private window, the remembered copy is lost, so save a project file you want to keep.
+The top of the page says *kept in this browser* while autosave works, and warns you if the browser runs out of room.
+
+**Drafts.** Before a big rewrite, open **Story settings** (top of the Review list), name a draft and click **Keep a draft**.
+**Restore** brings it back, and the undo button takes you back again if you change your mind. Converting a new script
+keeps the old story as a draft automatically; find it on the Import page under *Or pick up earlier work*.
+
+**At a glance** (also in Story settings) shows the word count, reading time, choices, endings, and how many lines each
+character speaks, which helps when you plan a voice recording session.
+
+**Using the website offline.** After you have opened the website once, it also opens without an internet connection.
+Your browser may offer to install it as an app (in Chrome or Edge, the install icon in the address bar; on iPhone or iPad,
+Share → *Add to Home Screen*).
 
 ## Sharing your story
 
 In the **Export** tab, under *Share without a game engine*:
 
 - **Download playable story** gives you one web page. Anyone can open it on a computer or phone to read and play your
-  story, with no installs. Email it, or put it on any website.
+  story, with no installs. Email it, or put it on any website. If you fix something and send a new copy, readers keep
+  their place: the page finds where they were in the new version (or the nearest point, if you cut that choice).
 - **Download for Twine** gives you a file to open in [Twine](https://twinery.org) (Library → Import), if you'd like to
   keep editing the story there.
 

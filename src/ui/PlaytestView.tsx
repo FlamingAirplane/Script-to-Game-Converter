@@ -32,6 +32,45 @@ interface Snapshot {
   segment: Segment | null;
 }
 
+/** Reads on until the next choice (or the end), appending the new lines to `prefix`. */
+function readOn(s: Story, prefix: Line[]): Line[] {
+  const out = [...prefix];
+  while (s.canContinue) {
+    const raw = (s.Continue() ?? '').trim();
+    if (!raw) continue;
+    const tags = s.currentTags ?? [];
+    const speakerTag = tags.find((t) => t.startsWith('speaker:'));
+    if (speakerTag) {
+      const i = raw.indexOf(': ');
+      out.push({ speaker: i > 0 ? raw.slice(0, i) : speakerTag.slice(8), text: i > 0 ? raw.slice(i + 2) : raw, tags, kind: 'text' });
+    } else out.push({ text: raw, tags, kind: 'text' });
+  }
+  return out;
+}
+
+/**
+ * Brings a save from another version of the story forward: plays the new version from the start
+ * making the same choices (by their text), so its text and variables apply. Stops at the first
+ * choice the new version no longer offers. The playable story export does the same for readers.
+ */
+function replayChoices(s: Story, chosen: string[]): { lines: Line[]; history: Snapshot[]; segment: Segment; followed: number } {
+  let segment: Segment = { state: s.state.toJson(), prefix: [], overrides: {} };
+  let lines = readOn(s, []);
+  const history: Snapshot[] = [];
+  let followed = 0;
+  for (const text of chosen) {
+    const c = s.currentChoices.find((x) => x.text === text);
+    if (!c) break;
+    history.push({ state: s.state.toJson(), lines, segment });
+    s.ChooseChoiceIndex(c.index);
+    const prefix: Line[] = [...lines, { text, tags: [], kind: 'choice' }];
+    segment = { state: s.state.toJson(), prefix, overrides: {} };
+    lines = readOn(s, prefix);
+    followed++;
+  }
+  return { lines, history, segment, followed };
+}
+
 export function PlaytestView({
   processed,
   onOpen,
@@ -50,7 +89,23 @@ export function PlaytestView({
   const [choices, setChoices] = useState<{ text: string; index: number }[]>([]);
   const [vars, setVars] = useState<Record<string, unknown>>({});
   const [history, setHistory] = useState<Snapshot[]>([]);
-  const [slot, setSlot] = useState<{ version: string; state: string; lines: Line[] } | null>(null);
+  // The save slot is kept per story, so it survives going to Review to edit and coming back.
+  const slotKey = `narrative-bridge.playtest-save.${processed.project.project.id}`;
+  const [slot, setSlotState] = useState<{ version: string; state: string; lines: Line[] } | null>(() => {
+    try {
+      return JSON.parse(localStorage.getItem(slotKey) ?? 'null');
+    } catch {
+      return null;
+    }
+  });
+  const setSlot = (v: { version: string; state: string; lines: Line[] }) => {
+    setSlotState(v);
+    try {
+      localStorage.setItem(slotKey, JSON.stringify(v));
+    } catch {
+      /* kept for this visit only */
+    }
+  };
   const [notice, setNotice] = useState('');
   const [errors, setErrors] = useState<string[]>([]);
   const [where, setWhere] = useState('');
@@ -101,17 +156,7 @@ export function PlaytestView({
       const s = story.current!;
       segment.current = { state: s.state.toJson(), prefix, overrides };
       for (const [n, v] of Object.entries(overrides)) s.variablesState.$(n, v);
-      const out = [...prefix];
-      while (s.canContinue) {
-        const raw = (s.Continue() ?? '').trim();
-        if (!raw) continue;
-        const tags = s.currentTags ?? [];
-        const speakerTag = tags.find((t) => t.startsWith('speaker:'));
-        if (speakerTag) {
-          const i = raw.indexOf(': ');
-          out.push({ speaker: i > 0 ? raw.slice(0, i) : speakerTag.slice(8), text: i > 0 ? raw.slice(i + 2) : raw, tags, kind: 'text' });
-        } else out.push({ text: raw, tags, kind: 'text' });
-      }
+      const out = readOn(s, prefix);
       setLines(out);
       speakRef.current(out.slice(prefix.length));
       setChoices(s.currentChoices.map((c) => ({ text: c.text, index: c.index })));
@@ -121,10 +166,9 @@ export function PlaytestView({
     [readVars],
   );
 
-  const restart = useCallback(() => {
-    voiceQueue.current.stop();
-    if (!json) return;
-    const s = new Story(json);
+  /** A fresh story whose runtime errors are listed in the side panel. */
+  const freshStory = useCallback(() => {
+    const s = new Story(json!);
     const errs: string[] = [];
     s.onError = (m: string) => {
       errs.push(m);
@@ -132,10 +176,17 @@ export function PlaytestView({
     };
     story.current = s;
     setErrors([]);
+    return s;
+  }, [json]);
+
+  const restart = useCallback(() => {
+    voiceQueue.current.stop();
+    if (!json) return;
+    freshStory();
     setHistory([]);
     setNotice('');
     advance([]);
-  }, [json, advance]);
+  }, [json, freshStory, advance]);
 
   useEffect(() => {
     restart();
@@ -350,8 +401,27 @@ export function PlaytestView({
               disabled={!slot}
               onClick={() => {
                 if (!slot) return;
+                voiceQueue.current.stop();
                 if (slot.version !== version) {
-                  setNotice(`Save rejected: it was made with story version ${slot.version}, the story is now ${version}. Restart instead of loading invalid state.`);
+                  const chosen = slot.lines.filter((l) => l.kind === 'choice').map((l) => l.text);
+                  const s = freshStory();
+                  const r = replayChoices(s, chosen);
+                  segment.current = r.segment;
+                  setHistory(r.history);
+                  setLines(r.lines);
+                  setChoices(s.currentChoices.map((c) => ({ text: c.text, index: c.index })));
+                  setWhere((s.currentChoices[0]?.sourcePath ?? '').split('.')[0]);
+                  readVars();
+                  const n = (k: number) => `${k} choice${k === 1 ? '' : 's'}`;
+                  setNotice(
+                    `The story changed since this save (version ${slot.version} → ${version}). ` +
+                      (r.followed === chosen.length
+                        ? `Replayed ${chosen.length === 1 ? 'its choice' : `all ${n(chosen.length)}`} in the new version.`
+                        : r.followed
+                          ? `${r.followed} of ${n(chosen.length)} still exist, so it resumes after the last one that does.`
+                          : `None of its ${n(chosen.length)} exist any more, so it starts from the beginning.`) +
+                      ' Readers’ saves of the playable story carry over the same way.',
+                  );
                   return;
                 }
                 story.current!.state.LoadJson(slot.state);
@@ -364,7 +434,7 @@ export function PlaytestView({
               Load
             </button>
           </div>
-          <p className="muted small">Edit the story and try loading: saves from another story version are refused.</p>
+          <p className="muted small">Edit the story and try loading: a save from another version replays its choices in the new version, as readers' saves do.</p>
         </section>
         {processed.smokePending && (
           <section>

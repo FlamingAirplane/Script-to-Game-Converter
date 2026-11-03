@@ -13,7 +13,9 @@ One source-processing pipeline → one canonical story model (ISR) → one gener
 Everything runs locally. Scripts never leave your machine.
 
 **Try it online:** https://flamingairplane.github.io/Script-to-Game-Converter/ (the page runs entirely in your browser;
-nothing is uploaded). The site also offers the offline single-file edition for writers. It is rebuilt and redeployed by
+nothing is uploaded). After one visit it also works with no connection, and browsers offer to install it as an app
+(see [`scripts/offline-site.ts`](scripts/offline-site.ts)); when a new version is deployed, the app offers to reload into it.
+The site also offers the offline single-file edition for writers. It is rebuilt and redeployed by
 [`.github/workflows/pages.yml`](.github/workflows/pages.yml) on every push to `main`.
 
 ## Quick start
@@ -30,7 +32,7 @@ npm test           # unit, golden-file, compiler, runtime and export tests
 npm run build:single   # → release/Narrative-Bridge.html
 ```
 
-This produces one self-contained HTML file (~0.6 MB) with all scripts and styles inlined. Writers double-click it to run the
+This produces one self-contained HTML file (~3 MB, most of it the PDF reader) with all scripts and styles inlined. Writers double-click it to run the
 whole app offline in any modern browser. Nothing is installed and nothing is uploaded. Send it together with
 [WRITERS.md](WRITERS.md), or attach it to a GitHub release. The `release/` folder is git-ignored, so rebuild the file for each release.
 
@@ -55,18 +57,24 @@ exports a Unity zip and a playable story, then plays that story):
 npx playwright-core install webkit chromium   # once
 npm run test:e2e
 npm run test:overflow   # no chapter scrolls sideways at 360–1920 px (WIDTHS=… to choose)
+npm run test:offline    # the website opens, converts, plays and exports offline after one visit
 ```
 
 ## The workflow (web app)
 
 | Tab | What it does |
 | --- | --- |
-| **Import** | Drop `.fountain`, `.txt`, `.md` or `.ink` files (or paste), choose a conversion mode, or start from a sample. |
-| **Review** | Every passage with its content, provenance (`source` / `transformed` / `generated` / `edited`) and the original source lines side by side. Edit text, choices, conditions, effects, items and variables; approve or reject proposed branches; find & replace, merge duplicate characters, reorder passages. Give characters voices, and record or attach a clip for any line. *Dialogue only* (D) hides everything but spoken lines. |
-| **Graph** | The story as an old map: start, endings, unreachable passages, conditional and proposed routes. Drag passages to arrange them (saved with the project), search, minimap; click a passage to edit it. |
+| **Import** | Drop Fountain, Final Draft (`.fdx`), Word (`.docx`), PDF, plain text, Markdown or Ink files (or paste), choose a conversion mode, or start from a sample. |
+| **Review** | Every passage with its content, provenance (`source` / `transformed` / `generated` / `edited`) and the original source lines side by side. Edit text, choices, conditions, effects, items and variables; approve or reject proposed branches; find & replace, merge duplicate characters, reorder passages. Give characters voices, and record or attach a clip for any line. *Dialogue only* (D) hides everything but spoken lines. **Story settings** shows the story at a glance (words, reading time, choices, endings, spoken minutes and lines per character) and keeps **drafts**. |
+| **Graph** | The story as an old map: start, endings, unreachable passages, conditional and proposed routes. Drag passages to arrange them (saved with the project), search, minimap; click a passage to edit it. *Save map* downloads the whole map as SVG or PNG. |
 | **Ink** | The deterministic generated Ink, compiled live with the pinned inkjs compiler; compile errors are mapped back to passages. |
-| **Playtest** | Play the compiled story, undo choices, toggle inventory to simulate the host game, save/load with story-version checks, hear the dialogue (recorded clips or character voices), and see the automated playthrough report. |
+| **Playtest** | Play the compiled story, undo choices, toggle inventory to simulate the host game, save/load (a save from an earlier version of the story carries over, as readers' saves do), hear the dialogue (recorded clips or character voices), and see the automated playthrough report. |
 | **Export** | A playable web page, a Twine file, a recording script (.csv) for voice sessions, or a verified Unity / Unreal package (.zip) with manifest, validation report, ISR, source map, voice clips and the original sources. |
+
+**Drafts** are named copies of a story kept in this browser: keep one before a big change and restore it later
+(restoring can be undone). A draft is also kept automatically before a story is replaced by a new conversion or an opened
+project file, and the Import page lists earlier stories to pick up again. The cover band shows whether the project is
+autosaved, and warns if the browser has run out of room.
 
 Press **?** for keyboard shortcuts. Book sounds (page turns, a bell at endings) and the light/dark theme switch
 are on the cover band.
@@ -131,7 +139,9 @@ Fatal errors block export. The manifest records engine import and in-engine smok
 
 - **Playable story** (Export → *Share without a game engine*, or `--engine web`): one self-contained HTML page with the
   Ink runtime, the compiled story and a book-style reader. It works offline and on phones, saves each reader's progress in
-  their browser, and offers undo and start over. Saves are tied to the story version.
+  their browser, and offers undo and start over. When you send readers a revised edition, their place carries over: the
+reader replays their earlier choices (matched by text) in the new edition, so its text and variables apply, and if a
+choice was cut they resume just before it.
 - **Twine** (`--engine twine`): a Twee 3 file for SugarCube 2.37, generated from the story model. Items become
   `$has_<item>` variables set in `StoryInit`, conditions wrap links in `<<if>>`, effects become link setters, once-only
   choices track `$once_<choice>` flags, and the Ink fallback becomes a conditional "Continue" link. Prose is wrapped in
@@ -142,7 +152,7 @@ Fatal errors block export. The manifest records engine import and in-engine smok
 **Unity** (2022.3 LTS+): `Packages/manifest.json` references Ink Unity Integration `2.0.0` as a UPM git dependency. On first open the
 editor creates a `NarrativeDemo` scene whose `NarrativeController` uses the `InkFile` the integration imports from
 `MainStory.ink`. Press Play. The controller handles text, choices, approved variables, a host-authoritative inventory bridge
-(`IInventoryAuthority`) and version-checked save/load. Headless check:
+(`IInventoryAuthority`) and save/load that carries saves over to revised story versions (checked in the engine by the smoke test). Headless check:
 `Unity -batchmode -projectPath <dir> -executeMethod NarrativeBridge.EditorTools.NarrativeBridgeEditor.RunSmokeTestBatch`.
 
 **Unreal** (5.7+): a C++ project with Inkpot enabled, `Scripts/setup_inkpot.sh|ps1` to clone Inkpot at the pinned ref,
@@ -170,5 +180,6 @@ tests/               unit, golden-file, compiler, runtime and export tests
 
 ## Not yet supported
 
-DOCX, FDX and PDF import; AI-assisted adaptation (would require explicit consent before sending scripts anywhere);
-save migration between story versions (incompatible saves are rejected with a clear message instead).
+scanned PDFs (PDF import reads the text layer) and dual dialogue in PDFs; AI-assisted adaptation (would require explicit
+consent before sending scripts anywhere); carrying Unreal saves over to a revised story (the Unreal component still asks
+you to restart the narrative when the story version differs).

@@ -174,6 +174,9 @@ h3 { font-size: 12.5px; font-variant: small-caps; text-transform: lowercase; let
 .state-Succeeded { color: #c3cf8f; border-color: rgba(195, 207, 143, 0.5); }
 .state-Failed { color: #f3a77f; border-color: rgba(243, 167, 127, 0.5); }
 .state-ReviewRequired { color: #e0c6ee; border-color: rgba(224, 198, 238, 0.5); }
+.autosave { font-size: 12px; font-style: italic; color: rgba(236, 227, 189, 0.7); white-space: nowrap; }
+.autosave.failed { color: #f3a77f; font-style: normal; }
+@media (max-width: 900px) { .autosave:not(.failed) { display: none; } }
 .topbar .btn.ghost { color: #ece3bd; }
 .topbar .btn.ghost:hover:not(:disabled) { border-color: rgba(221, 161, 94, 0.45); background: transparent; }
 
@@ -712,6 +715,13 @@ input[type='checkbox'], input[type='radio'] { accent-color: var(--ink); }
 .ex-libris-title { font-size: 22px; font-style: italic; }
 .ex-libris-by { color: var(--ink-2); }
 .ex-libris-meta { font-size: 12.5px; color: var(--faded); font-variant: small-caps; text-transform: lowercase; letter-spacing: 0.1em; margin-top: 4px; }
+.glance { margin: 6px 0 18px; }
+.glance-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 150px), 1fr)); gap: 10px 18px; margin: 0 0 12px; }
+.glance-grid > div { border-left: 2px solid var(--rule-2); padding: 2px 0 2px 10px; }
+.glance-grid dt { font-size: 12px; color: var(--faded); font-variant: small-caps; text-transform: lowercase; letter-spacing: 0.1em; }
+.glance-grid dd { margin: 2px 0 0; font-size: 17px; }
+.glance-cast caption { text-align: left; caption-side: bottom; padding-top: 4px; }
+.glance-cast td:not(:first-child), .glance-cast th:not(:first-child) { text-align: right; font-variant-numeric: tabular-nums; }
 
 /* A brass paper clip holding the errata slip. */
 .diagnostics { position: relative; }
@@ -895,3 +905,17 @@ p code, li code, .muted code { overflow-wrap: anywhere; }
 .then label { flex: 1 1 240px; min-width: 0; }
 .then select { width: 100%; }
 .editor .row { flex-wrap: wrap; }
+
+/* "A new edition is ready" notice from the offline copy (src/ui/OfflineUpdate.tsx). */
+.update-toast { position: fixed; left: 50%; bottom: 18px; transform: translateX(-50%); z-index: 50; display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 10px; max-width: calc(100vw - 32px); padding: 10px 14px; background: var(--paper); color: var(--ink); border: 1px solid var(--rule-2); border-radius: 3px; box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3); font-style: italic; }
+
+/* Drafts (src/ui/Drafts.tsx): kept copies of a story, on Story settings and the Import page. */
+.drafts { margin: 6px 0 18px; }
+.draft-keep { flex-wrap: wrap; gap: 8px; margin: 8px 0; }
+.draft-keep .input { flex: 1 1 260px; min-width: 0; }
+.draft-list { list-style: none; margin: 8px 0 0; padding: 0; }
+.draft { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 2px 12px; padding: 8px 0; border-bottom: 1px dotted var(--rule-2); }
+.draft-name { overflow-wrap: anywhere; }
+.draft-meta { grid-column: 1; overflow-wrap: anywhere; }
+.draft-actions { grid-column: 2; grid-row: 1 / span 2; align-self: center; display: flex; gap: 6px; }
+section.drafts > h2 { margin-top: 26px; }

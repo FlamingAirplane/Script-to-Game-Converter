@@ -28,10 +28,10 @@ export interface SourceInput {
   text: string;
   /** Set when the text was converted from another format (see parsing/convert.ts); skips detection. */
   format?: SourceFormat;
-  convertedFrom?: 'fdx' | 'docx';
+  convertedFrom?: 'fdx' | 'docx' | 'pdf';
 }
 
-const CONVERTED_LABEL = { fdx: 'Final Draft', docx: 'Word' } as const;
+const CONVERTED_LABEL = { fdx: 'Final Draft', docx: 'Word', pdf: 'PDF' } as const;
 
 export interface BuildOptions {
   mode: ConversionMode;

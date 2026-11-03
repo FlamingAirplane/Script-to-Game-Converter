@@ -102,12 +102,84 @@ for (const [name, type] of [['WebKit', webkit], ['Chromium', chromium]]) {
       await page.reload();
       await page.getByRole('button', { name: /Archive Entrance/ }).waitFor({ timeout: 5000 });
     });
+    await step('a reader’s place carries over to a revised edition of the playable story', async () => {
+      const exportPlayable = async (path) => {
+        await page.getByRole('button', { name: /Export/ }).click();
+        const [dl] = await Promise.all([page.waitForEvent('download'), page.getByRole('button', { name: /Download playable story/ }).click()]);
+        await dl.saveAs(path);
+      };
+      const path = join(mkdtempSync(join(tmpdir(), 'nb-edition-')), 'archive.html');
+      await exportPlayable(path);
+      const reader = await browser.newPage();
+      reader.on('pageerror', (e) => errors.push(`reader: ${e.message}`));
+      await reader.goto(`file://${encodeURI(path)}`);
+      await reader.getByRole('button', { name: 'Begin' }).click();
+      await reader.getByRole('button', { name: 'Search the reading room' }).click();
+      await reader.getByRole('button', { name: 'Lift the loose floorboard' }).waitFor();
+      // Revise the story: the reader's next visit opens the new edition.
+      await page.getByRole('button', { name: /Review/ }).click();
+      await page.locator('.find-panel summary').click();
+      await page.getByLabel('Find text').fill('The archive is locked.');
+      await page.getByLabel('Replace with').fill('The archive is sealed with wax.');
+      await page.getByRole('button', { name: 'Replace all' }).click();
+      await exportPlayable(path);
+      await reader.reload();
+      await reader.getByRole('button', { name: 'Continue reading' }).click();
+      await reader.getByText('You are back where you left off.').waitFor({ timeout: 5000 });
+      await reader.getByText('The archive is sealed with wax.').waitFor();
+      await reader.getByRole('button', { name: 'Lift the loose floorboard' }).waitFor();
+      await reader.getByRole('button', { name: 'Undo' }).click();
+      await reader.getByRole('button', { name: 'Search the reading room' }).waitFor();
+      await reader.close();
+      await page.locator('button[title^="Undo"]').click(); // put the sample text back
+      await page.getByRole('button', { name: /Review/ }).click();
+      await page.getByText('The archive is locked.').first().waitFor();
+    });
+    await step('story settings show statistics and keep a draft that can be restored', async () => {
+      page.on('dialog', (d) => d.accept());
+      await page.getByRole('button', { name: /Review/ }).click();
+      await page.locator('.story-entry').click();
+      await page.getByRole('heading', { name: 'At a glance' }).waitFor();
+      if (!/MIRA/.test(await page.locator('.glance-cast').innerText())) throw new Error('lines per character missing');
+      await page.getByLabel('Draft name').fill('First pass');
+      await page.getByRole('button', { name: 'Keep a draft' }).click();
+      await page.locator('.draft', { hasText: 'First pass' }).waitFor({ timeout: 5000 });
+      const title = page.locator('.settings-grid label', { hasText: 'Title' }).locator('input');
+      await title.fill('Renamed Archive');
+      await page.locator('.project-name', { hasText: 'Renamed Archive' }).waitFor();
+      await page.locator('.draft', { hasText: 'First pass' }).getByRole('button', { name: 'Restore' }).click();
+      await page.locator('.project-name', { hasText: 'The Locked Archive' }).waitFor({ timeout: 5000 });
+      await page.locator('.draft', { hasText: 'Before restoring' }).waitFor({ timeout: 5000 });
+    });
+    await step('saves the story map as SVG and PNG', async () => {
+      await page.getByRole('button', { name: /Graph/ }).click();
+      const [svgDl] = await Promise.all([page.waitForEvent('download'), page.getByRole('button', { name: 'Save map' }).click()]);
+      const svg = readFileSync(await svgDl.path(), 'utf8');
+      if (!/^<\?xml[\s\S]*<svg[\s\S]*A Map of The Locked Archive[\s\S]*Archive Entrance/.test(svg)) throw new Error('map SVG is missing its title or passages');
+      if (/class="/.test(svg)) throw new Error('map SVG still depends on the app stylesheet');
+      const [pngDl] = await Promise.all([page.waitForEvent('download'), page.getByRole('button', { name: 'PNG' }).click()]);
+      const png = readFileSync(await pngDl.path());
+      if (png.subarray(1, 4).toString() !== 'PNG' || png.length < 5000) throw new Error('map PNG is empty or invalid');
+    });
     await step('imports a Final Draft (.fdx) file through the file picker', async () => {
       await page.getByRole('button', { name: /Import/ }).first().click();
       await page.locator('.dropzone input[type=file]').setInputFiles(fileURLToPath(new URL('../fixtures/archive.fdx', import.meta.url)));
       await page.getByText('archive.fdx').waitFor({ timeout: 5000 });
       await page.getByRole('button', { name: /^Convert/ }).click();
       await page.locator('.passage-item', { hasText: 'Cliff Path' }).waitFor({ timeout: 5000 });
+    });
+    await step('imports a screenplay PDF', async () => {
+      await page.getByRole('button', { name: /Import/ }).first().click();
+      await page.locator('.dropzone input[type=file]').setInputFiles(fileURLToPath(new URL('../fixtures/lighthouse.pdf', import.meta.url)));
+      await page.getByText('lighthouse.pdf').waitFor({ timeout: 15000 });
+      await page.getByRole('button', { name: /^Convert/ }).click();
+      await page.locator('.passage-item', { hasText: /lamp room/i }).waitFor({ timeout: 10000 });
+      await page.locator('.project-name', { hasText: 'THE LIGHTHOUSE KEEPER' }).waitFor();
+    });
+    await step('the replaced story waits on the Import page as earlier work', async () => {
+      await page.getByRole('button', { name: /Import/ }).first().click();
+      await page.locator('.drafts .draft', { hasText: 'The Locked Archive' }).waitFor({ timeout: 5000 });
+      await page.getByRole('button', { name: /Review/ }).click();
     });
     await step('Logbook shows page and worker entries, and its download has no story text', async () => {
       await page.locator('body').click({ position: { x: 5, y: 5 } });

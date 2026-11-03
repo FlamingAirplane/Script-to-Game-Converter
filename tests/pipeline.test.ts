@@ -1,3 +1,4 @@
+import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import { reviewAll } from '../src/core/adapt';
 import { analyze } from '../src/core/analyzer';
@@ -9,6 +10,7 @@ import { fountainParser } from '../src/core/parsing/fountain';
 import { parseCondition, parseMarker } from '../src/core/parsing/markers';
 import { detectFormat } from '../src/core/parsing/registry';
 import { processProject } from '../src/core/pipeline';
+import { countWords, formatMinutes, storyStats } from '../src/core/stats';
 import { compileInk } from '../src/core/validate';
 import { SAMPLES } from '../src/samples';
 
@@ -191,6 +193,16 @@ describe('engine exports', () => {
       expect(manifest.validation.engineSmokeTest).toBe('pending');
     });
   }
+  it('Unity saves record the choices made, so they carry over to a revised story (C# strings stay escaped)', async () => {
+    const s = SAMPLES.find((x) => x.id === 'archive')!;
+    const { project } = await build(s.text, s.fileName, 'structured');
+    const res = await ADAPTERS.unity.export(processProject(project), { engine: 'unity', projectName: 'Locked Archive', engineVersion: ADAPTERS.unity.defaultEngineVersion, integrationRef: 'v1.2.3', includeDemo: true });
+    const file = (name: string) => res.files.find((f) => f.path.endsWith(name))!.content as string;
+    const controller = file('NarrativeController.cs');
+    expect(controller).toContain('choicePath.Add(Story.currentChoices[index].text);');
+    expect(controller).toContain('saveJson.IndexOf("\\"choicePath\\"", StringComparison.Ordinal)');
+    expect(file('NarrativeBridgeEditor.cs')).toContain('save.Replace("\\"storyVersion\\":\\"" + StoryInfo.StoryVersion');
+  });
 });
 
 describe('hashing', () => {
@@ -250,7 +262,6 @@ describe('Final Draft and Word import', () => {
   };
 
   it('converts an FDX screenplay, keeping every line, dual dialogue and the title page', async () => {
-    const { readFileSync } = await import('node:fs');
     const { prepareInput } = await import('../src/core/parsing/convert');
     const input = await prepareInput('archive.fdx', readFileSync('tests/fixtures/archive.fdx', 'utf8'));
     expect(input.format).toBe('fountain');
@@ -479,5 +490,121 @@ describe('logging', () => {
     expect(dump).not.toContain('VELVET');
     expect(dump).not.toContain('whispers');
     expect(entries.find((e) => e.msg === 'Compiled Ink')?.ms).toBeGreaterThanOrEqual(0);
+  });
+});
+
+describe('story statistics', () => {
+  it('counts words, choices, endings and lines per character, skipping rejected proposals', async () => {
+    expect(countWords("Don't move — the keeper's lamp is lit, 3 times.")).toBe(9);
+    const { project } = await build(SAMPLES[0].text, SAMPLES[0].fileName, 'structured');
+    const st = storyStats(project);
+    expect(st.passages).toBe(project.passages.length);
+    expect(st.endings).toBeGreaterThan(0);
+    expect(st.choices).toBe(project.passages.flatMap((p) => p.choices).length);
+    expect(st.characters.reduce((n, c) => n + c.lines, 0)).toBe(project.passages.flatMap((p) => p.content).filter((b) => b.type === 'dialogue').length);
+    expect(st.words).toBeGreaterThan(st.dialogueWords);
+    // A rejected passage drops out of every count.
+    const lines = st.characters.reduce((n, c) => n + c.lines, 0);
+    const withDialogue = project.passages.find((p) => p.content.some((b) => b.type === 'dialogue'))!;
+    withDialogue.review = 'rejected';
+    const after = storyStats(project);
+    expect(after.passages).toBe(st.passages - 1);
+    expect(after.characters.reduce((n, c) => n + c.lines, 0)).toBeLessThan(lines);
+  });
+  it('formats durations for writers', () => {
+    expect(formatMinutes(0.4)).toBe('under a minute');
+    expect(formatMinutes(1.2)).toBe('about 1 minute');
+    expect(formatMinutes(80)).toBe('about 1 hour 20 minutes');
+    expect(formatMinutes(120)).toBe('about 2 hours');
+  });
+});
+
+describe('PDF import', () => {
+  const at = (page: number, x: number, y: number, text: string, size = 12) => ({ page, x, y, size, text });
+  it('rebuilds screenplay structure from indents and drops page furniture', async () => {
+    const { pdfLinesToText } = await import('../src/core/parsing/pdf');
+    const m = 108; // 1.5" action margin
+    const lines = [
+      at(1, 300, 300, 'NIGHT SHIFT', 24),
+      at(1, 290, 340, 'by'),
+      at(1, 280, 360, 'Sam Doe'),
+      at(2, 526, 40, '2.'),
+      at(2, 72, 80, '4'),
+      at(2, m, 80, '4 INT. DINER - NIGHT 4'),
+      at(2, m, 104, 'A neon sign buzzes over an empty'),
+      at(2, m, 116, 'counter.'),
+      at(2, m + 158, 140, 'JO'),
+      at(2, m + 115, 152, '(quietly)'),
+      at(2, m + 72, 164, 'Coffee. Black. And whatever'),
+      at(2, m + 158, 700, '(MORE)'),
+      at(3, 526, 40, '3.'),
+      at(3, m + 158, 80, "JO (CONT'D)"),
+      at(3, m + 72, 92, 'you have that still counts as pie.'),
+      at(3, m + 158, 116, 'COOK (O.S.)'),
+      at(3, m + 72, 128, 'Kitchen closed an hour ago.'),
+      at(3, m + 158, 152, 'JO'),
+      at(3, m + 72, 164, 'Then open it.'),
+      at(3, 432, 200, 'SMASH CUT TO:'),
+      at(3, m, 224, 'EXT. PARKING LOT - LATER'),
+    ];
+    const { text, format } = pdfLinesToText(lines);
+    expect(format).toBe('fountain');
+    expect(text).toBe(
+      [
+        'Title: NIGHT SHIFT',
+        'Author: Sam Doe',
+        '',
+        'INT. DINER - NIGHT',
+        '',
+        'A neon sign buzzes over an empty counter.',
+        '',
+        '@JO',
+        '(quietly)',
+        'Coffee. Black. And whatever',
+        '',
+        '@JO',
+        'you have that still counts as pie.',
+        '',
+        '@COOK (O.S.)',
+        'Kitchen closed an hour ago.',
+        '',
+        '@JO',
+        'Then open it.',
+        '',
+        '> SMASH CUT TO:',
+        '',
+        'EXT. PARKING LOT - LATER',
+        '',
+      ].join('\n'),
+    );
+  });
+  it('imports a screenplay PDF with every line of dialogue, and a novel PDF by chapter', async () => {
+    const { prepareInput } = await import('../src/core/parsing/convert');
+    const script = await prepareInput('lighthouse.pdf', new Uint8Array(readFileSync('tests/fixtures/lighthouse.pdf')));
+    expect(script).toMatchObject({ format: 'fountain', convertedFrom: 'pdf' });
+    const { project, diagnostics } = await buildStory([script], { mode: 'faithful' });
+    expect(project.project.title).toBe('THE LIGHTHOUSE KEEPER');
+    expect(project.characters.map((c) => c.displayName).sort()).toEqual(['KEEPER', 'MARA']);
+    expect(project.passages.map((p) => p.sceneHeading)).toEqual(['EXT. LIGHTHOUSE - NIGHT', 'INT. LAMP ROOM - CONTINUOUS']);
+    const dialogue = project.passages.flatMap((p) => p.content).filter((b) => b.type === 'dialogue');
+    expect(dialogue.map((b) => b.type === 'dialogue' && b.text)).toEqual([
+      'Is anyone up there? The light has gone out and the boats are still at sea, every one of them.',
+      'Go home, Mara.',
+      'Forty years I kept it lit.',
+      'Then keep it lit tonight.',
+      'Hand me the oil.',
+    ]);
+    expect(diagnostics.some((d) => d.code === 'INPUT_CONVERTED' && /from PDF/.test(d.message))).toBe(true);
+
+    const novel = await prepareInput('novel.pdf', new Uint8Array(readFileSync('tests/fixtures/novel.pdf')));
+    expect(novel.format).toBe('md');
+    const story = await buildStory([novel], { mode: 'faithful' });
+    expect(story.project.passages.map((p) => p.title)).toEqual(['Chapter One', 'Chapter Two']);
+    // Paragraphs that run onto the next page stay whole.
+    expect(novel.text).not.toMatch(/\n\n(?!#|The keeper|Mara|The lamp)/);
+  });
+  it('explains files that are not readable PDFs', async () => {
+    const { prepareInput } = await import('../src/core/parsing/convert');
+    await expect(prepareInput('x.pdf', new TextEncoder().encode('not a pdf'))).rejects.toThrow(/could not be read as a PDF/);
   });
 });

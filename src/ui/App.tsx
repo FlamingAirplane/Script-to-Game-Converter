@@ -15,6 +15,7 @@ import { base64ToBytes, bytesToBase64, referencedAudio } from '../core/audio';
 import { collectClips, putClip } from './audioStore';
 import { errorData, log } from '../core/log';
 import { Logo } from './Logo';
+import { getDraft, keepDraft } from './draftStore';
 
 const appLog = log('app');
 
@@ -106,12 +107,21 @@ export function App() {
   // Processed in a background worker; `stale` while a newer edit is being processed.
   const { processed, stale } = useProcessedStory(project, parseDiagnostics);
 
+  // Autosave to this browser. If storage is full or blocked, say so: the writer must save a project file instead.
+  const [autosave, setAutosave] = useState<'saved' | 'failed' | null>(initial ? 'saved' : null);
   useEffect(() => {
     if (!project) return;
     try {
       localStorage.setItem(STORAGE_KEY, JSON.stringify({ project, parseDiagnostics }));
-    } catch {
-      /* storage full or unavailable: autosave is a convenience only */
+      setAutosave((was) => {
+        if (was === 'failed') appLog.info('Autosave works again');
+        return 'saved';
+      });
+    } catch (e) {
+      setAutosave((was) => {
+        if (was !== 'failed') appLog.warn('Autosave failed: browser storage is full or unavailable', errorData(e));
+        return 'failed';
+      });
     }
   }, [project, parseDiagnostics]);
 
@@ -202,10 +212,43 @@ export function App() {
     return () => window.removeEventListener('keydown', onKey);
   }, [undo, redo, project]);
 
+  /** Keeps the open story as an automatic draft before something replaces it (never blocks the change). */
+  const keepBeforeReplacing = async (label: string) => {
+    if (!project?.passages.length) return;
+    try {
+      await keepDraft(project, parseDiagnostics, label, true);
+    } catch {
+      /* logged; the change goes ahead */
+    }
+  };
+
+  const restoreDraft = async (id: number) => {
+    const d = await getDraft(id);
+    if (!d) return;
+    const replacing = project && project.project.id !== d.projectId;
+    if (replacing && !confirm(`Open “${d.title}” (${d.label})? The story that is open now is kept as a draft.`)) return;
+    await keepBeforeReplacing(replacing ? 'Before opening another story' : `Before restoring “${d.label}”`);
+    if (project && !replacing) {
+      // Restoring is one undoable step within the same story.
+      undoStack.current.push(project);
+      redoStack.current = [];
+    } else {
+      undoStack.current = [];
+      redoStack.current = [];
+    }
+    setParseDiagnostics(d.parseDiagnostics);
+    setProject(d.project);
+    setSelected(replacing || !project ? d.project.project.startPassage : selected);
+    setExportState(null);
+    setTab('review');
+    appLog.info('Restored a draft', { passages: d.passages, otherStory: !!replacing });
+  };
+
   const convert = async (inputs: SourceInput[], mode: ConversionMode, title?: string) => {
     setBusy(true);
     try {
       const { project: p, diagnostics } = await buildStory(inputs, { mode, title });
+      await keepBeforeReplacing('Before converting a new script');
       undoStack.current = [];
       redoStack.current = [];
       setParseDiagnostics(diagnostics);
@@ -249,6 +292,7 @@ export function App() {
       const p: StoryProject = data.project?.schemaVersion ? data.project : data;
       const errs = validateSchema(p).filter((d) => d.severity === 'error');
       if (errs.length) return alert(`Not a valid Narrative Bridge project:\n${errs.map((e) => e.message).join('\n')}`);
+      await keepBeforeReplacing('Before opening a project file');
       undoStack.current = [];
       setParseDiagnostics(data.parseDiagnostics ?? []);
       setProject(p);
@@ -315,6 +359,16 @@ export function App() {
               ))}
             </ol>
             <span className={`state-pill state-${state}`}>{state}</span>
+            {autosave === 'saved' && (
+              <span className="autosave" title="Every change is kept in this browser. Use Save project for a file you can back up or share.">
+                ✓ kept in this browser
+              </span>
+            )}
+            {autosave === 'failed' && (
+              <span className="autosave failed" role="status" title="This browser has no room left (or blocks storage), so changes are not remembered after a reload.">
+                ⚠ not autosaved — use Save project
+              </span>
+            )}
           </>
         )}
         <span className="spacer" />
@@ -388,8 +442,8 @@ export function App() {
         </div>
         <div className="content" key={`page-${tab}`}>
           <Suspense fallback={<p className="muted pad">Turning the page…</p>}>
-          {tab === 'import' && <ImportView onConvert={convert} busy={busy} />}
-          {processed && tab === 'review' && <ReviewView processed={{ ...processed, project: project! }} selected={selected} onSelect={setSelected} update={update} dialogueOnly={dialogueOnly} onDialogueOnly={setDialogueOnly} />}
+          {tab === 'import' && <ImportView onConvert={convert} busy={busy} onRestoreDraft={(id) => void restoreDraft(id)} />}
+          {processed && tab === 'review' && <ReviewView processed={{ ...processed, project: project! }} selected={selected} onSelect={setSelected} update={update} dialogueOnly={dialogueOnly} onDialogueOnly={setDialogueOnly} onKeepDraft={(label) => keepDraft(project!, parseDiagnostics, label)} onRestoreDraft={(id) => void restoreDraft(id)} />}
           {processed && tab === 'graph' && (
             <GraphView
               graph={processed.analysis.graph}
