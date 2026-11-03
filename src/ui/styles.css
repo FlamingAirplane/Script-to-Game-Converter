@@ -832,3 +832,66 @@ kbd { font: 12.5px var(--mono); padding: 1px 6px; border: 1px solid var(--rule-2
 .pane-tabs { gap: 10px; min-width: 0; }
 .pane-tab { letter-spacing: 0.06em; }
 .diagnostics > .pane-head .check { gap: 4px; }
+
+/* ---------- Fit to the screen: nothing ever scrolls sideways ---------- */
+/* The page-turn animation and decorations may draw past the page edge; clip it instead of scrolling. */
+html, body { overflow-x: clip; }
+.app, .workspace { overflow-x: clip; }
+select.input { max-width: 100%; }
+.markers-help pre { white-space: pre-wrap; overflow-wrap: anywhere; overflow-x: visible; }
+p code, li code, .muted code { overflow-wrap: anywhere; }
+.btn.big, .share-card .btn, .engine-card { white-space: normal; text-align: center; }
+/* Grids reflow into fewer columns instead of overflowing. */
+.import-grid { grid-template-columns: repeat(auto-fit, minmax(min(100%, 360px), 1fr)); }
+.sample-grid { grid-template-columns: repeat(auto-fit, minmax(min(100%, 240px), 1fr)); }
+.share-grid { grid-template-columns: repeat(auto-fit, minmax(min(100%, 240px), 1fr)); }
+.engines { grid-template-columns: repeat(auto-fit, minmax(min(100%, 260px), 1fr)); }
+.export-grid { grid-template-columns: repeat(auto-fit, minmax(min(100%, 340px), 1fr)); }
+.file-browser { grid-template-columns: repeat(auto-fit, minmax(min(100%, 260px), 1fr)); height: auto; }
+.file-browser .tree, .file-browser .file-preview { max-height: 440px; }
+.then { flex-wrap: wrap; }
+.speaker { min-width: 0; }
+@media (max-width: 1100px) { .diag-toggle { display: none; } }
+@media (max-width: 760px) {
+  .topbar { padding: 8px 10px 6px; gap: 8px; }
+  .topbar .btn.ghost { padding: 2px 6px; }
+  .tabs { overflow-x: visible; flex-wrap: wrap; row-gap: 3px; padding: 0 8px; }
+  .tab { padding: 6px 10px 5px; font-size: 14.5px; transform: none; }
+  .title-page h1 { font-size: 36px; }
+  .title-page .subtitle { font-size: 18px; }
+  .orn-rule { width: 200px; }
+  .id-field, .id-field .input { width: 100%; }
+  .block { grid-template-columns: 1fr; gap: 4px; }
+  .block-gutter { flex-direction: row; gap: 8px; text-align: left; border-right: 0; padding: 0; }
+  .block-actions { justify-content: flex-end; }
+  .choice .row { flex-wrap: wrap; }
+  .choice-text { flex: 1 1 100%; min-width: 0; }
+  .choice .target { max-width: 100%; flex: 1; }
+  .paren { flex: 1 1 140px; max-width: none; }
+  .stage-head { flex-wrap: wrap; padding-right: 0; }
+  .stage-head h2 { white-space: normal; }
+  .stage-head .row { flex: 1 1 100%; flex-wrap: wrap; }
+  .graph-toolbar, .ink-toolbar { flex-wrap: wrap; padding-right: 12px; }
+  .graph-search { width: 100%; }
+  .cartouche { display: none; }
+  /* Tables stack into cards. */
+  .table, .table tbody, .table tr, .table td { display: block; width: 100%; }
+  .table thead { display: none; }
+  .table tr { padding: 8px 0; border-bottom: 1px dotted var(--rule-2); }
+  .table td { border: 0; padding: 2px 0; }
+  .voice-picker select:first-child { max-width: 100%; }
+  .key-row dt { min-width: 96px; }
+}
+.result > .row { flex-wrap: wrap; }
+@media (max-width: 760px) {
+  .review-view, .playtest-view, .review-view.with-source { grid-template-columns: minmax(0, 1fr); }
+  .editor, .passage-editor { min-width: 0; }
+}
+@media (max-width: 760px) {
+  .app .review-view, .app .review-view.with-source, .app.with-diag .review-view.with-source { grid-template-columns: minmax(0, 1fr); }
+}
+/* Long commands, paths and ids may break anywhere rather than widen their card. */
+.steps li, .checklist li, .inline-diags li, .diag-msg, .log-msg, .file-list .mono, .tree .link { overflow-wrap: anywhere; }
+.then label { flex: 1 1 240px; min-width: 0; }
+.then select { width: 100%; }
+.editor .row { flex-wrap: wrap; }

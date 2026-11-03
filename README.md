@@ -54,6 +54,7 @@ exports a Unity zip and a playable story, then plays that story):
 ```bash
 npx playwright-core install webkit chromium   # once
 npm run test:e2e
+npm run test:overflow   # no chapter scrolls sideways at 360–1920 px (WIDTHS=… to choose)
 ```
 
 ## The workflow (web app)

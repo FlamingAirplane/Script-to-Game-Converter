@@ -38,3 +38,7 @@ jobs:
       - run: npm ci
       - run: npx playwright-core install --with-deps webkit chromium
       - run: npm run test:e2e
+      - name: No screen scrolls sideways (320–2560 px)
+        run: |
+          node tests/e2e/overflow.mjs
+          WIDTHS=320,375,600,900,1100,1200,1600,2560 node tests/e2e/overflow.mjs
