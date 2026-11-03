@@ -7,7 +7,7 @@ import { SUPPORTED_EXTENSIONS } from '../core/parsing/registry';
 const ACCEPTED = [...SUPPORTED_EXTENSIONS, ...CONVERTED_EXTENSIONS];
 import { SAMPLES } from '../samples';
 import { DraftShelf } from './Drafts';
-import { GettingStarted } from './GettingStarted';
+import { GettingStarted, USER_GUIDE_URL } from './GettingStarted';
 import { Logo } from './Logo';
 
 // The hosted site (GitHub Pages) also serves the offline writer edition next to index.html. Hidden in
@@ -196,6 +196,10 @@ export function ImportView({
 
       <p className="colophon-note small">
         Narrative Bridge is free and open source ·{' '}
+        <a href={USER_GUIDE_URL} target="_blank" rel="noopener noreferrer">
+          User guide
+        </a>{' '}
+        ·{' '}
         <a href="https://github.com/FlamingAirplane/Script-to-Game-Converter" target="_blank" rel="noopener noreferrer">
           View on GitHub
         </a>{' '}

@@ -1,6 +1,6 @@
 <p align="center"><a href="https://flamingairplane.github.io/Script-to-Game-Converter/"><img src="public/og.png" alt="Narrative Bridge — turn a script into a playable story" width="720"></a></p>
 
-<p align="center"><b><a href="https://flamingairplane.github.io/Script-to-Game-Converter/">Open Narrative Bridge</a></b> · <a href="https://github.com/FlamingAirplane/Script-to-Game-Converter/releases">Download the offline edition</a> · <a href="WRITERS.md">Guide for writers</a></p>
+<p align="center"><b><a href="https://flamingairplane.github.io/Script-to-Game-Converter/">Open Narrative Bridge</a></b> · <a href="https://github.com/FlamingAirplane/Script-to-Game-Converter/releases">Download the offline edition</a> · <a href="docs/USER_GUIDE.md">User guide</a> · <a href="WRITERS.md">Quick start for writers</a></p>
 
 # Narrative Bridge
 
@@ -19,6 +19,8 @@ The site also offers the offline single-file edition for writers. It is rebuilt 
 [`.github/workflows/pages.yml`](.github/workflows/pages.yml) on every push to `main`.
 
 ## Quick start
+
+New to the app? The [user guide](docs/USER_GUIDE.md) walks through every chapter with screenshots.
 
 ```bash
 npm install
@@ -175,6 +177,7 @@ src/core/            engine-independent pipeline (no UI or Node dependencies)
 src/ui/              React web app
 src/cli/             command-line interface
 schemas/             JSON Schema for the ISR
+docs/                user guide (USER_GUIDE.md) and its screenshots (npm run guide:screenshots)
 tests/               unit, golden-file, compiler, runtime and export tests
 ```
 

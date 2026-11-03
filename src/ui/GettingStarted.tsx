@@ -11,6 +11,9 @@ function readDismissed(): boolean {
 }
 
 /** Plain-language first-run guide for writers. Dismissible; reopened from "How it works". */
+/** The illustrated guide in the repository (docs/USER_GUIDE.md). */
+export const USER_GUIDE_URL = 'https://github.com/FlamingAirplane/Script-to-Game-Converter/blob/main/docs/USER_GUIDE.md';
+
 export function GettingStarted() {
   const [open, setOpen] = useState(() => !readDismissed());
   const close = () => {
@@ -40,8 +43,8 @@ export function GettingStarted() {
       </div>
       <ol className="guide-steps">
         <li>
-          <strong>Bring your script.</strong> Drag in a screenplay (Final Draft, Word, Fountain or a plain-text export) or a prose document
-          (Word or Markdown), or paste text below. Not sure? Try a sample at the bottom first.
+          <strong>Bring your script.</strong> Drag in a screenplay (Final Draft, Word, PDF, Fountain or a plain-text export) or a prose
+          document (Word, PDF or Markdown), or paste text below. Not sure? Try a sample at the bottom first.
         </li>
         <li>
           <strong>Pick how interactive it should be.</strong> <em>Faithful</em> keeps your story exactly as written. <em>Interactive adaptation</em>{' '}
@@ -59,6 +62,12 @@ export function GettingStarted() {
       <p className="muted small">
         Your scripts never leave this computer — nothing is uploaded. Work is remembered in this browser, but use <strong>Save project</strong> (top
         right) to keep a copy you can reopen anywhere.
+      </p>
+      <p className="small">
+        <a href={USER_GUIDE_URL} target="_blank" rel="noopener noreferrer">
+          Read the full user guide
+        </a>{' '}
+        for every screen, with pictures.
       </p>
     </section>
   );
