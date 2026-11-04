@@ -121,6 +121,36 @@ export interface StoryProject {
   inkPassthrough?: string;
   /** Passage positions dragged by hand on the story map (UI only; absent = automatic layout). */
   layout?: Record<string, { x: number; y: number }>;
+  /** How the story looks when played in a game engine (absent = defaults). */
+  presentation?: { unity?: UnityTheme };
+}
+
+/**
+ * The Unity story UI's look, chosen on the Export page and exported as NarrativeBridgeTheme.json
+ * (the developer can change it further in Unity's Inspector). Colours are #rrggbb.
+ */
+export interface UnityTheme {
+  preset: 'book' | 'night' | 'minimal' | 'custom';
+  background: string;
+  text: string;
+  /** Speaker names, choice buttons and the Continue button. */
+  accent: string;
+  /** Scene headings, stage directions and the status line. */
+  muted: string;
+  /** How opaque the story panel is, 0–1. */
+  panelOpacity: number;
+  layout: 'bottom' | 'center' | 'left' | 'right' | 'full';
+  /** Text size in pixels at 1920×1080 (the UI scales with the screen). */
+  fontSize: number;
+  /** Typewriter speed in characters per second; 0 shows each line at once. */
+  charactersPerSecond: number;
+  showSpeakers: boolean;
+  showSceneHeadings: boolean;
+  showChoiceNumbers: boolean;
+  /** Restart, Save and Load buttons under the story. */
+  showToolbar: boolean;
+  continueLabel: string;
+  endLabel: string;
 }
 
 export function itemVar(itemId: string): string {

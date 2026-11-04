@@ -25,6 +25,12 @@ for (const theme of ['light', 'dark']) {
       await page.getByText('The Lighthouse Keeper').first().click();
       await page.locator('.passage-item').first().waitFor();
     } else await page.getByRole('button', { name: new RegExp(tab) }).first().click();
+    // Scan the Graph with its passage panel open, so the panel is checked too.
+    if (tab === 'Graph') {
+      await page.locator('g.node').first().focus();
+      await page.keyboard.press('Space');
+      await page.locator('.map-inspector').waitFor();
+    }
     await page.waitForTimeout(400);
     await page.addScriptTag({ content: axeSource });
     const result = await page.evaluate(() =>

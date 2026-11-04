@@ -591,6 +591,9 @@ export function App() {
               start={processed.project.project.startPassage}
               selected={selected}
               onOpen={open}
+              onSelect={setSelected}
+              project={project!}
+              update={update}
               endingsReached={processed.smoke?.endingsReached}
               title={project!.project.title}
               layout={project!.layout}
@@ -600,7 +603,7 @@ export function App() {
           )}
           {processed && tab === 'ink' && <InkView processed={processed} onOpen={open} />}
           {processed && tab === 'play' && <PlaytestView processed={processed} onOpen={open} dialogueOnly={dialogueOnly} onDialogueOnly={setDialogueOnly} />}
-          {processed && tab === 'export' && <ExportView processed={processed} stale={stale} onState={setExportState} />}
+          {processed && tab === 'export' && <ExportView processed={processed} stale={stale} onState={setExportState} project={project!} update={update} />}
           </Suspense>
           {(tab === 'import' || tab === 'export') && <footer className="folio">— {TABS.find((t) => t.id === tab)!.numeral.toLowerCase()} —</footer>}
         </div>

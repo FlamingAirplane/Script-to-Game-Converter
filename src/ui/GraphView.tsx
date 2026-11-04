@@ -4,6 +4,9 @@ import { plainKey } from './Shortcuts';
 import type { StoryGraph } from '../core/analyzer';
 import { errorData, log } from '../core/log';
 import { CARD, storyLayout, type Position } from '../core/layout';
+import type { StoryProject } from '../core/isr';
+import { PassageInspector } from './PassageInspector';
+import { countBreaks, type Update } from './projectOps';
 
 // The story map. Passages are laid out in columns by distance from the start (ordered to reduce
 // crossings), can be dragged to new places (remembered in the project), searched, and navigated
@@ -149,6 +152,20 @@ function RouteSign({ kind, x, y }: { kind: 'cond' | 'pending'; x: number; y: num
   );
 }
 
+/** How many Continue breaks a passage has, pinned to its card's bottom edge (decorative: the card's text says it). */
+function BreakSign({ count, x, y }: { count: number; x: number; y: number }) {
+  const label = `⏸ ${count}`;
+  const w = label.length * 6.4 + 12;
+  return (
+    <g className="break-sign" transform={`translate(${x},${y})`} aria-hidden pointerEvents="none">
+      <rect width={w} height={17} rx={8.5} />
+      <text x={w / 2} y={12.5} textAnchor="middle">
+        {label}
+      </text>
+    </g>
+  );
+}
+
 const KEY_STORE = 'narrative-bridge.map-key';
 
 /** The map's key, in plain words, drawn with the same marks as the map. */
@@ -173,6 +190,12 @@ function MapKey() {
       <li>{line('cond', 'cond')} a choice that needs an item or value</li>
       <li>{line('fallback')} continues on its own</li>
       <li>{line('pending', 'pending')} suggested, waiting for your OK</li>
+      <li>
+        <svg width="40" height="20" aria-hidden>
+          <BreakSign count={2} x={2} y={1} />
+        </svg>{' '}
+        Continue breaks inside the passage
+      </li>
     </ul>
   );
 }
@@ -182,6 +205,9 @@ export function GraphView({
   start,
   selected,
   onOpen,
+  onSelect,
+  project,
+  update,
   endingsReached,
   title,
   layout,
@@ -192,12 +218,20 @@ export function GraphView({
   start: string;
   selected?: string;
   onOpen: (id: string) => void;
+  /** Selects a passage on the map (and opens the passage panel). */
+  onSelect: (id: string) => void;
+  /** The live project, for the passage panel and break counts (the graph comes from the processed copy). */
+  project: StoryProject;
+  update: Update;
   endingsReached?: Record<string, number>;
   title: string;
   layout?: Record<string, Position>;
   onMove: (id: string, pos: Position) => void;
   onResetLayout: () => void;
 }) {
+  // The passage panel: open after a passage is clicked (or chosen with Space), closed with Esc or ×.
+  const [inspecting, setInspecting] = useState(false);
+  const breaks = useMemo(() => new Map(project.passages.map((p) => [p.id, countBreaks(p)])), [project]);
   const auto = useMemo(() => storyLayout(graph, start), [graph, start]);
   const [dragging, setDragging] = useState<{ id: string; pos: Position } | null>(null);
   const placed = useMemo(() => {
@@ -284,6 +318,24 @@ export function GraphView({
       cancelAnimationFrame(frame);
     };
   }, []);
+  const inspect = (id: string) => {
+    // The panel narrows the map: keep the view where it is rather than refitting under the reader's hand.
+    moved.current = true;
+    onSelect(id);
+    setInspecting(true);
+  };
+  // Once the panel has narrowed the map, bring the selected passage into view if it went under the panel.
+  useEffect(() => {
+    if (!inspecting || !selected) return;
+    const r = svg.current?.getBoundingClientRect();
+    const card = svg.current?.querySelector(`.node[data-id="${CSS.escape(selected)}"]`)?.getBoundingClientRect();
+    if (r && card && (card.right > r.right || card.left < r.left || card.bottom > r.bottom || card.top < r.top)) centerOn(selected);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [inspecting, selected]);
+  const closeInspector = () => {
+    setInspecting(false);
+    if (selected) svg.current?.querySelector<SVGGElement>(`.node[data-id="${CSS.escape(selected)}"]`)?.focus();
+  };
   const zoomBy = (f: number) => {
     moved.current = true;
     setView((v) => ({ ...v, k: Math.min(2.5, Math.max(0.2, v.k * f)) }));
@@ -389,11 +441,12 @@ export function GraphView({
         </button>
       </div>
       <div className="map-frame">
+        <div className="map-canvas">
         <svg
           ref={svg}
           className="graph"
           role="group"
-          aria-label={`Story map: ${graph.nodes.length} passages and ${graph.edges.length} links. Use Tab to move between passages and Enter to open one. Drag a passage to move it.`}
+          aria-label={`Story map: ${graph.nodes.length} passages and ${graph.edges.length} links. Tab moves between passages, Space shows a passage's lines, Enter opens it in Review. Drag a passage to move it.`}
           onWheel={(e) => {
             const r = svg.current!.getBoundingClientRect();
             const mx = e.clientX - r.left;
@@ -435,7 +488,7 @@ export function GraphView({
             pan.current = null;
             if (!nd) return;
             if (nd.moved && dragging) onMove(nd.id, dragging.pos);
-            else onOpen(nd.id);
+            else inspect(nd.id);
             setDragging(null);
           }}
         >
@@ -506,6 +559,7 @@ export function GraphView({
                 n.reachable ? '' : 'No route leads here yet.',
                 out ? `${out} route${out === 1 ? '' : 's'} lead${out === 1 ? 's' : ''} on.` : '',
                 reached ? `Reached in ${reached} automated test play${reached === 1 ? '' : 's'}.` : '',
+                breaks.get(n.id) ? `${breaks.get(n.id)} Continue break${breaks.get(n.id) === 1 ? '' : 's'}.` : '',
               ]
                 .filter(Boolean)
                 .join(' ');
@@ -517,11 +571,15 @@ export function GraphView({
                   className={`node ${n.isStart ? 'start' : ''} ${n.isEnding ? 'ending' : ''} ${n.reachable ? '' : 'unreachable'} ${selected === n.id ? 'selected' : ''} ${matches.includes(n.id) ? 'match' : ''} ${dragging?.id === n.id ? 'dragging' : ''} origin-${n.origin}`}
                   transform={`translate(${p.x},${p.y})`}
                   onKeyDown={(e) => {
-                    if (e.key === 'Enter' || e.key === ' ') {
+                    if (e.key === 'Enter') {
                       e.preventDefault();
                       onOpen(n.id);
+                    } else if (e.key === ' ') {
+                      e.preventDefault();
+                      inspect(n.id);
                     }
                   }}
+                  onDoubleClick={() => onOpen(n.id)}
                   onFocus={() => setHover(n.id)}
                   onBlur={() => setHover(null)}
                   tabIndex={0}
@@ -530,7 +588,7 @@ export function GraphView({
                   onPointerEnter={() => setHover(n.id)}
                   onPointerLeave={() => setHover(null)}
                 >
-                  <title>{`${n.title}${about ? ` — ${about}` : ''} Click to edit, drag to move.`}</title>
+                  <title>{`${n.title}${about ? ` — ${about}` : ''} Click to see its lines, double-click to edit, drag to move.`}</title>
                   <rect width={W} height={H} rx={3} />
                   <rect x={3} y={3} width={W - 6} height={H - 6} rx={2} className="node-inner" />
                   <text x={12} y={tags.length ? 26 : 24} className="node-title">
@@ -544,6 +602,7 @@ export function GraphView({
                     tagX += tagWidth(t) + 5;
                     return <NodeTag key={t} kind={t} x={x} />;
                   })}
+                  {!!breaks.get(n.id) && <BreakSign count={breaks.get(n.id)!} x={W - 46} y={H - 9} />}
                 </g>
               );
             })}
@@ -575,6 +634,10 @@ export function GraphView({
           })}
           <rect x={vp.x} y={vp.y} width={(size.w / view.k) * mk} height={(size.h / view.k) * mk} className="mini-view" />
         </svg>
+        )}
+        </div>
+        {inspecting && selected && project.passages.some((p) => p.id === selected) && (
+          <PassageInspector project={project} passageId={selected} update={update} onOpen={onOpen} onClose={closeInspector} />
         )}
       </div>
       {showKey && <MapKey />}

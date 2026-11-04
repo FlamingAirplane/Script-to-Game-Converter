@@ -305,6 +305,7 @@ export function ImportView({
 + {trust >= 2 and not has lamp} [Trust her] -> ally
 - [Markdown link choice](#target)
 -> target   /   @end                         divert / ending
+@pause                                       Continue break: the player clicks Continue to read on
 ## Heading {#custom_id}                      Markdown heading as a passage`}</pre>
       </details>
 

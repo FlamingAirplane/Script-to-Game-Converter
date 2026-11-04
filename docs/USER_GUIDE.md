@@ -106,7 +106,9 @@ suggestions to review. Type in *Filter passages…* to narrow it down. Press **[
   script beside the passage), ↑ ↓ to reorder, **Make start**, and **Delete**.
 - **Content:** each block is *action* (narration), *dialogue*, a *transition*, a *note* (kept as a comment) or an
   *effect* (such as giving an item). Click text to edit it. The **L12** link on each block jumps to that line of the
-  original script. Add blocks with **+ narration**, **+ dialogue** and **+ effect**.
+  original script. Add blocks with **+ narration**, **+ dialogue**, **+ effect** and **+ Continue break**.
+- **Continue breaks:** a *break* line means the player clicks **Continue** before the next lines appear, so a long
+  passage can be read a little at a time. Add them here or, more easily, from the Graph (section 5).
 - **Choices:** each has its wording, where it leads (→, with ↗ to jump there), conditions (**+ condition**, for example
   *has the brass key*), effects (**+ effect**), and **once only** (the choice disappears after it is picked). Add one with
   **+ Add choice**. **Then** sets where the story goes when there are no choices, or **End the story here**.
@@ -154,12 +156,16 @@ Every passage is a card and every choice a route between cards. The **key** unde
 | Dashed route with a padlock | A choice that needs an item or value, such as having the key. |
 | Dotted route | The story continues on its own. |
 | Dashed route with ◆ | A suggested choice, waiting for your OK in Review. |
+| **Continue** pill on a card | The passage has Continue breaks; a number shows how many. |
 
 Hover over a route to read its choice, and over a passage for a summary, including how many automated test plays ended
 there. **Key** in the toolbar hides or shows the key; your choice is remembered.
 
-- **Click** a passage to open it in Review. **Drag** it to rearrange the map; your layout is saved with the project.
-  **Reset layout** returns to automatic placement.
+- **Click** a passage to open its panel beside the map. It lists the passage's lines; click **+ Continue break**
+  between two lines to make the player click Continue there, or **remove** to take a break out. **Edit in Review**
+  opens the passage for everything else, and Esc closes the panel.
+- **Double-click** a passage to open it in Review. **Drag** it to rearrange the map; your layout is saved with the
+  project. **Reset layout** returns to automatic placement.
 - **Scroll** or **+ / −** to zoom, drag the background to move, **Fit** to see everything. Click the minimap to jump.
 - **Find a passage…** highlights matches; press Enter to go to the first.
 - **Save map** downloads the whole map as an SVG image; **PNG** as a picture.
@@ -225,6 +231,18 @@ The panel beside the story shows:
 
 The zip contains the game project, your story, your original script, any voice recordings, a validation report, and
 setup instructions for the developer.
+
+**Story UI** (Unity only) sets how the story looks in the demo scene, with a preview beside the settings:
+
+- **Look:** *Book*, *Night* or *Minimal* to start from; changing any colour makes it *Custom*.
+- **Where it sits:** along the bottom, in the centre, down the left or right, or full screen.
+- **Colours** for the panel, text, buttons and speaker names, and how see-through the panel is.
+- **Text size**, and a **typewriter** speed (letters a second, or off so each line appears at once).
+- Whether to show speaker names, scene headings, choice numbers, and the Restart, Save and Load buttons.
+- The words on the **Continue** button and at the ending.
+
+These settings are saved with your project. Your developer can change any of them later in Unity by selecting
+*NarrativeTheme* in *Assets/NarrativeBridge/Settings*; changes show while the game runs.
 
 ## 9. Diagnostics and the Logbook
 
@@ -300,7 +318,10 @@ Press **?** at any time to see them all. On Windows and Linux, use Ctrl instead 
 | [ / ] | Previous / next passage | 1 – 9 | Pick a choice | / | Find a passage |
 | D | Dialogue only | Backspace | Undo a choice | F | Fit the map |
 | | | R | Restart | + / − | Zoom |
-| | | V | Voices on / off | Tab, Enter | Move between passages, open one |
+| | | V | Voices on / off | Tab | Move between passages |
+| | | | | Space | Show a passage's lines |
+| | | | | Enter | Open it in Review |
+| | | | | Esc | Close the passage panel |
 
 ## 13. Structured markers
 
@@ -320,6 +341,7 @@ Write these on their own lines in any script to control the structure exactly (t
 + {trust >= 2 and not has lamp} [Trust her] -> ally
 - [Markdown link choice](#target)
 -> target                                    continue to another passage
+@pause                                       a Continue break: the player clicks Continue to read on
 @end                                         end the story here
 ## Heading {#custom_id}                      a Markdown heading as a passage with a chosen id
 ```

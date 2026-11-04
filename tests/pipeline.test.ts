@@ -855,4 +855,44 @@ describe('Continue breaks', () => {
     const ok = await build('@passage a A\nOne.\n@pause\nTwo.\n@end\n', 'ok.md', 'structured');
     expect(analyze(ok.project).diagnostics.filter((d) => d.code === 'PAUSE_WITHOUT_TEXT')).toEqual([]);
   });
+
+  it('adds and removes breaks from the Graph panel without disturbing the lines', async () => {
+    const { addBreak, countBreaks, removeBreak } = await import('../src/ui/projectOps');
+    const { project } = await build('@passage a A\nOne.\n\nTwo.\n\nThree.\n@end\n', 'g.md', 'structured');
+    addBreak(project, 'a', 1);
+    addBreak(project, 'a', 3);
+    expect(kinds(project)).toEqual(['action,pause,action,pause,action']);
+    expect(project.passages[0].content[1]).toMatchObject({ type: 'pause', origin: 'user_authored' });
+    expect(countBreaks(project.passages[0])).toBe(2);
+    removeBreak(project, 'a', 1);
+    expect(kinds(project)).toEqual(['action,action,pause,action']);
+    expect(processProject(project).generated.ink).toContain('Two.\n+ [Continue]\n-\nThree.');
+  });
+});
+
+describe('Unity story UI', () => {
+  const unity = async (project: StoryProject) =>
+    ADAPTERS.unity.export(processProject(project), { engine: 'unity', projectName: 'UI', engineVersion: ADAPTERS.unity.defaultEngineVersion, integrationRef: 'v1.2.3', includeDemo: true });
+  const file = (r: { files: { path: string; content: unknown }[] }, end: string) => String(r.files.find((f) => f.path.endsWith(end))?.content ?? '');
+
+  it('ships the uGUI view, the theme and the uGUI package', async () => {
+    const { project } = await build('@passage a A\nOne.\n@pause\nTwo.\n@end\n', 'u.md', 'structured');
+    const r = await unity(project);
+    expect(JSON.parse(file(r, 'Packages/manifest.json')).dependencies['com.unity.ugui']).toBeTruthy();
+    expect(file(r, 'Scripts/NarrativeView.cs')).toContain('class NarrativeView');
+    expect(file(r, 'Scripts/NarrativeTheme.cs')).toContain('class NarrativeTheme : ScriptableObject');
+    const controller = r.files.map((f) => String(f.content)).find((c) => c.includes('IsWaitingForContinue'))!;
+    expect(controller).toContain('ContinueShown');
+    // Ink's Object and Unity's Object are both in scope there, so Unity's must be named in full.
+    expect(file(r, 'Scripts/NarrativeView.cs')).not.toMatch(/[^.\w]Object\.Destroy/);
+    const theme = JSON.parse(file(r, 'Resources/NarrativeBridgeTheme.json'));
+    expect(theme).toMatchObject({ preset: 'book', layout: 'bottom', continueLabel: 'Continue', panelYMin: 0.03 });
+  });
+
+  it('exports the project theme, filled in from its preset and made safe', async () => {
+    const { project } = await build('@passage a A\nOne.\n@end\n', 'u.md', 'structured');
+    project.presentation = { unity: { preset: 'night', layout: 'center', fontSize: 400, continueLabel: '  Next  ', endLabel: '', text: 'red' } as never };
+    const theme = JSON.parse(file(await unity(project), 'Resources/NarrativeBridgeTheme.json'));
+    expect(theme).toMatchObject({ preset: 'night', background: '#1f2913', text: '#fefae0', layout: 'center', fontSize: 56, continueLabel: 'Next', endLabel: 'The End', panelXMin: 0.2 });
+  });
 });

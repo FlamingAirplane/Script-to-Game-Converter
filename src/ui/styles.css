@@ -894,3 +894,56 @@ section.drafts > h2 { margin-top: 26px; }
 /* Continue breaks (a pause inside a passage): the button reads as turning the page, not a choice. */
 .choice-btn.continue { align-self: center; text-align: center; font-style: normal; font-variant: small-caps; text-transform: lowercase; letter-spacing: 0.14em; }
 .choice-btn.continue::after { content: ' ›'; }
+
+/* Graph: the passage panel beside the map (src/ui/PassageInspector.tsx) and Continue break signs. */
+.map-canvas { position: relative; flex: 1; min-width: 0; display: flex; }
+.map-inspector { flex: 0 0 300px; max-width: 300px; overflow: auto; border-left: 1px solid var(--rule-2); background: color-mix(in srgb, var(--paper-hi) 85%, transparent); padding: 12px 14px; display: flex; flex-direction: column; gap: 8px; }
+.map-inspector-head { display: flex; align-items: flex-start; gap: 8px; }
+.map-inspector-head h3 { flex: 1; margin: 0; font-size: 18px; overflow-wrap: anywhere; }
+.map-inspector-head h3:focus { outline: none; }
+.inspector-lines { list-style: none; margin: 0; padding: 0; }
+.inspector-line { margin: 0; padding: 6px 0; font-size: 14px; line-height: 1.45; overflow-wrap: anywhere; }
+.inspector-kind { font-size: 11px; font-variant: small-caps; text-transform: lowercase; letter-spacing: 0.12em; color: var(--faded); margin-right: 4px; }
+.inspector-gap { display: block; width: 100%; border: 0; border-top: 1px dotted var(--rule-2); background: none; color: var(--faded); font: italic 12px var(--serif); text-align: center; padding: 2px 0; cursor: pointer; opacity: 0.75; }
+.inspector-gap:hover, .inspector-gap:focus-visible { opacity: 1; color: var(--pen); border-top-color: var(--pen); }
+.inspector-break { display: flex; align-items: center; gap: 8px; padding: 4px 0; }
+.inspector-break .pause-rule { flex: 1; }
+.pause-rule { display: flex; align-items: center; gap: 8px; margin: 0; color: var(--pen); font-size: 13px; font-style: italic; }
+.pause-rule::before, .pause-rule::after { content: ''; flex: 1; border-top: 1px dashed var(--pen); }
+.pause-rule span { font-style: normal; font-variant: small-caps; text-transform: lowercase; letter-spacing: 0.14em; }
+.block-pause .block-body { align-self: center; }
+.break-sign rect { fill: color-mix(in srgb, var(--pen) 14%, var(--paper-hi)); stroke: var(--pen); stroke-width: 1; }
+.break-sign text { fill: var(--pen); font: 600 10.5px var(--serif); }
+@media (max-width: 760px) {
+  .map-frame { flex-direction: column; }
+  .map-canvas { min-height: 320px; }
+  .map-inspector { flex-basis: auto; max-width: none; border-left: 0; border-top: 1px solid var(--rule-2); }
+}
+
+/* Export: the Unity Story UI card and its preview */
+.unity-theme { grid-column: 1 / -1; }
+.unity-theme-grid { display: grid; gap: 22px; grid-template-columns: minmax(0, 1fr) minmax(0, 1.2fr); align-items: start; }
+@media (max-width: 760px) { .unity-theme-grid { grid-template-columns: minmax(0, 1fr); } }
+.unity-theme fieldset { border: 0; padding: 0; margin: 0 0 14px; min-width: 0; }
+.unity-theme legend { padding: 0; margin-bottom: 4px; font-variant: small-caps; text-transform: lowercase; letter-spacing: 0.08em; }
+.seg { display: flex; flex-wrap: wrap; gap: 6px; }
+.unity-colours { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px 14px; margin-bottom: 14px; }
+.colour-field { display: flex; align-items: center; gap: 8px; cursor: pointer; }
+.colour-field input[type='color'] { width: 34px; height: 28px; padding: 0; border: 1px solid var(--rule); border-radius: 2px; background: none; cursor: pointer; }
+.unity-theme input[type='range'] { width: 100%; accent-color: var(--rubric); }
+.unity-theme .check { margin-bottom: 6px; }
+.unity-labels { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0 14px; margin-top: 10px; }
+.unity-preview { margin: 0; position: sticky; top: 12px; }
+.unity-screen { container-type: inline-size; position: relative; aspect-ratio: 16 / 9; border-radius: 3px; overflow: hidden; border: 1px solid var(--rule);
+  background: linear-gradient(160deg, #6b7f8e 0%, #3e4c57 55%, #26313a 100%); }
+.unity-screen::after { content: ''; position: absolute; left: 0; right: 0; bottom: 0; height: 32%; background: linear-gradient(180deg, transparent, #1b2329); }
+.unity-panel { position: absolute; z-index: 1; display: flex; flex-direction: column; gap: 0.5em; padding: calc(28 * 100cqw / 1920); border-radius: calc(8 * 100cqw / 1920);
+  font-family: Arial, Helvetica, sans-serif; line-height: 1.25; overflow: hidden; }
+.unity-lines { flex: 1; min-height: 0; overflow: hidden; }
+.unity-lines p { margin: 0 0 0.4em; }
+.unity-scene { font-weight: bold; }
+.unity-choices { display: flex; flex-direction: column; gap: 0.3em; }
+.unity-btn { display: block; padding: 0.35em 0.7em; border-radius: calc(6 * 100cqw / 1920); text-align: center; }
+.unity-toolbar { display: flex; gap: 1.2em; font-size: 0.7em; }
+.unity-preview figcaption { margin-top: 6px; }
+.seg .btn[aria-pressed='true'] { background: var(--rubric); border-color: var(--rubric); color: var(--paper-hi); }
