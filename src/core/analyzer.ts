@@ -119,8 +119,28 @@ export function analyze(project: StoryProject): Analysis {
       ds.push(diag('NO_AVAILABLE_CHOICES', 'warning', STAGE, `"${p.title}" has no choices, divert or ending — the player will be stuck.`, { entityId: p.id, remediation: 'Add a choice, a divert, or mark it as an ending.', exportBlocked: false }));
     else if (!p.divert && activeChoices.length > 0 && activeChoices.every((c) => c.conditions.length > 0))
       ds.push(diag('ALL_CHOICES_CONDITIONAL', 'warning', STAGE, `Every choice in "${p.title}" is conditional; if none are available the player is stuck.`, { entityId: p.id, remediation: 'Add an unconditional choice or a fallback divert.', exportBlocked: false }));
-    if (p.content.length === 0 && passages.length > 1)
+    if (p.content.filter((b) => b.type !== 'pause').length === 0 && passages.length > 1)
       ds.push(diag('EMPTY_PASSAGE', 'info', STAGE, `"${p.title}" has no narrative content.`, { entityId: p.id, exportBlocked: false }));
+    // A Continue break should have something to show on each side, or the reader clicks Continue for nothing.
+    const shown = (b: (typeof p.content)[number]) => b.type === 'action' || b.type === 'dialogue' || b.type === 'transition';
+    const visible = (b: (typeof p.content)[number]) => b.type === 'pause' || shown(b);
+    p.content.forEach((b, i) => {
+      if (b.type !== 'pause') return;
+      // The nearest thing the reader sees on each side must be text, not the passage edge or another break.
+      const prev = p.content.slice(0, i).reverse().find(visible);
+      const next = p.content.slice(i + 1).find(visible);
+      const before = !!prev && shown(prev);
+      // (Of two breaks in a row, the second is the redundant one; it is flagged for having no text before.)
+      const nextIsText = !!next && (shown(next) || next.type === 'pause');
+      if (!before || !nextIsText)
+        ds.push(
+          diag('PAUSE_WITHOUT_TEXT', 'info', STAGE, `A Continue break in "${p.title}" has no text ${!nextIsText ? 'after' : 'before'} it, so the reader clicks Continue for nothing.`, {
+            entityId: p.id,
+            remediation: 'Move the break between two lines, or remove it.',
+            exportBlocked: false,
+          }),
+        );
+    });
   }
 
   // Reachability over approved edges.

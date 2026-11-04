@@ -169,3 +169,21 @@ export function movePassage(p: StoryProject, id: string, dir: -1 | 1): boolean {
   [p.passages[i], p.passages[j]] = [p.passages[j], p.passages[i]];
   return true;
 }
+
+/** An edit to the project (see App.update): applied to a copy, one undo step unless grouped. */
+export type Update = (fn: (draft: StoryProject) => void, group?: string) => void;
+
+/** Puts a Continue break before content block `at`: from there on, the reader clicks Continue first. */
+export function addBreak(p: StoryProject, passageId: string, at: number) {
+  p.passages.find((x) => x.id === passageId)?.content.splice(at, 0, { type: 'pause', origin: 'user_authored' });
+}
+
+/** Removes the Continue break at content index `at` (if it is one). */
+export function removeBreak(p: StoryProject, passageId: string, at: number) {
+  const passage = p.passages.find((x) => x.id === passageId);
+  if (passage?.content[at]?.type === 'pause') passage.content.splice(at, 1);
+}
+
+export function countBreaks(passage: { content: { type: string }[] }): number {
+  return passage.content.filter((b) => b.type === 'pause').length;
+}

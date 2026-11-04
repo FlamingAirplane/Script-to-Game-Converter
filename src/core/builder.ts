@@ -327,6 +327,8 @@ function assemble(
           case 'heading':
             if (!p.sceneHeading) p.sceneHeading = m.text;
             return null;
+          case 'pause':
+            return { type: 'pause', origin: 'source', source: s };
           case 'divert':
             if (p.divert) diagnostics.push(diag('MULTIPLE_DIVERTS', 'warning', 'parsing', `Passage "${p.id}" has more than one divert; the last one wins.`, { entityId: p.id, source: s, exportBlocked: false }));
             p.divert = m.target;

@@ -9,11 +9,12 @@ import type { Marker } from './types';
 //   @item <id> ["Display Name"] [consumable]
 //   @var <id> = <true|false|number|"text">
 //   @give <item>   @take <item>   @set <var> = <value>   @add <var> <n>
+//   @pause                           a Continue break: what follows waits for the reader
 //   * [Choice text] -> target        once-only choice
 //   + {has key} [Choice text] -> target @take key     sticky, gated choice with effects
 //   - [Choice text](#target)         Markdown link form
 
-const KEYWORDS = new Set(['passage', 'start', 'end', 'item', 'var', 'give', 'take', 'set', 'add']);
+const KEYWORDS = new Set(['passage', 'start', 'end', 'pause', 'item', 'var', 'give', 'take', 'set', 'add']);
 
 export function isMarkerLine(line: string): boolean {
   const t = line.trim();
@@ -92,6 +93,8 @@ export function parseMarker(line: string): Marker | null {
       return rest.trim() ? { type: 'start', id: rest.trim() } : null;
     case 'end':
       return { type: 'end' };
+    case 'pause':
+      return { type: 'pause' };
     case 'item': {
       const p = /^([A-Za-z_]\w*)\s*(?:"([^"]*)")?\s*(consumable)?/.exec(rest);
       return p ? { type: 'item', id: p[1], displayName: p[2], consumable: !!p[3] } : null;

@@ -51,6 +51,11 @@ for (const width of WIDTHS) {
   for (const tab of TABS.slice(1)) {
     await page.getByRole('button', { name: new RegExp(tab) }).first().click();
     await page.waitForTimeout(350);
+    if (tab === 'Graph') {
+      await page.locator('g.node').first().focus();
+      await page.keyboard.press('Space');
+      await page.locator('.map-inspector').waitFor();
+    }
     if (tab === 'Export') {
       await page.getByRole('button', { name: 'Build Unity package' }).click().catch(() => {});
       await page.getByText('package verified').waitFor({ timeout: 8000 }).catch(() => {});

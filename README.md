@@ -137,6 +137,7 @@ Existing interactive stories can be opened and worked on like any other project.
 + {trust >= 2 and not has lamp} [Trust her] -> ally
 - [Markdown link choice](#target)
 -> target   /   @end                         divert / ending
+@pause                                       Continue break: the player clicks Continue to read on
 ## Heading {#custom_id}                      Markdown heading as a passage
 ```
 
@@ -147,6 +148,10 @@ See [`src/samples.ts`](src/samples.ts) for complete examples.
 - Items are Booleans: `VAR has_<item> = false`. Conditions compile from an expression tree (never raw strings).
 - Dialogue: `NAME: text #speaker:<id>`; parentheticals add `#paren:…`; the first line of a scene carries `#scene:<heading>`; transitions carry `#transition`.
 - Choices are sticky (`+`) unless marked once-only (`*`). A passage's divert becomes an invisible fallback choice when the passage also has choices, so players never get stuck.
+- A Continue break (`@pause`, or **+ Continue break** on the Graph or in Review) is a single sticky choice `+ [Continue]`
+  followed by a gather `-`. The Ink importer reads that exact pair back as a break, but only outside an open set of
+  choices; hand-written gathers elsewhere still count as unsupported. Twine exports split the passage into
+  `Name (continued)` parts joined by a `[[Continue->…]]` link, and the Twine importer joins them again.
 - Output is deterministic: the same ISR always produces byte-identical Ink.
 
 ## Logging
@@ -196,7 +201,14 @@ choice was cut they resume just before it.
 **Unity** (2022.3 LTS+): `Packages/manifest.json` references Ink Unity Integration `2.0.0` as a UPM git dependency. On first open the
 editor creates a `NarrativeDemo` scene whose `NarrativeController` uses the `InkFile` the integration imports from
 `MainStory.ink`. Press Play. The controller handles text, choices, approved variables, a host-authoritative inventory bridge
-(`IInventoryAuthority`) and save/load that carries saves over to revised story versions (checked in the engine by the smoke test). Headless check:
+(`IInventoryAuthority`) and save/load that carries saves over to revised story versions (checked in the engine by the smoke test).
+
+The demo scene shows the story in a uGUI panel (`NarrativeView`, `com.unity.ugui`) styled by a `NarrativeTheme` asset in
+`Assets/NarrativeBridge/Settings`, created from the **Story UI** settings on the Export page
+(`Resources/NarrativeBridgeTheme.json`): look, position, colours, opacity, text size, typewriter speed, which parts show,
+and the Continue and ending labels. Edits to the asset apply while the game runs; *Narrative Bridge → Reset Theme to
+Exported Defaults* restores the exported settings. Continue breaks raise `ContinueShown` and show one Continue button.
+The smoke test also builds the view and clicks through it. Headless check:
 `Unity -batchmode -projectPath <dir> -executeMethod NarrativeBridge.EditorTools.NarrativeBridgeEditor.RunSmokeTestBatch`.
 
 **Unreal** (5.7+): a C++ project with Inkpot enabled, `Scripts/setup_inkpot.sh|ps1` to clone Inkpot at the pinned ref,

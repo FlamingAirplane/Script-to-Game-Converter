@@ -2,6 +2,8 @@ import { log } from '../log';
 import type { ProcessedStory } from '../pipeline';
 import { assertExportable, audioFiles, buildManifest, commonFiles, itemVarNames, json, sourceFiles, storyVersion, verifyExport } from './common';
 import type { EngineAdapter, ExportFile, ExportOptions, ExportResult } from './types';
+import { normaliseUnityTheme, unityThemeJson } from './unityTheme';
+import { THEME_CS, VIEW_CS } from './unityUi';
 
 // Unity adapter. Uses inkle's Ink Unity Integration (com.inkle.ink-unity-integration) as a
 // versioned UPM git dependency rather than copying its source. The canonical .ink is delivered
@@ -35,6 +37,10 @@ export const unityAdapter: EngineAdapter = {
       { path: `${root}${NB}/Scripts/StoryInfo.cs`, content: storyInfoCs(story) },
       { path: `${root}${NB}/Scripts/IInventoryAuthority.cs`, content: INVENTORY_CS },
       { path: `${root}${NB}/Scripts/NarrativeController.cs`, content: CONTROLLER_CS },
+      { path: `${root}${NB}/Scripts/NarrativeTheme.cs`, content: THEME_CS },
+      { path: `${root}${NB}/Scripts/NarrativeView.cs`, content: VIEW_CS },
+      // The look chosen on the Export page; NarrativeTheme reads it (see unityTheme.ts).
+      { path: `${root}${NB}/Resources/NarrativeBridgeTheme.json`, content: json(unityThemeJson(normaliseUnityTheme(options.unityTheme ?? story.project.presentation?.unity))) },
       ...(options.includeDemo ? [{ path: `${root}${NB}/Editor/NarrativeBridgeEditor.cs`, content: EDITOR_CS }] : []),
       { path: `${root}Packages/manifest.json`, content: json(packageManifest(options)) },
       { path: `${root}ProjectSettings/ProjectVersion.txt`, content: `m_EditorVersion: ${options.engineVersion}\n` },
@@ -101,6 +107,8 @@ function packageManifest(o: ExportOptions) {
       'com.unity.modules.audio': '1.0.0',
       'com.unity.modules.imgui': '1.0.0',
       'com.unity.modules.jsonserialize': '1.0.0',
+      // uGUI for the story panel (NarrativeView). 2022.3 ships 1.0.0; Unity 6 raises it to its own 2.0.0.
+      'com.unity.ugui': '1.0.0',
     },
   };
 }
@@ -110,7 +118,7 @@ function setupSteps(o: ExportOptions): string[] {
     `Open Unity Hub → Add → select the "${o.projectName}" folder. Open it with Unity ${o.engineVersion} or any later 2022.3+/6000.x editor.`,
     'Unity Package Manager fetches Ink Unity Integration from GitHub on first open (git must be installed).',
     o.includeDemo
-      ? 'The "NarrativeDemo" scene is created automatically on first open. Press Play to run the story.'
+      ? 'The "NarrativeDemo" scene is created automatically on first open. Press Play to run the story. Change its look in Assets/NarrativeBridge/Settings/NarrativeTheme.asset (even while playing).'
       : 'Add a NarrativeController component to any GameObject and press Play.',
     'Optional: run the automated check from Narrative Bridge → Run Story Smoke Test, or headless: Unity -batchmode -projectPath <path> -executeMethod NarrativeBridge.EditorTools.NarrativeBridgeEditor.RunSmokeTestBatch',
   ];
@@ -153,7 +161,10 @@ ${setupSteps(o).map((s, i) => `${i + 1}. ${s}`).join('\n')}
 ## Layout
 - \`Assets/NarrativeBridge/Ink/MainStory.ink\` — canonical, validated Ink source (imported by Ink Unity Integration).
 - \`Assets/NarrativeBridge/Resources/MainStory.compiled.json\` — preflight-compiled story used by the demo.
-- \`Assets/NarrativeBridge/Scripts/NarrativeController.cs\` — continue/choose/variables/inventory/save-load.
+- \`Assets/NarrativeBridge/Scripts/NarrativeController.cs\` — continue/choose/variables/inventory/save-load, and the events a UI listens to.
+- \`Assets/NarrativeBridge/Scripts/NarrativeView.cs\` — the story panel (uGUI), built at runtime from a \`NarrativeTheme\`.
+- \`Assets/NarrativeBridge/Scripts/NarrativeTheme.cs\` and \`Settings/NarrativeTheme.asset\` — the look: colours, font and size, panel
+  position, typewriter speed, what to show, button words. \`Resources/NarrativeBridgeTheme.json\` is the look chosen in Narrative Bridge.
 - \`NarrativeBridge/\` — manifest, validation report, ISR, source map and original source documents.
 
 ## Integration notes
@@ -161,6 +172,17 @@ ${setupSteps(o).map((s, i) => `${i + 1}. ${s}`).join('\n')}
   ${/^[0-9a-f]{7,40}$/i.test(o.integrationRef) || /^v?\d/.test(o.integrationRef) ? 'This ref is pinned.' : '**This ref is a branch.** Replace it with a tested release tag or commit for reproducible builds.'}
 - The demo scene's controller references the \`InkFile\` that Ink Unity Integration imports from \`MainStory.ink\`, so the integration owns
   final compilation. If that asset is missing or failed to compile, the controller falls back to \`Resources/MainStory.compiled\`.
+
+## Story UI
+The demo scene's \`NarrativeView\` draws the story as a themed uGUI panel: story text (with an optional typewriter), choices, the
+Continue button for Continue breaks, the ending, and optional Restart / Save / Load. Keys: 1–9 choose, Space or Return continues.
+- **Change the look:** select \`Assets/NarrativeBridge/Settings/NarrativeTheme.asset\` and edit it in the Inspector, even while
+  playing; right-click its header → *Layout* for panel positions. *Narrative Bridge → Reset Theme to Exported Defaults* brings back
+  the look chosen in Narrative Bridge. Exporting again updates \`NarrativeBridgeTheme.json\` but never your edited asset.
+- **Your own UI:** remove \`NarrativeView\` and listen to \`NarrativeController\`: \`LineShown\` (with \`Speaker\`, \`Paren\`, \`Scene\`),
+  \`ChoicesShown\` → \`Choose(i)\`, \`ContinueShown\` → \`Continue()\`, \`StoryEnded\`, \`Restarted\`, \`StatusChanged\`.
+- Buttons need an EventSystem; one is added when missing. With only the new Input System enabled, give it an
+  *Input System UI Input Module*.
 
 ## Inventory
 Items are Ink Booleans named \`has_<item>\`. Assign a component implementing \`IInventoryAuthority\` to make your game's
@@ -200,8 +222,10 @@ namespace NarrativeBridge
 {
     /// <summary>
     /// Runs a Narrative Bridge story with the Ink runtime from Ink Unity Integration:
-    /// advances text, presents choices, exposes approved variables, synchronises inventory
-    /// and saves/restores state with story-version checks. Includes an optional IMGUI demo UI.
+    /// advances text, presents choices and Continue breaks, exposes approved variables,
+    /// synchronises inventory and saves/restores state with story-version checks.
+    /// NarrativeView draws it as a themed uGUI story panel; any other UI can use the events below.
+    /// Includes an optional bare-bones IMGUI demo (drawDemoUI).
     /// </summary>
     public class NarrativeController : MonoBehaviour
     {
@@ -215,6 +239,8 @@ namespace NarrativeBridge
         public MonoBehaviour inventoryAuthority;
 
         public bool startOnAwake = true;
+
+        [Tooltip("Draw the bare-bones IMGUI demo. Off when a NarrativeView draws the story.")]
         public bool drawDemoUI = true;
 
         [Tooltip("Play recorded dialogue clips (#audio tags) from Resources/NarrativeBridgeAudio.")]
@@ -225,16 +251,36 @@ namespace NarrativeBridge
             public string Speaker;
             public string Text;
             public List<string> Tags;
+            /// <summary>The scene heading this line opens (from #scene), or null.</summary>
+            public string Scene;
+            /// <summary>A stage direction for the speaker (from #paren), or null.</summary>
+            public string Paren;
+            /// <summary>A choice the player made (shown in the transcript), not story text.</summary>
+            public bool IsChoice;
+            public bool IsTransition;
         }
 
+        /// <summary>The text of a Continue break's only choice (see the Ink conventions).</summary>
+        public const string ContinueText = "Continue";
+
         public event Action<Line> LineShown;
+        /// <summary>Real choices to make. A Continue break raises ContinueShown instead.</summary>
         public event Action<IReadOnlyList<Choice>> ChoicesShown;
+        /// <summary>A Continue break: the reader continues (Continue()) to see what follows.</summary>
+        public event Action ContinueShown;
         public event Action StoryEnded;
         public event Action<string> RuntimeError;
+        /// <summary>The transcript was cleared (start, restart or load): redraw from scratch.</summary>
+        public event Action Restarted;
+        public event Action<string> StatusChanged;
 
         public Story Story { get; private set; }
         public bool HasEnded { get; private set; }
         public IReadOnlyList<Line> Transcript => transcript;
+        public string Status => status;
+
+        /// <summary>The story is at a Continue break: its only choice is Continue.</summary>
+        public bool IsWaitingForContinue => Story != null && Story.currentChoices.Count == 1 && Story.currentChoices[0].text == ContinueText;
 
         const string SaveKey = "NarrativeBridge.Save." + StoryInfo.ProjectId;
         readonly List<Line> transcript = new List<Line>();
@@ -295,15 +341,24 @@ namespace NarrativeBridge
             choicePath.Clear();
             transcript.Clear();
             HasEnded = false;
-            status = "";
+            SetStatus("");
             StopVoice();
+            Restarted?.Invoke();
             Advance();
+        }
+
+        /// <summary>Goes on past a Continue break.</summary>
+        public void Continue()
+        {
+            if (IsWaitingForContinue) Choose(0);
         }
 
         public void Choose(int index)
         {
             if (Story == null || index < 0 || index >= Story.currentChoices.Count) return;
-            transcript.Add(new Line { Speaker = null, Text = "> " + Story.currentChoices[index].text, Tags = new List<string> { "choice" } });
+            // A Continue break leaves no trace in the transcript: the page simply goes on.
+            if (!IsWaitingForContinue)
+                transcript.Add(new Line { Speaker = null, Text = Story.currentChoices[index].text, Tags = new List<string> { "choice" }, IsChoice = true });
             choicePath.Add(Story.currentChoices[index].text);
             Story.ChooseChoiceIndex(index);
             StopVoice();
@@ -322,7 +377,8 @@ namespace NarrativeBridge
                 QueueVoice(line);
                 LineShown?.Invoke(line);
             }
-            if (Story.currentChoices.Count > 0) ChoicesShown?.Invoke(Story.currentChoices);
+            if (IsWaitingForContinue) ContinueShown?.Invoke();
+            else if (Story.currentChoices.Count > 0) ChoicesShown?.Invoke(Story.currentChoices);
             else
             {
                 HasEnded = true;
@@ -363,16 +419,22 @@ namespace NarrativeBridge
 
         static Line ParseLine(string raw, List<string> tags)
         {
-            string speaker = null;
+            string speaker = null, scene = null, paren = null;
+            var transition = false;
             foreach (var t in tags)
+            {
                 if (t.StartsWith("speaker:")) speaker = t.Substring(8).Trim();
+                else if (t.StartsWith("scene:")) scene = t.Substring(6).Trim();
+                else if (t.StartsWith("paren:")) paren = t.Substring(6).Trim();
+                else if (t == "transition") transition = true;
+            }
             var text = raw;
             if (speaker != null)
             {
                 var colon = raw.IndexOf(": ", StringComparison.Ordinal);
                 if (colon > 0) { speaker = raw.Substring(0, colon); text = raw.Substring(colon + 2); }
             }
-            return new Line { Speaker = speaker, Text = text, Tags = tags };
+            return new Line { Speaker = speaker, Text = text, Tags = tags, Scene = scene, Paren = paren, IsTransition = transition };
         }
 
         // ---- Variables -------------------------------------------------------------------
@@ -415,6 +477,21 @@ namespace NarrativeBridge
 
         // ---- Save / load with story-version checks ----------------------------------------
 
+        /// <summary>Saves to PlayerPrefs (one slot per story), as the demo's Save button does.</summary>
+        public void SaveToPrefs()
+        {
+            if (Story == null) return;
+            PlayerPrefs.SetString(SaveKey, SaveState());
+            SetStatus("Saved.");
+        }
+
+        /// <summary>Loads the PlayerPrefs slot, as the demo's Load button does. The outcome is in Status.</summary>
+        public void LoadFromPrefs()
+        {
+            if (Story == null) return;
+            SetStatus(TryLoadState(PlayerPrefs.GetString(SaveKey, ""), out var err) ? LoadNote ?? "Loaded." : err);
+        }
+
         public string SaveState()
         {
             return JsonUtility.ToJson(new SaveData { storyVersion = StoryInfo.StoryVersion, inkState = Story.state.ToJson(), choicePath = new List<string>(choicePath) });
@@ -444,7 +521,9 @@ namespace NarrativeBridge
             if (data.choicePath != null) choicePath.AddRange(data.choicePath);
             transcript.Clear();
             HasEnded = false;
+            Restarted?.Invoke();
             if (Story.canContinue) Advance();
+            else if (IsWaitingForContinue) ContinueShown?.Invoke();
             else if (Story.currentChoices.Count > 0) ChoicesShown?.Invoke(Story.currentChoices);
             return true;
         }
@@ -463,18 +542,34 @@ namespace NarrativeBridge
             syncing = true; // the host's inventory is already where the save left it
             try
             {
-                foreach (var text in path)
+                // Continue breaks added or removed since the save don't stop it: take or skip them.
+                for (int i = 0, steps = 0; i < path.Count && steps < 10000; steps++)
                 {
                     var before = Story.state.ToJson();
                     while (Story.canContinue) Story.Continue();
-                    var match = Story.currentChoices.Find(c => c.text == text);
-                    if (match == null) { Story.state.LoadJson(before); break; }
-                    Story.ChooseChoiceIndex(match.index);
-                    choicePath.Add(text);
-                    followed++;
+                    var match = Story.currentChoices.Find(c => c.text == path[i]);
+                    if (match != null)
+                    {
+                        Story.ChooseChoiceIndex(match.index);
+                        choicePath.Add(path[i]);
+                        followed++;
+                        i++;
+                    }
+                    else if (IsWaitingForContinue)
+                    {
+                        Story.ChooseChoiceIndex(0);
+                        choicePath.Add(ContinueText);
+                    }
+                    else if (path[i] == ContinueText)
+                    {
+                        followed++;
+                        i++;
+                    }
+                    else { Story.state.LoadJson(before); break; }
                 }
             }
             finally { syncing = false; }
+            Restarted?.Invoke();
             LoadNote = followed == path.Count
                 ? "Carried this save over from story version " + savedVersion + ": all " + path.Count + " choices replayed."
                 : "Carried this save over from story version " + savedVersion + ": " + followed + " of " + path.Count + " choices still exist, so it resumes after the last one that does.";
@@ -484,8 +579,14 @@ namespace NarrativeBridge
         void ReportError(string message)
         {
             Debug.LogError("[NarrativeBridge] " + message, this);
-            status = message;
+            SetStatus(message);
             RuntimeError?.Invoke(message);
+        }
+
+        void SetStatus(string message)
+        {
+            status = message ?? "";
+            StatusChanged?.Invoke(status);
         }
 
         // ---- Demo UI ---------------------------------------------------------------------
@@ -500,7 +601,7 @@ namespace NarrativeBridge
             var style = new GUIStyle(GUI.skin.label) { richText = true, wordWrap = true, fontSize = 15 };
             foreach (var l in transcript)
             {
-                if (l.Tags.Contains("choice")) GUILayout.Label("<i>" + l.Text + "</i>", style);
+                if (l.IsChoice) GUILayout.Label("<i>> " + l.Text + "</i>", style);
                 else if (l.Speaker != null) GUILayout.Label("<b>" + l.Speaker + "</b>  " + l.Text, style);
                 else GUILayout.Label(l.Text, style);
             }
@@ -513,11 +614,8 @@ namespace NarrativeBridge
             }
             GUILayout.BeginHorizontal();
             if (GUILayout.Button("Restart")) StartStory();
-            if (Story != null && GUILayout.Button("Save")) { PlayerPrefs.SetString(SaveKey, SaveState()); status = "Saved."; }
-            if (Story != null && GUILayout.Button("Load"))
-            {
-                status = TryLoadState(PlayerPrefs.GetString(SaveKey, ""), out var err) ? LoadNote ?? "Loaded." : err;
-            }
+            if (Story != null && GUILayout.Button("Save")) SaveToPrefs();
+            if (Story != null && GUILayout.Button("Load")) LoadFromPrefs();
             GUILayout.EndHorizontal();
             if (!string.IsNullOrEmpty(status)) GUILayout.Label(status);
             GUILayout.EndArea();
@@ -540,6 +638,7 @@ namespace NarrativeBridge.EditorTools
     {
         const string ScenePath = "Assets/NarrativeBridge/Scenes/NarrativeDemo.unity";
         const string InkPath = "Assets/NarrativeBridge/Ink/MainStory.ink";
+        const string ThemePath = "Assets/NarrativeBridge/Settings/NarrativeTheme.asset";
 
         static NarrativeBridgeEditor()
         {
@@ -579,10 +678,41 @@ namespace NarrativeBridge.EditorTools
             var scene = EditorSceneManager.NewScene(NewSceneSetup.DefaultGameObjects, NewSceneMode.Single);
             var controller = new GameObject("Narrative Controller").AddComponent<NarrativeController>();
             controller.inkFile = LoadCompiledInkFile();
+            // The themed uGUI story panel replaces the bare-bones IMGUI demo.
+            controller.drawDemoUI = false;
+            var view = controller.gameObject.AddComponent<NarrativeView>();
+            view.controller = controller;
+            view.theme = LoadOrCreateTheme();
             Directory.CreateDirectory(System.IO.Path.GetDirectoryName(ScenePath));
             EditorSceneManager.SaveScene(scene, ScenePath);
             EditorBuildSettings.scenes = new[] { new EditorBuildSettingsScene(ScenePath, true) };
             Debug.Log("[NarrativeBridge] Demo scene created at " + ScenePath + ". Press Play to run the story.");
+        }
+
+        /// <summary>The project's theme asset, created from the exported look the first time.</summary>
+        static NarrativeTheme LoadOrCreateTheme()
+        {
+            var theme = AssetDatabase.LoadAssetAtPath<NarrativeTheme>(ThemePath);
+            if (theme != null) return theme;
+            Directory.CreateDirectory(System.IO.Path.GetDirectoryName(ThemePath));
+            theme = NarrativeTheme.LoadExported();
+            AssetDatabase.CreateAsset(theme, ThemePath);
+            AssetDatabase.SaveAssets();
+            return theme;
+        }
+
+        [MenuItem("Narrative Bridge/Reset Theme to Exported Defaults")]
+        public static void ResetTheme()
+        {
+            var theme = LoadOrCreateTheme();
+            var exported = Resources.Load<TextAsset>(NarrativeTheme.ExportedResource);
+            if (exported == null) { Debug.LogWarning("[NarrativeBridge] Resources/" + NarrativeTheme.ExportedResource + ".json is missing."); return; }
+            Undo.RecordObject(theme, "Reset Narrative Bridge theme");
+            theme.ApplyExported(exported.text);
+            EditorUtility.SetDirty(theme);
+            AssetDatabase.SaveAssets();
+            Selection.activeObject = theme;
+            Debug.Log("[NarrativeBridge] Theme reset to the look exported from Narrative Bridge.");
         }
 
         [MenuItem("Narrative Bridge/Run Story Smoke Test")]
@@ -648,7 +778,8 @@ namespace NarrativeBridge.EditorTools
                     errors.Add("Voice clip did not import: " + file);
             }
             var carry = SaveCarryOverCheck(errors);
-            log = "[NarrativeBridge] Smoke test (" + source + "): " + clipsHeard.Count + " voice clip(s) checked, " + completed + "/" + runs + " playthroughs reached an ending, " + carry + ", " + errors.Count + " runtime errors." +
+            var ui = StoryViewCheck(errors);
+            log = "[NarrativeBridge] Smoke test (" + source + "): " + clipsHeard.Count + " voice clip(s) checked, " + completed + "/" + runs + " playthroughs reached an ending, " + carry + ", " + ui + ", " + errors.Count + " runtime errors." +
                   (errors.Count > 0 ? "\\n" + string.Join("\\n", errors) : "");
             return errors.Count == 0 && completed > 0;
         }
@@ -672,6 +803,37 @@ namespace NarrativeBridge.EditorTools
                 var got = string.Join(" | ", c.Story.currentChoices.ConvertAll(x => x.text));
                 if (got != expected || c.LoadNote == null) { errors.Add("Save carry-over: expected choices [" + expected + "] but got [" + got + "]"); return "save carry-over failed"; }
                 return "save carry-over passed";
+            }
+            finally { UnityEngine.Object.DestroyImmediate(go); }
+        }
+
+        /// Builds the story panel from the exported theme and plays a few steps through its buttons:
+        /// one button per choice (one for a Continue break), clicks advance the story, the ending shows.
+        static string StoryViewCheck(List<string> errors)
+        {
+            var go = new GameObject("NarrativeBridge view check");
+            try
+            {
+                var c = go.AddComponent<NarrativeController>();
+                c.drawDemoUI = false;
+                var view = go.AddComponent<NarrativeView>();
+                view.controller = c;
+                view.theme = NarrativeTheme.LoadExported();
+                view.Build();
+                c.StartStory();
+                if (c.Story == null || view.Canvas == null) { errors.Add("Story UI: the panel was not built."); return "story UI failed"; }
+                var steps = 0;
+                while (!c.HasEnded && steps++ < 200)
+                {
+                    var expected = c.IsWaitingForContinue ? 1 : c.Story.currentChoices.Count;
+                    if (view.Buttons.Count != expected) { errors.Add("Story UI: expected " + expected + " button(s) but the panel shows " + view.Buttons.Count + "."); return "story UI failed"; }
+                    var before = c.Transcript.Count + "/" + c.Story.state.currentTurnIndex;
+                    view.Buttons[0].onClick.Invoke();
+                    if (before == c.Transcript.Count + "/" + c.Story.state.currentTurnIndex) { errors.Add("Story UI: clicking a button did not advance the story."); return "story UI failed"; }
+                }
+                if (!c.HasEnded) return "story UI passed (" + steps + " steps, no ending within the check)";
+                if (view.Buttons.Count != 0) { errors.Add("Story UI: buttons are still shown after the ending."); return "story UI failed"; }
+                return "story UI passed";
             }
             finally { UnityEngine.Object.DestroyImmediate(go); }
         }

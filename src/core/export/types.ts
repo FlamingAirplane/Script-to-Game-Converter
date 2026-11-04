@@ -1,5 +1,6 @@
 import type { AudioAssets } from '../audio';
 import type { Diagnostic } from '../diagnostics';
+import type { UnityTheme } from '../isr';
 import type { ProcessedStory } from '../pipeline';
 
 // Engine adapter contract (TypeScript rendering of the IEngineAdapter interface in the design doc).
@@ -16,6 +17,8 @@ export interface ExportOptions {
   includeDemo: boolean;
   /** Recorded dialogue clips referenced by #audio tags; shipped with the export. */
   audio?: AudioAssets;
+  /** Unity story UI look; defaults to the project's (presentation.unity), then to the Book preset. */
+  unityTheme?: UnityTheme;
 }
 
 export interface ExportFile {

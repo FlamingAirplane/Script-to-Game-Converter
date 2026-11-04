@@ -8,9 +8,8 @@ import { friendly } from './friendly';
 import { VoiceClip, VoicePicker } from './VoiceControls';
 import { formatMinutes, storyStats } from '../core/stats';
 import { DraftShelf } from './Drafts';
-import { addChoice, addPassage, deletePassage, findText, mergeCharacter, movePassage, renamePassage, replaceText } from './projectOps';
+import { type Update, addChoice, addPassage, deletePassage, findText, mergeCharacter, movePassage, renamePassage, replaceText } from './projectOps';
 
-type Update = (fn: (draft: StoryProject) => void, group?: string) => void;
 
 export const STORY_SETTINGS = '__story__';
 
@@ -290,15 +289,15 @@ function PassageEditor({
       <section className="blocks">
         <h3>Content</h3>
         {passage.content.length === 0 && <p className="muted small">No narrative content.</p>}
-        {dialogueOnly && passage.content.some((b) => b.type !== 'dialogue') && (
+        {dialogueOnly && passage.content.some((b) => b.type !== 'dialogue' && b.type !== 'pause') && (
           <p className="muted small dialogue-only-note">
-            Showing dialogue only — {passage.content.filter((b) => b.type !== 'dialogue').length} other block(s) hidden.{' '}
+            Showing dialogue only — {passage.content.filter((b) => b.type !== 'dialogue' && b.type !== 'pause').length} other block(s) hidden.{' '}
             <button className="link small" onClick={() => onDialogueOnly(false)}>
               Show everything
             </button>
           </p>
         )}
-        {passage.content.map((b, i) => (dialogueOnly && b.type !== 'dialogue' ? null : (
+        {passage.content.map((b, i) => (dialogueOnly && b.type !== 'dialogue' && b.type !== 'pause' ? null : (
           <BlockRow
             key={i}
             block={b}
@@ -346,6 +345,13 @@ function PassageEditor({
             }
           >
             + Effect
+          </button>
+          <button
+            className="btn tiny"
+            title="The reader clicks Continue before reading what follows. Move it up between two lines, or add breaks from the Graph."
+            onClick={() => edit((p) => p.content.push({ type: 'pause', origin: 'user_authored' }))}
+          >
+            + Continue break
           </button>
         </div>
       </section>
@@ -428,7 +434,7 @@ function BlockRow({
   return (
     <div className={`block block-${block.type}`}>
       <div className="block-gutter">
-        <span className="block-type">{block.type}</span>
+        <span className="block-type">{block.type === 'pause' ? 'break' : block.type}</span>
         {block.source && (
           <button className="link mono small" onClick={() => onFocusLine(block.source!.line)} title="Show in source">
             L{block.source.line}
@@ -456,6 +462,11 @@ function BlockRow({
         )}
         {'text' in block && block.type !== 'unsupported' && (
           <AutoText value={block.text} onChange={(text) => onChange(touched({ ...block, text } as ContentBlock))} serif={block.type !== 'note'} label={`${block.type === 'dialogue' ? 'Dialogue' : block.type === 'note' ? 'Note' : block.type === 'transition' ? 'Transition' : 'Narration'} text`} />
+        )}
+        {block.type === 'pause' && (
+          <p className="pause-rule">
+            <span>Continue</span> the reader clicks Continue here before reading on
+          </p>
         )}
         {block.type === 'unsupported' && (
           <div>

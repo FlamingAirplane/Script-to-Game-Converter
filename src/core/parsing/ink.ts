@@ -6,7 +6,7 @@ import type { ParsedBlock, Parser } from './types';
 // Ink import. Ink that uses only what the story model can represent becomes an ordinary editable
 // story: knots and stitches are passages, VARs are variables (has_<item> ones are items), text,
 // dialogue (NAME: line #speaker #paren), #scene and #transition tags, choices with {conditions},
-// effects and diverts, fallback choices, diverts and endings. Narrative Bridge's own Ink comes back
+// effects and diverts, fallback choices, Continue breaks ("+ [Continue]" then "-"), diverts and endings. Narrative Bridge's own Ink comes back
 // exactly as it was made.
 //
 // Anything beyond that (gathers, tunnels, threads, inline logic and alternatives, functions,
@@ -82,6 +82,9 @@ function scan(text: string): { blocks: ParsedBlock[]; unsupported: InkFeature[] 
   let lastPassage = -1; // index in blocks of the current passage marker
   let bodyStart = true; // nothing but the header so far in this passage
   let choice: Extract<ParsedBlock, { kind: 'marker' }> | null = null; // the choice whose body we are in
+  // Whether a set of choices is open (until a gather or a new passage): a "+ [Continue]" there is
+  // one more choice of that set, not a Continue break.
+  let weaveOpen = false;
   let comment: { start: number; lines: string[] } | null = null;
   let unsupportedNote: { line: number; reason: string; lines: string[] } | null = null;
 
@@ -160,6 +163,7 @@ function scan(text: string): { blocks: ParsedBlock[]; unsupported: InkFeature[] 
     const knotM = /^={2,}\s*(function\s+)?([A-Za-z_]\w*)\s*(\([^)]*\))?\s*=*\s*$/.exec(t);
     if (knotM) {
       choice = null;
+      weaveOpen = false;
       inFunction = !!knotM[1];
       if (inFunction) {
         lossy(ln, 'functions');
@@ -177,6 +181,7 @@ function scan(text: string): { blocks: ParsedBlock[]; unsupported: InkFeature[] 
     const stitchM = /^=\s*([A-Za-z_]\w*)\s*(\([^)]*\))?\s*$/.exec(t);
     if (stitchM) {
       choice = null;
+      weaveOpen = false;
       if (stitchM[2]) lossy(ln, 'stitch parameters');
       lastPassage = blocks.length;
       bodyStart = true;
@@ -222,6 +227,17 @@ function scan(text: string): { blocks: ParsedBlock[]; unsupported: InkFeature[] 
       continue;
     }
 
+    // A Continue break: "+ [Continue]" followed by a bare gather "-", with no other choices open.
+    // The reader chooses Continue to see what follows (see inkgen.ts).
+    if (/^\+\s*\[Continue\]$/.test(t) && !weaveOpen && lines[i + 1]?.trim() === '-') {
+      blocks.push({ kind: 'marker', marker: { type: 'pause' }, line: ln, endLine: ln + 1 });
+      i++;
+      bodyStart = false;
+      sawText = true;
+      choice = null;
+      continue;
+    }
+
     // Choices: * / + [ {conditions} ] [text] [-> target]
     const choiceM = /^([*+])((?:\s*[*+])*)\s*(\([A-Za-z_]\w*\))?\s*((?:\{[^}]*\}\s*)*)(.*)$/.exec(t);
     if (choiceM) {
@@ -246,6 +262,7 @@ function scan(text: string): { blocks: ParsedBlock[]; unsupported: InkFeature[] 
         if (target === 'END') blocks.push({ kind: 'marker', marker: { type: 'end' }, line: ln });
         else if (target) blocks.push({ kind: 'marker', marker: { type: 'divert', target }, line: ln });
         choice = null;
+        weaveOpen = true;
         continue;
       }
       const inline = hasInlineLogic(body.replace(/\[[^\]]*\]/, ''));
@@ -264,6 +281,7 @@ function scan(text: string): { blocks: ParsedBlock[]; unsupported: InkFeature[] 
       const block: ParsedBlock = { kind: 'marker', marker: { type: 'choice', once: choiceM[1] === '*', text: body || '(choice)', target, conditions, effects }, line: ln };
       blocks.push(block);
       choice = block;
+      weaveOpen = true;
       continue;
     }
 
@@ -271,6 +289,7 @@ function scan(text: string): { blocks: ParsedBlock[]; unsupported: InkFeature[] 
     if (/^-(?!>)/.test(t)) {
       lossy(ln, 'gathers (-)', t);
       choice = null;
+      weaveOpen = false;
       continue;
     }
 

@@ -6,6 +6,11 @@
   "required": ["schemaVersion", "project", "sources", "characters", "items", "variables", "passages"],
   "properties": {
     "schemaVersion": { "const": "1.0" },
+    "presentation": {
+      "type": "object",
+      "description": "How the story looks in a game engine. unity: the Unity story UI theme (see UnityTheme in src/core/isr.ts).",
+      "properties": { "unity": { "type": "object" } }
+    },
     "project": {
       "type": "object",
       "required": ["id", "title", "startPassage", "mode"],
@@ -97,7 +102,7 @@
       "type": "object",
       "required": ["type", "origin"],
       "properties": {
-        "type": { "enum": ["dialogue", "action", "transition", "note", "effect", "unsupported"] },
+        "type": { "enum": ["dialogue", "action", "transition", "note", "effect", "unsupported", "pause"] },
         "speakerId": { "type": "string" },
         "text": { "type": "string" },
         "parenthetical": { "type": "string" },

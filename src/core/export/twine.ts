@@ -21,7 +21,8 @@ import { assertExportable, ExportBlockedError } from './common';
 //
 // Passage text is written as plain prose that reads well in Twine's editor: paragraphs separated by
 // blank lines, dialogue as a speaker line followed by the speech. Passages are placed on Twine's
-// story map the way they are on the Graph chapter's map.
+// story map the way they are on the Graph chapter's map. A Continue break splits a passage into
+// "Name" and "Name (continued)" joined by a Continue link (works in every story format).
 
 export const SUGARCUBE_VERSION = '2.37.3';
 
@@ -122,6 +123,17 @@ export function buildTwee(story: ProcessedStory, kind: TwineKind = 'sugarcube'):
     used.add(name.toLowerCase());
     names.set(p.id, name);
   }
+  // A passage with Continue breaks becomes several Twine passages, "Name", "Name (continued)",
+  // "Name (continued 2)"…, each ending in a Continue link to the next.
+  const parts = new Map(project.passages.map((p) => [p.id, splitAtPauses(p)]));
+  for (const p of project.passages)
+    parts.get(p.id)!.forEach((part, k) => {
+      if (!k) return;
+      let name = `${names.get(p.id)} (continued${k > 1 ? ` ${k}` : ''})`;
+      while (used.has(name.toLowerCase())) name = `${name}′`;
+      used.add(name.toLowerCase());
+      names.set(part.id, name);
+    });
   // Choices that end the story link to a dedicated ending passage.
   let endName = 'The End';
   if (used.has(endName.toLowerCase())) endName = 'The End (finis)';
@@ -151,11 +163,13 @@ export function buildTwee(story: ProcessedStory, kind: TwineKind = 'sugarcube'):
     out.push(':: StoryStylesheet [stylesheet]', STYLESHEET.trim(), '');
   }
 
-  for (const p of project.passages) {
-    const tags = !plain && p.isEnding ? ' [ending]' : '';
-    out.push(`:: ${nameOf(p.id)}${tags} {"position":"${positions.get(p.id) ?? '100,100'}"}`);
-    out.push(...(plain ? plainBody(p, speakers, nameOf) : sugarBody(p, speakers, nameOf)), '');
-  }
+  for (const p of project.passages)
+    parts.get(p.id)!.forEach((part, k) => {
+      const tags = !plain && part.isEnding ? ' [ending]' : '';
+      const [x, y] = (positions.get(p.id) ?? '100,100').split(',').map(Number);
+      out.push(`:: ${nameOf(part.id)}${tags} {"position":"${x},${y + k * 130}"}`);
+      out.push(...(plain ? plainBody(part, speakers, nameOf) : sugarBody(part, speakers, nameOf)), '');
+    });
   const endsByChoice = project.passages.some((p) => p.choices.some((c) => isActive(c.review) && (c.target === 'END' || !c.target)));
   if (endsByChoice) {
     const bottom = Math.max(100, ...[...positions.values()].map((v) => Number(v.split(',')[1]))) + 200;
@@ -163,6 +177,25 @@ export function buildTwee(story: ProcessedStory, kind: TwineKind = 'sugarcube'):
   }
   log('export').info('Built Twine file', { kind, passages: project.passages.length, items: project.items.length, variables: project.variables.length });
   return out.join('\n').replace(/\n{3,}/g, '\n\n');
+}
+
+/**
+ * Splits a passage at its Continue breaks. Each part but the last ends by continuing to the next
+ * (a "Continue" link); the last keeps the passage's choices, divert and ending. Only the first part
+ * has the scene heading. Ids of later parts are "<id>#2", "<id>#3"….
+ */
+function splitAtPauses(p: Passage): Passage[] {
+  const segments: Passage['content'][] = [[]];
+  for (const b of p.content) {
+    if (b.type === 'pause') segments.push([]);
+    else segments[segments.length - 1].push(b);
+  }
+  if (segments.length === 1) return [p];
+  const id = (k: number) => (k ? `${p.id}#${k + 1}` : p.id);
+  return segments.map((content, k) => {
+    const last = k === segments.length - 1;
+    return { ...p, id: id(k), content, sceneHeading: k ? undefined : p.sceneHeading, choices: last ? p.choices : [], divert: last ? p.divert : id(k + 1), isEnding: last && p.isEnding };
+  });
 }
 
 /** Paragraphs of a block: blank lines separate them; single line breaks (verse, lyrics) are kept. */

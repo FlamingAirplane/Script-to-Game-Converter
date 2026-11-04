@@ -31,6 +31,7 @@ const TITLES: Record<string, string> = {
   UNUSED_VARIABLE: 'A variable is created but never used.',
   UNUSED_ITEM: 'An item is created but never used.',
   EMPTY_PASSAGE: 'This passage has no text.',
+  PAUSE_WITHOUT_TEXT: 'A Continue break has nothing to show on one side.',
   MULTIPLE_DIVERTS: 'This passage says where to go next more than once.',
   UNAPPROVED_GENERATED: 'A suggestion is waiting for your OK.',
   UNSUPPORTED_CONSTRUCT: 'Part of your script couldn’t be converted, so it was kept as a note.',

@@ -8,9 +8,12 @@ import type { ProcessedStory } from '../core/pipeline';
 import { collectClips } from './audioStore';
 import { sfx } from './sfx';
 import { Badge, SeverityIcon, download } from './common';
+import type { StoryProject } from '../core/isr';
+import type { Update } from './projectOps';
+import { UnityThemeEditor } from './UnityThemeEditor';
 
 // `stale`: an edit is still being processed, so exports wait for it rather than packaging the previous version.
-export function ExportView({ processed, stale, onState }: { processed: ProcessedStory; stale: boolean; onState: (s: 'Exporting' | 'Succeeded' | 'Failed' | null) => void }) {
+export function ExportView({ processed, stale, onState, project, update }: { processed: ProcessedStory; stale: boolean; onState: (s: 'Exporting' | 'Succeeded' | 'Failed' | null) => void; project: StoryProject; update: Update }) {
   const [engine, setEngine] = useState<EngineTarget>('unity');
   const adapter = ADAPTERS[engine];
   const defaultName = processed.project.project.title.replace(/[^\w]+/g, '') || 'NarrativeProject';
@@ -95,7 +98,7 @@ export function ExportView({ processed, stale, onState }: { processed: Processed
           </label>
           <label className="check">
             <input type="checkbox" checked={opts.includeDemo} onChange={(e) => setOpts({ ...opts, includeDemo: e.target.checked })} />
-            Include runnable demo ({engine === 'unity' ? 'auto-created scene + IMGUI player' : 'Blueprint-friendly C++ component'})
+            Include runnable demo ({engine === 'unity' ? 'auto-created scene with the story UI' : 'Blueprint-friendly C++ component'})
           </label>
 
           <h3>Preflight</h3>
@@ -129,6 +132,8 @@ export function ExportView({ processed, stale, onState }: { processed: Processed
           {blocking.length > 0 && <p className="error-text small">Fix the errors in the Diagnostics panel to enable export.</p>}
           {error && <p className="error-text">{error}</p>}
         </section>
+
+        {engine === 'unity' && <UnityThemeEditor project={project} update={update} />}
 
         <section className="card">
           <h2>Environment requirements</h2>

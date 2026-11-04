@@ -194,6 +194,24 @@ for (const [name, type] of [['WebKit', webkit], ['Chromium', chromium]]) {
       const png = readFileSync(await pngDl.path());
       if (png.subarray(1, 4).toString() !== 'PNG' || png.length < 5000) throw new Error('map PNG is empty or invalid');
     });
+    await step('a Continue break added on the Graph shows as Continue in Playtest', async () => {
+      // The Graph is still open from the step before.
+      await page.locator('g.node.start').first().click();
+      const panel = page.locator('.map-inspector');
+      await panel.waitFor();
+      await panel.getByRole('button', { name: /^Add a Continue break/ }).first().click();
+      await panel.getByRole('button', { name: /^Remove the Continue break/ }).waitFor();
+      await page.locator('.break-sign').first().waitFor();
+      await page.keyboard.press('Escape');
+      await page.getByRole('button', { name: /Playtest/ }).click();
+      await page.getByRole('button', { name: /Restart/ }).first().click().catch(() => {});
+      const next = page.locator('.choice-btn.continue');
+      await next.waitFor({ timeout: 5000 });
+      await next.click();
+      await next.waitFor({ state: 'detached', timeout: 3000 });
+      // Put the story back as it was for the steps that follow.
+      await page.keyboard.press('ControlOrMeta+z');
+    });
     await step('imports a Final Draft (.fdx) file through the file picker', async () => {
       await page.getByRole('button', { name: /Import/ }).first().click();
       await page.locator('.dropzone input[type=file]').setInputFiles(fileURLToPath(new URL('../fixtures/archive.fdx', import.meta.url)));
