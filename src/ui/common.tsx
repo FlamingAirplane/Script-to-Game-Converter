@@ -1,3 +1,4 @@
+import { saveFile } from './platform';
 import type { ReactNode } from 'react';
 import type { Severity } from '../core/diagnostics';
 import type { Provenance } from '../core/isr';
@@ -44,12 +45,7 @@ export function Empty({ title, children }: { title: string; children?: ReactNode
   );
 }
 
+/** Saves an export: into a folder the writer picks where the browser allows it, otherwise as a download (see platform.ts). */
 export function download(name: string, data: string | Uint8Array, type = 'text/plain') {
-  const blob = new Blob([data as BlobPart], { type });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = name;
-  a.click();
-  setTimeout(() => URL.revokeObjectURL(url), 1000);
+  void saveFile(name, data, type);
 }

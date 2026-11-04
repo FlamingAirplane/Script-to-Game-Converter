@@ -15,6 +15,10 @@ const lighthouse = /const LIGHTHOUSE = `([\s\S]*?)`;/.exec(readFileSync(join(roo
 
 const browser = await chromium.launch();
 const page = await browser.newPage({ viewport: { width: 1280, height: 820 }, colorScheme: 'light', acceptDownloads: true });
+// Exports here are checked as downloads; Chromium's Save dialogs would need a person to answer them.
+await page.addInitScript(() => {
+  for (const k of ['showSaveFilePicker', 'showOpenFilePicker']) Object.defineProperty(window, k, { value: undefined, configurable: true });
+});
 page.on('dialog', (d) => d.accept());
 const shot = async (name, target = page) => {
   await page.waitForTimeout(450); // let page-turn animations settle

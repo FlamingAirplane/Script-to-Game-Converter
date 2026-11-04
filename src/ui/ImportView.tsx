@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import type { SourceInput } from '../core/builder';
 import type { ConversionMode } from '../core/isr';
 import { BINARY_EXTENSIONS, CONVERTED_EXTENSIONS, prepareInput } from '../core/parsing/convert';
@@ -7,7 +7,10 @@ import { SUPPORTED_EXTENSIONS } from '../core/parsing/registry';
 
 const ACCEPTED = [...SUPPORTED_EXTENSIONS, ...CONVERTED_EXTENSIONS];
 import { SAMPLES } from '../samples';
+import { GENERATOR_VERSION } from '../core/version';
 import { DraftShelf } from './Drafts';
+import type { FileHandle } from './platform';
+import { RecentFiles } from './RecentFiles';
 import { GettingStarted, USER_GUIDE_URL } from './GettingStarted';
 import { Logo } from './Logo';
 
@@ -32,14 +35,75 @@ function inkSummary(features: InkFeature[]): string {
   return list.join('; ') + (kinds.size > 3 ? `; and ${kinds.size - 3} more` : '');
 }
 
+/** Running as the single offline file (opened from disk), which doesn't update itself. */
+const IS_OFFLINE_FILE = typeof location !== 'undefined' && location.protocol === 'file:';
+
+/** Safari in a normal tab (not added to the Dock): its storage is cleared after 7 days without a visit. */
+const SAFARI_TAB =
+  typeof navigator !== 'undefined' &&
+  /Apple/.test(navigator.vendor) &&
+  !/CriOS|FxiOS|EdgiOS/.test(navigator.userAgent) &&
+  location.protocol.startsWith('http') &&
+  !window.matchMedia?.('(display-mode: standalone)').matches &&
+  !(navigator as { standalone?: boolean }).standalone;
+
+const RELEASES = 'https://github.com/FlamingAirplane/Script-to-Game-Converter/releases/latest';
+
+/** "1.2.10" > "1.2.9" */
+function newer(a: string, b: string): boolean {
+  const pa = a.split('.').map(Number), pb = b.split('.').map(Number);
+  for (let i = 0; i < Math.max(pa.length, pb.length); i++) if ((pa[i] ?? 0) !== (pb[i] ?? 0)) return (pa[i] ?? 0) > (pb[i] ?? 0);
+  return false;
+}
+
+/** The offline file can't update itself: on request (and only then), ask GitHub for the latest version. */
+function VersionCheck() {
+  const [state, setState] = useState<{ status: 'idle' | 'checking' | 'latest' | 'newer' | 'error'; version?: string }>({ status: 'idle' });
+  const check = async () => {
+    setState({ status: 'checking' });
+    try {
+      const r = await fetch('https://api.github.com/repos/FlamingAirplane/Script-to-Game-Converter/releases/latest', { headers: { Accept: 'application/vnd.github+json' } });
+      const tag = String(((await r.json()) as { tag_name?: string }).tag_name ?? '').replace(/^v/, '');
+      if (!r.ok || !tag) throw new Error(`GitHub answered ${r.status}`);
+      setState(newer(tag, GENERATOR_VERSION) ? { status: 'newer', version: tag } : { status: 'latest' });
+    } catch {
+      setState({ status: 'error' });
+    }
+  };
+  if (state.status === 'newer')
+    return (
+      <a href={RELEASES} target="_blank" rel="noopener noreferrer">
+        Version {state.version} is available — download it
+      </a>
+    );
+  if (state.status === 'latest') return <span>you have the latest version</span>;
+  if (state.status === 'error')
+    return (
+      <a href={RELEASES} target="_blank" rel="noopener noreferrer">
+        couldn’t check (offline?) — see the releases page
+      </a>
+    );
+  return (
+    <button className="link small" onClick={() => void check()} disabled={state.status === 'checking'}>
+      {state.status === 'checking' ? 'checking…' : 'check for a newer version'}
+    </button>
+  );
+}
+
 export function ImportView({
   onConvert,
   busy,
   onRestoreDraft,
+  onOpenProject,
+  incoming,
 }: {
   onConvert: (inputs: SourceInput[], mode: ConversionMode, title?: string) => void;
   busy: boolean;
   onRestoreDraft: (id: number) => void;
+  /** Reopens a recent project file. */
+  onOpenProject: (file: File, handle: FileHandle) => void;
+  /** Files the system asked the installed app to open (scripts land in the file list). */
+  incoming?: File[];
 }) {
   // Ink files carry how to import them, and what in them the editor can't show.
   const [files, setFiles] = useState<(SourceInput & { inkFeatures?: InkFeature[] })[]>([]);
@@ -51,7 +115,7 @@ export function ImportView({
   const [error, setError] = useState('');
   const input = useRef<HTMLInputElement>(null);
 
-  const addFiles = async (list: FileList | null) => {
+  const addFiles = async (list: FileList | File[] | null) => {
     if (!list) return;
     setError('');
     const next: (SourceInput & { inkFeatures?: InkFeature[] })[] = [];
@@ -76,6 +140,12 @@ export function ImportView({
     setFiles((cur) => [...cur, ...next]);
   };
 
+  // Files opened from the system (double-click, "Open with") are added once.
+  useEffect(() => {
+    if (incoming?.length) void addFiles(incoming);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [incoming]);
+
   const inputs: SourceInput[] = [...files.map(({ inkFeatures: _, ...f }) => f), ...(paste.trim() ? [{ fileName: pasteName || 'pasted.txt', text: paste }] : [])];
 
   return (
@@ -96,8 +166,14 @@ export function ImportView({
         </p>
         {OFFLINE_COPY_AVAILABLE && (
           <p className="offline-note small">
-            Prefer to work offline? <a href="./Narrative-Bridge.html" download>Download Narrative Bridge as a single file</a> and double-click it any time ·{' '}
-            <a href="./WRITERS.md">guide for writers</a>
+            Prefer to work offline? <a href="./Narrative-Bridge.html" download>Download Narrative Bridge as a single file</a> and double-click it any time (if it
+            opens as text, right-click it → <em>Open With</em> → your web browser) · <a href="./WRITERS.md">guide for writers</a>
+          </p>
+        )}
+        {SAFARI_TAB && (
+          <p className="offline-note small">
+            Using Safari? Choose <em>File → Add to Dock</em> and open Narrative Bridge from the Dock: Safari then keeps your work, instead of clearing it after a week
+            without a visit.
           </p>
         )}
         <GettingStarted />
@@ -213,6 +289,7 @@ export function ImportView({
         </div>
       </section>
 
+      <RecentFiles onOpen={onOpenProject} />
       <DraftShelf onRestore={onRestoreDraft} />
 
       <details className="card markers-help">
@@ -232,7 +309,8 @@ export function ImportView({
       </details>
 
       <p className="colophon-note small">
-        Narrative Bridge is free and open source ·{' '}
+        Narrative Bridge {GENERATOR_VERSION} is free and open source · {IS_OFFLINE_FILE && <VersionCheck />}
+        {IS_OFFLINE_FILE && ' · '}
         <a href={USER_GUIDE_URL} target="_blank" rel="noopener noreferrer">
           User guide
         </a>{' '}
