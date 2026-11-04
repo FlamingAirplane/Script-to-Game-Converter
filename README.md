@@ -81,7 +81,19 @@ npm run test:offline    # the website opens, converts, plays and exports offline
 **Drafts** are named copies of a story kept in this browser: keep one before a big change and restore it later
 (restoring can be undone). A draft is also kept automatically before a story is replaced by a new conversion or an opened
 project file, and the Import page lists earlier stories to pick up again. The cover band shows whether the project is
-autosaved, and warns if the browser has run out of room.
+autosaved, and warns if the browser's storage is almost full or failing (closing the page then asks first).
+
+**Files and storage** live in one module, [`src/ui/platform.ts`](src/ui/platform.ts):
+- **Autosave:** goes to IndexedDB (a quick copy stays in localStorage while the project is small), and the app asks the
+  browser to keep its storage.
+- **Chrome and Edge** (the File System Access API): Save writes back to the project file it came from, Save As (⇧⌘S) and
+  exports open the Save dialog (each kind of export remembers its folder), and recent project files can be reopened. The
+  installed web app registers `file_handlers`, so scripts, stories and project files can be opened with it.
+- **Safari and Firefox:** saves and exports are downloads.
+
+A desktop edition was considered: it would mainly add real files in Safari and Firefox, at the cost of signing fees and
+install warnings. If one is built, it should implement this same module with native dialogs (Electron is the recommended
+wrapper).
 
 Press **?** for keyboard shortcuts. Book sounds (page turns, a bell at endings) and the light/dark theme switch
 are on the cover band.

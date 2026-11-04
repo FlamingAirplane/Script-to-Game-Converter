@@ -4,7 +4,6 @@ import type { Diagnostic } from '../core/diagnostics';
 import type { ConversionMode, StoryProject } from '../core/isr';
 import type { ConversionState } from '../core/pipeline';
 import { validateSchema } from '../core/schema';
-import { download } from './common';
 import { DiagnosticsPanel, type PanelView } from './DiagnosticsPanel';
 import { GraphView } from './GraphView';
 import { ImportView } from './ImportView';
@@ -16,6 +15,7 @@ import { collectClips, putClip } from './audioStore';
 import { errorData, log } from '../core/log';
 import { Logo } from './Logo';
 import { getDraft, keepDraft } from './draftStore';
+import { canUseFiles, kvGet, kvSet, pickProjectFile, rememberRecent, requestPersistence, saveFile, storageUse, writeToHandle, type FileHandle } from './platform';
 
 const appLog = log('app');
 
@@ -51,18 +51,25 @@ const STORAGE_KEY = 'narrative-bridge.project.v1';
 interface Saved {
   project: StoryProject;
   parseDiagnostics: Diagnostic[];
+  /** When it was autosaved (ms); the newer of the two autosaved copies wins on start-up. */
+  savedAt?: number;
 }
 
+const valid = (s: Saved | null | undefined): s is Saved => !!s?.project && !validateSchema(s.project).some((d) => d.severity === 'error');
+
+/** The quick copy in localStorage (kept while the project is small), read synchronously on start-up. */
 function loadSaved(): Saved | null {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
-    if (!raw) return null;
-    const s = JSON.parse(raw) as Saved;
-    return validateSchema(s.project).some((d) => d.severity === 'error') ? null : s;
+    const s = raw ? (JSON.parse(raw) as Saved) : null;
+    return valid(s) ? s : null;
   } catch {
     return null;
   }
 }
+
+/** Projects larger than this are autosaved to IndexedDB only (localStorage holds about 5 MB in all). */
+const QUICK_COPY_LIMIT = 1_500_000;
 
 export function App() {
   const initial = useMemo(loadSaved, []);
@@ -88,7 +95,15 @@ export function App() {
       /* preference not saved */
     }
   };
-  const keys = useRef<{ tab: Tab; save: () => void | Promise<void>; find: () => void; step: (dir: 1 | -1) => void; dialogueOnly: () => void }>({ tab: 'import', save: () => {}, find: () => {}, step: () => {}, dialogueOnly: () => {} });
+  const keys = useRef<{ tab: Tab; save: () => void | Promise<void>; saveAs: () => void | Promise<void>; open: () => void; find: () => void; step: (dir: 1 | -1) => void; dialogueOnly: () => void }>({
+    tab: 'import',
+    save: () => {},
+    saveAs: () => {},
+    open: () => {},
+    find: () => {},
+    step: () => {},
+    dialogueOnly: () => {},
+  });
   // A page turns whenever the chapter changes (not on first load).
   const prevTab = useRef(tab);
   useEffect(() => {
@@ -107,23 +122,87 @@ export function App() {
   // Processed in a background worker; `stale` while a newer edit is being processed.
   const { processed, stale } = useProcessedStory(project, parseDiagnostics);
 
-  // Autosave to this browser. If storage is full or blocked, say so: the writer must save a project file instead.
-  const [autosave, setAutosave] = useState<'saved' | 'failed' | null>(initial ? 'saved' : null);
+  // Autosave to this browser: IndexedDB (room for large projects), plus a quick copy in localStorage
+  // while the project is small. If both fail, say so: the writer must save a project file instead.
+  const [autosave, setAutosave] = useState<'saved' | 'low' | 'failed' | null>(initial ? 'saved' : null);
+  const loaded = useRef(false);
   useEffect(() => {
-    if (!project) return;
+    // On start-up, a newer or larger autosave in IndexedDB replaces the quick copy.
+    void kvGet<Saved>(STORAGE_KEY)
+      .then((s) => {
+        if (valid(s) && (!initial || (s.savedAt ?? 0) > (initial.savedAt ?? 0))) {
+          setParseDiagnostics(s.parseDiagnostics ?? []);
+          setProject(s.project);
+          setSelected(s.project.project.startPassage);
+          setTab('review');
+          setAutosave('saved');
+        }
+      })
+      .catch(() => {})
+      .finally(() => (loaded.current = true));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+  useEffect(() => {
+    if (!project || !loaded.current) return;
+    const saved: Saved = { project, parseDiagnostics, savedAt: Date.now() };
+    const json = JSON.stringify(saved);
+    let quick = false;
     try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify({ project, parseDiagnostics }));
-      setAutosave((was) => {
-        if (was === 'failed') appLog.info('Autosave works again');
-        return 'saved';
-      });
-    } catch (e) {
-      setAutosave((was) => {
-        if (was !== 'failed') appLog.warn('Autosave failed: browser storage is full or unavailable', errorData(e));
-        return 'failed';
-      });
+      if (json.length < QUICK_COPY_LIMIT) {
+        localStorage.setItem(STORAGE_KEY, json);
+        quick = true;
+      } else localStorage.removeItem(STORAGE_KEY); // too big: IndexedDB holds the only copy
+    } catch {
+      /* full: IndexedDB below */
     }
+    void kvSet(STORAGE_KEY, saved)
+      .then(() => true)
+      .catch(() => quick)
+      .then(async (ok) => {
+        const use = ok ? await storageUse() : null;
+        const next = !ok ? 'failed' : use !== null && use > 0.85 ? 'low' : 'saved';
+        setAutosave((was) => {
+          if (was !== next) {
+            if (next === 'failed') appLog.warn('Autosave failed: browser storage is full or unavailable');
+            else if (next === 'low') appLog.warn('Browser storage is almost full', { used: Math.round((use ?? 0) * 100) });
+            else if (was === 'failed' || was === 'low') appLog.info('Autosave works again');
+          }
+          return next;
+        });
+      });
   }, [project, parseDiagnostics]);
+  // Closing the page while autosave is failing would lose work: let the browser ask first.
+  useEffect(() => {
+    if (autosave !== 'failed') return;
+    const warn = (e: BeforeUnloadEvent) => e.preventDefault();
+    window.addEventListener('beforeunload', warn);
+    return () => window.removeEventListener('beforeunload', warn);
+  }, [autosave]);
+
+  // Files the system opens with the installed app (manifest file_handlers, Chrome/Edge): project files
+  // open straight away; scripts and stories go to the Import page's file list.
+  const [incoming, setIncoming] = useState<File[]>();
+  const openRefFn = useRef<(f: File, h?: FileHandle) => void>(() => {});
+  useEffect(() => {
+    const queue = (window as unknown as { launchQueue?: { setConsumer(fn: (p: { files: FileHandle[] }) => void): void } }).launchQueue;
+    queue?.setConsumer(async ({ files }) => {
+      const scripts: File[] = [];
+      for (const h of files ?? []) {
+        const f = await h.getFile();
+        if (/\.json$/i.test(f.name)) openRefFn.current(f, h);
+        else scripts.push(f);
+      }
+      if (scripts.length) {
+        setIncoming(scripts);
+        setTab('import');
+      }
+      appLog.info('Opened files from the system', { files: files?.length ?? 0 });
+    });
+  }, []);
+
+  // The project file this story was opened from or saved to (Chrome/Edge), so Save writes back to it.
+  const [projectFile, setProjectFile] = useState<FileHandle | null>(null);
+  const [savedToFile, setSavedToFile] = useState<StoryProject | null>(null);
 
   const lastEdit = useRef<{ group: string; at: number } | null>(null);
   /**
@@ -184,9 +263,12 @@ export function App() {
       } else if (mod && k === 's' && project) {
         e.preventDefault();
         void h.save();
+      } else if (modKey(e, { shift: true }) && e.shiftKey && k === 's' && project && canUseFiles()) {
+        e.preventDefault();
+        void h.saveAs();
       } else if (mod && k === 'o') {
         e.preventDefault();
-        openRef.current?.click();
+        h.open();
       } else if (mod && k === 'f' && project) {
         e.preventDefault();
         h.find();
@@ -238,6 +320,10 @@ export function App() {
     }
     setParseDiagnostics(d.parseDiagnostics);
     setProject(d.project);
+    if (replacing) {
+      setProjectFile(null);
+      setSavedToFile(null);
+    }
     setSelected(replacing || !project ? d.project.project.startPassage : selected);
     setExportState(null);
     setTab('review');
@@ -253,6 +339,9 @@ export function App() {
       redoStack.current = [];
       setParseDiagnostics(diagnostics);
       setProject(p);
+      setProjectFile(null); // a new story isn't saved anywhere yet
+      setSavedToFile(null);
+      void requestPersistence();
       setSelected(p.project.startPassage);
       setExportState(null);
       setTab('review');
@@ -274,17 +363,45 @@ export function App() {
     else if (project.items.some((i) => i.id === d.entityId) || project.variables.some((v) => v.id === d.entityId)) open(STORY_SETTINGS);
   };
 
-  /** Saves the project as one .nbproj.json file, with voice clips embedded so it is complete on its own. */
-  const saveProject = async () => {
+  /**
+   * Saves the project as one .nbproj.json file, with voice clips embedded so it is complete on its own.
+   * Where the browser allows it, Save writes back to the file the project came from and Save As picks
+   * a new one; elsewhere the file is downloaded.
+   */
+  const saveProject = async (as = false) => {
     if (!project) return;
+    const snapshot = project;
     const clips = await collectClips(referencedAudio(project));
     const audio = Object.fromEntries(Object.entries(clips).map(([id, c]) => [id, { mime: c.mime, data: bytesToBase64(c.bytes) }]));
     const json = JSON.stringify({ project, parseDiagnostics, audio }, null, 2);
-    download(`${project.project.id}.nbproj.json`, json, 'application/json');
-    appLog.info('Saved project file', { passages: project.passages.length, clips: Object.keys(audio).length, bytes: json.length });
+    try {
+      let target: FileHandle | 'downloaded' | null;
+      if (projectFile && !as) {
+        await writeToHandle(projectFile, json);
+        target = projectFile;
+      } else target = await saveFile(`${project.project.id}.nbproj.json`, json, 'application/json', 'project');
+      if (!target) return; // cancelled
+      if (target !== 'downloaded') {
+        setProjectFile(target);
+        setSavedToFile(snapshot);
+        void rememberRecent(target, project.project.title);
+      }
+      void requestPersistence();
+      appLog.info('Saved project file', { passages: project.passages.length, clips: Object.keys(audio).length, bytes: json.length, toFile: target !== 'downloaded' });
+    } catch (e) {
+      appLog.error('Could not save the project file', errorData(e));
+      alert(`Could not save the project file: ${e instanceof Error ? e.message : e}`);
+    }
   };
 
-  const openProject = async (file: File) => {
+  /** Open project: the system's Open dialog where the browser allows it (so Save can write back), else the file input. */
+  const chooseProject = async () => {
+    if (!canUseFiles()) return openRef.current?.click();
+    const picked = await pickProjectFile();
+    if (picked) await openProject(picked.file, picked.handle);
+  };
+
+  const openProject = async (file: File, handle?: FileHandle) => {
     try {
       const data = JSON.parse(await file.text());
       for (const [id, c] of Object.entries((data.audio ?? {}) as Record<string, { mime: string; data: string }>)) await putClip(id, c.mime, base64ToBytes(c.data));
@@ -296,6 +413,10 @@ export function App() {
       undoStack.current = [];
       setParseDiagnostics(data.parseDiagnostics ?? []);
       setProject(p);
+      setProjectFile(handle ?? null);
+      setSavedToFile(handle ? p : null);
+      if (handle) void rememberRecent(handle, p.project.title);
+      void requestPersistence();
       setSelected(p.project.startPassage);
       setTab('review');
     } catch (e) {
@@ -304,11 +425,15 @@ export function App() {
     }
   };
 
+  openRefFn.current = (f, h) => void openProject(f, h);
+
   // Latest handlers for the keyboard shortcuts (the listener is registered once).
   keys.current = {
     tab,
     dialogueOnly: () => setDialogueOnly(!dialogueOnly),
-    save: saveProject,
+    save: () => saveProject(),
+    saveAs: () => saveProject(true),
+    open: () => void chooseProject(),
     find: () => {
       if (tab === 'graph') return document.querySelector<HTMLInputElement>('.graph-search')?.focus();
       if (tab !== 'review') setTab('review');
@@ -359,9 +484,20 @@ export function App() {
               ))}
             </ol>
             <span className={`state-pill state-${state}`}>{state}</span>
-            {autosave === 'saved' && (
-              <span className="autosave" title="Every change is kept in this browser. Use Save project for a file you can back up or share.">
-                ✓ kept in this browser
+            {projectFile ? (
+              <span className="autosave" title={`Save (⌘S) writes to ${projectFile.name}. Every change is also kept in this browser.`}>
+                {savedToFile === project ? `✓ saved to ${projectFile.name}` : `edited · ⌘S saves to ${projectFile.name}`}
+              </span>
+            ) : (
+              autosave === 'saved' && (
+                <span className="autosave" title="Every change is kept in this browser. Use Save project for a file you can back up or share.">
+                  ✓ kept in this browser
+                </span>
+              )
+            )}
+            {autosave === 'low' && (
+              <span className="autosave failed" role="status" title="This browser has almost no room left for this app. Save a project file so nothing is lost.">
+                ⚠ storage almost full — save a project file
               </span>
             )}
             {autosave === 'failed' && (
@@ -394,13 +530,18 @@ export function App() {
         >
           {soundOn ? '♪ sounds' : '♪ muted'}
         </button>
-        <button className="btn tiny ghost" onClick={() => openRef.current?.click()}>
+        <button className="btn tiny ghost" onClick={() => void chooseProject()}>
           Open project
         </button>
         <input ref={openRef} type="file" accept=".json" hidden onChange={(e) => e.target.files?.[0] && openProject(e.target.files[0])} />
         {project && (
-          <button className="btn tiny ghost" onClick={() => void saveProject()}>
+          <button className="btn tiny ghost" onClick={() => void saveProject()} title={projectFile ? `Save to ${projectFile.name} (⌘S)` : 'Save the project as a file (⌘S)'}>
             Save project
+          </button>
+        )}
+        {project && canUseFiles() && (
+          <button className="btn tiny ghost" onClick={() => void saveProject(true)} title="Save the project to a new file (⇧⌘S)">
+            Save as…
           </button>
         )}
         {project && (
@@ -442,7 +583,7 @@ export function App() {
         </div>
         <div className="content" key={`page-${tab}`}>
           <Suspense fallback={<p className="muted pad">Turning the page…</p>}>
-          {tab === 'import' && <ImportView onConvert={convert} busy={busy} onRestoreDraft={(id) => void restoreDraft(id)} />}
+          {tab === 'import' && <ImportView onConvert={convert} busy={busy} onRestoreDraft={(id) => void restoreDraft(id)} onOpenProject={(f, h) => void openProject(f, h)} incoming={incoming} />}
           {processed && tab === 'review' && <ReviewView processed={{ ...processed, project: project! }} selected={selected} onSelect={setSelected} update={update} dialogueOnly={dialogueOnly} onDialogueOnly={setDialogueOnly} onKeepDraft={(label) => keepDraft(project!, parseDiagnostics, label)} onRestoreDraft={(id) => void restoreDraft(id)} />}
           {processed && tab === 'graph' && (
             <GraphView

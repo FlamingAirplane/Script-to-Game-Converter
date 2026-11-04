@@ -24,6 +24,21 @@ const MANIFEST = {
     { src: 'icon-512.png', sizes: '512x512', type: 'image/png', purpose: 'any' },
     { src: 'icon-512.png', sizes: '512x512', type: 'image/png', purpose: 'maskable' },
   ],
+  // Once installed (Chrome/Edge), the app can be chosen to open these files; App.tsx receives them
+  // through the launch queue. Project files open directly; the rest go to the Import page.
+  file_handlers: [
+    { action: './', accept: { 'application/json': ['.json'] } },
+    {
+      action: './',
+      accept: {
+        'text/plain': ['.fountain', '.txt', '.md', '.ink', '.twee', '.tw'],
+        'application/xml': ['.fdx'],
+        'application/pdf': ['.pdf'],
+        'application/vnd.openxmlformats-officedocument.wordprocessingml.document': ['.docx'],
+      },
+    },
+  ],
+  launch_handler: { client_mode: 'focus-existing' },
 };
 
 /** Files from public/ that the app itself uses (og.png is only for link previews). */

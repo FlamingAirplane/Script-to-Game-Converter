@@ -248,11 +248,24 @@ your story's text, so it is safe to attach to a bug report. Choose how much to s
 
 ## 10. Saving, drafts and working offline
 
-- **Autosave:** your project is remembered in this browser. *✓ kept in this browser* confirms it; if the browser runs
-  out of room, a warning appears instead and you should use **Save project**.
-- **Save project** (⌘S / Ctrl+S) downloads a `.nbproj.json` file containing everything, including recordings.
-  **Open project** (⌘O / Ctrl+O) loads one. Use this to move work to another computer, share it with a collaborator, or
-  keep a backup. Clearing your browser's history, or using a private window, loses the remembered copy.
+- **Autosave:** your project is remembered in this browser, with room for large projects. *✓ kept in this browser*
+  confirms it. If the browser's storage is almost full or stops working, a warning appears instead, and closing the page
+  asks first: use **Save project** then.
+- **Save project** (⌘S / Ctrl+S) saves a `.nbproj.json` file containing everything, including recordings. **Open
+  project** (⌘O / Ctrl+O) loads one. Use this to move work to another computer, share it with a collaborator, or keep a
+  backup. Clearing your browser's history, or using a private window, loses the remembered copy.
+- **In Chrome and Edge** (computers and Chromebooks) these are real files:
+  - The first Save asks where to save. After that, ⌘S saves to the same file, and the top of the page shows *✓ saved to
+    your-file.nbproj.json*, or *edited · ⌘S saves to …* when there are unsaved changes.
+  - **Save as…** (⇧⌘S) saves to a new file.
+  - Exports open a Save dialog, and each kind of export remembers its folder.
+  - The Import page lists **Recent project files** to reopen in one click.
+  - Install the website as an app (the install icon in the address bar), and you can open scripts, stories and project
+    files with it from your computer (*Open with → Narrative Bridge*).
+- **In Safari and Firefox,** saves and exports are downloads, as before. In Safari, choose *File → Add to Dock* and open
+  Narrative Bridge from the Dock; otherwise Safari clears a site's stored work after a week without a visit.
+- **The offline file** shows its version at the bottom of the Import page. **Check for a newer version** asks GitHub
+  (only when you click it).
 - **Drafts** (in Story settings): type a name and click **Keep a draft** before a big change. **Restore** brings a draft
   back, and undo ↶ reverses the restore. A draft is also kept automatically before your story is replaced by a new
   conversion or an opened project file. On the Import page, *Or pick up earlier work* lists earlier stories.

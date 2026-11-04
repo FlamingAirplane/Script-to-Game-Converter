@@ -31,6 +31,7 @@ const GROUPS: { title: string; keys: [string, string][] }[] = [
     keys: [
       [`${MOD} 1 – 6`, 'Go to chapter I – VI'],
       [`${MOD} S`, 'Save project'],
+      [`⇧ ${MOD} S`, 'Save as… (Chrome, Edge)'],
       [`${MOD} O`, 'Open project'],
       [`${MOD} Z  /  ⇧ ${MOD} Z`, 'Undo / redo'],
       [`${MOD} F`, 'Find (passages, text, map)'],

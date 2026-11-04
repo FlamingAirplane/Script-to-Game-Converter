@@ -31,6 +31,10 @@ const url = `http://127.0.0.1:${server.address().port}/app/`;
 
 const browser = await chromium.launch();
 const context = await browser.newContext({ acceptDownloads: true });
+// Exports here are checked as downloads; Chromium's Save dialogs would need a person to answer them.
+await context.addInitScript(() => {
+  for (const k of ['showSaveFilePicker', 'showOpenFilePicker']) Object.defineProperty(window, k, { value: undefined, configurable: true });
+});
 const page = await context.newPage();
 const errors = [];
 page.on('pageerror', (e) => errors.push(e.message));

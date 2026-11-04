@@ -41,7 +41,12 @@ all of your words are.
 ## Keeping your work
 
 Your project is remembered in the browser you used. To keep a copy you can reopen on another computer or send to someone,
-click **Save project** (top right). This downloads a `.nbproj.json` file. Use **Open project** to load it again.
+click **Save project** (top right). This saves a `.nbproj.json` file. Use **Open project** to load it again.
+
+In **Chrome or Edge**, that's a real file: after the first save, ⌘S (Ctrl+S) saves straight back to it, **Save as…**
+makes a copy, and the Import page lists your recent project files. In **Safari**, choose *File → Add to Dock* and use
+Narrative Bridge from the Dock, so Safari doesn't clear your work after a week away. The offline file shows its version at
+the bottom of the first page, with a button to check for a newer one.
 
 If you clear your browser history or use a private window, the remembered copy is lost, so save a project file you want to keep.
 The top of the page says *kept in this browser* while autosave works, and warns you if the browser runs out of room.

@@ -26,6 +26,11 @@ for (const [name, type] of [['WebKit', webkit], ['Chromium', chromium]]) {
     continue;
   }
   const page = await browser.newPage({ acceptDownloads: true });
+  // This page checks the download path (Safari, Firefox). Chromium's Save dialogs need a person to
+  // answer them, so hide them here; the "real files" step covers them with a stand-in file system.
+  await page.addInitScript(() => {
+    for (const k of ['showSaveFilePicker', 'showOpenFilePicker']) Object.defineProperty(window, k, { value: undefined, configurable: true });
+  });
   const errors = [];
   page.on('pageerror', (e) => errors.push(e.message));
   page.on('console', (m) => m.type() === 'error' && errors.push(m.text()));
@@ -56,14 +61,14 @@ for (const [name, type] of [['WebKit', webkit], ['Chromium', chromium]]) {
       await page.getByText('The Locked Archive').first().click();
       await page.getByRole('button', { name: /Archive Entrance/ }).waitFor();
     });
-    await step('browser shortcuts with extra keys (⌘⇧F, ⌘⇧O…) reach the browser; ⌘F still finds', async () => {
+    await step('browser shortcuts with extra keys (⌘⇧F, ⌘⇧O, ⌘⇧B…) reach the browser; ⌘F still finds', async () => {
       // Record, after the app's own listener, whether each key press was taken by the app.
       await page.evaluate(() => {
         window.__taken = [];
         window.addEventListener('keydown', (e) => e.key.length === 1 && window.__taken.push(`${e.shiftKey ? 'shift+' : ''}${e.altKey ? 'alt+' : ''}${e.key.toLowerCase()}:${e.defaultPrevented}`));
       });
       await page.locator('body').click({ position: { x: 5, y: 5 } });
-      for (const k of ['ControlOrMeta+Shift+f', 'ControlOrMeta+Shift+o', 'ControlOrMeta+Shift+s', 'ControlOrMeta+Alt+f', 'ControlOrMeta+Shift+l']) await page.keyboard.press(k);
+      for (const k of ['ControlOrMeta+Shift+f', 'ControlOrMeta+Shift+o', 'ControlOrMeta+Shift+b', 'ControlOrMeta+Alt+f', 'ControlOrMeta+Shift+l']) await page.keyboard.press(k);
       const taken = await page.evaluate(() => window.__taken);
       if (taken.length !== 5 || taken.some((t) => t.endsWith(':true'))) throw new Error(`the app took a browser shortcut: ${taken.join(', ')}`);
       if (await page.locator('details.find-panel[open]').count()) throw new Error('⌘⇧F opened the app’s Find');
@@ -280,6 +285,66 @@ for (const [name, type] of [['WebKit', webkit], ['Chromium', chromium]]) {
       await page.getByRole('button', { name: /Ink/ }).first().click();
       if (await page.getByText(/passthrough/).count()) throw new Error('editable Ink was passed through');
       await page.getByRole('button', { name: /Review/ }).click();
+    });
+    await step('real files: Save writes the project file, ⌘S writes back, Save As and exports pick a file', async () => {
+      // A stand-in for the browser's file system (Chrome/Edge's Save and Open dialogs), recording what is written.
+      const fs = await browser.newPage({ acceptDownloads: true });
+      fs.on('pageerror', (e) => errors.push(`files page: ${e.message}`));
+      await fs.addInitScript(() => {
+        const files = (window.__files = {});
+        window.__picked = [];
+        const handle = (name) => ({
+          name,
+          kind: 'file',
+          async getFile() {
+            return new File([files[name] ?? ''], name);
+          },
+          async createWritable() {
+            let data = '';
+            return { async write(d) { data += typeof d === 'string' ? d : new TextDecoder().decode(d); }, async close() { files[name] = data; } };
+          },
+          async queryPermission() { return 'granted'; },
+          async requestPermission() { return 'granted'; },
+          async isSameEntry(o) { return o?.name === name; },
+        });
+        window.showSaveFilePicker = async ({ suggestedName, id }) => {
+          const name = window.__picked.length && id === 'project' ? `copy-${suggestedName}` : suggestedName;
+          window.__picked.push(`${id}:${name}`);
+          return handle(name);
+        };
+        window.showOpenFilePicker = async () => [handle(Object.keys(files).find((n) => n.endsWith('.json')))];
+      });
+      await fs.goto(url);
+      await fs.getByText('The Locked Archive').first().click();
+      await fs.getByRole('button', { name: /Archive Entrance/ }).waitFor();
+      let downloaded = false;
+      fs.on('download', () => (downloaded = true));
+      const name = 'the_locked_archive.nbproj.json';
+      await fs.getByRole('button', { name: 'Save project' }).click();
+      await fs.getByText(`✓ saved to ${name}`).waitFor({ timeout: 5000 });
+      const saved = () => fs.evaluate((n) => JSON.parse(window.__files[n]).project.project.title, name);
+      if ((await saved()) !== 'The Locked Archive') throw new Error('project file was not written');
+      // An edit shows as unsaved; ⌘S writes it back to the same file without asking again.
+      await fs.locator('.story-entry').click();
+      await fs.locator('.settings-grid label', { hasText: 'Title' }).locator('input').fill('Archive, Revised');
+      await fs.getByText(`edited · ⌘S saves to ${name}`).waitFor();
+      await fs.locator('body').click({ position: { x: 3, y: 3 } });
+      await fs.keyboard.press('ControlOrMeta+s');
+      await fs.getByText(`✓ saved to ${name}`).waitFor({ timeout: 5000 });
+      if ((await saved()) !== 'Archive, Revised') throw new Error('⌘S did not write back to the project file');
+      // Save As picks a new file; exports go through the Save dialog, not into Downloads.
+      await fs.getByRole('button', { name: 'Save as…' }).click();
+      await fs.getByText(`✓ saved to copy-${name}`).waitFor({ timeout: 5000 });
+      await fs.getByRole('button', { name: /Export/ }).click();
+      await fs.getByRole('button', { name: /Download playable story/ }).click();
+      await fs.waitForFunction(() => window.__picked.some((p) => p.startsWith('export-html:')), null, { timeout: 5000 });
+      const picked = await fs.evaluate(() => window.__picked);
+      if (picked.filter((p) => p.startsWith('project:')).length !== 2 || downloaded) throw new Error(`unexpected saves: ${picked.join(', ')}${downloaded ? ' + a download' : ''}`);
+      // The autosave lives in IndexedDB: without the quick localStorage copy, a reload still restores the story.
+      await fs.evaluate(() => localStorage.removeItem('narrative-bridge.project.v1'));
+      await fs.reload();
+      await fs.locator('.project-name', { hasText: 'Archive, Revised' }).waitFor({ timeout: 5000 });
+      await fs.close();
     });
     if (errors.length) throw new Error(`console errors: ${errors.join(' | ')}`);
     console.log(`✓ ${name}: all checks passed (zip ${(zipBytes / 1024).toFixed(1)} KB)`);
