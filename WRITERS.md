@@ -87,7 +87,8 @@ click **+ Continue break** between two of its lines.
 ## Shortcuts
 
 Press **?** anywhere to see every keyboard shortcut. The handy ones: ⌘S (Ctrl+S on Windows) saves your project,
-⌘F finds text, and in Playtest the number keys pick a choice and Backspace undoes it.
+⌘F finds text, and in Playtest the number keys pick a choice and Backspace undoes it. Press G in Playtest or on the Graph to show or hide
+choices that need an item or value.
 
 ## Troubleshooting
 

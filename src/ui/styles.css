@@ -947,3 +947,11 @@ section.drafts > h2 { margin-top: 26px; }
 .unity-toolbar { display: flex; gap: 1.2em; font-size: 0.7em; }
 .unity-preview figcaption { margin-top: 6px; }
 .seg .btn[aria-pressed='true'] { background: var(--rubric); border-color: var(--rubric); color: var(--paper-hi); }
+
+/* Playtest: a choice the reader can't take yet, shown when locked choices are on */
+.choice-btn.locked { cursor: default; color: var(--faded); display: flex; flex-wrap: wrap; gap: 2px 10px; align-items: baseline; margin: 0; }
+.choice-btn.locked::before { content: '🔒'; font-size: 12px; top: 11px; filter: grayscale(1); opacity: 0.7; }
+.choice-btn.locked:hover { color: var(--faded); background: transparent; }
+.choice-btn.locked:hover::before { left: 4px; }
+.choice-btn.locked .locked-text { text-decoration: line-through; text-decoration-color: var(--rule-2); }
+.choice-btn.locked .locked-needs { font: normal 13px var(--serif); font-variant: small-caps; text-transform: lowercase; letter-spacing: 0.06em; }

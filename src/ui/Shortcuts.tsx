@@ -54,6 +54,7 @@ const GROUPS: { title: string; keys: [string, string][] }[] = [
       ['Backspace', 'Undo the last choice'],
       ['R', 'Restart'],
       ['V', 'Voices on / off'],
+      ['G', 'Show or hide locked choices (also on the Graph)'],
     ],
   },
   {
