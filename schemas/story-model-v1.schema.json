@@ -97,7 +97,7 @@
       "type": "object",
       "required": ["type", "origin"],
       "properties": {
-        "type": { "enum": ["dialogue", "action", "transition", "note", "effect", "unsupported"] },
+        "type": { "enum": ["dialogue", "action", "transition", "note", "effect", "unsupported", "pause"] },
         "speakerId": { "type": "string" },
         "text": { "type": "string" },
         "parenthetical": { "type": "string" },

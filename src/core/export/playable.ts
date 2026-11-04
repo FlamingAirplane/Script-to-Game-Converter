@@ -115,6 +115,8 @@ font-size:13px;font-variant:small-caps;text-transform:lowercase;letter-spacing:.
 .choice{position:relative;text-align:left;font:italic 18px var(--serif);color:var(--ink);background:none;border:0;border-bottom:1px dotted var(--rule);
 padding:10px 8px 10px 30px;cursor:pointer}.choice:before{content:'❧';position:absolute;left:4px;color:var(--rubric);font-style:normal}
 .choice:hover,.choice:focus-visible{color:var(--pen);background:rgba(96,108,56,.1);outline:none}
+.choice.continue{align-self:center;text-align:center;border:0;padding:8px 20px;font-style:normal;font-variant:small-caps;text-transform:lowercase;letter-spacing:.14em;color:var(--pen)}
+.choice.continue:before{content:none}.choice.continue:after{content:' ›'}
 .end{text-align:center;color:var(--rubric);font-style:italic;font-size:22px;margin:30px 0 10px;letter-spacing:.1em}
 .end-actions{text-align:center}
 .notice{font-size:15px;font-style:italic;color:var(--ink2);background:rgba(221,161,94,.16);border-left:2px solid var(--rubric);padding:8px 12px;margin:0 0 18px}
@@ -259,6 +261,7 @@ const PLAYER_JS = `
     var box = $('text');
     box.textContent = '';
     lines.forEach(function (l) {
+      if (l.pause) return; // a Continue break: the page simply goes on
       if (l.chosen) { box.appendChild(el('p', 'chosen', l.chosen)); return; }
       if (l.scene) box.appendChild(el('span', 'scene', l.scene));
       if (l.speaker) {
@@ -281,8 +284,9 @@ const PLAYER_JS = `
       again.appendChild(b);
       nav.appendChild(again);
     }
+    var pause = isPause();
     choices.forEach(function (c) {
-      var b = el('button', 'choice', c.text);
+      var b = el('button', pause ? 'choice continue' : 'choice', c.text);
       b.onclick = function () { choose(c.index, c.text); };
       nav.appendChild(b);
     });
@@ -298,19 +302,31 @@ const PLAYER_JS = `
     var chosen = (saved.lines || []).filter(function (l) { return l.chosen; }).map(function (l) { return l.chosen; });
     newStory(); lines = []; history = [];
     replaying = true;
+    var take = function (c) {
+      history.push({ state: story.state.toJson(), lines: lines.slice() });
+      if (history.length > 50) history.shift();
+      var pause = isPause();
+      story.ChooseChoiceIndex(c.index);
+      lines.push(pause ? { chosen: c.text, pause: true } : { chosen: c.text });
+      continueStory();
+    };
     try {
       continueStory();
-      for (var i = 0; i < chosen.length; i++) {
+      for (var i = 0, steps = 0; i < chosen.length && steps < 10000; steps++) {
         var match = story.currentChoices.filter(function (c) { return c.text === chosen[i]; })[0];
-        if (!match) return false;
-        history.push({ state: story.state.toJson(), lines: lines.slice() });
-        if (history.length > 50) history.shift();
-        story.ChooseChoiceIndex(match.index);
-        lines.push({ chosen: match.text });
-        continueStory();
+        if (match) { take(match); i++; }
+        else if (isPause()) take(story.currentChoices[0]); // a Continue break added since the save
+        else if (chosen[i] === 'Continue') i++; // a Continue break removed since the save
+        else return false;
       }
       return true;
     } finally { replaying = false; }
+  }
+
+  // A Continue break: the only thing to do is go on (see inkgen.ts).
+  function isPause() {
+    var c = story.currentChoices;
+    return c.length === 1 && c[0].text === 'Continue';
   }
 
   function notice(text) {
@@ -324,8 +340,9 @@ const PLAYER_JS = `
     stopVoices();
     notice('');
     pageTurn();
+    var pause = isPause();
     story.ChooseChoiceIndex(index);
-    lines.push({ chosen: text });
+    lines.push(pause ? { chosen: text, pause: true } : { chosen: text });
     continueStory();
     render();
     save();

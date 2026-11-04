@@ -890,3 +890,7 @@ section.drafts > h2 { margin-top: 26px; }
 /* Import: how to bring in an Ink file (src/ui/ImportView.tsx). */
 .ink-mode { flex-basis: 100%; display: flex; flex-wrap: wrap; align-items: center; gap: 4px 10px; margin: 4px 0 2px; }
 .ink-mode .muted { flex: 1 1 240px; min-width: 0; }
+
+/* Continue breaks (a pause inside a passage): the button reads as turning the page, not a choice. */
+.choice-btn.continue { align-self: center; text-align: center; font-style: normal; font-variant: small-caps; text-transform: lowercase; letter-spacing: 0.14em; }
+.choice-btn.continue::after { content: ' ›'; }

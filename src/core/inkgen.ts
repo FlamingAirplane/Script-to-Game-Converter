@@ -1,15 +1,16 @@
 import { audioFileName } from './audio';
 import { GENERATOR_VERSION } from './version';
-import { isActive, itemVar, type Condition, type Effect, type Passage, type StoryProject } from './isr';
+import { CONTINUE_TEXT, isActive, itemVar, type Condition, type Effect, type Passage, type StoryProject } from './isr';
 
 // Deterministic, template-based Ink generation. Same ISR in → byte-identical Ink out.
 //
-// Conventions (documented in docs/InkConventions.md):
+// Conventions (see "Ink conventions" in the README):
 //  - Items are Boolean VARs named has_<item_id>.
 //  - Dialogue lines are "NAME: text" with a #speaker:<id> tag; parentheticals add #paren:<text>, and
 //    a recorded clip adds #audio:<file> (the file ships with the export).
 //  - Transitions carry a #transition tag; scene headings are a #scene tag on the first line.
 //  - Notes and unsupported constructs are preserved as Ink comments.
+//  - A Continue break is "+ [Continue]" followed by a gather "-": what follows waits for the reader.
 //  - Choices are sticky (+) unless marked once-only (*). A passage divert becomes an invisible
 //    fallback choice when the passage also has choices.
 
@@ -147,6 +148,12 @@ export function generateInk(project: StoryProject): GeneratedInk {
           break;
         case 'effect':
           if (isActive(b.review ?? 'approved')) emit(effectToInk(b.effect), p.id);
+          break;
+        case 'pause':
+          // A Continue break: a lone sticky choice and a gather, so every Ink player shows a Continue
+          // button and what follows waits for it. (Sticky, so revisiting the passage never runs dry.)
+          emit(`+ [${CONTINUE_TEXT}]`, p.id);
+          emit('-', p.id);
           break;
       }
     }

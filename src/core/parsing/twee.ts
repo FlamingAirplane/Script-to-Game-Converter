@@ -109,7 +109,10 @@ export const tweeParser: Parser = {
     const taken = new Set<string>();
     const ids = new Map<string, string>();
     const story = passages.filter((p) => !SPECIAL.test(p.name) && !p.tags.some((t) => CODE_TAGS.has(t)) && !p.tags.includes('startup'));
-    for (const p of story) ids.set(p.name, uniqueId(p.name, taken, 'passage'));
+    // Parts of a passage split at Continue breaks ("Name (continued)") are merged back into it.
+    const next = continuations(story);
+    const parts = new Set([...next.values()].map((q) => q.name));
+    for (const p of story) if (!parts.has(p.name)) ids.set(p.name, uniqueId(p.name, taken, 'passage'));
     const idOf = (name: string) => ids.get(name) ?? (slugify(name) || 'passage');
 
     let format = '';
@@ -140,13 +143,43 @@ export const tweeParser: Parser = {
       diagnostics.push(diag('TWINE_FORMAT', 'info', 'parsing', `This story uses the ${format} story format; its links and text are imported, but its own code may not be.`, { entityId: documentId, exportBlocked: false }));
 
     for (const p of story) {
+      if (parts.has(p.name)) continue;
       blocks.push({ kind: 'marker', marker: { type: 'passage', id: idOf(p.name), title: p.name }, line: p.line });
-      if (p.tags.includes('ending')) blocks.push({ kind: 'marker', marker: { type: 'end' }, line: p.line });
-      blocks.push(...passageBlocks(p, idOf));
+      for (let part: TweePassage | undefined = p, first = true; part; first = false) {
+        const after = next.get(part.name);
+        if (part.tags.includes('ending')) blocks.push({ kind: 'marker', marker: { type: 'end' }, line: part.line });
+        blocks.push(...passageBlocks(part, idOf, { continueTo: after?.name, continued: !first }));
+        if (after) blocks.push({ kind: 'marker', marker: { type: 'pause' }, line: after.line });
+        part = after;
+      }
     }
     return { format: 'twee', blocks, diagnostics };
   },
 };
+
+/** The [[…]] links in a passage body, as written. */
+function linksIn(body: string): { text: string; target: string }[] {
+  return [...body.matchAll(LINK)].map((l) => parseLinkInner(l[1]));
+}
+
+/**
+ * Continue breaks come back from Twine as "Name" → "Name (continued)" (see export/twine.ts). A
+ * passage Q is the next part of P when Q is named "… (continued[ n])", P's only link is
+ * [[Continue->Q]], and nothing else links to Q. Returns P's name → Q.
+ */
+function continuations(story: TweePassage[]): Map<string, TweePassage> {
+  const incoming = new Map<string, number>();
+  for (const p of story) for (const l of linksIn(p.body)) incoming.set(l.target, (incoming.get(l.target) ?? 0) + 1);
+  const byName = new Map(story.map((p) => [p.name, p]));
+  const out = new Map<string, TweePassage>();
+  for (const p of story) {
+    const links = linksIn(p.body);
+    if (links.length !== 1 || !/^continue$/i.test(links[0].text)) continue;
+    const q = byName.get(links[0].target);
+    if (q && q !== p && /\(continued(?: \d+)?\)′*$/.test(q.name) && incoming.get(q.name) === 1) out.set(p.name, q);
+  }
+  return out;
+}
 
 /** StoryInit / startup passages: variables and items. */
 function declarations(p: TweePassage): ParsedBlock[] {
@@ -181,7 +214,8 @@ function takeOnce(c: Condition | null): { cond: Condition | null; once: boolean 
   return { cond: c, once: false };
 }
 
-function passageBlocks(p: TweePassage, idOf: (name: string) => string): ParsedBlock[] {
+/** `continueTo`: the next part of this passage (its Continue link is a break, not a route); `continued`: this is a later part. */
+function passageBlocks(p: TweePassage, idOf: (name: string) => string, opts: { continueTo?: string; continued?: boolean } = {}): ParsedBlock[] {
   const out: ParsedBlock[] = [];
   const links: (Link & { line: number })[] = [];
   let body = p.body;
@@ -231,12 +265,13 @@ function passageBlocks(p: TweePassage, idOf: (name: string) => string): ParsedBl
   let para: string[] = [];
   let paraLine = 0;
   let speaker: { who: string; paren?: string; line: number } | null = null;
-  let headingDone = false;
+  let headingDone = !!opts.continued;
   const pushText = (text: string, ln: number) => {
     const t = restore(text).trim();
     if (!t) return;
     // Plain formats: scene headings, transitions and "NAME (direction): line" dialogue.
-    if (!headingDone && SCENE_START.test(t) && !t.includes('\n')) {
+    // (Scene headings are capitals; a sentence that merely starts with "INT." is text.)
+    if (!headingDone && SCENE_START.test(t) && !t.includes('\n') && t === t.toUpperCase()) {
       headingDone = true;
       out.push({ kind: 'marker', marker: { type: 'heading', text: plainText(t) }, line: ln });
       return;
@@ -357,6 +392,8 @@ function passageBlocks(p: TweePassage, idOf: (name: string) => string): ParsedBl
 
   // "Continue" is the passage's onward route, not a choice, when it is the only link or the
   // conditional fallback Narrative Bridge exports (offered only when no other choice is).
+  // The link to the passage's next part is the Continue break the caller adds.
+  if (opts.continueTo) links.splice(0, links.length, ...links.filter((l) => !(/^continue$/i.test(l.text) && l.target === opts.continueTo)));
   const onward = (l: Link) => /^continue$/i.test(l.text) && !l.effects.length && (links.length === 1 || l.conditions.length > 0);
   const choices = links.filter((l) => !onward(l));
   for (const l of links.filter(onward)) out.push({ kind: 'marker', marker: { type: 'divert', target: idOf(l.target) }, line: l.line });

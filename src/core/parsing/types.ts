@@ -7,6 +7,8 @@ export type Marker =
   | { type: 'start'; id: string }
   | { type: 'end' }
   | { type: 'divert'; target: string }
+  /** A Continue break: what follows waits for the reader. */
+  | { type: 'pause' }
   /** The passage's scene heading (Ink #scene tags, Twine scene lines). */
   | { type: 'heading'; text: string }
   | { type: 'item'; id: string; displayName?: string; consumable: boolean }

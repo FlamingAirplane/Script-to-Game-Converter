@@ -802,3 +802,57 @@ describe('PDF import', () => {
     await expect(prepareInput('x.pdf', new TextEncoder().encode('not a pdf'))).rejects.toThrow(/could not be read as a PDF/);
   });
 });
+
+describe('Continue breaks', () => {
+  const src = `@item key "Key"\n@passage hall Hall\nThe hall is dark.\n@pause\nA light flickers.\n@give key\n@pause\nMIRA: Who's there?\n* {has key} [Unlock] -> room\n+ [Wait] -> hall\n@passage room Room\nInside.\n@pause\nThe end comes quietly.\n@end\n`;
+  const kinds = (p: StoryProject) => p.passages.map((x) => x.content.map((b) => b.type).join(','));
+
+  it('@pause becomes a break that every Ink player shows as Continue, and plays through', async () => {
+    const { project } = await build(src, 's.md', 'structured');
+    expect(kinds(project)).toEqual(['action,pause,action,effect,pause,dialogue', 'action,pause,action']);
+    const story = processProject(project);
+    expect(story.generated.ink).toContain('The hall is dark.\n+ [Continue]\n-\nA light flickers.');
+    expect(story.compile.ok).toBe(true);
+    expect(story.smoke?.endingsReached).toMatchObject({ room: expect.any(Number) });
+    // A linear story with breaks is still one playthrough.
+    const linear = processProject((await build('@passage a A\nOne.\n@pause\nTwo.\n@end\n', 'l.md', 'structured')).project);
+    expect([linear.smoke?.stopReason, linear.smoke?.runs]).toEqual(['deterministic', 1]);
+  });
+
+  it('round-trips through Ink exactly, and only the exact form counts as a break', async () => {
+    const { inkUnsupported } = await import('../src/core/parsing/ink');
+    const { project } = await build(src, 's.md', 'structured');
+    const ink = generateInk(project).ink;
+    expect(inkUnsupported(ink)).toEqual([]);
+    const back = (await build(ink, 's.ink', 'structured')).project;
+    expect(back.inkPassthrough).toBeUndefined();
+    back.project.mode = project.project.mode;
+    const strip = (x: string) => x.replace(/ \(source line \d+\)/g, '');
+    expect(strip(generateInk(back).ink)).toBe(strip(ink));
+    // Hand-written Ink: a Continue inside an open set of choices is a choice, followed by a real gather.
+    expect(inkUnsupported('=== a ===\nHi\n* [A] -> a\n+ [Continue]\n-\nAfter\n-> END\n').map((f) => f.feature)).toEqual(['gathers (-)']);
+    expect(kinds((await build('=== a ===\nHi\n+ [Continue]\n-\nAfter\n-> END\n', 'h.ink', 'structured')).project)).toEqual(['action,pause,action']);
+  });
+
+  it('round-trips through both Twine kinds as "Name (continued)" parts', async () => {
+    const { buildTwee } = await import('../src/core/export');
+    const { project } = await build(src, 's.md', 'structured');
+    const shape = (p: StoryProject) => p.passages.map((x) => [x.title, x.isEnding, x.content.filter((b) => b.type !== 'effect').map((b) => (b.type === 'pause' ? '⏸' : 'text' in b ? b.text : '')), x.choices.map((c) => c.text)]);
+    for (const kind of ['sugarcube', 'plain'] as const) {
+      const twee = buildTwee(processProject(project), kind);
+      expect(twee).toContain(':: Hall (continued 2)');
+      expect(twee).toContain('[[Continue->Hall (continued)]]');
+      const back = await build(twee, 's.twee', 'structured');
+      expect(shape(back.project), kind).toEqual(shape(project));
+      expect(back.diagnostics.filter((d) => d.severity !== 'info')).toEqual([]);
+    }
+  });
+
+  it('notes a break with nothing to show on one side', async () => {
+    const { project } = await build('@passage a A\n@pause\nOne.\n@pause\n@pause\nTwo.\n@pause\n@end\n', 'm.md', 'structured');
+    const notes = analyze(project).diagnostics.filter((d) => d.code === 'PAUSE_WITHOUT_TEXT');
+    expect(notes).toHaveLength(3); // first, the second of a pair, and last
+    const ok = await build('@passage a A\nOne.\n@pause\nTwo.\n@end\n', 'ok.md', 'structured');
+    expect(analyze(ok.project).diagnostics.filter((d) => d.code === 'PAUSE_WITHOUT_TEXT')).toEqual([]);
+  });
+});

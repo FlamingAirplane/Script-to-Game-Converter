@@ -168,7 +168,8 @@ function* smokeRuns(json: string, project: StoryProject, opts: SmokeOptions): Ge
         }
         const knotNow = knotOf(choices[0].sourcePath) || lastKnot;
         lastKnot = knotNow;
-        choicePoints++;
+        // A lone choice (such as a Continue break) can't make runs differ; only real branching counts.
+        if (choices.length > 1) choicePoints++;
         for (const g of gated) if (g.passageId === knotNow && choices.some((c) => c.text === g.text)) g.seenEnabled++;
         let idx: number;
         if (r % 2 === 0) idx = Math.floor(rand() * choices.length);

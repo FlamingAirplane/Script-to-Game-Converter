@@ -2,7 +2,7 @@
 import { Story } from 'inkjs';
 import { Fragment, useCallback, useEffect, useRef, useState } from 'react';
 import { fnv1a } from '../core/hash';
-import { itemVar } from '../core/isr';
+import { CONTINUE_TEXT, itemVar } from '../core/isr';
 import type { ProcessedStory } from '../core/pipeline';
 import { audioFileName, referencedAudio } from '../core/audio';
 import { Badge, Empty } from './common';
@@ -17,7 +17,12 @@ interface Line {
   speaker?: string;
   tags: string[];
   kind: 'text' | 'choice' | 'system';
+  /** A Continue break was taken here (a choice line that isn't shown). */
+  pause?: boolean;
 }
+
+/** A Continue break: the story offers only "Continue" (see inkgen.ts). */
+const isPause = (s: Story) => s.currentChoices.length === 1 && s.currentChoices[0].text === CONTINUE_TEXT;
 
 /** Story state at the start of the current stretch of text, so a state change can replay it. */
 interface Segment {
@@ -58,15 +63,26 @@ function replayChoices(s: Story, chosen: string[]): { lines: Line[]; history: Sn
   let lines = readOn(s, []);
   const history: Snapshot[] = [];
   let followed = 0;
-  for (const text of chosen) {
-    const c = s.currentChoices.find((x) => x.text === text);
-    if (!c) break;
+  const take = (c: { index: number; text: string }) => {
     history.push({ state: s.state.toJson(), lines, segment });
+    const pause = isPause(s);
     s.ChooseChoiceIndex(c.index);
-    const prefix: Line[] = [...lines, { text, tags: [], kind: 'choice' }];
+    const prefix: Line[] = [...lines, { text: c.text, tags: [], kind: 'choice', pause }];
     segment = { state: s.state.toJson(), prefix, overrides: {} };
     lines = readOn(s, prefix);
-    followed++;
+  };
+  // Continue breaks added or removed since the save don't stop it: take or skip them.
+  for (let i = 0, steps = 0; i < chosen.length && steps < 10000; steps++) {
+    const c = s.currentChoices.find((x) => x.text === chosen[i]);
+    if (c) {
+      take(c);
+      i++;
+      followed++;
+    } else if (isPause(s)) take(s.currentChoices[0]);
+    else if (chosen[i] === CONTINUE_TEXT) {
+      i++;
+      followed++;
+    } else break;
   }
   return { lines, history, segment, followed };
 }
@@ -232,8 +248,9 @@ export function PlaytestView({
     const s = story.current!;
     setHistory((h) => [...h, { state: s.state.toJson(), lines, segment: segment.current }]);
     sfx.choice();
+    const pause = isPause(s);
     s.ChooseChoiceIndex(i);
-    advance([...lines, { text, tags: [], kind: 'choice' }]);
+    advance([...lines, { text, tags: [], kind: 'choice', pause }]);
   };
 
   const undo = () => {
@@ -312,6 +329,7 @@ export function PlaytestView({
         <div className="transcript" tabIndex={0} aria-label="Story text">
           {lines.map((l, i) =>
             dialogueOnly && l.kind === 'text' && !l.speaker ? null :
+            l.pause ? null :
             l.kind === 'choice' ? (
               <p key={i} className="t-choice">
                 › {l.text}
@@ -334,7 +352,7 @@ export function PlaytestView({
         </div>
         <div className="choices">
           {choices.map((c) => (
-            <button key={c.index} className="choice-btn" onClick={() => choose(c.index, c.text)}>
+            <button key={c.index} className={`choice-btn${choices.length === 1 && c.text === CONTINUE_TEXT ? ' continue' : ''}`} onClick={() => choose(c.index, c.text)}>
               {c.text}
             </button>
           ))}

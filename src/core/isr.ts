@@ -70,7 +70,12 @@ export type ContentBlock =
   | { type: 'transition'; text: string; origin: Provenance; source?: SourceRef }
   | { type: 'note'; text: string; origin: Provenance; source?: SourceRef } // preserved, emitted as Ink comment
   | { type: 'effect'; effect: Effect; origin: Provenance; review?: ReviewStatus; source?: SourceRef }
-  | { type: 'unsupported'; text: string; reason: string; origin: Provenance; source?: SourceRef };
+  | { type: 'unsupported'; text: string; reason: string; origin: Provenance; source?: SourceRef }
+  /** A Continue break: what follows appears only once the reader chooses Continue. */
+  | { type: 'pause'; origin: Provenance; source?: SourceRef };
+
+/** The choice text of a Continue break, in Ink and every reader. */
+export const CONTINUE_TEXT = 'Continue';
 
 export interface Choice {
   id: string;
