@@ -11,6 +11,7 @@ import { InkView } from './InkView';
 import { passageForEntity } from './projectOps';
 import { ReviewView, STORY_SETTINGS } from './ReviewView';
 import { base64ToBytes, bytesToBase64, referencedAudio } from '../core/audio';
+import { referencedImages } from '../core/images';
 import { collectClips, putClip } from './audioStore';
 import { errorData, log } from '../core/log';
 import { Logo } from './Logo';
@@ -392,7 +393,8 @@ export function App() {
   const saveProject = async (as = false) => {
     if (!project) return;
     const snapshot = project;
-    const clips = await collectClips(referencedAudio(project));
+    // Scene pictures share the "audio" map with voice clips (same store, keyed by id), so older versions still open the file.
+    const clips = await collectClips([...referencedAudio(project), ...referencedImages(project)]);
     const audio = Object.fromEntries(Object.entries(clips).map(([id, c]) => [id, { mime: c.mime, data: bytesToBase64(c.bytes) }]));
     const json = JSON.stringify({ project, parseDiagnostics, audio }, null, 2);
     try {

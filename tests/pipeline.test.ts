@@ -367,7 +367,7 @@ describe('share exports', () => {
     const json = /<script id="story-json" type="application\/json">([\s\S]*?)<\/script>/.exec(html)![1];
     expect(json).not.toMatch(/<\/script|<!--/i);
     expect(JSON.stringify(JSON.parse(json))).toContain('</script><!--');
-    expect(html.match(/<script/g)!.length).toBe(5);
+    expect(html.match(/<script/g)!.length).toBe(6); // runtime, story, meta, clips, pictures, player
   });
 
   /** Passages of a Twee file by name, and the targets of every [[link]] in them. */
@@ -920,5 +920,55 @@ describe('gated choices', () => {
     expect(lockedChoices(project, 'a', read, ['Unlock']).map((l) => l.choice.text)).toEqual([]);
     expect(conditionHolds({ type: 'or', conditions: [{ type: 'has_item', itemId: 'lamp' }, { type: 'compare', variableId: 'trust', op: '!=', value: 3 }] }, read)).toBe(false);
     expect(describeCondition({ type: 'not', condition: { type: 'compare', variableId: 'trust', op: '<', value: 1 } }, project)).toBe('not trust below 1');
+  });
+});
+
+describe('scene pictures and recordings', () => {
+  const src = '@passage hall Hall\nThe hall is dark.\n\nMIRA: Who is there?\n\nTOMAS: Only me.\n-> room\n@passage room Room\n@end\n';
+  const png = { mime: 'image/png', bytes: new Uint8Array([137, 80, 78, 71]) };
+
+  it('tags the first line of a scene with its picture and ships it in every export', async () => {
+    const { buildPlayableHtml } = await import('../src/core/export');
+    const { project } = await build(src, 'p.md', 'structured');
+    project.passages[0].image = { id: 'img_hall_1', name: 'hall.png', mime: 'image/png', width: 4, height: 3, alt: 'A dark hall' };
+    const story = processProject(project);
+    expect(story.compile.ok).toBe(true);
+    expect(story.generated.ink).toMatch(/^The hall is dark\. #image:img_hall_1\.png$/m);
+    // Re-importing that Ink keeps the story and does not count the tag as something it lost.
+    const { inkUnsupported } = await import('../src/core/parsing/ink');
+    expect(inkUnsupported(story.generated.ink)).toEqual([]);
+    const opts = { engineVersion: '6000.0', integrationRef: 'v1.2.3', includeDemo: true, images: { img_hall_1: png } };
+    const unity = await ADAPTERS.unity.export(story, { engine: 'unity', projectName: 'P', ...opts });
+    expect(unity.files.map((f) => f.path)).toContain('P/Assets/NarrativeBridge/Resources/NarrativeBridgeImages/img_hall_1.png');
+    expect(unity.report.warnings.filter((w) => /picture/.test(w))).toEqual([]);
+    const unreal = await ADAPTERS.unreal.export(story, { engine: 'unreal', projectName: 'P', ...opts, engineVersion: '5.7' });
+    expect(unreal.files.map((f) => f.path)).toContain('P/StorySource/Images/img_hall_1.png');
+    const missing = await ADAPTERS.unity.export(story, { engine: 'unity', projectName: 'P', ...opts, images: {} });
+    expect(missing.report.warnings).toContain('Scene picture "hall.png" is missing from this browser, so it was left out of the package.');
+    const html = buildPlayableHtml(story, '/* runtime */', {}, { img_hall_1: png });
+    const pictures = JSON.parse(/<script id="story-pictures" type="application\/json">([^<]*)<\/script>/.exec(html)![1]);
+    expect(pictures['img_hall_1.png']).toEqual({ src: 'data:image/png;base64,iVBORw==', alt: 'A dark hall' });
+  });
+
+  it('warns when a picture has no line of text to open it', async () => {
+    const { project } = await build(src, 'p.md', 'structured');
+    project.passages[1].image = { id: 'img_room', name: 'room.png', mime: 'image/png' };
+    expect(analyze(project).diagnostics.filter((d) => d.code === 'IMAGE_WITHOUT_TEXT').map((d) => d.entityId)).toEqual(['room']);
+  });
+
+  it('matches recording files to lines by the script\'s clip name, an existing clip, or the row number', async () => {
+    const { buildRecordingScript, matchRecordings } = await import('../src/core/export');
+    const { project } = await build(src, 'p.md', 'structured');
+    const kinds = project.passages[0].content.map((b) => b.type);
+    expect(kinds).toEqual(['action', 'dialogue', 'dialogue']);
+    expect(buildRecordingScript(project)).toContain('hall_002.wav');
+    project.passages[0].content[2] = { ...(project.passages[0].content[2] as Extract<(typeof project.passages)[0]['content'][number], { type: 'dialogue' }>), audio: { id: 'vo_tomas_ab12', name: 'old.wav', mime: 'audio/wav' } };
+    const r = matchRecordings(project, ['HALL_002.WAV', 'vo_tomas_ab12.mp3', 'notes.wav', '2.wav', '01.ogg']);
+    expect(r.matched.map((m) => [m.file, m.passageId, m.index])).toEqual([
+      ['HALL_002.WAV', 'hall', 1],
+      ['vo_tomas_ab12.mp3', 'hall', 2],
+    ]);
+    // "2.wav" is the second line, already matched; "01.ogg" is the first, already matched too.
+    expect(r.unmatched).toEqual(['notes.wav', '2.wav', '01.ogg']);
   });
 });

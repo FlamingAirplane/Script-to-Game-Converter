@@ -146,7 +146,7 @@ See [`src/samples.ts`](src/samples.ts) for complete examples.
 ## Ink conventions
 
 - Items are Booleans: `VAR has_<item> = false`. Conditions compile from an expression tree (never raw strings).
-- Dialogue: `NAME: text #speaker:<id>`; parentheticals add `#paren:…`; the first line of a scene carries `#scene:<heading>`; transitions carry `#transition`.
+- Dialogue: `NAME: text #speaker:<id>`; parentheticals add `#paren:…`; recorded lines add `#audio:<file>`; the first line of a scene carries `#scene:<heading>` and, if the passage has a picture, `#image:<file>` (PNG or JPEG); transitions carry `#transition`.
 - Choices are sticky (`+`) unless marked once-only (`*`). A passage's divert becomes an invisible fallback choice when the passage also has choices, so players never get stuck.
 - A Continue break (`@pause`, or **+ Continue break** on the Graph or in Review) is a single sticky choice `+ [Continue]`
   followed by a gather `-`. The Ink importer reads that exact pair back as a break, but only outside an open set of
@@ -207,7 +207,9 @@ The demo scene shows the story in a uGUI panel (`NarrativeView`, `com.unity.ugui
 `Assets/NarrativeBridge/Settings`, created from the **Story UI** settings on the Export page
 (`Resources/NarrativeBridgeTheme.json`): look, position, colours, opacity, text size, typewriter speed, which parts show,
 and the Continue and ending labels. Edits to the asset apply while the game runs; *Narrative Bridge → Reset Theme to
-Exported Defaults* restores the exported settings. Continue breaks raise `ContinueShown` and show one Continue button.
+Exported Defaults* restores the exported settings. Continue breaks raise `ContinueShown` and show one Continue button. Scene pictures ship in
+`Resources/NarrativeBridgeImages` and fill the screen behind the panel (`NarrativeController.LoadPicture`,
+`CurrentPicture`); the smoke test checks each one imported and is shown. Unreal packages put them in `StorySource/Images`.
 The smoke test also builds the view and clicks through it. Headless check:
 `Unity -batchmode -projectPath <dir> -executeMethod NarrativeBridge.EditorTools.NarrativeBridgeEditor.RunSmokeTestBatch`.
 

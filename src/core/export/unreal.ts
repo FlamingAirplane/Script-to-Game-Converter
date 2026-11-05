@@ -1,5 +1,5 @@
 import type { ProcessedStory } from '../pipeline';
-import { assertExportable, audioFiles, buildManifest, commonFiles, isPinnedRef, itemVarNames, json, pascalCase, sourceFiles, storyVersion } from './common';
+import { assertExportable, audioFiles, buildManifest, imageFiles, commonFiles, isPinnedRef, itemVarNames, json, pascalCase, sourceFiles, storyVersion } from './common';
 import type { EngineAdapter, ExportFile, ExportOptions, ExportResult } from './types';
 import { finalize } from './unity';
 
@@ -30,11 +30,14 @@ export const unrealAdapter: EngineAdapter = {
     const manifest = await buildManifest(story, options, this);
     // Unreal imports audio through the editor, so clips ship next to the story source to drag in.
     const voice = audioFiles(story, options.audio, `${root}StorySource/VoiceClips/`);
+    // Pictures too: drag them into the Content Browser; the #image tag names the file.
+    const pictures = imageFiles(story, options.images, `${root}StorySource/Images/`);
     const files: ExportFile[] = [
       { path: `${root}${name}.uproject`, content: json(uproject(name, options)) },
       { path: `${root}StorySource/MainStory.ink`, content: story.generated.ink },
       { path: `${root}StorySource/MainStory.compiled.json`, content: story.compile.json! },
       ...voice.files,
+      ...pictures.files,
       { path: `${root}Config/DefaultGame.ini`, content: `[/Script/EngineSettings.GeneralProjectSettings]\nProjectName=${story.project.project.title.replace(/\n/g, ' ')}\n` },
       { path: `${root}Config/DefaultEngine.ini`, content: '[/Script/Engine.Engine]\n+ActiveGameNameRedirects=(OldGameName="TP_Blank",NewGameName="/Script/' + name + '")\n' },
       { path: `${root}Source/${name}.Target.cs`, content: target(name, 'Game') },
@@ -74,6 +77,7 @@ export const unrealAdapter: EngineAdapter = {
       },
     };
     for (const n of voice.missing) result.report.warnings.push(`Voice clip "${n}" is missing from this browser, so it was left out of the package.`);
+    for (const n of pictures.missing) result.report.warnings.push(`Scene picture "${n}" is missing from this browser, so it was left out of the package.`);
     finalize(result, story, [`${root}${name}.uproject`, `${root}StorySource/MainStory.ink`, `${root}Source/${name}/${name}.Build.cs`]);
     return result;
   },

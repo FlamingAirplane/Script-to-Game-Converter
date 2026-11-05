@@ -5,6 +5,7 @@ import { existsSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { deflateSync } from 'node:zlib';
 import JSZip from 'jszip';
 import { chromium, webkit } from 'playwright-core';
 
@@ -252,6 +253,7 @@ for (const [name, type] of [['WebKit', webkit], ['Chromium', chromium]]) {
       if (/Rows of shelves|archive is locked|Wrapped in oilcloth/.test(text)) throw new Error('log contains story text');
       await page.getByRole('tab', { name: 'Diagnostics' }).click();
     });
+    let wavPath = '';
     await step('attaches a voice clip to a line and ships it in the exports', async () => {
       // A one-second 8 kHz silent WAV.
       const n = 8000;
@@ -268,7 +270,7 @@ for (const [name, type] of [['WebKit', webkit], ['Chromium', chromium]]) {
       wav.writeUInt16LE(16, 34);
       wav.write('data', 36);
       wav.writeUInt32LE(n * 2, 40);
-      const wavPath = join(mkdtempSync(join(tmpdir(), 'nb-wav-')), 'take1.wav');
+      wavPath = join(mkdtempSync(join(tmpdir(), 'nb-wav-')), 'take1.wav');
       writeFileSync(wavPath, wav);
       await page.locator('.passage-item').first().click();
       await page.locator('.block-dialogue .voice-clip input[type=file]').first().setInputFiles(wavPath);
@@ -282,6 +284,39 @@ for (const [name, type] of [['WebKit', webkit], ['Chromium', chromium]]) {
       const [zipDl] = await Promise.all([page.waitForEvent('download'), page.getByRole('button', { name: 'Download .zip' }).click()]);
       const zip = await JSZip.loadAsync(readFileSync(await zipDl.path()));
       if (!Object.keys(zip.files).some((f) => /Resources\/NarrativeBridgeAudio\/vo_.+\.wav$/.test(f))) throw new Error('Unity zip has no voice clip');
+    });
+    await step('adds a scene picture and a batch of recordings, and ships the picture', async () => {
+      const dir = mkdtempSync(join(tmpdir(), 'nb-media-'));
+      // A 16x9 PNG, drawn by hand (no image library needed).
+      const crcT = Array.from({ length: 256 }, (_, n) => { let c = n; for (let k = 0; k < 8; k++) c = c & 1 ? 0xedb88320 ^ (c >>> 1) : c >>> 1; return c >>> 0; });
+      const crc = (b) => { let c = 0xffffffff; for (const x of b) c = crcT[(c ^ x) & 255] ^ (c >>> 8); return (c ^ 0xffffffff) >>> 0; };
+      const chunk = (t, d) => { const len = Buffer.alloc(4); len.writeUInt32BE(d.length); const td = Buffer.concat([Buffer.from(t), d]); const c = Buffer.alloc(4); c.writeUInt32BE(crc(td)); return Buffer.concat([len, td, c]); };
+      const ihdr = Buffer.alloc(13); ihdr.writeUInt32BE(16, 0); ihdr.writeUInt32BE(9, 4); ihdr[8] = 8; ihdr[9] = 2;
+      const png = Buffer.concat([Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]), chunk('IHDR', ihdr), chunk('IDAT', deflateSync(Buffer.concat(Array.from({ length: 9 }, () => Buffer.concat([Buffer.from([0]), Buffer.alloc(16 * 3, 90)]))))), chunk('IEND', Buffer.alloc(0))]);
+      writeFileSync(join(dir, 'tower.png'), png);
+      await page.getByRole('button', { name: /Review/ }).click();
+      await page.locator('.passage-item').first().click();
+      await page.locator('input[aria-label="Scene picture file"]').setInputFiles(join(dir, 'tower.png'));
+      const expect = (locator, what) => locator.waitFor({ timeout: 5000 }).catch(() => { throw new Error(what); });
+      await expect(page.locator('.scene-picture', { hasText: '16 × 9' }), 'the picture did not attach in Review');
+      await page.getByPlaceholder(/A lighthouse in a storm/).fill('A grey tower');
+      await page.getByRole('button', { name: /Playtest/ }).click();
+      await page.getByRole('button', { name: /Restart/ }).first().click();
+      await expect(page.locator('.t-picture img[alt="A grey tower"]'), 'Playtest does not show the picture');
+      await page.getByRole('button', { name: /Export/ }).click();
+      // Recordings named by their row in the recording script: "2.wav" is the second line of dialogue.
+      writeFileSync(join(dir, '2.wav'), readFileSync(wavPath));
+      writeFileSync(join(dir, 'outtake.wav'), readFileSync(wavPath));
+      await page.locator('.share-card input[aria-label="Recording files"]').setInputFiles([join(dir, '2.wav'), join(dir, 'outtake.wav')]);
+      await expect(page.locator('.share-card [role=status]', { hasText: /Attached 1 recording\. 1 file didn't match a line: outtake\.wav/ }), 'the recordings were not matched as expected');
+      const [dl] = await Promise.all([page.waitForEvent('download'), page.getByRole('button', { name: /Download playable story/ }).click()]);
+      const html = readFileSync(await dl.path(), 'utf8');
+      if (!/"img_[^"]+\.png":\{"src":"data:image\\?\/png;base64,/.test(html)) throw new Error('playable story does not embed the picture');
+      await page.getByRole('button', { name: 'Build Unity package' }).click();
+      await page.getByText('package verified').waitFor({ timeout: 15000 });
+      const [zipDl] = await Promise.all([page.waitForEvent('download'), page.getByRole('button', { name: 'Download .zip' }).click()]);
+      const zip = await JSZip.loadAsync(readFileSync(await zipDl.path()));
+      if (!Object.keys(zip.files).some((f) => /Resources\/NarrativeBridgeImages\/img_.+\.png$/.test(f))) throw new Error('Unity zip has no scene picture');
     });
     await step('opens a Twine story to keep working on it', async () => {
       await page.getByRole('button', { name: /Import/ }).first().click();

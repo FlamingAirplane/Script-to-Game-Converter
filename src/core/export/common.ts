@@ -1,4 +1,5 @@
 import { audioFileName, referencedAudio, type AudioAssets } from '../audio';
+import { imageFileName, referencedImages } from '../images';
 import { blocksExport, diag, type Diagnostic } from '../diagnostics';
 import { fnv1a, sha256Hex } from '../hash';
 import { itemVar } from '../isr';
@@ -159,6 +160,18 @@ export function verifyExport(result: ExportResult, story: ProcessedStory, requir
       }),
     );
   return ds;
+}
+
+/** Picture files for every scene picture the story refers to, and the names of any missing from `assets`. */
+export function imageFiles(story: ProcessedStory, assets: AudioAssets | undefined, dir: string): { files: ExportFile[]; missing: string[] } {
+  const files: ExportFile[] = [];
+  const missing: string[] = [];
+  for (const ref of referencedImages(story.project)) {
+    const a = assets?.[ref.id];
+    if (a) files.push({ path: `${dir}${imageFileName(ref)}`, content: a.bytes });
+    else missing.push(ref.name);
+  }
+  return { files, missing };
 }
 
 /** Audio files for every clip the story's dialogue refers to, plus diagnostics for missing ones. */

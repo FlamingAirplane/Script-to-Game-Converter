@@ -4,6 +4,7 @@ import { ADAPTERS, buildPlayableHtml, buildRecordingScript, recordingScriptFileN
 // The engine-only Ink runtime (~125 KB), embedded in playable-story exports.
 import inkRuntime from '../../node_modules/inkjs/dist/ink.js?raw';
 import { referencedAudio } from '../core/audio';
+import { referencedImages } from '../core/images';
 import type { ProcessedStory } from '../core/pipeline';
 import { collectClips } from './audioStore';
 import { sfx } from './sfx';
@@ -11,6 +12,7 @@ import { Badge, SeverityIcon, download } from './common';
 import type { StoryProject } from '../core/isr';
 import type { Update } from './projectOps';
 import { UnityThemeEditor } from './UnityThemeEditor';
+import { RecordingsImport } from './RecordingsImport';
 
 // `stale`: an edit is still being processed, so exports wait for it rather than packaging the previous version.
 export function ExportView({ processed, stale, onState, project, update }: { processed: ProcessedStory; stale: boolean; onState: (s: 'Exporting' | 'Succeeded' | 'Failed' | null) => void; project: StoryProject; update: Update }) {
@@ -45,7 +47,8 @@ export function ExportView({ processed, stale, onState, project, update }: { pro
     onState('Exporting');
     try {
       const audio = await collectClips(referencedAudio(processed.project));
-      const r = await adapter.export(processed, { engine, ...opts, audio });
+      const images = await collectClips(referencedImages(processed.project));
+      const r = await adapter.export(processed, { engine, ...opts, audio, images });
       setResult(r);
       setZip(await zipExport(r));
       setPreview(r.files.find((f) => f.path.endsWith('narrative-bridge.manifest.json'))?.path ?? null);
@@ -66,7 +69,7 @@ export function ExportView({ processed, stale, onState, project, update }: { pro
 
   return (
     <div className="view export-view">
-      <ShareSection processed={processed} stale={stale} />
+      <ShareSection processed={processed} stale={stale} project={project} update={update} />
 
       <h2 className="section-title">For a game engine</h2>
       <section className="engines">
@@ -205,7 +208,7 @@ function Pass({ ok }: { ok: boolean }) {
 }
 
 /** Exports that need no game engine: a playable web page for readers, and a Twine project. */
-function ShareSection({ processed, stale }: { processed: ProcessedStory; stale: boolean }) {
+function ShareSection({ processed, stale, project, update }: { processed: ProcessedStory; stale: boolean; project: StoryProject; update: Update }) {
   const [error, setError] = useState('');
   const [twineKind, setTwineKind] = useState<TwineKind>('sugarcube');
   const blocked = processed.diagnostics.some((d) => d.exportBlocked) || stale;
@@ -233,7 +236,8 @@ function ShareSection({ processed, stale }: { processed: ProcessedStory; stale: 
             onClick={() =>
               run(async () => {
                 const audio = await collectClips(referencedAudio(processed.project));
-                download(playableFileName(processed), buildPlayableHtml(processed, inkRuntime, audio), 'text/html');
+                const images = await collectClips(referencedImages(processed.project));
+                download(playableFileName(processed), buildPlayableHtml(processed, inkRuntime, audio, images), 'text/html');
               })
             }
           >
@@ -249,6 +253,7 @@ function ShareSection({ processed, stale }: { processed: ProcessedStory; stale: 
           <button className="btn" disabled={stale} onClick={() => run(() => download(recordingScriptFileName(processed.project), buildRecordingScript(processed.project), 'text/csv'))}>
             Download recording script (.csv)
           </button>
+          <RecordingsImport project={project} update={update} />
         </div>
         <div className="card share-card">
           <h2>Twine</h2>

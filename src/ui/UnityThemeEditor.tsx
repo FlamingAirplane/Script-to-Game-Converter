@@ -20,11 +20,12 @@ const COLOURS: { key: 'background' | 'text' | 'accent' | 'muted'; label: string 
   { key: 'accent', label: 'Buttons' },
   { key: 'muted', label: 'Speakers & notes' },
 ];
-const TOGGLES: { key: 'showSpeakers' | 'showSceneHeadings' | 'showChoiceNumbers' | 'showToolbar'; label: string }[] = [
+const TOGGLES: { key: 'showSpeakers' | 'showSceneHeadings' | 'showChoiceNumbers' | 'showToolbar' | 'showPictures'; label: string }[] = [
   { key: 'showSpeakers', label: 'Speaker names' },
   { key: 'showSceneHeadings', label: 'Scene headings' },
   { key: 'showChoiceNumbers', label: 'Number the choices (1–9 keys)' },
   { key: 'showToolbar', label: 'Restart, Save and Load buttons' },
+  { key: 'showPictures', label: 'Scene pictures, full screen behind the panel' },
 ];
 
 const alpha = (hex: string, a: number) => `${hex}${Math.round(a * 255).toString(16).padStart(2, '0')}`;

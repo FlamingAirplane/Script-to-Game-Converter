@@ -17,6 +17,8 @@ export interface ExportOptions {
   includeDemo: boolean;
   /** Recorded dialogue clips referenced by #audio tags; shipped with the export. */
   audio?: AudioAssets;
+  /** Scene pictures referenced by #image tags (PNG or JPEG bytes by ImageRef id); shipped with the export. */
+  images?: AudioAssets;
   /** Unity story UI look; defaults to the project's (presentation.unity), then to the Book preset. */
   unityTheme?: UnityTheme;
 }
