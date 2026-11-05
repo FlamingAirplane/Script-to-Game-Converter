@@ -1,7 +1,7 @@
 import { fnv1a } from '../hash';
 import { storyLayout } from '../layout';
 import { log } from '../log';
-import { isActive, itemVar, type Choice, type Condition, type Effect, type Passage, type StoryProject } from '../isr';
+import { EXIT_PREFIX, isActive, itemVar, type Choice, type Condition, type Effect, type Passage, type StoryProject } from '../isr';
 import type { ProcessedStory } from '../pipeline';
 import { GENERATOR_VERSION } from '../version';
 import { assertExportable, ExportBlockedError } from './common';
@@ -180,7 +180,7 @@ export function buildTwee(story: ProcessedStory, kind: TwineKind = 'sugarcube'):
 }
 
 /**
- * Splits a passage at its Continue breaks. Each part but the last ends by continuing to the next
+ * Splits a passage at its Continue breaks (and exits to the game). Each part but the last ends by continuing to the next
  * (a "Continue" link); the last keeps the passage's choices, divert and ending. Only the first part
  * has the scene heading. Ids of later parts are "<id>#2", "<id>#3"….
  */
@@ -188,7 +188,11 @@ function splitAtPauses(p: Passage): Passage[] {
   const segments: Passage['content'][] = [[]];
   for (const b of p.content) {
     if (b.type === 'pause') segments.push([]);
-    else segments[segments.length - 1].push(b);
+    else if (b.type === 'exit') {
+      // Twine has no game to hand over to: an exit becomes a Continue link, with a note saying so.
+      segments[segments.length - 1].push({ type: 'note', text: `${EXIT_PREFIX}${b.name}${b.note ? ` (${b.note})` : ''}`, origin: b.origin });
+      segments.push([]);
+    } else segments[segments.length - 1].push(b);
   }
   if (segments.length === 1) return [p];
   const id = (k: number) => (k ? `${p.id}#${k + 1}` : p.id);

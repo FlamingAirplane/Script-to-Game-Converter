@@ -1191,3 +1191,49 @@ describe('admin design editor', () => {
     for (const t of TOKENS) expect(root, t.name).toContain(`${t.name}:`);
   });
 });
+
+describe('exits to the game', () => {
+  const src = '@passage camp Camp\nWolves circle the fire.\n@exit wolf_fight The player fights the wolves\nThe last wolf runs.\n+ [Rest] -> dawn\n@passage dawn Dawn\nMorning.\n@end\n';
+  it('stops the dialogue at an exit, in Ink and back again', async () => {
+    const { exitOf, EXIT_PREFIX } = await import('../src/core/isr');
+    const { project } = await build(src, 'x.md', 'structured');
+    expect(project.passages[0].content.find((b) => b.type === 'exit')).toMatchObject({ type: 'exit', name: 'wolf_fight', note: 'The player fights the wolves' });
+    const story = processProject(project);
+    expect(story.compile.ok).toBe(true);
+    expect(story.generated.ink).toContain('+ [Back to the game: wolf_fight] // The player fights the wolves\n-');
+    expect(exitOf(`${EXIT_PREFIX}wolf_fight`)).toBe('wolf_fight');
+    expect(exitOf('Rest')).toBeNull();
+    // The game sees the exit as the only choice, and taking it goes on with the scene.
+    const { Story } = await import('inkjs');
+    const s = new Story(story.compile.json!);
+    expect(s.ContinueMaximally()).toContain('Wolves circle the fire.');
+    expect(s.currentChoices.map((c) => c.text)).toEqual(['Back to the game: wolf_fight']);
+    s.ChooseChoiceIndex(0);
+    expect(s.ContinueMaximally()).toContain('The last wolf runs.');
+    // Ink that Narrative Bridge wrote comes back with its exit.
+    const again = await build(story.generated.ink, 'x.ink', 'faithful');
+    expect(again.project.passages.find((p) => p.id === 'camp')!.content.find((b) => b.type === 'exit')).toMatchObject({ name: 'wolf_fight', note: 'The player fights the wolves' });
+  });
+
+  it('lists the exits for the game, and plays through them elsewhere', async () => {
+    const { project } = await build(src, 'x.md', 'structured');
+    const story = processProject(project);
+    const r = await ADAPTERS.unity.export(story, { engine: 'unity', projectName: 'Wolves', engineVersion: '6000.0', integrationRef: 'v1.2.3', includeDemo: true });
+    const text = (end: string) => String(r.files.find((f) => f.path.endsWith(end))!.content);
+    expect(text('StoryInfo.cs')).toContain('public static readonly string[] Exits = { "wolf_fight" };');
+    expect(text('NarrativeController.cs')).toContain('public void ResumeAt(string passage)');
+    expect(text('Samples~/Hooking into your game/StoryExits.cs')).toContain('story.ExitReached += Reached;');
+    // Generated C# without "using System;" must name System's types in full.
+    for (const f of r.files.filter((x) => x.path.endsWith('.cs'))) {
+      const c = String(f.content);
+      if (!c.includes('using System;')) expect(c, f.path).not.toMatch(/[^.\w](Array|StringComparison|Exception)\./);
+      expect(c, f.path).not.toContain('""storyVersion');
+    }
+    const { buildPlayableHtml, buildTwee } = await import('../src/core/export');
+    expect(buildPlayableHtml(story, '/* runtime */')).toContain("Resume the story");
+    // Twine has no game: the exit is a Continue link, with a note.
+    const twee = buildTwee(story, 'sugarcube');
+    expect(twee).toContain('Back to the game: wolf_fight');
+    expect(twee).toMatch(/:: Camp \(continued\)/);
+  });
+});

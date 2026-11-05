@@ -93,6 +93,10 @@ picture*, or drop an image there.
 To make the player click **Continue** before the rest of a passage appears, open the **Graph**, click the passage, and
 click **+ Continue break** between two of its lines.
 
+If your story is part of a game with more than dialogue (exploring, fights, puzzles), add **+ Exit to game** in Review
+where the dialogue should stop and the game take over. Name it (the game sees the name) and say what happens; the game
+picks the story up again afterwards, where it left off or at another passage.
+
 ## Shortcuts
 
 Press **?** anywhere to see every keyboard shortcut. The handy ones: ⌘S (Ctrl+S on Windows) saves your project,
