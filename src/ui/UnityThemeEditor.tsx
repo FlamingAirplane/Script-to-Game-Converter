@@ -30,6 +30,14 @@ function shown(f: ThemeField, v: number): string {
   }
 }
 
+/** A setting's value in words, for the reset button's tooltip. */
+function describe(f: ThemeField, v: unknown): string {
+  if (f.kind === 'number') return shown(f, v as number);
+  if (f.kind === 'bool') return v ? 'on' : 'off';
+  if (f.kind === 'choice') return f.choices.find(([c]) => c === v)?.[1] ?? String(v);
+  return String(v);
+}
+
 export function UnityThemeEditor({ project, update }: { project: StoryProject; update: Update }) {
   const saved = project.presentation?.unity;
   const theme = normaliseUnityTheme(saved);
@@ -53,6 +61,15 @@ export function UnityThemeEditor({ project, update }: { project: StoryProject; u
     if (confirm('Put every Story UI setting back to its default?')) save({ ...p });
   };
   const portraitCount = project.characters.filter((c) => c.portrait).length;
+  // Each setting's default: the chosen look's (the Book look's for a custom one).
+  const defaults = theme.preset === 'custom' ? DEFAULT_UNITY_THEME : UNITY_THEME_PRESETS[theme.preset];
+  const isDefault = (f: ThemeField) => {
+    const v = f.kind === 'text' && typeof saved?.[f.key] === 'string' ? saved[f.key] : theme[f.key];
+    const d = defaults[f.key];
+    return typeof v === 'number' && typeof d === 'number' ? Math.abs(v - d) < 1e-6 : v === d;
+  };
+  // Back to the default without changing the look's name (a reset colour isn't a custom one).
+  const resetFields = (fields: ThemeField[]) => save({ ...theme, ...Object.fromEntries(fields.map((f) => [f.key, defaults[f.key]])) });
 
   return (
     <section className="card unity-theme">
@@ -103,9 +120,21 @@ export function UnityThemeEditor({ project, update }: { project: StoryProject; u
                   {g}
                   {g === 'Character portraits' && <span className="muted small"> · {portraitCount ? `${portraitCount} character${portraitCount === 1 ? '' : 's'} with a portrait` : 'none added yet'}</span>}
                 </summary>
+                {fields.some((f) => !isDefault(f)) && (
+                  <button className="btn tiny ghost group-reset" onClick={() => resetFields(fields.filter((f) => !isDefault(f)))}>
+                    ↺ Reset {g.toLowerCase()} to defaults
+                  </button>
+                )}
                 <div className={g === 'Colours' ? 'unity-colours' : 'theme-fields'}>
                   {fields.map((f) => (
-                    <FieldControl key={f.key} field={f} theme={theme} raw={saved?.[f.key]} onChange={(v) => set(f, v)} />
+                    <div key={f.key} className={`theme-field${isDefault(f) ? '' : ' changed'}`}>
+                      <FieldControl field={f} theme={theme} raw={saved?.[f.key]} onChange={(v) => set(f, v)} />
+                      {!isDefault(f) && (
+                        <button className="icon field-reset" onClick={() => resetFields([f])} title={`Back to the default: ${describe(f, defaults[f.key])}`} aria-label={`Reset ${f.label} to its default (${describe(f, defaults[f.key])})`}>
+                          ↺
+                        </button>
+                      )}
+                    </div>
                   ))}
                 </div>
               </details>
