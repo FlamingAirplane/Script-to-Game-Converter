@@ -339,6 +339,19 @@ your story's text, so it is safe to attach to a bug report. Choose how much to s
   them all, or drop them there. Each file is attached to its line; a file named by its row number, like `12.wav`, works
   too, and one for a line that already has a recording replaces it. Files that match no line are listed, and one Undo
   takes the whole batch back off.
+- **A whole recording session:** if your actor recorded everything in one long file, click **Link a whole session…**
+  (next to *Add recordings…*) and load it. You see its waveform (the whole session, and a zoomed view you can scroll by
+  clicking the whole one) and every line of dialogue. Mark where each line is:
+  - pick a line, then **drag across the zoomed waveform** over its take;
+  - or type its **start** and **end** (like `1:02.50`);
+  - or play the session and press **I** at the start and **O** at the end (or the ⇤ ⇥ buttons).
+
+  **Find takes** looks for the pauses between takes (adjust *Sensitivity* and *Pause between takes* if it finds too
+  many or too few). Then pick the first line they belong to and **Give the takes to lines in order**. *Lines of* shows
+  one character's lines, handy for a session with one actor. ▶ (or Enter) plays a line's stretch; ✕ unlinks it.
+  **Cut and attach** turns each marked stretch into that line's recording, marked ✂ in Review. Open the session again
+  any time to move a line's start or end and cut it again; one Undo takes a whole cut back. The session recording itself
+  stays in this browser; the clips cut from it are saved with your project.
 - Recordings and scene pictures travel with the playable story, the Unity and Unreal packages, and saved project
   files.
 

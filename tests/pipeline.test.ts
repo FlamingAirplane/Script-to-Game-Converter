@@ -1217,3 +1217,57 @@ describe('story files', () => {
     expect(safeFileName('a/b:c?.wav')).toBe('a_b_c_.wav');
   });
 });
+
+describe('recording sessions', () => {
+  it('reads and writes times', async () => {
+    const { formatTime, parseTime } = await import('../src/core/session');
+    expect([formatTime(0), formatTime(75.5), formatTime(3723.4)]).toEqual(['0:00.00', '1:15.50', '1:02:03.40']);
+    expect(['1:15.5', '75.5', '1:02:03.4', '1:15,5', 'abc', '1:75', ''].map(parseTime)).toEqual([75.5, 75.5, 3723.4, 75.5, null, null, null]);
+  });
+
+  it('finds the takes in a session and gives them to lines in order, cutting them cleanly', async () => {
+    const { detectSegments, assignInOrder, cutSamples } = await import('../src/core/session');
+    const rate = 8000;
+    // Quiet room tone, with three spoken takes at 1–2 s, 3–3.6 s and 5–6.5 s, and a click at 4.3 s (too short to be a take).
+    const s = new Float32Array(rate * 8);
+    for (let i = 0; i < s.length; i++) s[i] = Math.sin(i * 12.9898) * 0.002;
+    const speak = (a: number, b: number) => {
+      for (let i = a * rate; i < b * rate; i++) s[i] = Math.sin(i / 3) * 0.5;
+    };
+    speak(1, 2);
+    speak(3, 3.6);
+    speak(5, 6.5);
+    for (let i = 4.3 * rate; i < 4.3 * rate + 40; i++) s[i] = 0.6;
+    const takes = detectSegments(s, rate);
+    expect(takes).toHaveLength(3);
+    takes.forEach((t, i) => {
+      const [a, b] = [[1, 2], [3, 3.6], [5, 6.5]][i];
+      expect(t.start).toBeGreaterThan(a - 0.2);
+      expect(t.start).toBeLessThanOrEqual(a);
+      expect(t.end).toBeGreaterThanOrEqual(b);
+      expect(t.end).toBeLessThan(b + 0.2);
+    });
+    // A long minimum pause joins takes that are close together.
+    expect(detectSegments(s, rate, { minGap: 1.5 }).length).toBeLessThan(3);
+    expect(assignInOrder(['a', 'b'], takes)).toEqual({ a: takes[0], b: takes[1] });
+    const cut = cutSamples(s, rate, { start: 1, end: 2 });
+    expect(cut.length).toBe(rate);
+    expect(Math.abs(cut[0])).toBe(0); // faded in
+    expect(detectSegments(new Float32Array(rate), rate)).toEqual([]);
+  });
+
+  it('lists the lines in recording-script order with where their clips came from', async () => {
+    const { sessionLines, clipName } = await import('../src/core/session');
+    const { project } = await build('@passage hall Hall\nThe hall is dark.\n\nMIRA: Who is there?\n\nTOMAS: Only me.\n@end\n', 'p.md', 'structured');
+    const second = project.passages[0].content.filter((b) => b.type === 'dialogue')[1] as { audio?: unknown };
+    second.audio = { id: 'vo_x', name: 'x.wav', mime: 'audio/wav', from: { session: 'ses_1', start: 3, end: 4.5 } };
+    const lines = sessionLines(project);
+    expect(lines.map((l) => [l.number, l.speaker, l.text, l.from?.start])).toEqual([
+      [1, 'MIRA', 'Who is there?', undefined],
+      [2, 'TOMAS', 'Only me.', 3],
+    ]);
+    expect(lines[0].slot).toMatch(/^hall_\d{3}$/);
+    expect(clipName({ id: 'ses_1', name: 'Mira day 1.wav', mime: 'audio/wav' }, { start: 62.5, end: 65.1 })).toBe('Mira day 1 1.02.50–1.05.10.wav');
+  });
+});
+

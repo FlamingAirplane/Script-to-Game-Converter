@@ -7,6 +7,8 @@ export interface AudioRef {
   name: string; // original file name, for display
   mime: string;
   durationMs?: number;
+  /** Cut from a recording session: which one, and where (seconds). See src/core/session.ts. */
+  from?: { session: string; start: number; end: number };
 }
 
 export interface VoiceSettings {
