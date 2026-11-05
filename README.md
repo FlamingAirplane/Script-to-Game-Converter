@@ -246,7 +246,12 @@ your browser are included.
   one on your machine. Only a salted PBKDF2 hash is built in, and the editor's code loads only at `#admin`. The site is
   static, so the check runs in the browser: it keeps the editor closed to visitors, and the editor only ever changes the
   look in your own browser. Nobody else sees a change until you publish it.
-- **Publish:** *Save & publish → Download published.json*, then `npm run design:publish -- ~/Downloads/published.json`
+- **Publish live, no commit:** *Save & publish → Publish it for everyone, now*. Paste a GitHub token (classic, with only
+  the `gist` scope; it stays in your browser and goes only to GitHub) and click **Create the live design**: the design
+  goes to a public Gist that every visitor's app reads when it opens. One-time setup:
+  `gh variable set NB_DESIGN_GIST --body <the gist id>` and redeploy. After that, **Publish now** puts a new design live
+  with no commit or rebuild (`src/ui/design/live.ts`).
+- **Or publish with a commit:** *Download published.json*, then `npm run design:publish -- ~/Downloads/published.json`
   (or replace `src/ui/design/published.json`), commit and push to main.
 - `npm run test:admin` checks the whole flow in WebKit and Chromium with a throwaway password.
 

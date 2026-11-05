@@ -1300,3 +1300,32 @@ describe('story map arrows', () => {
     expect(self.d).toMatch(/^M188,/);
   });
 });
+
+describe('live design', () => {
+  it('reads the published design from its Gist, keeps it for the next visit, and ignores anything else', async () => {
+    const mem = new Map<string, string>();
+    const store = { getItem: (k: string) => mem.get(k) ?? null, setItem: (k: string, v: string) => void mem.set(k, v), removeItem: (k: string) => void mem.delete(k) };
+    Object.assign(globalThis, { localStorage: store, sessionStorage: store });
+    const { loadLiveDesign, setLocalGist, gistId } = await import('../src/ui/design/live');
+    const { designState } = await import('../src/ui/design/design');
+    expect(await loadLiveDesign(async () => new Response('{}'))).toBe('none'); // no Gist yet
+    setLocalGist('0123456789abcdef0123');
+    expect(gistId()).toBe('0123456789abcdef0123');
+    const design = { format: 'narrative-bridge-design', version: 1, name: 'Live', tokens: { '--radius': '8px' }, words: { brand: 'Story Forge' } };
+    const asked: string[] = [];
+    const gist = async (url: string | URL | Request) => {
+      asked.push(String(url));
+      return new Response(JSON.stringify({ files: { 'design.json': { content: JSON.stringify(design) } } }));
+    };
+    expect(await loadLiveDesign(gist as typeof fetch)).toBe('updated');
+    expect(asked).toEqual(['https://api.github.com/gists/0123456789abcdef0123']);
+    expect(designState().design.tokens['--radius']).toBe('8px');
+    expect(designState().published.words.brand).toBe('Story Forge');
+    expect(mem.get('narrative-bridge.design-live')).toContain('Story Forge');
+    expect(await loadLiveDesign(gist as typeof fetch)).toBe('same');
+    // Not a design, or GitHub unreachable: the last copy stays.
+    expect(await loadLiveDesign((async () => new Response(JSON.stringify({ files: { 'design.json': { content: '{"format":"other"}' } } }))) as typeof fetch)).toBe('failed');
+    expect(await loadLiveDesign((async () => { throw new Error('offline'); }) as typeof fetch)).toBe('failed');
+    expect(designState().published.words.brand).toBe('Story Forge');
+  });
+});

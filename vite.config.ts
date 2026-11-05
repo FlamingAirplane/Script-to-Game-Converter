@@ -21,7 +21,11 @@ function adminLock(mode: string) {
 
 export default defineConfig(({ mode }) => ({
   base: './',
-  define: { __NB_ADMIN_LOCK__: JSON.stringify(mode === 'test' ? null : adminLock(mode)) },
+  define: {
+    __NB_ADMIN_LOCK__: JSON.stringify(mode === 'test' ? null : adminLock(mode)),
+    // The live design's Gist (see src/ui/design/live.ts): a repository variable for the website.
+    __NB_DESIGN_GIST__: JSON.stringify(process.env.NB_DESIGN_GIST || loadEnv(mode, process.cwd(), 'NB_').NB_DESIGN_GIST || null),
+  },
   plugins: mode === 'single' ? [react(), viteSingleFile()] : [react(), offlineSite()],
   resolve: {
     alias: [

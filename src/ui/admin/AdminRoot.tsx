@@ -1,10 +1,11 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { createRoot } from 'react-dom/client';
 import { THEME_KEY, applyTheme } from '../ThemeToggle';
-import { DESIGN_FORMAT, PUBLISHED, designChanges, emptyDesign, normaliseDesign, sameDesign, setDraft, setPreviewPublished, useDesign, type DesignDoc } from '../design/design';
+import { DESIGN_FORMAT, designChanges, emptyDesign, normaliseDesign, sameDesign, setDraft, setPreviewPublished, useDesign, type DesignDoc } from '../design/design';
 import { FONT_CHOICES, SETTINGS, TOKENS, TOKEN_GROUPS, WORDS, type Token } from '../design/tokens';
 import { ADMIN_LOCK, MAX_TRIES, WAIT_SECONDS, checkPassword, devWithoutPassword, isUnlocked, lockAdmin, recordFailure, rememberUnlock, waitLeft } from './lock';
 import { describeElement, readAppRules, ruleMatches, type AppRule } from './rules';
+import { BUILT_IN_GIST, gistId, keepToken, publishLive, savedToken, setLocalGist } from '../design/live';
 import css from './admin.css?inline';
 
 // The admin design editor: a window over the live app (opened at #admin, behind the password lock).
@@ -185,8 +186,8 @@ function readBase(): Record<string, string> {
 }
 
 function Editor({ onClose, onLock, host }: { onClose: () => void; onLock: () => void; host: HTMLElement }) {
-  const { draft, previewPublished } = useDesign();
-  const doc = draft ?? PUBLISHED;
+  const { draft, previewPublished, published: live } = useDesign();
+  const doc = draft ?? live;
   const [tab, setTab] = useState<Tab>('variables');
   const [mode, setMode] = useState<Mode>(currentMode);
   const [base, setBase] = useState<Record<string, string>>(readBase);
@@ -320,7 +321,7 @@ function Editor({ onClose, onLock, host }: { onClose: () => void; onLock: () => 
   }, [picking, host]);
 
   const changes = designChanges(doc);
-  const published = sameDesign(doc, PUBLISHED);
+  const published = sameDesign(doc, live);
   const h = history.current;
 
   const switchMode = (m: Mode) => {
@@ -798,11 +799,11 @@ function SettingsTab({ doc, update }: { doc: DesignDoc; update: Update }) {
 // ---- Save and publish ------------------------------------------------------------------------
 
 function PublishTab({ doc, update, onLock }: { doc: DesignDoc; update: Update; onLock: () => void }) {
-  const { previewPublished } = useDesign();
+  const { previewPublished, published: base } = useDesign();
   const [note, setNote] = useState('');
   const file = useRef<HTMLInputElement>(null);
   const text = JSON.stringify(doc, null, 2) + '\n';
-  const isPublished = sameDesign(doc, PUBLISHED);
+  const isPublished = sameDesign(doc, base);
   const say = (s: string) => {
     setNote(s);
     setTimeout(() => setNote((n) => (n === s ? '' : n)), 4000);
@@ -839,7 +840,8 @@ function PublishTab({ doc, update, onLock }: { doc: DesignDoc; update: Update; o
           <input type="checkbox" checked={previewPublished} onChange={(e) => setPreviewPublished(e.target.checked)} /> Show the published design instead (to compare)
         </label>
       </Box>
-      <Box title="Publish it for everyone">
+      <LiveBox doc={doc} say={say} />
+      <Box title="Or publish it with a commit (built into the site)">
         <ol>
           <li>
             <button className="primary" onClick={downloadFile}>
@@ -876,7 +878,7 @@ function PublishTab({ doc, update, onLock }: { doc: DesignDoc; update: Update; o
               e.target.value = '';
             }}
           />
-          <button disabled={isPublished} onClick={() => update((d) => Object.assign(d, structuredClone(PUBLISHED)))}>
+          <button disabled={isPublished} onClick={() => update((d) => Object.assign(d, structuredClone(base)))}>
             Back to the published design
           </button>
           <button disabled={designChanges(doc) === 0} onClick={() => update((d) => Object.assign(d, emptyDesign(d.name)))}>
@@ -904,5 +906,84 @@ function Box({ title, children }: { title: string; children: ReactNode }) {
       <h2>{title}</h2>
       {children}
     </section>
+  );
+}
+
+/**
+ * Publishing without a commit: the design goes to a public GitHub Gist that every visitor's app reads
+ * when it opens. A GitHub token (classic, with only the "gist" scope) is what allows it; it stays in
+ * this browser and is sent only to GitHub.
+ */
+function LiveBox({ doc, say }: { doc: DesignDoc; say: (s: string) => void }) {
+  const [token, setToken] = useState(savedToken);
+  const [remember, setRemember] = useState(() => !!savedToken() && (() => { try { return !!localStorage.getItem('narrative-bridge.github-token'); } catch { return false; } })());
+  const [id, setId] = useState(gistId() ?? '');
+  const [busy, setBusy] = useState(false);
+  const [result, setResult] = useState<{ id: string; url: string; created: boolean } | null>(null);
+  const publish = async () => {
+    setBusy(true);
+    try {
+      keepToken(token.trim(), remember);
+      if (id.trim() && id.trim() !== BUILT_IN_GIST) setLocalGist(id.trim());
+      const r = await publishLive(doc, token.trim(), id.trim() || null);
+      setId(r.id);
+      setResult(r);
+      say(r.created ? 'Created the live design.' : 'Published. Visitors get it the next time they open the site.');
+    } catch (e) {
+      say((e as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  };
+  const needsSetup = !BUILT_IN_GIST || (id && id !== BUILT_IN_GIST);
+  return (
+    <Box title="Publish it for everyone, now (no commit)">
+      <p className="small">
+        The design goes to a public GitHub Gist that the site reads when it opens: no commit, no rebuild. Visitors get it the next time they open the
+        site.
+      </p>
+      <label className="field">
+        <span>GitHub token</span>
+        <input type="password" autoComplete="off" spellCheck={false} value={token} onChange={(e) => setToken(e.target.value)} placeholder="ghp_…" aria-label="GitHub token" />
+      </label>
+      <p className="muted small">
+        Make one at github.com → Settings → Developer settings → Personal access tokens → <em>Tokens (classic)</em>, with only the <code>gist</code> scope. It stays
+        in this browser and is sent only to GitHub.
+      </p>
+      <label className="check small">
+        <input type="checkbox" checked={remember} onChange={(e) => setRemember(e.target.checked)} /> Remember it in this browser (otherwise until this tab closes)
+      </label>
+      <label className="field">
+        <span>Gist {BUILT_IN_GIST ? '(set up for the site)' : '(leave empty to create it)'}</span>
+        <input className="mono" spellCheck={false} value={id} onChange={(e) => setId(e.target.value.trim())} placeholder="created the first time you publish" aria-label="Gist id" />
+      </label>
+      <div className="row wrap">
+        <button className="primary" disabled={busy || !token.trim()} onClick={() => void publish()}>
+          {busy ? 'Publishing…' : id ? 'Publish now' : 'Create the live design'}
+        </button>
+        {token && (
+          <button
+            onClick={() => {
+              keepToken('', false);
+              setToken('');
+              say('Token forgotten.');
+            }}
+          >
+            Forget the token
+          </button>
+        )}
+      </div>
+      {result && (
+        <p className="small">
+          Live at <a href={result.url} target="_blank" rel="noreferrer">its Gist</a>.
+        </p>
+      )}
+      {needsSetup && id && (
+        <p className="muted small">
+          One-time setup so every visitor reads it: run <code>gh variable set NB_DESIGN_GIST --body {id}</code> in the project, then <code>gh workflow run pages.yml</code>.
+          Until then, only this browser uses it.
+        </p>
+      )}
+    </Box>
   );
 }
