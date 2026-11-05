@@ -397,7 +397,8 @@ export function App() {
     if (!project) return;
     const snapshot = project;
     // Scene pictures share the "audio" map with voice clips (same store, keyed by id), so older versions still open the file.
-    const clips = await collectClips([...referencedAudio(project), ...referencedImages(project)]);
+    // Regions have no bytes of their own: the session recordings they play from are saved instead.
+    const clips = await collectClips([...referencedAudio(project).filter((a) => !a.region), ...referencedImages(project), ...(project.sessions ?? [])]);
     const audio = Object.fromEntries(Object.entries(clips).map(([id, c]) => [id, { mime: c.mime, data: bytesToBase64(c.bytes) }]));
     const json = JSON.stringify({ project, parseDiagnostics, audio }, null, 2);
     try {

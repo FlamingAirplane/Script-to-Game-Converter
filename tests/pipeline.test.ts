@@ -1300,3 +1300,35 @@ describe('story map arrows', () => {
     expect(self.d).toMatch(/^M188,/);
   });
 });
+
+describe('non-destructive clips', () => {
+  it('trims, fades and changes gain without touching the source', async () => {
+    const { applyEdit, hasEdit, isRendered, audioFileName } = await import('../src/core/audio');
+    const rate = 1000;
+    const src = new Float32Array(rate).fill(0.5); // one second
+    expect(applyEdit(src, rate)).toEqual(src);
+    const out = applyEdit(src, rate, { trimStart: 0.1, trimEnd: 0.2, fadeIn: 0.1, fadeOut: 0.1, gain: 6 });
+    expect(out.length).toBe(700);
+    expect(src[0]).toBe(0.5); // the source is unchanged
+    expect(out[0]).toBe(0); // fades in from silence
+    expect(out[350]).toBeCloseTo(0.5 * Math.pow(10, 6 / 20), 3); // +6 dB in the middle
+    expect(out[699]).toBe(0); // and fades out
+    expect(applyEdit(src, rate, { gain: 30 })[10]).toBe(1); // never clips past full scale
+    expect([hasEdit({}), hasEdit({ gain: 0 }), hasEdit({ fadeIn: 0.2 })]).toEqual([false, false, true]);
+    // A clip plays from its own file until it's a region or edited; then it's rendered as WAV.
+    expect(audioFileName({ id: 'vo_a', mime: 'audio/mpeg' })).toBe('vo_a.mp3');
+    expect(audioFileName({ id: 'vo_a', mime: 'audio/mpeg', edit: { fadeOut: 0.5 } })).toBe('vo_a.wav');
+    expect(isRendered({ region: true })).toBe(true);
+  });
+
+  it('exports a region or edited clip under its WAV name in the Ink and the package', async () => {
+    const { project } = await build('@passage hall Hall\nMIRA: Who is there?\n@end\n', 'r.md', 'structured');
+    const line = project.passages[0].content.find((b) => b.type === 'dialogue') as { audio?: unknown };
+    line.audio = { id: 'vo_mira_x', name: 'Session 0.01.00–0.02.00.wav', mime: 'audio/wav', from: { session: 'ses_1', start: 1, end: 2 }, region: true };
+    const story = processProject(project);
+    expect(story.generated.ink).toContain('#audio:vo_mira_x.wav');
+    const wav = { mime: 'audio/wav', bytes: new Uint8Array([82, 73, 70, 70]) };
+    const r = await ADAPTERS.unity.export(story, { engine: 'unity', projectName: 'R', engineVersion: '6000.0', integrationRef: 'v1.2.3', includeDemo: true, audio: { vo_mira_x: wav } });
+    expect(r.files.some((f) => f.path.endsWith('Audio/vo_mira_x.wav'))).toBe(true);
+  });
+});

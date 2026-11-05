@@ -1078,3 +1078,12 @@ section.drafts > h2 { margin-top: 26px; }
   .session-line .buttons { grid-column: 2 / -1; grid-row: 3; }
   .session-tools input[type='range'], .session-transport input[type='range'] { width: 90px; }
 }
+
+/* Non-destructive clip edits */
+.voice-clip { position: relative; }
+.voice-clip .icon.edited { color: var(--teal); }
+.clip-editor { position: absolute; z-index: 5; top: calc(100% + 4px); left: 0; width: min(440px, 80vw); background: var(--paper-hi); border: 1px solid var(--rule-2); border-radius: var(--radius-card); padding: 10px 12px; box-shadow: 0 6px 18px color-mix(in srgb, var(--shadow) 25%, transparent); display: flex; flex-direction: column; gap: 6px; }
+.clip-editor p { margin: 0; }
+.clip-edit-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 2px 14px; }
+.clip-edit-field { display: flex; flex-direction: column; }
+.clip-edit-field input { width: 100%; accent-color: var(--teal); }

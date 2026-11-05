@@ -1,4 +1,4 @@
-import { audioExtension, audioFileName } from './audio';
+import { audioExtension, audioFileName, isRendered, type AudioRef } from './audio';
 import { imageFileName } from './images';
 import type { SourceDocument, StoryProject } from './isr';
 
@@ -17,6 +17,8 @@ export interface StoryFile {
   context: string;
   /** Media: the id of its bytes in the browser. */
   id?: string;
+  /** Recordings: the clip, which may be a region or edited, so it's rendered to download. */
+  audio?: AudioRef;
   mime: string;
   /** Scripts: their text. */
   text?: string;
@@ -70,8 +72,9 @@ export function storyFiles(project: StoryProject): StoryFile[] {
     for (const b of p.content) {
       if (b.type !== 'dialogue' || !b.audio || seen.has(b.audio.id)) continue;
       seen.add(b.audio.id);
-      const name = b.audio.name.toLowerCase().endsWith(`.${audioExtension(b.audio.mime)}`) ? b.audio.name : audioFileName(b.audio);
-      files.push({ kind: 'recording', fileName: safeFileName(name, audioFileName(b.audio)), context: `${p.title || p.id} · ${speakers.get(b.speakerId) ?? b.speakerId}: “${snippet(b.text)}”`, id: b.audio.id, mime: b.audio.mime });
+      const ext = isRendered(b.audio) ? 'wav' : audioExtension(b.audio.mime);
+      const name = b.audio.name.toLowerCase().endsWith(`.${ext}`) ? b.audio.name : isRendered(b.audio) ? withExtension(b.audio.name, 'wav') : audioFileName(b.audio);
+      files.push({ kind: 'recording', audio: b.audio, fileName: safeFileName(name, audioFileName(b.audio)), context: `${p.title || p.id} · ${speakers.get(b.speakerId) ?? b.speakerId}: “${snippet(b.text)}”`, id: b.audio.id, mime: isRendered(b.audio) ? 'audio/wav' : b.audio.mime });
     }
   }
   for (const c of project.characters)

@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { storyFiles, zipPaths, type StoryFile, type StoryFileKind } from '../core/files';
 import type { StoryProject } from '../core/isr';
 import { getClip } from './audioStore';
+import { renderClip } from './audioRender';
 import { download } from './common';
 
 // Story settings → Files: everything put into this story, to download again. Scripts as text,
@@ -16,6 +17,7 @@ function size(n: number): string {
 
 async function bytesOf(f: StoryFile): Promise<Uint8Array | string | undefined> {
   if (f.text != null) return f.text;
+  if (f.audio) return (await renderClip(f.audio))?.bytes;
   return f.id ? (await getClip(f.id))?.bytes : undefined;
 }
 

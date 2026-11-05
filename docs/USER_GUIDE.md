@@ -353,9 +353,13 @@ your story's text, so it is safe to attach to a bug report. Choose how much to s
   **Find takes** looks for the pauses between takes (adjust *Sensitivity* and *Pause between takes* if it finds too
   many or too few). Then pick the first line they belong to and **Give the takes to lines in order**. *Lines of* shows
   one character's lines, handy for a session with one actor. ▶ (or Enter) plays a line's stretch; ✕ unlinks it.
-  **Cut and attach** turns each marked stretch into that line's recording, marked ✂ in Review. Open the session again
-  any time to move a line's start or end and cut it again; one Undo takes a whole cut back. The session recording itself
-  stays in this browser; the clips cut from it are saved with your project.
+  Every change is **saved as you make it**, like regions in Pro Tools: a linked line plays its stretch of the session
+  (nothing is copied), marked ✂ in Review, and Undo takes a change back. Open the session again any time to move a
+  line's start or end. The session is kept in your browser and in saved project files; exports get each line as its
+  own file.
+- **Editing a clip:** ✎ beside any recording opens its edits: **trim** the start and end, **fade** in and out, and the
+  **volume** (in decibels). They're saved as you change them and never alter the recording itself; ▶ plays the clip
+  with its edits, **Undo all edits** clears them, and exports get the clip with its edits applied.
 - Recordings and scene pictures travel with the playable story, the Unity and Unreal packages, and saved project
   files.
 
