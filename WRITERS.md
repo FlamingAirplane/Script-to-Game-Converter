@@ -87,6 +87,9 @@ you change them. Give each character a portrait in Review → Story settings →
 Your voice actors can work from the **recording script** (Export page): it names the file for every line. Click
 **Add recordings…** and pick all their files at once to attach each to its line.
 
+To get any of your files back (scripts, recordings, pictures, portraits), open **Review → Story settings → Files**:
+download one, or **Download all (.zip)**.
+
 To show a picture when a scene begins, open the passage in **Review** and click **+ Add a picture** under *Scene
 picture*, or drop an image there.
 
