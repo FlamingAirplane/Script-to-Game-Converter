@@ -79,7 +79,14 @@ for (const [name, type] of [['WebKit', webkit], ['Chromium', chromium]]) {
     await step('playtest: toggling an item unlocks its choice immediately', async () => {
       await page.getByRole('button', { name: /Playtest/ }).click();
       const open = page.getByRole('button', { name: 'Open the archive' });
-      if (await open.count()) throw new Error('locked choice visible before the key');
+      if (await open.count()) throw new Error('locked choice offered before the key');
+      // Locked choices are shown, greyed, with what they need; G hides them.
+      const locked = page.locator('.choice-btn.locked', { hasText: 'Open the archive' });
+      await locked.getByText('needs Archive Key').waitFor({ timeout: 3000 });
+      await page.keyboard.press('g');
+      await locked.waitFor({ state: 'detached', timeout: 3000 });
+      await page.keyboard.press('g');
+      await locked.waitFor({ timeout: 3000 });
       await page.locator('.vars li', { hasText: 'has_archive_key' }).locator('input').check();
       await open.waitFor({ timeout: 3000 });
     });

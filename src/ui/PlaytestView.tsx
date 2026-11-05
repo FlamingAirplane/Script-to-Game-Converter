@@ -2,6 +2,7 @@
 import { Story } from 'inkjs';
 import { Fragment, useCallback, useEffect, useRef, useState } from 'react';
 import { fnv1a } from '../core/hash';
+import { lockedChoices } from '../core/gating';
 import { CONTINUE_TEXT, itemVar } from '../core/isr';
 import type { ProcessedStory } from '../core/pipeline';
 import { audioFileName, referencedAudio } from '../core/audio';
@@ -22,6 +23,8 @@ interface Line {
 }
 
 /** A Continue break: the story offers only "Continue" (see inkgen.ts). */
+/** The passage (Ink knot) the reader is in: where the story last read from, even when it offers no choices. */
+const knotOf = (s: Story) => (s.state.previousPointer?.path?.toString() ?? s.currentChoices[0]?.sourcePath ?? '').split('.')[0];
 const isPause = (s: Story) => s.currentChoices.length === 1 && s.currentChoices[0].text === CONTINUE_TEXT;
 
 /** Story state at the start of the current stretch of text, so a state change can replay it. */
@@ -92,11 +95,15 @@ export function PlaytestView({
   onOpen,
   dialogueOnly,
   onDialogueOnly,
+  showGated,
+  onShowGated,
 }: {
   processed: ProcessedStory;
   onOpen: (id: string) => void;
   dialogueOnly: boolean;
   onDialogueOnly: (on: boolean) => void;
+  showGated: boolean;
+  onShowGated: (on: boolean) => void;
 }) {
   const json = processed.compile.json;
   const version = fnv1a(processed.generated.ink);
@@ -176,7 +183,7 @@ export function PlaytestView({
       setLines(out);
       speakRef.current(out.slice(prefix.length));
       setChoices(s.currentChoices.map((c) => ({ text: c.text, index: c.index })));
-      setWhere((s.currentChoices[0]?.sourcePath ?? '').split('.')[0]);
+      setWhere(knotOf(s));
       readVars();
     },
     [readVars],
@@ -297,6 +304,11 @@ export function PlaytestView({
     voices: toggleVoices,
   };
   const ended = choices.length === 0;
+  // Choices the reader can't take yet. Not at a Continue break: a passage's choices come after its last break.
+  const locked =
+    showGated && story.current && !(choices.length === 1 && choices[0].text === CONTINUE_TEXT)
+      ? lockedChoices(processed.project, where, (n) => story.current!.variablesState.$(n), choices.map((c) => c.text))
+      : [];
   // The drop cap opens the first real paragraph of prose, not a short line like "FADE IN:".
   const dropCapAt = lines.findIndex((l) => l.kind === 'text' && !l.speaker && !l.tags.includes('transition') && l.text.length >= 40);
   const smoke = processed.smoke;
@@ -317,6 +329,14 @@ export function PlaytestView({
             </button>
             <button className={`btn tiny ${dialogueOnly ? 'ok' : ''}`} aria-pressed={dialogueOnly} title="Show only dialogue (D)" onClick={() => onDialogueOnly(!dialogueOnly)}>
               {dialogueOnly ? 'dialogue only' : 'all text'}
+            </button>
+            <button
+              className={`btn tiny ${showGated ? 'ok' : ''}`}
+              aria-pressed={showGated}
+              title="Also show choices that need an item or value you don't have yet, and what they need (G)"
+              onClick={() => onShowGated(!showGated)}
+            >
+              {showGated ? '🔒 locked shown' : '🔒 locked hidden'}
             </button>
             <button className="btn tiny" onClick={undo} disabled={!history.length}>
               ↶ Undo choice
@@ -355,6 +375,12 @@ export function PlaytestView({
             <button key={c.index} className={`choice-btn${choices.length === 1 && c.text === CONTINUE_TEXT ? ' continue' : ''}`} onClick={() => choose(c.index, c.text)}>
               {c.text}
             </button>
+          ))}
+          {locked.map((l) => (
+            <p key={l.choice.id} className="choice-btn locked" aria-disabled="true">
+              <span className="locked-text">{l.choice.text}</span>
+              <span className="locked-needs">needs {l.needs.join(', ')}</span>
+            </p>
           ))}
           {ended && (
             <button className="choice-btn" onClick={restart}>
@@ -428,7 +454,7 @@ export function PlaytestView({
                   setHistory(r.history);
                   setLines(r.lines);
                   setChoices(s.currentChoices.map((c) => ({ text: c.text, index: c.index })));
-                  setWhere((s.currentChoices[0]?.sourcePath ?? '').split('.')[0]);
+                  setWhere(knotOf(s));
                   readVars();
                   const n = (k: number) => `${k} choice${k === 1 ? '' : 's'}`;
                   setNotice(

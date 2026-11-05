@@ -87,6 +87,23 @@ export function App() {
       return false;
     }
   });
+  // "Gated choices": show choices that need an item or value in Playtest (greyed, with what they need)
+  // and as padlock routes on the Graph. One setting for both, remembered.
+  const [showGated, setShowGatedState] = useState(() => {
+    try {
+      return localStorage.getItem('narrative-bridge.show-gated') !== 'off';
+    } catch {
+      return true;
+    }
+  });
+  const setShowGated = (on: boolean) => {
+    setShowGatedState(on);
+    try {
+      localStorage.setItem('narrative-bridge.show-gated', on ? 'on' : 'off');
+    } catch {
+      /* preference not saved */
+    }
+  };
   const setDialogueOnly = (on: boolean) => {
     setDialogueOnlyState(on);
     try {
@@ -95,7 +112,7 @@ export function App() {
       /* preference not saved */
     }
   };
-  const keys = useRef<{ tab: Tab; save: () => void | Promise<void>; saveAs: () => void | Promise<void>; open: () => void; find: () => void; step: (dir: 1 | -1) => void; dialogueOnly: () => void }>({
+  const keys = useRef<{ tab: Tab; save: () => void | Promise<void>; saveAs: () => void | Promise<void>; open: () => void; find: () => void; step: (dir: 1 | -1) => void; dialogueOnly: () => void; showGated: () => void }>({
     tab: 'import',
     save: () => {},
     saveAs: () => {},
@@ -103,6 +120,7 @@ export function App() {
     find: () => {},
     step: () => {},
     dialogueOnly: () => {},
+    showGated: () => {},
   });
   // A page turns whenever the chapter changes (not on first load).
   const prevTab = useRef(tab);
@@ -285,6 +303,9 @@ export function App() {
       } else if (e.key.toLowerCase() === 'd' && plainKey(e) && (h.tab === 'review' || h.tab === 'play')) {
         e.preventDefault();
         h.dialogueOnly();
+      } else if (e.key.toLowerCase() === 'g' && plainKey(e) && (h.tab === 'play' || h.tab === 'graph') && project) {
+        e.preventDefault();
+        h.showGated();
       } else if ((e.key === '[' || e.key === ']') && plainKey(e) && h.tab === 'review' && project) {
         e.preventDefault();
         h.step(e.key === ']' ? 1 : -1);
@@ -431,6 +452,7 @@ export function App() {
   keys.current = {
     tab,
     dialogueOnly: () => setDialogueOnly(!dialogueOnly),
+    showGated: () => setShowGated(!showGated),
     save: () => saveProject(),
     saveAs: () => saveProject(true),
     open: () => void chooseProject(),
@@ -599,10 +621,12 @@ export function App() {
               layout={project!.layout}
               onMove={(id, pos) => update((d) => (d.layout = { ...d.layout, [id]: pos }))}
               onResetLayout={() => update((d) => delete d.layout)}
+              showGated={showGated}
+              onShowGated={setShowGated}
             />
           )}
           {processed && tab === 'ink' && <InkView processed={processed} onOpen={open} />}
-          {processed && tab === 'play' && <PlaytestView processed={processed} onOpen={open} dialogueOnly={dialogueOnly} onDialogueOnly={setDialogueOnly} />}
+          {processed && tab === 'play' && <PlaytestView processed={processed} onOpen={open} dialogueOnly={dialogueOnly} onDialogueOnly={setDialogueOnly} showGated={showGated} onShowGated={setShowGated} />}
           {processed && tab === 'export' && <ExportView processed={processed} stale={stale} onState={setExportState} project={project!} update={update} />}
           </Suspense>
           {(tab === 'import' || tab === 'export') && <footer className="folio">— {TABS.find((t) => t.id === tab)!.numeral.toLowerCase()} —</footer>}

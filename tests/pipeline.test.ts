@@ -896,3 +896,29 @@ describe('Unity story UI', () => {
     expect(theme).toMatchObject({ preset: 'night', background: '#1f2913', text: '#fefae0', layout: 'center', fontSize: 56, continueLabel: 'Next', endLabel: 'The End', panelXMin: 0.2 });
   });
 });
+
+describe('gated choices', () => {
+  it('lists the choices a reader cannot take yet, with what they need in plain words', async () => {
+    const { conditionHolds, describeCondition, lockedChoices } = await import('../src/core/gating');
+    const { project } = await build(
+      '@item key "Brass Key"\n@item lamp "Lamp"\n@var trust = 0\n@passage a A\nHall.\n+ {has key} [Unlock] -> a\n+ {trust >= 2 and not has lamp} [Trust her] -> a\n+ [Wait] -> a\n',
+      'g.md',
+      'structured',
+    );
+    const vars: Record<string, unknown> = { has_key: false, has_lamp: false, trust: 0 };
+    const read = (n: string) => vars[n];
+    const locked = lockedChoices(project, 'a', read, ['Wait']);
+    expect(locked.map((l) => [l.choice.text, l.needs])).toEqual([
+      ['Unlock', ['Brass Key']],
+      ['Trust her', ['trust at least 2 and no Lamp']],
+    ]);
+    vars.has_key = true;
+    vars.trust = 3;
+    expect(lockedChoices(project, 'a', read, ['Wait', 'Unlock']).map((l) => l.choice.text)).toEqual([]);
+    // A choice already on offer is never listed twice, even if the condition reads as false.
+    vars.has_key = false;
+    expect(lockedChoices(project, 'a', read, ['Unlock']).map((l) => l.choice.text)).toEqual([]);
+    expect(conditionHolds({ type: 'or', conditions: [{ type: 'has_item', itemId: 'lamp' }, { type: 'compare', variableId: 'trust', op: '!=', value: 3 }] }, read)).toBe(false);
+    expect(describeCondition({ type: 'not', condition: { type: 'compare', variableId: 'trust', op: '<', value: 1 } }, project)).toBe('not trust below 1');
+  });
+});

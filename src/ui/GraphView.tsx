@@ -169,7 +169,7 @@ function BreakSign({ count, x, y }: { count: number; x: number; y: number }) {
 const KEY_STORE = 'narrative-bridge.map-key';
 
 /** The map's key, in plain words, drawn with the same marks as the map. */
-function MapKey() {
+function MapKey({ hiddenGated }: { hiddenGated: number }) {
   const line = (kind: string, sign?: 'cond' | 'pending') => (
     <svg width="58" height="20" aria-hidden>
       <path d="M2 10 H50" className={`edge ${kind}`} markerEnd={`url(#arrow-${kind})`} />
@@ -187,7 +187,10 @@ function MapKey() {
       <li>{tag('ending')} the story can end here</li>
       <li>{tag('unreachable')} no route leads here yet</li>
       <li>{line('edge')} a choice</li>
-      <li>{line('cond', 'cond')} a choice that needs an item or value</li>
+      <li>
+        {line('cond', 'cond')} a choice that needs an item or value
+        {hiddenGated > 0 && <span className="muted"> ({hiddenGated} hidden; Locked to show)</span>}
+      </li>
       <li>{line('fallback')} continues on its own</li>
       <li>{line('pending', 'pending')} suggested, waiting for your OK</li>
       <li>
@@ -213,6 +216,8 @@ export function GraphView({
   layout,
   onMove,
   onResetLayout,
+  showGated,
+  onShowGated,
 }: {
   graph: StoryGraph;
   start: string;
@@ -228,7 +233,11 @@ export function GraphView({
   layout?: Record<string, Position>;
   onMove: (id: string, pos: Position) => void;
   onResetLayout: () => void;
+  /** Whether routes that need an item or value are drawn. */
+  showGated: boolean;
+  onShowGated: (on: boolean) => void;
 }) {
+  const edges = useMemo(() => (showGated ? graph.edges : graph.edges.filter((e) => !e.conditional)), [graph.edges, showGated]);
   // The passage panel: open after a passage is clicked (or chosen with Space), closed with Esc or ×.
   const [inspecting, setInspecting] = useState(false);
   const breaks = useMemo(() => new Map(project.passages.map((p) => [p.id, countBreaks(p)])), [project]);
@@ -265,14 +274,14 @@ export function GraphView({
   // Parallel edges between the same two passages get their own lane so they don't draw on top of each other.
   const lanes = useMemo(() => {
     const groups = new Map<string, string[]>();
-    for (const e of graph.edges) {
+    for (const e of edges) {
       const key = `${e.from}->${e.to}`;
       (groups.get(key) ?? groups.set(key, []).get(key)!).push(e.id);
     }
     const out = new Map<string, { i: number; n: number }>();
     for (const ids of groups.values()) ids.forEach((id, i) => out.set(id, { i, n: ids.length }));
     return out;
-  }, [graph.edges]);
+  }, [edges]);
 
   // Whether the reader has panned or zoomed since the last fit; if not, the map refits on resize.
   const moved = useRef(false);
@@ -436,6 +445,14 @@ export function GraphView({
             PNG
           </button>
         </span>
+        <button
+          className={`btn tiny ${showGated ? 'ok' : ''}`}
+          aria-pressed={showGated}
+          onClick={() => onShowGated(!showGated)}
+          title="Show or hide the routes that need an item or value (G)"
+        >
+          🔒 Locked
+        </button>
         <button className="btn tiny" aria-pressed={showKey} onClick={toggleKey} title="Show or hide what the marks on the map mean">
           Key
         </button>
@@ -446,7 +463,7 @@ export function GraphView({
           ref={svg}
           className="graph"
           role="group"
-          aria-label={`Story map: ${graph.nodes.length} passages and ${graph.edges.length} links. Tab moves between passages, Space shows a passage's lines, Enter opens it in Review. Drag a passage to move it.`}
+          aria-label={`Story map: ${graph.nodes.length} passages and ${edges.length} links${edges.length < graph.edges.length ? ` (${graph.edges.length - edges.length} locked routes hidden)` : ''}. Tab moves between passages, Space shows a passage's lines, Enter opens it in Review. Drag a passage to move it.`}
           onWheel={(e) => {
             const r = svg.current!.getBoundingClientRect();
             const mx = e.clientX - r.left;
@@ -500,7 +517,7 @@ export function GraphView({
             ))}
           </defs>
           <g transform={`translate(${view.x},${view.y}) scale(${view.k})`}>
-            {graph.edges.map((e) => {
+            {edges.map((e) => {
               const a = placed.get(e.from);
               const b = placed.get(e.to);
               if (!a) return null;
@@ -640,7 +657,7 @@ export function GraphView({
           <PassageInspector project={project} passageId={selected} update={update} onOpen={onOpen} onClose={closeInspector} />
         )}
       </div>
-      {showKey && <MapKey />}
+      {showKey && <MapKey hiddenGated={graph.edges.length - edges.length} />}
     </div>
   );
 }

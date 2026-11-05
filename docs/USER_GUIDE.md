@@ -153,7 +153,7 @@ Every passage is a card and every choice a route between cards. The **key** unde
 | **Ending** tag | The story can end here. |
 | **Can't be reached** tag (dashed) | No route leads here yet. Add a choice to it, or delete it. |
 | Solid route | A choice the player can make. |
-| Dashed route with a padlock | A choice that needs an item or value, such as having the key. |
+| Dashed route with a padlock | A choice that needs an item or value, such as having the key. **🔒 Locked** in the toolbar (or **G**) hides or shows these routes. |
 | Dotted route | The story continues on its own. |
 | Dashed route with ◆ | A suggested choice, waiting for your OK in Review. |
 | **Continue** pill on a card | The passage has Continue breaks; a number shows how many. |
@@ -185,6 +185,11 @@ chapter.
 
 Click a choice (or press 1–9) to play. **Undo choice** (Backspace) steps back; **Restart** (R) begins again. **Voices**
 (V) reads the dialogue aloud; **All text / Dialogue only** (D) hides narration.
+
+**Locked shown / Locked hidden** (G) controls the choices you can't take yet because they need an item or value. When
+shown, each sits greyed out under the real choices with a 🔒 and what it needs, such as *needs Archive Key*, so you can
+see what the player is missing. Tick the item in the panel and it becomes a real choice. The same setting hides or shows
+the padlock routes on the Graph.
 
 The panel beside the story shows:
 
@@ -319,6 +324,7 @@ Press **?** at any time to see them all. On Windows and Linux, use Ctrl instead 
 | D | Dialogue only | Backspace | Undo a choice | F | Fit the map |
 | | | R | Restart | + / − | Zoom |
 | | | V | Voices on / off | Tab | Move between passages |
+| | | G | Locked choices on / off | G | Locked routes on / off |
 | | | | | Space | Show a passage's lines |
 | | | | | Enter | Open it in Review |
 | | | | | Esc | Close the passage panel |
