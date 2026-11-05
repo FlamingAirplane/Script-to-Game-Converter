@@ -3,7 +3,7 @@ import { Story } from 'inkjs';
 import { Fragment, useCallback, useEffect, useRef, useState } from 'react';
 import { fnv1a } from '../core/hash';
 import { lockedChoices } from '../core/gating';
-import { referencedImages } from '../core/images';
+import { portraitFiles, referencedImages } from '../core/images';
 import { usePictures } from './pictures';
 import { CONTINUE_TEXT, itemVar } from '../core/isr';
 import type { ProcessedStory } from '../core/pipeline';
@@ -150,6 +150,8 @@ export function PlaytestView({
   const voicesBySpeaker = new Map(processed.project.characters.map((c) => [c.id, c.voice]));
   // Scene pictures by the file name used in #image tags.
   const pictures = usePictures(referencedImages(processed.project));
+  // Character portraits by speaker id (the #speaker tag).
+  const portraitBySpeaker = portraitFiles(processed.project);
   const speakRef = useRef<(l: Line[]) => void>(() => {});
   speakRef.current = (newLines: Line[]) => {
     if (!voicesRef.current) return;
@@ -307,6 +309,11 @@ export function PlaytestView({
     restart,
     voices: toggleVoices,
   };
+  const portraitOf = (l: Line) => {
+    const who = l.tags.find((t) => t.startsWith('speaker:'))?.slice(8);
+    const file = who && portraitBySpeaker[who];
+    return file ? pictures.get(file) : undefined;
+  };
   const pictureFor = (l: Line) => {
     const file = l.tags.find((t) => t.startsWith('image:'))?.slice(6);
     return file ? pictures.get(file) : undefined;
@@ -363,7 +370,8 @@ export function PlaytestView({
                 › {l.text}
               </p>
             ) : l.speaker ? (
-              <p key={i} className="t-dialogue">
+              <p key={i} className={`t-dialogue${portraitOf(l) ? ' with-portrait' : ''}`}>
+                {portraitOf(l) && <img className="t-portrait" src={portraitOf(l)!.url} alt="" />}
                 <span className="t-speaker">{l.speaker}</span>
                 {l.tags.find((t) => t.startsWith('paren:')) && <span className="t-paren">({l.tags.find((t) => t.startsWith('paren:'))!.slice(6)})</span>}
                 <span className="t-text">{l.text}</span>

@@ -7,6 +7,7 @@ import { Badge, ProvenanceBadge, SeverityIcon } from './common';
 import { friendly } from './friendly';
 import { VoiceClip, VoicePicker } from './VoiceControls';
 import { ScenePicture } from './ScenePicture';
+import { CharacterPortrait } from './CharacterPortrait';
 import { RecordingsImport } from './RecordingsImport';
 import { formatMinutes, storyStats } from '../core/stats';
 import { DraftShelf } from './Drafts';
@@ -741,6 +742,7 @@ function StorySettings({ project, update, onKeepDraft, onRestoreDraft }: { proje
             <th>Aliases seen in source</th>
             <th>Same person as…</th>
             <th>Voice</th>
+            <th>Portrait</th>
           </tr>
         </thead>
         <tbody>
@@ -777,11 +779,14 @@ function StorySettings({ project, update, onKeepDraft, onRestoreDraft }: { proje
               <td>
                 <VoicePicker voice={c.voice} name={c.displayName} onChange={(voice) => update((d) => (d.characters[i].voice = voice), `settings:voice:${i}`)} />
               </td>
+              <td>
+                <CharacterPortrait character={c} update={update} />
+              </td>
             </tr>
           ))}
           {!project.characters.length && (
             <tr>
-              <td colSpan={5} className="muted small">
+              <td colSpan={6} className="muted small">
                 No characters detected.
               </td>
             </tr>

@@ -157,6 +157,8 @@ export function mergeCharacter(p: StoryProject, fromId: string, intoId: string):
         moved++;
       }
   into.aliases = [...new Set([...into.aliases, from.displayName, ...from.aliases])].filter((a) => a !== into.displayName);
+  if (!into.portrait && from.portrait) into.portrait = from.portrait;
+  if (!into.voice && from.voice) into.voice = from.voice;
   p.characters = p.characters.filter((c) => c.id !== fromId);
   return moved;
 }
