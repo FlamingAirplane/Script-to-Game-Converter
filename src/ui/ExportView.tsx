@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { isPinnedRef } from '../core/export/common';
-import { ADAPTERS, buildPlayableHtml, buildRecordingScript, recordingScriptFileName, buildTwee, ExportBlockedError, playableFileName, twineFileName, zipExport, type EngineTarget, type ExportResult, type TwineKind } from '../core/export';
+import { ADAPTERS, buildPlayableHtml, buildRecordingScript, recordingScriptFileName, buildTwee, ExportBlockedError, playableFileName, twineFileName, unityTarball, unityTarballName, zipExport, type EngineTarget, type ExportResult, type TwineKind } from '../core/export';
+import { SEMVER, unityPackageId } from '../core/export/unityPackage';
 // The engine-only Ink runtime (~125 KB), embedded in playable-story exports.
 import inkRuntime from '../../node_modules/inkjs/dist/ink.js?raw';
 import { referencedAudio } from '../core/audio';
@@ -19,9 +20,10 @@ export function ExportView({ processed, stale, onState, project, update }: { pro
   const [engine, setEngine] = useState<EngineTarget>('unity');
   const adapter = ADAPTERS[engine];
   const defaultName = processed.project.project.title.replace(/[^\w]+/g, '') || 'NarrativeProject';
-  const [opts, setOpts] = useState({ projectName: defaultName, engineVersion: adapter.defaultEngineVersion, integrationRef: adapter.integration.defaultRef, includeDemo: true });
+  const [opts, setOpts] = useState({ projectName: defaultName, engineVersion: adapter.defaultEngineVersion, integrationRef: adapter.integration.defaultRef, includeDemo: true, unityLayout: 'package' as 'package' | 'project', packageVersion: '1.0.0' });
   const [result, setResult] = useState<ExportResult | null>(null);
   const [zip, setZip] = useState<Uint8Array | null>(null);
+  const [tgz, setTgz] = useState<Uint8Array | null>(null);
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
   const [preview, setPreview] = useState<string | null>(null);
@@ -30,16 +32,21 @@ export function ExportView({ processed, stale, onState, project, update }: { pro
     setOpts((o) => ({ ...o, engineVersion: adapter.defaultEngineVersion, integrationRef: adapter.integration.defaultRef }));
     setResult(null);
     setZip(null);
+    setTgz(null);
   }, [engine, adapter]);
   useEffect(() => {
     setResult(null);
     setZip(null);
+    setTgz(null);
   }, [processed]);
 
   const blocking = processed.diagnostics.filter((d) => d.exportBlocked);
   const pending = processed.diagnostics.filter((d) => d.severity === 'review');
   const requirements = adapter.requirements({ engine, ...opts });
   const pinned = isPinnedRef(opts.integrationRef);
+  const asPackage = engine === 'unity' && opts.unityLayout === 'package';
+  const pkgId = unityPackageId(opts.projectName, processed.project.project.title);
+  const versionOk = SEMVER.test(opts.packageVersion);
 
   const build = async () => {
     setBusy(true);
@@ -51,6 +58,7 @@ export function ExportView({ processed, stale, onState, project, update }: { pro
       const r = await adapter.export(processed, { engine, ...opts, audio, images });
       setResult(r);
       setZip(await zipExport(r));
+      setTgz(engine === 'unity' && opts.unityLayout === 'package' ? await unityTarball(r) : null);
       setPreview(r.files.find((f) => f.path.endsWith('narrative-bridge.manifest.json'))?.path ?? null);
       onState(r.report.errors.length ? 'Failed' : 'Succeeded');
       if (!r.report.errors.length) sfx.stamp();
@@ -64,8 +72,13 @@ export function ExportView({ processed, stale, onState, project, update }: { pro
 
   const tree = useMemo(() => {
     if (!result) return [];
-    return result.files.map((f) => f.path).sort();
+    // Unity's .meta files (one per file and folder) are left out of the list; they're in the download.
+    return result.files
+      .map((f) => f.path)
+      .filter((p) => !p.endsWith('.meta'))
+      .sort();
   }, [result]);
+  const metas = result ? result.files.length - tree.length : 0;
 
   return (
     <div className="view export-view">
@@ -85,12 +98,42 @@ export function ExportView({ processed, stale, onState, project, update }: { pro
       <div className="export-grid">
         <section className="card">
           <h2>Package settings</h2>
+          {engine === 'unity' && (
+            <fieldset className="modes layout-choice">
+              <legend className="muted small">What to build</legend>
+              <label className={`mode ${opts.unityLayout === 'package' ? 'selected' : ''}`}>
+                <input type="radio" name="unity-layout" checked={opts.unityLayout === 'package'} onChange={() => setOpts({ ...opts, unityLayout: 'package' })} />
+                <span>
+                  <strong>A package for a game you already have</strong>
+                  <span className="muted small">Add it to any Unity project with Package Manager (or drop it in Packages/). Nothing in the project is replaced.</span>
+                </span>
+              </label>
+              <label className={`mode ${opts.unityLayout === 'project' ? 'selected' : ''}`}>
+                <input type="radio" name="unity-layout" checked={opts.unityLayout === 'project'} onChange={() => setOpts({ ...opts, unityLayout: 'project' })} />
+                <span>
+                  <strong>A complete new Unity project</strong>
+                  <span className="muted small">The same package inside a ready-to-open project, to try the story on its own.</span>
+                </span>
+              </label>
+            </fieldset>
+          )}
           <label className="field">
-            <span className="muted small">Project name</span>
+            <span className="muted small">{asPackage ? 'Story name' : 'Project name'}</span>
             <input className="input" value={opts.projectName} onChange={(e) => setOpts({ ...opts, projectName: e.target.value.replace(/[^\w\- ]/g, '') })} />
+            {engine === 'unity' && (
+              <span className="muted small">
+                Package <code>{pkgId.name}</code> · C# namespace <code>{pkgId.namespace}</code>
+              </span>
+            )}
           </label>
+          {asPackage && (
+            <label className="field">
+              <span className="muted small">Package version {versionOk ? null : <Badge tone="warning">use numbers like 1.2.0</Badge>}</span>
+              <input className={`input mono ${versionOk ? '' : 'invalid'}`} value={opts.packageVersion} onChange={(e) => setOpts({ ...opts, packageVersion: e.target.value.trim() })} />
+            </label>
+          )}
           <label className="field">
-            <span className="muted small">{adapter.label} version</span>
+            <span className="muted small">{asPackage ? 'Oldest Unity version to support' : `${adapter.label} version`}</span>
             <input className="input mono" value={opts.engineVersion} onChange={(e) => setOpts({ ...opts, engineVersion: e.target.value })} />
           </label>
           <label className="field">
@@ -99,10 +142,12 @@ export function ExportView({ processed, stale, onState, project, update }: { pro
             </span>
             <input className="input mono" value={opts.integrationRef} onChange={(e) => setOpts({ ...opts, integrationRef: e.target.value.trim() })} />
           </label>
-          <label className="check">
-            <input type="checkbox" checked={opts.includeDemo} onChange={(e) => setOpts({ ...opts, includeDemo: e.target.checked })} />
-            Include runnable demo ({engine === 'unity' ? 'auto-created scene with the story UI' : 'Blueprint-friendly C++ component'})
-          </label>
+          {!asPackage && (
+            <label className="check">
+              <input type="checkbox" checked={opts.includeDemo} onChange={(e) => setOpts({ ...opts, includeDemo: e.target.checked })} />
+              Include runnable demo ({engine === 'unity' ? 'auto-created scene with the story UI' : 'Blueprint-friendly C++ component'})
+            </label>
+          )}
 
           <h3>Preflight</h3>
           <ul className="checklist">
@@ -129,8 +174,8 @@ export function ExportView({ processed, stale, onState, project, update }: { pro
               </li>
             )}
           </ul>
-          <button className="btn primary big" disabled={busy || stale || blocking.length > 0 || !!processed.smokePending} onClick={build}>
-            {busy ? 'Building…' : `Build ${adapter.label} package`}
+          <button className="btn primary big" disabled={busy || stale || blocking.length > 0 || !!processed.smokePending || (asPackage && !versionOk)} onClick={build}>
+            {busy ? 'Building…' : engine === 'unity' ? (asPackage ? 'Build Unity package' : 'Build Unity project') : `Build ${adapter.label} package`}
           </button>
           {blocking.length > 0 && <p className="error-text small">Fix the errors in the Diagnostics panel to enable export.</p>}
           {error && <p className="error-text">{error}</p>}
@@ -170,9 +215,14 @@ export function ExportView({ processed, stale, onState, project, update }: { pro
             <Badge tone="muted">engine import: pending</Badge>
             <span className="spacer" />
             <span className="muted small">
-              {result.files.length} files · {zip ? `${(zip.length / 1024).toFixed(1)} KB` : ''}
+              {tree.length} files{metas ? ` (+ ${metas} Unity .meta)` : ''} · {zip ? `${(zip.length / 1024).toFixed(1)} KB` : ''}
             </span>
-            <button className="btn primary" disabled={!zip} onClick={() => zip && download(`${result.rootName}-${engine}.zip`, zip, 'application/zip')}>
+            {tgz && (
+              <button className="btn" title="For Package Manager → + → Install package from tarball…" onClick={() => download(unityTarballName(result), tgz, 'application/gzip')}>
+                Download .tgz
+              </button>
+            )}
+            <button className="btn primary" disabled={!zip} onClick={() => zip && download(result.unityPackage && engine === 'unity' && result.rootName === result.unityPackage.name ? `${result.rootName}.zip` : `${result.rootName}-${engine}.zip`, zip, 'application/zip')}>
               Download .zip
             </button>
           </div>

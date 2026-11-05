@@ -1,22 +1,23 @@
 // The Unity story UI: a theme asset the developer edits in the Inspector (NarrativeTheme) and a uGUI
 // view built from it at runtime (NarrativeView). The writer's choices from the Export page arrive as
-// Resources/NarrativeBridgeTheme.json (see unityTheme.ts). These are C# sources inside template
-// literals: keep backslashes out of them (none are needed), and don't use `${`.
+// the package's Resources (StoryInfo.ThemeResource, see unityTheme.ts). These are C# sources inside
+// template literals: keep backslashes out of them (none are needed), and don't use `${`. __TOKENS__ are
+// filled per story by fillTemplate (unityPackage.ts).
 
 export const THEME_CS = `using System;
 using UnityEngine;
 
-namespace NarrativeBridge
+namespace __NAMESPACE__
 {
     /// <summary>
-    /// How the story UI looks. The demo scene's theme asset is made from the look chosen in Narrative Bridge
-    /// (Resources/NarrativeBridgeTheme.json); change it here in the Inspector, even while playing.
-    /// Narrative Bridge → Reset Theme to Exported Defaults brings back the exported look.
+    /// How the story UI looks. The theme asset (Assets/NarrativeBridge/...) is made from the look chosen in
+    /// Narrative Bridge (StoryInfo.ThemeResource); change it in the Inspector, even while playing.
+    /// Tools → Narrative Bridge → __MENU_TITLE__ → Reset Theme to Exported Defaults brings back the exported look.
     /// </summary>
-    [CreateAssetMenu(menuName = "Narrative Bridge/Theme", fileName = "NarrativeTheme")]
+    [CreateAssetMenu(menuName = "Narrative Bridge/__MENU_TITLE__ Theme", fileName = "NarrativeTheme")]
     public class NarrativeTheme : ScriptableObject
     {
-        public const string ExportedResource = "NarrativeBridgeTheme";
+        public const string ExportedResource = StoryInfo.ThemeResource;
 
         [Header("Colours")]
         public Color background = new Color(0.996f, 0.98f, 0.878f, 1f);
@@ -68,7 +69,7 @@ namespace NarrativeBridge
             public bool showSpeakers, showSceneHeadings, showChoiceNumbers, showToolbar, showPictures;
         }
 
-        /// <summary>Applies a theme exported from Narrative Bridge (NarrativeBridgeTheme.json).</summary>
+        /// <summary>Applies a theme exported from Narrative Bridge (the package's Theme.json).</summary>
         public void ApplyExported(string json)
         {
             var e = JsonUtility.FromJson<Exported>(json);
@@ -130,7 +131,7 @@ using UnityEngine;
 using UnityEngine.EventSystems;
 using UnityEngine.UI;
 
-namespace NarrativeBridge
+namespace __NAMESPACE__
 {
     /// <summary>
     /// The story UI: a uGUI panel built at runtime from a NarrativeTheme and driven by a NarrativeController's
@@ -138,11 +139,18 @@ namespace NarrativeBridge
     /// Load are optional. Keys: 1-9 choose, Space or Return continues (or finishes the typewriter).
     /// To design your own UI instead, remove this component and use the controller's events.
     /// </summary>
+    [AddComponentMenu("Narrative Bridge/__MENU_TITLE__/Narrative View")]
     public class NarrativeView : MonoBehaviour
     {
         public NarrativeController controller;
         [Tooltip("Leave empty to use the look exported from Narrative Bridge.")]
         public NarrativeTheme theme;
+        [Tooltip("Draw order against your game's other screen-space canvases (higher draws on top).")]
+        public int sortingOrder = 100;
+        [Tooltip("1-9 choose, Space or Return continue. Turn off if your game uses those keys.")]
+        public bool keyboardShortcuts = true;
+        [Tooltip("Add an EventSystem when the scene has none, so the buttons can be clicked.")]
+        public bool createEventSystem = true;
 
         public Canvas Canvas { get; private set; }
         public IReadOnlyList<Button> Buttons => buttons;
@@ -168,7 +176,7 @@ namespace NarrativeBridge
 
         void Start()
         {
-            EnsureEventSystem();
+            if (createEventSystem) EnsureEventSystem();
             Build();
             Redraw();
         }
@@ -222,7 +230,7 @@ namespace NarrativeBridge
             canvasObject.transform.SetParent(transform, false);
             Canvas = canvasObject.GetComponent<Canvas>();
             Canvas.renderMode = RenderMode.ScreenSpaceOverlay;
-            Canvas.sortingOrder = 100;
+            Canvas.sortingOrder = sortingOrder;
             var scaler = canvasObject.GetComponent<CanvasScaler>();
             scaler.uiScaleMode = CanvasScaler.ScaleMode.ScaleWithScreenSize;
             scaler.referenceResolution = new Vector2(1920, 1080);
@@ -444,19 +452,44 @@ namespace NarrativeBridge
 
         void Update()
         {
-#if ENABLE_LEGACY_INPUT_MANAGER
-            if (controller == null || controller.Story == null) return;
-            if (Input.GetKeyDown(KeyCode.Space) || Input.GetKeyDown(KeyCode.Return))
+            if (!keyboardShortcuts || controller == null || controller.Story == null) return;
+            if (ContinuePressed())
             {
                 if (typer != null) FinishTyping();
                 else if (controller.IsWaitingForContinue) controller.Continue();
             }
-            else if (typer != null && Input.GetMouseButtonDown(0)) FinishTyping();
+            else if (typer != null && ClickPressed()) FinishTyping();
             else if (typer == null)
                 for (int i = 0; i < 9 && i < buttons.Count; i++)
-                    if (Input.GetKeyDown(KeyCode.Alpha1 + i)) { buttons[i].onClick.Invoke(); break; }
-#endif
+                    if (NumberPressed(i + 1)) { buttons[i].onClick.Invoke(); break; }
         }
+
+        // Keys work with the old Input Manager and with the Input System package, whichever the game uses.
+#if ENABLE_LEGACY_INPUT_MANAGER
+        static bool ContinuePressed() => Input.GetKeyDown(KeyCode.Space) || Input.GetKeyDown(KeyCode.Return);
+        static bool ClickPressed() => Input.GetMouseButtonDown(0);
+        static bool NumberPressed(int n) => Input.GetKeyDown(KeyCode.Alpha0 + n);
+#elif NARRATIVE_BRIDGE_INPUT_SYSTEM && ENABLE_INPUT_SYSTEM
+        static bool ContinuePressed()
+        {
+            var k = UnityEngine.InputSystem.Keyboard.current;
+            return k != null && (k.spaceKey.wasPressedThisFrame || k.enterKey.wasPressedThisFrame);
+        }
+        static bool ClickPressed()
+        {
+            var m = UnityEngine.InputSystem.Mouse.current;
+            return m != null && m.leftButton.wasPressedThisFrame;
+        }
+        static bool NumberPressed(int n)
+        {
+            var k = UnityEngine.InputSystem.Keyboard.current;
+            return k != null && k[UnityEngine.InputSystem.Key.Digit1 + (n - 1)].wasPressedThisFrame;
+        }
+#else
+        static bool ContinuePressed() => false;
+        static bool ClickPressed() => false;
+        static bool NumberPressed(int n) => false;
+#endif
 
         // ---- Building blocks -------------------------------------------------------------
 
@@ -535,12 +568,15 @@ namespace NarrativeBridge
 
         static void EnsureEventSystem()
         {
-            if (!Application.isPlaying || EventSystem.current != null) return;
+            // Your game's own EventSystem is used when there is one, even a disabled one.
+            if (!Application.isPlaying || EventSystem.current != null || UnityEngine.Object.FindAnyObjectByType<EventSystem>(FindObjectsInactive.Include) != null) return;
             var es = new GameObject("EventSystem", typeof(EventSystem));
 #if ENABLE_LEGACY_INPUT_MANAGER
             es.AddComponent<StandaloneInputModule>();
+#elif NARRATIVE_BRIDGE_INPUT_SYSTEM && ENABLE_INPUT_SYSTEM
+            es.AddComponent<UnityEngine.InputSystem.UI.InputSystemUIInputModule>();
 #else
-            Debug.LogWarning("[NarrativeBridge] This project uses only the new Input System: add an Input System UI Input Module to the EventSystem so the story's buttons can be clicked.");
+            Debug.LogWarning("[NarrativeBridge] Add an input module to the EventSystem so the story's buttons can be clicked.");
 #endif
         }
 

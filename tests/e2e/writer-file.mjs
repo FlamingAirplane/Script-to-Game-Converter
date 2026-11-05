@@ -47,6 +47,14 @@ for (const [name, type] of [['WebKit', webkit], ['Chromium', chromium]]) {
       await page.goto(url);
       await page.getByText('New here? Four steps.').waitFor({ timeout: 10000 });
     });
+    await step('the design editor is hidden, and closed on a copy built without an admin password', async () => {
+      if (await page.locator('#nb-admin-host').count()) throw new Error('the editor is on the page without #admin');
+      await page.goto(`${url}#admin`);
+      await page.getByText('built without an admin password').waitFor({ timeout: 5000 });
+      await page.getByRole('button', { name: 'Close' }).click();
+      await page.locator('#nb-admin-host').waitFor({ state: 'detached' });
+      if (page.url().includes('#admin')) throw new Error('closing kept #admin in the address');
+    });
     await step('theme toggle switches to dark and survives a reload', async () => {
       const paper = () => page.evaluate(() => getComputedStyle(document.documentElement).getPropertyValue('--paper').trim());
       const light = await paper();
@@ -104,6 +112,14 @@ for (const [name, type] of [['WebKit', webkit], ['Chromium', chromium]]) {
       const buf = readFileSync(await dl.path());
       if (buf.subarray(0, 2).toString() !== 'PK') throw new Error('download is not a zip');
       zipBytes = buf.length;
+      // A Unity package (UPM) for an existing game: the zip's folder is the package, with .meta files.
+      const files = Object.keys((await JSZip.loadAsync(buf)).files);
+      if (!files.some((f) => /^com\.narrativebridge\.[a-z0-9-]+\/package\.json$/.test(f))) throw new Error(`no package.json in ${files.slice(0, 5)}`);
+      if (!files.some((f) => f.endsWith('Runtime/NarrativeController.cs.meta'))) throw new Error('scripts have no .meta files');
+      // …and the same package as a .tgz for Package Manager's "Install package from tarball".
+      const [tgz] = await Promise.all([page.waitForEvent('download'), page.getByRole('button', { name: 'Download .tgz' }).click()]);
+      const gz = readFileSync(await tgz.path());
+      if (gz[0] !== 0x1f || gz[1] !== 0x8b || !/^com\.narrativebridge\..+\.tgz$/.test(tgz.suggestedFilename())) throw new Error(`not a package tarball: ${tgz.suggestedFilename()}`);
     });
     await step('playable story: downloads, plays, resumes after reload, undoes, ends', async () => {
       const [dl] = await Promise.all([page.waitForEvent('download'), page.getByRole('button', { name: /Download playable story/ }).click()]);
@@ -283,7 +299,7 @@ for (const [name, type] of [['WebKit', webkit], ['Chromium', chromium]]) {
       await page.getByText('package verified').waitFor({ timeout: 15000 });
       const [zipDl] = await Promise.all([page.waitForEvent('download'), page.getByRole('button', { name: 'Download .zip' }).click()]);
       const zip = await JSZip.loadAsync(readFileSync(await zipDl.path()));
-      if (!Object.keys(zip.files).some((f) => /Resources\/NarrativeBridgeAudio\/vo_.+\.wav$/.test(f))) throw new Error('Unity zip has no voice clip');
+      if (!Object.keys(zip.files).some((f) => /Resources\/NarrativeBridge\/[^/]+\/Audio\/vo_.+\.wav$/.test(f))) throw new Error('Unity zip has no voice clip');
     });
     await step('adds a scene picture and a batch of recordings, and ships the picture', async () => {
       const dir = mkdtempSync(join(tmpdir(), 'nb-media-'));
@@ -316,7 +332,7 @@ for (const [name, type] of [['WebKit', webkit], ['Chromium', chromium]]) {
       await page.getByText('package verified').waitFor({ timeout: 15000 });
       const [zipDl] = await Promise.all([page.waitForEvent('download'), page.getByRole('button', { name: 'Download .zip' }).click()]);
       const zip = await JSZip.loadAsync(readFileSync(await zipDl.path()));
-      if (!Object.keys(zip.files).some((f) => /Resources\/NarrativeBridgeImages\/img_.+\.png$/.test(f))) throw new Error('Unity zip has no scene picture');
+      if (!Object.keys(zip.files).some((f) => /Resources\/NarrativeBridge\/[^/]+\/Images\/img_.+\.png\.bytes$/.test(f))) throw new Error('Unity zip has no scene picture');
     });
     await step('opens a Twine story to keep working on it', async () => {
       await page.getByRole('button', { name: /Import/ }).first().click();

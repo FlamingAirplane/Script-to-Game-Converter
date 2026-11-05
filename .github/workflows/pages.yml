@@ -27,8 +27,13 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npm test
+      # The admin design editor's password (#admin): a repository secret, built in only as a salted hash.
       - run: npm run build
+        env:
+          NB_ADMIN_PASSWORD: ${{ secrets.NB_ADMIN_PASSWORD }}
       - name: Add the offline writer edition to the site
+        env:
+          NB_ADMIN_PASSWORD: ${{ secrets.NB_ADMIN_PASSWORD }}
         run: |
           npm run build:single
           cp release/Narrative-Bridge.html dist/Narrative-Bridge.html

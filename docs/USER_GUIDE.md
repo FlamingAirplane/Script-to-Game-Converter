@@ -232,15 +232,24 @@ The panel beside the story shows:
    integration release.
 3. The **Preflight** list must be all ticks: the story compiles, nothing blocks export, and the automated playthroughs
    reach an ending.
-4. Click **Build Unity package** (or Unreal). The app checks the package it built; *package verified* means it passed.
-5. Click **Download .zip** and send that one file to your developer.
+4. For Unity, choose **what to build**:
+   - **A package for a game you already have** (the usual choice): your developer adds it to their game with Unity's
+     Package Manager, and nothing in their project is replaced. **Story name** names the package; **Package version**
+     goes up each time you send a new version (1.0.0, 1.1.0 …).
+   - **A complete new Unity project**: the same package inside a project that opens straight to a demo scene, to try
+     the story on its own.
+5. Click **Build Unity package** (or Unreal). The app checks the package it built; *package verified* means it passed.
+6. Click **Download .zip** and send that one file to your developer. (For Unity there's also **Download .tgz**, the same
+   package as one file for Package Manager's *Install package from tarball*.)
 
 ![A verified Unity package ready to download](images/export-unity.jpg)
 
-The zip contains the game project, your story, your original script, any voice recordings, a validation report, and
-setup instructions for the developer.
+The zip contains your story, your original script, any voice recordings and pictures, a validation report, and setup
+instructions for the developer. The Unity package installs the free Ink Unity Integration it runs on if the game doesn't
+have it yet, and gives the developer ways to connect the story to the game: start it at any passage, react to its tags
+and variables, and use the game's own inventory and save system.
 
-**Story UI** (Unity only) sets how the story looks in the demo scene, with a preview beside the settings:
+**Story UI** (Unity only) sets how the story panel looks in the game, with a preview beside the settings:
 
 - **Look:** *Book*, *Night* or *Minimal* to start from; changing any colour makes it *Custom*.
 - **Where it sits:** along the bottom, in the centre, down the left or right, or full screen.
@@ -250,8 +259,8 @@ setup instructions for the developer.
   pictures (they fill the screen behind the panel).
 - The words on the **Continue** button and at the ending.
 
-These settings are saved with your project. Your developer can change any of them later in Unity by selecting
-*NarrativeTheme* in *Assets/NarrativeBridge/Settings*; changes show while the game runs.
+These settings are saved with your project. Your developer can change any of them later in Unity by selecting the
+*NarrativeTheme* asset in *Assets/NarrativeBridge/(your story)*; changes show while the game runs.
 
 ## 9. Diagnostics and the Logbook
 

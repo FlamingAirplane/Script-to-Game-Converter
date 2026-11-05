@@ -15,6 +15,7 @@ import { referencedImages } from '../core/images';
 import { collectClips, putClip } from './audioStore';
 import { errorData, log } from '../core/log';
 import { Logo } from './Logo';
+import { designSetting, useWord } from './design/design';
 import { getDraft, keepDraft } from './draftStore';
 import { canUseFiles, kvGet, kvSet, pickProjectFile, rememberRecent, requestPersistence, saveFile, storageUse, writeToHandle, type FileHandle } from './platform';
 
@@ -92,11 +93,13 @@ export function App() {
   // and as padlock routes on the Graph. One setting for both, remembered.
   const [showGated, setShowGatedState] = useState(() => {
     try {
-      return localStorage.getItem('narrative-bridge.show-gated') !== 'off';
+      const saved = localStorage.getItem('narrative-bridge.show-gated');
+      return saved ? saved !== 'off' : designSetting<boolean>('showLocked');
     } catch {
-      return true;
+      return designSetting<boolean>('showLocked');
     }
   });
+  const brand = useWord('brand');
   const setShowGated = (on: boolean) => {
     setShowGatedState(on);
     try {
@@ -493,7 +496,7 @@ export function App() {
       <header className="topbar">
         <div className="brand">
           <Logo size={26} />
-          <span>Narrative Bridge</span>
+          <span>{brand}</span>
         </div>
         {project && (
           <>

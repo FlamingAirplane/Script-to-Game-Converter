@@ -1,5 +1,6 @@
 # Checks every pull request: typecheck, unit tests, both builds, and the browser end-to-end
-# test of the offline writer file in WebKit (Safari's engine) and Chromium.
+# tests (the offline writer file, the website offline, and the #admin design editor) in WebKit
+# (Safari's engine) and Chromium.
 name: CI
 
 on:
@@ -44,3 +45,5 @@ jobs:
           WIDTHS=320,375,600,900,1100,1200,1600,2560 node tests/e2e/overflow.mjs
       - name: Website works offline after one visit
         run: npm run test:offline
+      - name: Design editor is password-locked and edits the app live
+        run: npm run test:admin

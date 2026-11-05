@@ -3,9 +3,21 @@ import { createRoot } from 'react-dom/client';
 import { errorData, formatEntry, log, logbook } from '../core/log';
 import { GENERATOR_VERSION } from '../core/version';
 import { App } from './App';
+import { AdminHost } from './admin/AdminHost';
+import { applyDesign, designSetting, designState } from './design/design';
 import { OfflineUpdate } from './OfflineUpdate';
+import { THEME_KEY, applyTheme } from './ThemeToggle';
 import './fonts.css';
 import './styles.css';
+
+// The published design (and, in the admin's browser, their draft) before the first render.
+applyDesign(designState().design);
+try {
+  const theme = designSetting<string>('theme');
+  if (!localStorage.getItem(THEME_KEY) && (theme === 'light' || theme === 'dark')) applyTheme(theme);
+} catch {
+  /* storage unavailable */
+}
 
 const appLog = log('app');
 appLog.info('Narrative Bridge started', {
@@ -62,6 +74,7 @@ createRoot(document.getElementById('root')!).render(
     <ErrorBoundary>
       <App />
       <OfflineUpdate />
+      <AdminHost />
     </ErrorBoundary>
   </StrictMode>,
 );

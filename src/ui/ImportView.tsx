@@ -13,6 +13,7 @@ import type { FileHandle } from './platform';
 import { RecentFiles } from './RecentFiles';
 import { GettingStarted, USER_GUIDE_URL } from './GettingStarted';
 import { Logo } from './Logo';
+import { designWord, useDesign } from './design/design';
 
 // The hosted site (GitHub Pages) also serves the offline writer edition next to index.html. Hidden in
 // development, where that file doesn't exist, and inside the offline edition itself (opened from file://).
@@ -105,6 +106,8 @@ export function ImportView({
   /** Files the system asked the installed app to open (scripts land in the file list). */
   incoming?: File[];
 }) {
+  const design = useDesign().design;
+  const words = { edition: designWord(design, 'edition'), heroTitle: designWord(design, 'heroTitle'), subtitle: designWord(design, 'subtitle'), lede: designWord(design, 'lede') };
   // Ink files carry how to import them, and what in them the editor can't show.
   const [files, setFiles] = useState<(SourceInput & { inkFeatures?: InkFeature[] })[]>([]);
   const [paste, setPaste] = useState('');
@@ -153,17 +156,14 @@ export function ImportView({
       <section className="hero">
         <div className="title-page">
           <Logo size={58} />
-          <p className="edition">The Workshop Edition</p>
-          <h1>Narrative Bridge</h1>
-          <p className="subtitle">Turn a script into a playable story</p>
+          <p className="edition">{words.edition}</p>
+          <h1>{words.heroTitle}</h1>
+          <p className="subtitle">{words.subtitle}</p>
           <div className="orn-rule" aria-hidden>
             <span>❦</span>
           </div>
         </div>
-        <p className="lede">
-          Import a screenplay or structured prose, review what was understood, then export a validated Ink story packaged for Unity or Unreal Engine. Everything runs
-          locally in your browser — nothing is uploaded.
-        </p>
+        <p className="lede">{words.lede}</p>
         {OFFLINE_COPY_AVAILABLE && (
           <p className="offline-note small">
             Prefer to work offline? <a href="./Narrative-Bridge.html" download>Download Narrative Bridge as a single file</a> and double-click it any time (if it

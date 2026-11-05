@@ -198,24 +198,52 @@ choice was cut they resume just before it.
 
 ## Engine exports
 
-**Unity** (2022.3 LTS+): `Packages/manifest.json` references Ink Unity Integration `2.0.0` as a UPM git dependency. On first open the
-editor creates a `NarrativeDemo` scene whose `NarrativeController` uses the `InkFile` the integration imports from
-`MainStory.ink`. Press Play. The controller handles text, choices, approved variables, a host-authoritative inventory bridge
-(`IInventoryAuthority`) and save/load that carries saves over to revised story versions (checked in the engine by the smoke test).
+**Unity** (2022.3 LTS+): a **Unity package** (UPM) that adds the story to a game you already have. Unzip it into the game's
+`Packages/` folder, or use Package Manager → *Install package from disk* (`package.json`) or *from tarball* (the `.tgz`
+download). Nothing in the project is replaced: each story has its own package name (`com.narrativebridge.<story>`), C#
+namespace and assemblies (`NarrativeBridge.<Story>`), so stories sit beside the game's code and each other, and the package
+never edits scenes, build settings or project settings by itself. Every file has a `.meta` with a GUID derived from the
+package and path, so tarball (read-only) installs work and re-exports keep a scene's references.
 
-The demo scene shows the story in a uGUI panel (`NarrativeView`, `com.unity.ugui`) styled by a `NarrativeTheme` asset in
-`Assets/NarrativeBridge/Settings`, created from the **Story UI** settings on the Export page
-(`Resources/NarrativeBridgeTheme.json`): look, position, colours, opacity, text size, typewriter speed, which parts show,
-and the Continue and ending labels. Edits to the asset apply while the game runs; *Narrative Bridge → Reset Theme to
-Exported Defaults* restores the exported settings. Continue breaks raise `ContinueShown` and show one Continue button. Scene pictures ship in
-`Resources/NarrativeBridgeImages` and fill the screen behind the panel (`NarrativeController.LoadPicture`,
-`CurrentPicture`); the smoke test checks each one imported and is shown. Unreal packages put them in `StorySource/Images`.
-The smoke test also builds the view and clicks through it. Headless check:
-`Unity -batchmode -projectPath <dir> -executeMethod NarrativeBridge.EditorTools.NarrativeBridgeEditor.RunSmokeTestBatch`.
+It runs on Ink Unity Integration. The scripts only compile once Ink is in the project (asmdef `versionDefines` and
+`defineConstraints`), so a game without it keeps compiling; a small editor assembly then offers to install it from GitHub
+(`2.0.0`), or to use an ink runtime the game already has. Inside: `NarrativeController` (text, choices, Continue breaks,
+approved variables, a host-authoritative inventory bridge `IInventoryAuthority`, and save/load that carries saves over to
+revised story versions), the `NarrativeView` story panel, the `NarrativeTheme` look, `StoryInfo`, and the story in
+`Runtime/Resources/NarrativeBridge/<story>/` (the compiled story, `Theme.json`, voice clips, and scene pictures as PNG/JPEG
+`.bytes` decoded at run time). For connecting it to a game: `StartAt(passage)`, `TagFound` for the story's own tags,
+`VariableChanged`, Inspector UnityEvents, *GameObject → Narrative Bridge → <Story>*, a *Voice Source* for the game's mixer,
+the view's *Sorting Order* and *Keyboard Shortcuts* (Input Manager or Input System), and a *Hooking into your game* sample.
+The validated ink is in `Ink~/MainStory.ink`. The **Story UI** settings on the Export page set the panel's look (position,
+colours, opacity, text size, typewriter speed, which parts show, button words); the game's editable `NarrativeTheme`
+asset is made in `Assets/NarrativeBridge/<Story>/`.
+
+The smoke test compiles the ink with the ink compiler inside Unity, plays it 50 times, checks every voice clip and picture,
+carries a save over, starts at every passage and clicks through the story panel:
+`Unity -batchmode -projectPath <dir> -executeMethod NarrativeBridge.<Story>.EditorTools.NarrativeBridgeEditor.RunSmokeTestBatch`.
+*A complete new Unity project* (or `--unity-project` on the command line) wraps the same package in a project that creates a
+demo scene on first open.
 
 **Unreal** (5.7+): a C++ project with Inkpot enabled, `Scripts/setup_inkpot.sh|ps1` to clone Inkpot at the pinned ref,
 `StorySource/MainStory.ink` for Inkpot to import, and a Blueprint-friendly `UNarrativeBridgeComponent`. The component targets
 Inkpot's `UInkpot::BeginStory` / `UInkpotStory` API. Check it against your pinned Inkpot release (see the generated README).
+
+## Design editor (for the site's owner)
+
+The app's own look can be edited live at **`<site>/#admin`**, a hidden, password-locked editor window over the running
+app: every design variable (colours for light pages and the night edition, fonts, sizes, corners, spacing, motion,
+texture), **every CSS rule** in the app (search, or pick something on the page to see the rules that style it), extra CSS,
+some of the app's words, and defaults for new visitors (theme, locked choices, sounds). Undo, redo and a draft that stays in
+your browser are included.
+
+- **Password:** set the repository secret `NB_ADMIN_PASSWORD` (`gh secret set NB_ADMIN_PASSWORD`) and deploy. For
+  `npm run dev`, put `NB_ADMIN_PASSWORD=…` in `.env.local` (not committed), or leave it unset to open the editor without
+  one on your machine. Only a salted PBKDF2 hash is built in, and the editor's code loads only at `#admin`. The site is
+  static, so the check runs in the browser: it keeps the editor closed to visitors, and the editor only ever changes the
+  look in your own browser. Nobody else sees a change until you publish it.
+- **Publish:** *Save & publish → Download published.json*, then `npm run design:publish -- ~/Downloads/published.json`
+  (or replace `src/ui/design/published.json`), commit and push to main.
+- `npm run test:admin` checks the whole flow in WebKit and Chromium with a throwaway password.
 
 ## Repository layout
 
@@ -228,9 +256,9 @@ src/core/            engine-independent pipeline (no UI or Node dependencies)
   analyzer.ts        graph + semantic diagnostics
   inkgen.ts          deterministic Ink generator + source map
   validate.ts        inkjs compile + seeded runtime smoke tests
-  export/            IEngineAdapter, Unity and Unreal adapters, manifest, verifier, zip
+  export/            IEngineAdapter, Unity (UPM package) and Unreal adapters, manifest, verifier, zip, tar
   pipeline.ts        conversion states and orchestration
-src/ui/              React web app
+src/ui/              React web app (design/: the app's design variables and published design; admin/: the #admin editor)
 src/cli/             command-line interface
 schemas/             JSON Schema for the ISR
 docs/                user guide (USER_GUIDE.md) and its screenshots (npm run guide:screenshots)

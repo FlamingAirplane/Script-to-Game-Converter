@@ -4,13 +4,30 @@ import { assertExportable, audioFiles, buildManifest, imageFiles, commonFiles, i
 import type { EngineAdapter, ExportFile, ExportOptions, ExportResult } from './types';
 import { normaliseUnityTheme, unityThemeJson } from './unityTheme';
 import { THEME_CS, VIEW_CS } from './unityUi';
+import {
+  editorAsmdef,
+  fillTemplate,
+  FIRST_OPEN_CS,
+  INK_PACKAGE,
+  packageJson,
+  runtimeAsmdef,
+  SAMPLE_INVENTORY_CS,
+  SAMPLE_LISTENER_CS,
+  SAMPLE_TRIGGER_CS,
+  samplesAsmdef,
+  SEMVER,
+  SETUP_CS,
+  setupAsmdef,
+  unityPackageId,
+  withMetas,
+  type UnityPackageId,
+} from './unityPackage';
 
-// Unity adapter. Uses inkle's Ink Unity Integration (com.inkle.ink-unity-integration) as a
-// versioned UPM git dependency rather than copying its source. The canonical .ink is delivered
-// for the integration to import; a precompiled JSON (from the pinned preflight compiler) is
-// shipped under Resources/ so the demo runs on first open without manual steps.
-
-const NB = 'Assets/NarrativeBridge';
+// Unity adapter. The export is a Unity package (UPM) that adds the story to an existing game: its own
+// assemblies and namespace, the story precompiled (from the pinned preflight compiler) in its Resources,
+// the canonical .ink, the story UI, and editor tools. It runs on inkle's Ink Unity Integration
+// (com.inkle.ink-unity-integration), which the package installs when the game doesn't have it. The
+// "complete project" layout wraps the same package in a new Unity project with a demo scene.
 
 export const unityAdapter: EngineAdapter = {
   id: 'unity',
@@ -22,60 +39,90 @@ export const unityAdapter: EngineAdapter = {
     defaultRef: '2.0.0',
   },
   requirements: (o) => [
-    { id: 'unity', label: `Unity ${o.engineVersion} (2022.3 LTS or later)`, detail: 'Install through Unity Hub.', probe: { paths: ['/Applications/Unity/Hub/Editor', 'C:\\Program Files\\Unity\\Hub\\Editor', '~/Unity/Hub/Editor'] } },
-    { id: 'git', label: 'Git on PATH', detail: 'Unity Package Manager needs git to fetch the Ink integration from GitHub.', probe: { command: 'git --version' } },
+    o.unityLayout === 'project'
+      ? { id: 'unity', label: `Unity ${o.engineVersion} (2022.3 LTS or later)`, detail: 'Install through Unity Hub.', probe: { paths: ['/Applications/Unity/Hub/Editor', 'C:\\Program Files\\Unity\\Hub\\Editor', '~/Unity/Hub/Editor'] } }
+      : { id: 'unity', label: 'Your Unity project (2022.3 LTS or later)', detail: 'The package adds the story to a game you already have; nothing in your project is replaced.', probe: { paths: ['/Applications/Unity/Hub/Editor', 'C:\\Program Files\\Unity\\Hub\\Editor', '~/Unity/Hub/Editor'] } },
+    { id: 'git', label: 'Git on PATH', detail: 'Unity Package Manager needs git to fetch Ink Unity Integration from GitHub (skip if your game already has it).', probe: { command: 'git --version' } },
   ],
   async export(story, options) {
     assertExportable(story);
-    const root = `${options.projectName}/`;
+    const layout = options.unityLayout ?? 'package';
+    const id = unityPackageId(options.projectName, story.project.project.title);
+    const version = options.packageVersion && SEMVER.test(options.packageVersion) ? options.packageVersion : '1.0.0';
+    const projectRoot = `${options.projectName}/`;
+    const pkg = layout === 'package' ? `${id.name}/` : `${projectRoot}Packages/${id.name}/`;
+    const res = `${pkg}Runtime/Resources/NarrativeBridge/${id.slug}/`;
     const manifest = await buildManifest(story, options, this);
-    const voice = audioFiles(story, options.audio, `${root}${NB}/Resources/NarrativeBridgeAudio/`);
-    // Scene pictures load at run time with Resources.Load<Texture2D>, by file name without the extension.
-    const pictures = imageFiles(story, options.images, `${root}${NB}/Resources/NarrativeBridgeImages/`);
-    const files: ExportFile[] = [
-      { path: `${root}${NB}/Ink/MainStory.ink`, content: story.generated.ink },
-      { path: `${root}${NB}/Resources/MainStory.compiled.json`, content: story.compile.json! },
+    const voice = audioFiles(story, options.audio, `${res}Audio/`);
+    // Scene pictures ship as their PNG/JPEG bytes (Images/<file>.bytes) and are decoded at run time: no
+    // texture import settings to depend on, the same in every Unity version, and kept at full size.
+    const pictures = imageFiles(story, options.images, `${res}Images/`, '.bytes');
+    const cs = (template: string) => fillTemplate(template, id, { __INK_URL__: unityPackageUrl(options.integrationRef), __ASSET_FOLDER__: `Assets/NarrativeBridge/${id.namespace.split('.').pop()}` });
+    const sample = `${pkg}Samples~/Hooking into your game/`;
+    const packageFiles: ExportFile[] = [
+      { path: `${pkg}package.json`, content: json(packageJson(id, { version, title: story.project.project.title, description: packageDescription(story), unity: minimumUnity(options.engineVersion) })) },
+      { path: `${pkg}README.md`, content: packageReadme(story, options, id) },
+      { path: `${pkg}CHANGELOG.md`, content: `# Changelog\n\n## ${version}\n\nExported from Narrative Bridge (story version \`${storyVersion(story)}\`).\n` },
+      // The canonical, validated Ink. Folders ending in ~ aren't imported by Unity: the smoke test compiles it.
+      { path: `${pkg}Ink~/MainStory.ink`, content: story.generated.ink },
+      { path: `${pkg}Runtime/${id.namespace}.asmdef`, content: json(runtimeAsmdef(id)) },
+      { path: `${pkg}Runtime/StoryInfo.cs`, content: storyInfoCs(story, id) },
+      { path: `${pkg}Runtime/IInventoryAuthority.cs`, content: cs(INVENTORY_CS) },
+      { path: `${pkg}Runtime/NarrativeController.cs`, content: cs(CONTROLLER_CS) },
+      { path: `${pkg}Runtime/NarrativeTheme.cs`, content: cs(THEME_CS) },
+      { path: `${pkg}Runtime/NarrativeView.cs`, content: cs(VIEW_CS) },
+      { path: `${res}MainStory.compiled.json`, content: story.compile.json! },
+      // The look chosen on the Export page; NarrativeTheme reads it (see unityTheme.ts).
+      { path: `${res}Theme.json`, content: json(unityThemeJson(normaliseUnityTheme(options.unityTheme ?? story.project.presentation?.unity))) },
       ...voice.files,
       ...pictures.files,
-      { path: `${root}${NB}/Scripts/StoryInfo.cs`, content: storyInfoCs(story) },
-      { path: `${root}${NB}/Scripts/IInventoryAuthority.cs`, content: INVENTORY_CS },
-      { path: `${root}${NB}/Scripts/NarrativeController.cs`, content: CONTROLLER_CS },
-      { path: `${root}${NB}/Scripts/NarrativeTheme.cs`, content: THEME_CS },
-      { path: `${root}${NB}/Scripts/NarrativeView.cs`, content: VIEW_CS },
-      // The look chosen on the Export page; NarrativeTheme reads it (see unityTheme.ts).
-      { path: `${root}${NB}/Resources/NarrativeBridgeTheme.json`, content: json(unityThemeJson(normaliseUnityTheme(options.unityTheme ?? story.project.presentation?.unity))) },
-      ...(options.includeDemo ? [{ path: `${root}${NB}/Editor/NarrativeBridgeEditor.cs`, content: EDITOR_CS }] : []),
-      { path: `${root}Packages/manifest.json`, content: json(packageManifest(options)) },
-      { path: `${root}ProjectSettings/ProjectVersion.txt`, content: `m_EditorVersion: ${options.engineVersion}\n` },
-      { path: `${root}README.md`, content: readme(story, options) },
-      ...commonFiles(story, manifest, `${root}NarrativeBridge/`),
-      ...sourceFiles(story, `${root}NarrativeBridge/`),
+      { path: `${pkg}Editor/${id.namespace}.Editor.asmdef`, content: json(editorAsmdef(id)) },
+      { path: `${pkg}Editor/NarrativeBridgeEditor.cs`, content: cs(EDITOR_CS) },
+      { path: `${pkg}Editor/Setup/${id.namespace}.Setup.asmdef`, content: json(setupAsmdef(id)) },
+      { path: `${pkg}Editor/Setup/InkSetup.cs`, content: cs(SETUP_CS) },
+      { path: `${sample}${id.namespace}.Samples.asmdef`, content: json(samplesAsmdef(id)) },
+      { path: `${sample}StoryTrigger.cs`, content: cs(SAMPLE_TRIGGER_CS) },
+      { path: `${sample}StoryInventoryBridge.cs`, content: cs(SAMPLE_INVENTORY_CS) },
+      { path: `${sample}StoryEventsListener.cs`, content: cs(SAMPLE_LISTENER_CS) },
+      ...commonFiles(story, manifest, `${pkg}NarrativeBridge~/`),
+      ...sourceFiles(story, `${pkg}NarrativeBridge~/`),
     ];
+    const files = await withMetas(packageFiles, pkg, id.name);
+    if (layout === 'project') {
+      files.push(
+        { path: `${projectRoot}Packages/manifest.json`, content: json(projectManifest(options)) },
+        { path: `${projectRoot}ProjectSettings/ProjectVersion.txt`, content: `m_EditorVersion: ${options.engineVersion}\n` },
+        { path: `${projectRoot}README.md`, content: projectReadme(story, options, id) },
+        ...(options.includeDemo ? [{ path: `${projectRoot}Assets/Editor/OpenDemoOnFirstOpen.cs`, content: cs(FIRST_OPEN_CS) }] : []),
+      );
+    }
+    const rootName = layout === 'package' ? id.name : options.projectName;
     const result: ExportResult = {
       engine: 'unity',
-      rootName: options.projectName,
+      rootName,
       files,
       manifest,
+      unityPackage: { name: id.name, version, root: pkg, namespace: id.namespace },
       report: {
-        exportPath: root,
+        exportPath: `${rootName}/`,
         engine: 'Unity',
         engineVersion: options.engineVersion,
         integration: `${this.integration.name} @ ${options.integrationRef}`,
         filesCreated: files.map((f) => f.path),
         warnings: [],
         errors: [],
-        setupInstructions: setupSteps(options),
+        setupInstructions: setupSteps(options, id),
         diagnostics: [],
       },
     };
     for (const name of voice.missing) result.report.warnings.push(`Voice clip "${name}" is missing from this browser, so it was left out of the package.`);
     for (const name of pictures.missing) result.report.warnings.push(`Scene picture "${name}" is missing from this browser, so it was left out of the package.`);
-    finalize(result, story, [`${root}${NB}/Ink/MainStory.ink`, `${root}${NB}/Resources/MainStory.compiled.json`, `${root}Packages/manifest.json`]);
+    finalize(result, story, [`${pkg}package.json`, `${pkg}Ink~/MainStory.ink`, `${res}MainStory.compiled.json`, ...(layout === 'project' ? [`${projectRoot}Packages/manifest.json`] : [])], `${pkg}NarrativeBridge~/`);
     return result;
   },
 };
 
-export function finalize(result: ExportResult, story: ProcessedStory, required: string[]) {
+export function finalize(result: ExportResult, story: ProcessedStory, required: string[], reportDir = `${result.rootName}/NarrativeBridge/`) {
   const ds = verifyExport(result, story, required);
   result.report.diagnostics = ds;
   result.report.errors = ds.filter((d) => d.severity === 'error').map((d) => d.message);
@@ -87,7 +134,7 @@ export function finalize(result: ExportResult, story: ProcessedStory, required: 
   result.manifest.validation.exportVerification = result.report.errors.length ? 'failed' : 'passed';
   const manifestPath = result.files.find((f) => f.path.endsWith('narrative-bridge.manifest.json'));
   if (manifestPath) manifestPath.content = json(result.manifest);
-  result.files.push({ path: `${result.rootName}/NarrativeBridge/export-report.json`, content: json(result.report) });
+  result.files.push({ path: `${reportDir}export-report.json`, content: json(result.report) });
   log('export').info(`Built ${result.report.engine} package`, {
     files: result.files.length,
     bytes: result.files.reduce((n, f) => n + (typeof f.content === 'string' ? f.content.length : f.content.byteLength), 0),
@@ -100,14 +147,15 @@ export function finalize(result: ExportResult, story: ProcessedStory, required: 
 
 /** UPM git URL. Releases 2.x keep the package in a subfolder; the legacy "upm" branches have it at the root. */
 export function unityPackageUrl(ref: string): string {
-  const path = ref.startsWith('upm') ? '' : '?path=/Packages/com.inkle.ink-unity-integration';
+  const path = ref.startsWith('upm') ? '' : `?path=/Packages/${INK_PACKAGE}`;
   return `${unityAdapter.integration.repository}${path}#${ref}`;
 }
 
-function packageManifest(o: ExportOptions) {
+function projectManifest(o: ExportOptions) {
   return {
+    // The story's package sits in Packages/ (an embedded package), so it needs no entry here.
     dependencies: {
-      'com.inkle.ink-unity-integration': unityPackageUrl(o.integrationRef),
+      [INK_PACKAGE]: unityPackageUrl(o.integrationRef),
       'com.unity.modules.audio': '1.0.0',
       'com.unity.modules.imgui': '1.0.0',
       'com.unity.modules.jsonserialize': '1.0.0',
@@ -117,14 +165,38 @@ function packageManifest(o: ExportOptions) {
   };
 }
 
-function setupSteps(o: ExportOptions): string[] {
+/** package.json's "unity": the oldest editor the package supports (never below 2022.3, which the code needs). */
+export function minimumUnity(engineVersion: string): string {
+  const m = /^(\d{4})\.(\d+)/.exec(engineVersion.trim());
+  if (!m) return '2022.3';
+  const [year, minor] = [+m[1], +m[2]];
+  return year > 2022 || (year === 2022 && minor >= 3) ? `${year}.${minor}` : '2022.3';
+}
+
+function packageDescription(story: ProcessedStory): string {
+  const p = story.project;
+  const n = p.passages.length;
+  return `The interactive story "${p.project.title}" (${n} passage${n === 1 ? '' : 's'}), with a themed story panel, voice clips, scene pictures, save/load and inventory hooks. Exported from Narrative Bridge; runs on Ink Unity Integration.`;
+}
+
+function setupSteps(o: ExportOptions, id: UnityPackageId): string[] {
+  const smoke = `Optional: check it with Tools → Narrative Bridge → ${id.menuTitle} → Run Story Smoke Test, or headless: Unity -batchmode -projectPath <path> -executeMethod ${id.namespace}.EditorTools.NarrativeBridgeEditor.RunSmokeTestBatch`;
+  if (o.unityLayout === 'project')
+    return [
+      `Open Unity Hub → Add → select the "${o.projectName}" folder. Open it with Unity ${o.engineVersion} or any later 2022.3+/6000.x editor.`,
+      'Unity Package Manager fetches Ink Unity Integration from GitHub on first open (git must be installed).',
+      o.includeDemo
+        ? `The "NarrativeDemo" scene is created automatically on first open (Assets/NarrativeBridge/). Press Play to run the story. Change its look in the NarrativeTheme asset next to it (even while playing).`
+        : `Add the story to a scene with GameObject → Narrative Bridge → ${id.menuTitle}, then press Play.`,
+      `The story itself is the package in Packages/${id.name}; copy that folder into any other Unity project to use it there.`,
+      smoke,
+    ];
   return [
-    `Open Unity Hub → Add → select the "${o.projectName}" folder. Open it with Unity ${o.engineVersion} or any later 2022.3+/6000.x editor.`,
-    'Unity Package Manager fetches Ink Unity Integration from GitHub on first open (git must be installed).',
-    o.includeDemo
-      ? 'The "NarrativeDemo" scene is created automatically on first open. Press Play to run the story. Change its look in Assets/NarrativeBridge/Settings/NarrativeTheme.asset (even while playing).'
-      : 'Add a NarrativeController component to any GameObject and press Play.',
-    'Optional: run the automated check from Narrative Bridge → Run Story Smoke Test, or headless: Unity -batchmode -projectPath <path> -executeMethod NarrativeBridge.EditorTools.NarrativeBridgeEditor.RunSmokeTestBatch',
+    `Unzip the download into your game's Packages folder (you should see Packages/${id.name}/package.json). Unity picks it up by itself. Or: Window → Package Manager → + → Install package from disk… and choose package.json, or Install package from tarball… with the .tgz download.`,
+    `If your game doesn't have Ink Unity Integration yet, the package offers to install it (from GitHub; git must be installed). Until then its scripts stay switched off, so your project keeps compiling.`,
+    `Add the story to a scene: GameObject → Narrative Bridge → ${id.menuTitle} (the controller with the story panel), or Tools → Narrative Bridge → ${id.menuTitle} → Create Demo Scene to try it on its own.`,
+    `Connect it to your game: use NarrativeController's events (LineShown, ChoicesShown, StoryEnded, TagFound, VariableChanged) or its Inspector events, give it your inventory (IInventoryAuthority), and start it where you like with StartAt("passage"). Package Manager → ${id.menuTitle} → Samples has examples. Code is in the ${id.namespace} namespace.`,
+    smoke,
   ];
 }
 
@@ -132,19 +204,30 @@ function csString(s: string): string {
   return JSON.stringify(s);
 }
 
-function storyInfoCs(story: ProcessedStory): string {
+function storyInfoCs(story: ProcessedStory, id: UnityPackageId): string {
   const items = itemVarNames(story);
   const vars = story.project.variables.map((v) => v.id);
+  const passages = [...story.generated.ink.matchAll(/^=== (\w+) ===$/gm)].map((m) => m[1]);
   return `// <auto-generated> by Narrative Bridge. Regenerated on every export. </auto-generated>
-namespace NarrativeBridge
+namespace ${id.namespace}
 {
     public static class StoryInfo
     {
         public const string Title = ${csString(story.project.project.title)};
         public const string ProjectId = ${csString(story.project.project.id)};
-        /// <summary>Changes whenever the generated Ink changes. Save data from another version is rejected.</summary>
+        /// <summary>Changes whenever the generated Ink changes. Save data from another version is carried over or rejected.</summary>
         public const string StoryVersion = ${csString(storyVersion(story))};
-        public const string CompiledResource = "MainStory.compiled";
+        public const string PackageName = ${csString(id.name)};
+
+        /// <summary>Where the story's files are, inside the package's Resources (for Resources.Load).</summary>
+        public const string ResourceFolder = ${csString(`NarrativeBridge/${id.slug}/`)};
+        public const string CompiledResource = ResourceFolder + "MainStory.compiled";
+        public const string ThemeResource = ResourceFolder + "Theme";
+        public const string AudioFolder = ResourceFolder + "Audio/";
+        public const string ImageFolder = ResourceFolder + "Images/";
+
+        /// <summary>Every passage (ink knot) the story can start at: NarrativeController.StartAt(name).</summary>
+        public static readonly string[] Passages = { ${passages.map(csString).join(', ')} };
         /// <summary>Ink variables that mirror inventory items (has_&lt;item&gt;).</summary>
         public static readonly string[] ItemVariables = { ${items.map(csString).join(', ')} };
         /// <summary>Story variables the game is allowed to read and write.</summary>
@@ -154,59 +237,103 @@ namespace NarrativeBridge
 `;
 }
 
-function readme(story: ProcessedStory, o: ExportOptions): string {
-  return `# ${story.project.project.title} — Unity export
+function packageReadme(story: ProcessedStory, o: ExportOptions, id: UnityPackageId): string {
+  return `# ${story.project.project.title}: a Narrative Bridge story for Unity
+
+Package \`${id.name}\`, story version \`${storyVersion(story)}\`, generated by Narrative Bridge. Everything is in the
+\`${id.namespace}\` namespace and its own assemblies, so it sits beside your game's code (and other Narrative Bridge
+stories) without clashing, and it never changes your scenes, build settings or project settings on its own.
+
+## Install
+1. **Unzip into your game's \`Packages\` folder**, so you have \`Packages/${id.name}/package.json\`. Unity picks it up by itself.
+   Or in Unity: *Window → Package Manager → + → Install package from disk…* and choose \`package.json\`, or
+   *Install package from tarball…* with the \`.tgz\`. (Keep the file inside your project, for example in \`Packages/\`.)
+2. **Ink Unity Integration.** The story runs on inkle's free ink runtime. If your game doesn't have it, the package
+   asks to install it (from GitHub; git must be installed), or use *Tools → Narrative Bridge → ${id.menuTitle} → Install
+   Ink Unity Integration*. Until it's there the story's scripts stay switched off, so your project still compiles.
+   You can also add it yourself in \`Packages/manifest.json\`:
+   \`"${INK_PACKAGE}": "${unityPackageUrl(o.integrationRef)}"\`.
+   If your game already has ink some other way (for example a copy in Assets), choose *Use the Ink Already in This Project*.
+
+## Add it to a scene
+- *GameObject → Narrative Bridge → ${id.menuTitle}* adds a GameObject with the **NarrativeController** (the story) and
+  the **NarrativeView** (a themed story panel).
+- *Tools → Narrative Bridge → ${id.menuTitle} → Create Demo Scene* makes a scene with just the story, to try it.
+- Or add the components yourself (*Add Component → Narrative Bridge → ${id.menuTitle}*).
+
+## Connect it to your game
+- **Start it where you want.** Turn off *Start On Awake* and call \`StartStory()\`, or \`StartAt("passage")\` to begin at a
+  scene (for a conversation with one character, say). The passages are listed in \`StoryInfo.Passages\`.
+- **Events, from code:** \`LineShown\` (a \`Line\` with \`Speaker\`, \`Text\`, \`Scene\`, \`Paren\`, \`Image\`, \`Tags\`),
+  \`ChoicesShown\` → \`Choose(i)\`, \`ContinueShown\` → \`Continue()\`, \`StoryEnded\`, \`Restarted\`, \`StatusChanged\`,
+  \`RuntimeError\`, plus **\`TagFound\`** for tags the story uses that Narrative Bridge doesn't (\`#shake\`, \`#music:calm\`)
+  and **\`VariableChanged\`** for every story variable and item.
+- **Events, without code:** the same moments as UnityEvents in the controller's Inspector (*On Line*, *On Choices*,
+  *On Continue*, *On Ended*, *On Tag*, *On Variable Changed*), to drive animations, sounds or quests.
+- **Variables:** \`GetVariable(name)\` and \`SetVariable(name, value)\` for the story's own variables (\`StoryInfo.Variables\`).
+- **Inventory:** items are Ink Booleans named \`has_<item>\` (\`StoryInfo.ItemVariables\`). Give the controller a component
+  implementing \`IInventoryAuthority\` and your inventory becomes the one source of truth: the story asks it before every
+  step and sends it the gains and losses instead of keeping its own copy.
+- **Your own UI:** remove the NarrativeView and draw the story from the events above.
+- **Voice:** recorded lines play through the controller's AudioSource; set *Voice Source* to route them through your mixer.
+- **Samples:** *Package Manager → ${id.menuTitle} → Samples → Hooking into your game* has a trigger that starts the story
+  and pauses your game, an inventory bridge, and a listener for tags and variables.
+
+## Saves
+\`SaveState()\` returns a string you can keep in your own save system (\`SaveToPrefs()\` / \`LoadFromPrefs()\` use one
+PlayerPrefs slot), and \`TryLoadState(save, out error)\` restores it. A save from an earlier version of the story is carried
+over: the new version is replayed with the same choices, so revising the story doesn't break players' saves.
+\`LoadNote\` says what happened.
+
+## The story panel
+The NarrativeView draws story text (with an optional typewriter), choices, the Continue button, the ending and optional
+Restart / Save / Load. Its look is a **NarrativeTheme** asset: the first time you add the story, one is made in
+\`Assets/NarrativeBridge/${id.namespace.split('.').pop()}/\` from the look chosen in Narrative Bridge, and you can change it in the
+Inspector, even while playing. The view's *Sorting Order* sets where it draws among your canvases, *Keyboard
+Shortcuts* (1-9 choose, Space or Return continue) can be turned off, and it uses your scene's EventSystem when there
+is one (it works with the Input Manager and the Input System package).
+
+## Updating
+Export the story again and replace this folder (or install the new .tgz). Script GUIDs stay the same, so your scenes
+keep their references. Your NarrativeTheme asset is never overwritten.
+
+## What's inside
+- \`Runtime/\`: the controller, view, theme, \`StoryInfo\`, and the story in \`Resources/NarrativeBridge/${id.slug}/\`
+  (the compiled story, its look, voice clips, and scene pictures as their PNG/JPEG bytes).
+- \`Editor/\`: menus, the demo scene and the smoke test; \`Editor/Setup\` installs Ink when needed.
+- \`Ink~/MainStory.ink\`: the story's validated ink source (not imported; the smoke test compiles it).
+- \`NarrativeBridge~/\`: the export manifest, validation report, story data and original source documents.
+
+## Smoke test
+*Tools → Narrative Bridge → ${id.menuTitle} → Run Story Smoke Test*, or headless:
+\`Unity -batchmode -projectPath <your project> -executeMethod ${id.namespace}.EditorTools.NarrativeBridgeEditor.RunSmokeTestBatch\`.
+It compiles the ink with the ink compiler inside Unity, plays the story 50 times, checks every voice clip and picture
+imported, saves and carries a save over, starts at every passage, and clicks through the story panel.
+`;
+}
+
+function projectReadme(story: ProcessedStory, o: ExportOptions, id: UnityPackageId): string {
+  return `# ${story.project.project.title}: Unity project
 
 Generated by Narrative Bridge. Story version \`${storyVersion(story)}\`.
 
 ## Run it
-${setupSteps(o).map((s, i) => `${i + 1}. ${s}`).join('\n')}
+${setupSteps(o, id).map((s, i) => `${i + 1}. ${s}`).join('\n')}
 
 ## Layout
-- \`Assets/NarrativeBridge/Ink/MainStory.ink\` — canonical, validated Ink source (imported by Ink Unity Integration).
-- \`Assets/NarrativeBridge/Resources/MainStory.compiled.json\` — preflight-compiled story used by the demo.
-- \`Assets/NarrativeBridge/Scripts/NarrativeController.cs\` — continue/choose/variables/inventory/save-load, and the events a UI listens to.
-- \`Assets/NarrativeBridge/Scripts/NarrativeView.cs\` — the story panel (uGUI), built at runtime from a \`NarrativeTheme\`.
-- \`Assets/NarrativeBridge/Scripts/NarrativeTheme.cs\` and \`Settings/NarrativeTheme.asset\` — the look: colours, font and size, panel
-  position, typewriter speed, what to show, button words. \`Resources/NarrativeBridgeTheme.json\` is the look chosen in Narrative Bridge.
-- \`NarrativeBridge/\` — manifest, validation report, ISR, source map and original source documents.
-
-## Integration notes
-- Ink Unity Integration is referenced as \`${unityPackageUrl(o.integrationRef)}\` in \`Packages/manifest.json\`.
+- \`Packages/${id.name}/\`: the story as a Unity package (see its README). The same package can be added to any other
+  Unity project.
+- \`Packages/manifest.json\`: Ink Unity Integration as \`${unityPackageUrl(o.integrationRef)}\`.
   ${/^[0-9a-f]{7,40}$/i.test(o.integrationRef) || /^v?\d/.test(o.integrationRef) ? 'This ref is pinned.' : '**This ref is a branch.** Replace it with a tested release tag or commit for reproducible builds.'}
-- The demo scene's controller references the \`InkFile\` that Ink Unity Integration imports from \`MainStory.ink\`, so the integration owns
-  final compilation. If that asset is missing or failed to compile, the controller falls back to \`Resources/MainStory.compiled\`.
-
-## Story UI
-The demo scene's \`NarrativeView\` draws the story as a themed uGUI panel: story text (with an optional typewriter), choices, the
-Continue button for Continue breaks, the ending, and optional Restart / Save / Load. Keys: 1–9 choose, Space or Return continues.
-- **Change the look:** select \`Assets/NarrativeBridge/Settings/NarrativeTheme.asset\` and edit it in the Inspector, even while
-  playing; right-click its header → *Layout* for panel positions. *Narrative Bridge → Reset Theme to Exported Defaults* brings back
-  the look chosen in Narrative Bridge. Exporting again updates \`NarrativeBridgeTheme.json\` but never your edited asset.
-- **Your own UI:** remove \`NarrativeView\` and listen to \`NarrativeController\`: \`LineShown\` (with \`Speaker\`, \`Paren\`, \`Scene\`),
-  \`ChoicesShown\` → \`Choose(i)\`, \`ContinueShown\` → \`Continue()\`, \`StoryEnded\`, \`Restarted\`, \`StatusChanged\`.
-- Buttons need an EventSystem; one is added when missing. With only the new Input System enabled, give it an
-  *Input System UI Input Module*.
-
-## Inventory
-Items are Ink Booleans named \`has_<item>\`. Assign a component implementing \`IInventoryAuthority\` to make your game's
-inventory the single source of truth: the controller copies possession into Ink before every step, and forwards
-story-driven gains/losses to the authority instead of letting both sides edit independently.
-
-## Saves
-\`SaveState()\` records \`StoryInfo.StoryVersion\` and the text of every choice made. \`TryLoadState()\` loads a save
-from the same version exactly. A save from a different version (after you revise the story) is carried over: the new
-version is played from the start, making the same choices, so its text and variables apply; if a choice no longer exists,
-the player resumes just before it. \`LoadNote\` then describes what happened. Saves without a choice record are refused
-with a clear message; call \`StartStory()\` to restart the narrative.
-`;
+${o.includeDemo ? `- \`Assets/Editor/OpenDemoOnFirstOpen.cs\`: makes the demo scene in \`Assets/NarrativeBridge/\` the first time the project opens.\n` : ''}`;
 }
 
-const INVENTORY_CS = `namespace NarrativeBridge
+const INVENTORY_CS = `namespace __NAMESPACE__
 {
     /// <summary>
-    /// Implement on a MonoBehaviour to make the host game the authority for item possession.
+    /// Implement on a MonoBehaviour to make your game the authority for item possession.
     /// The story only requests changes; the game decides and the controller mirrors the result into Ink.
+    /// Item ids are StoryInfo.ItemVariables without the "has_" prefix.
     /// </summary>
     public interface IInventoryAuthority
     {
@@ -221,34 +348,59 @@ const CONTROLLER_CS = `using System;
 using System.Collections.Generic;
 using Ink.Runtime;
 using UnityEngine;
+using UnityEngine.Events;
 
-namespace NarrativeBridge
+namespace __NAMESPACE__
 {
     /// <summary>
-    /// Runs a Narrative Bridge story with the Ink runtime from Ink Unity Integration:
-    /// advances text, presents choices and Continue breaks, exposes approved variables,
-    /// synchronises inventory and saves/restores state with story-version checks.
-    /// NarrativeView draws it as a themed uGUI story panel; any other UI can use the events below.
+    /// Runs the story with the ink runtime from Ink Unity Integration: advances text, presents choices and
+    /// Continue breaks, exposes approved variables, synchronises inventory with your game and saves/restores
+    /// state with story-version checks. NarrativeView draws it as a themed uGUI story panel; your own UI and
+    /// game systems can use the C# events or the Inspector events below instead.
     /// Includes an optional bare-bones IMGUI demo (drawDemoUI).
     /// </summary>
+    [AddComponentMenu("Narrative Bridge/__MENU_TITLE__/Narrative Controller")]
     public class NarrativeController : MonoBehaviour
     {
-        [Tooltip("The InkFile asset Ink Unity Integration imports from MainStory.ink (preferred).")]
+#if NARRATIVE_BRIDGE_INK_FILE
+        [Tooltip("Optional: an InkFile imported by Ink Unity Integration, to run your own edited copy of the story.")]
         public Ink.UnityIntegration.InkFile inkFile;
+#endif
 
-        [Tooltip("Fallback compiled ink JSON. Leave empty to use Resources/MainStory.compiled.")]
+        [Tooltip("Optional compiled ink JSON. Leave empty to use the story in this package.")]
         public TextAsset storyJson;
 
-        [Tooltip("Optional component implementing IInventoryAuthority. When set, the game owns item possession.")]
+        [Tooltip("Optional component implementing IInventoryAuthority. When set, your game owns item possession.")]
         public MonoBehaviour inventoryAuthority;
 
+        [Tooltip("Start when this object wakes. Turn off to start it yourself with StartStory() or StartAt(passage).")]
         public bool startOnAwake = true;
 
-        [Tooltip("Draw the bare-bones IMGUI demo. Off when a NarrativeView draws the story.")]
+        [Tooltip("Draw the bare-bones IMGUI demo. Off when a NarrativeView or your own UI draws the story.")]
         public bool drawDemoUI = true;
 
-        [Tooltip("Play recorded dialogue clips (#audio tags) from Resources/NarrativeBridgeAudio.")]
+        [Tooltip("Play the recorded dialogue clips (#audio tags) that come with the story.")]
         public bool playVoiceClips = true;
+
+        [Tooltip("Optional AudioSource for voice clips, e.g. one routed through your game's mixer. One is added when empty.")]
+        public AudioSource voiceSource;
+
+        [Serializable] public class LineEvent : UnityEvent<string, string> { }
+        [Serializable] public class TextEvent : UnityEvent<string> { }
+        [Serializable] public class VariableEvent : UnityEvent<string, string> { }
+
+        [Header("Events (wire these up in the Inspector)")]
+        [Tooltip("A line of the story: the speaker (empty for narration) and the text.")]
+        public LineEvent onLine = new LineEvent();
+        [Tooltip("Choices are waiting: call Choose(index).")]
+        public UnityEvent onChoices = new UnityEvent();
+        [Tooltip("A Continue break is waiting: call Continue().")]
+        public UnityEvent onContinue = new UnityEvent();
+        public UnityEvent onEnded = new UnityEvent();
+        [Tooltip("A tag the story uses that Narrative Bridge doesn't, e.g. #shake or #music:calm.")]
+        public TextEvent onTag = new TextEvent();
+        [Tooltip("A story variable or item changed: its name and new value.")]
+        public VariableEvent onVariableChanged = new VariableEvent();
 
         public struct Line
         {
@@ -279,11 +431,17 @@ namespace NarrativeBridge
         /// <summary>The transcript was cleared (start, restart or load): redraw from scratch.</summary>
         public event Action Restarted;
         public event Action<string> StatusChanged;
+        /// <summary>A tag on a line that isn't one of Narrative Bridge's own (speaker, scene, paren, image, audio, transition).</summary>
+        public event Action<string> TagFound;
+        /// <summary>A story variable or item variable changed (name, new value). Raised for all of them after a load.</summary>
+        public event Action<string, object> VariableChanged;
 
         public Story Story { get; private set; }
         public bool HasEnded { get; private set; }
         public IReadOnlyList<Line> Transcript => transcript;
         public string Status => status;
+        /// <summary>The passage the story was started at (StartAt), or null when it started from the beginning.</summary>
+        public string StartPassage { get; private set; }
 
         /// <summary>The story is at a Continue break: its only choice is Continue.</summary>
         public bool IsWaitingForContinue => Story != null && Story.currentChoices.Count == 1 && Story.currentChoices[0].text == ContinueText;
@@ -293,7 +451,7 @@ namespace NarrativeBridge
         IInventoryAuthority authority;
         AudioSource voice;
         readonly Queue<AudioClip> voiceQueue = new Queue<AudioClip>();
-        bool syncing;
+        bool syncing, silent;
         string status = "";
         Vector2 scroll;
 
@@ -309,6 +467,7 @@ namespace NarrativeBridge
             public string storyVersion;
             public string inkState;
             public List<string> choicePath;
+            public string startPassage;
         }
 
         void Awake()
@@ -316,17 +475,29 @@ namespace NarrativeBridge
             authority = inventoryAuthority as IInventoryAuthority;
             if (inventoryAuthority != null && authority == null)
                 Debug.LogError("[NarrativeBridge] inventoryAuthority does not implement IInventoryAuthority.", this);
-            voice = GetComponent<AudioSource>();
+            voice = voiceSource != null ? voiceSource : GetComponent<AudioSource>();
             if (voice == null) voice = gameObject.AddComponent<AudioSource>();
             voice.playOnAwake = false;
             if (startOnAwake) StartStory();
         }
 
-        public void StartStory()
+        /// <summary>Starts (or restarts) the story from the beginning.</summary>
+        public void StartStory() => Begin(null);
+
+        /// <summary>Starts (or restarts) the story at a passage, e.g. when the player talks to someone. See StoryInfo.Passages.</summary>
+        public void StartAt(string passage)
+        {
+            if (Array.IndexOf(StoryInfo.Passages, passage) < 0) { ReportError("There is no passage called " + passage + "."); return; }
+            Begin(passage);
+        }
+
+        void Begin(string passage)
         {
             string json = null;
+#if NARRATIVE_BRIDGE_INK_FILE
             if (inkFile != null && inkFile.isCompiled) json = inkFile.storyJson;
-            else if (inkFile != null) Debug.LogWarning("[NarrativeBridge] " + inkFile.name + " has not compiled; using the preflight-compiled story.", this);
+            else if (inkFile != null) Debug.LogWarning("[NarrativeBridge] " + inkFile.name + " has not compiled; using the story in the package.", this);
+#endif
             if (json == null)
             {
                 var asset = storyJson != null ? storyJson : Resources.Load<TextAsset>(StoryInfo.CompiledResource);
@@ -334,7 +505,7 @@ namespace NarrativeBridge
             }
             if (json == null)
             {
-                ReportError("No compiled story found. Assign inkFile or keep Resources/" + StoryInfo.CompiledResource + ".json.");
+                ReportError("No compiled story found. Assign storyJson or keep Resources/" + StoryInfo.CompiledResource + ".json.");
                 return;
             }
             Story = new Story(json);
@@ -343,12 +514,15 @@ namespace NarrativeBridge
                 if (type == Ink.ErrorType.Error) ReportError(message);
                 else Debug.LogWarning("[NarrativeBridge] " + message);
             };
-            foreach (var v in StoryInfo.ItemVariables) Story.ObserveVariable(v, OnItemVariableChanged);
+            foreach (var v in StoryInfo.ItemVariables) Story.ObserveVariable(v, OnVariableObserved);
+            foreach (var v in StoryInfo.Variables) Story.ObserveVariable(v, OnVariableObserved);
             choicePath.Clear();
             transcript.Clear();
             HasEnded = false;
+            StartPassage = passage;
             SetStatus("");
             StopVoice();
+            if (passage != null) Story.ChoosePathString(passage);
             Restarted?.Invoke();
             Advance();
         }
@@ -382,15 +556,22 @@ namespace NarrativeBridge
                 transcript.Add(line);
                 QueueVoice(line);
                 LineShown?.Invoke(line);
+                onLine.Invoke(line.Speaker ?? "", line.Text);
+                foreach (var t in line.Tags)
+                    if (!IsStoryTag(t)) { TagFound?.Invoke(t); onTag.Invoke(t); }
             }
-            if (IsWaitingForContinue) ContinueShown?.Invoke();
-            else if (Story.currentChoices.Count > 0) ChoicesShown?.Invoke(Story.currentChoices);
+            if (IsWaitingForContinue) { ContinueShown?.Invoke(); onContinue.Invoke(); }
+            else if (Story.currentChoices.Count > 0) { ChoicesShown?.Invoke(Story.currentChoices); onChoices.Invoke(); }
             else
             {
                 HasEnded = true;
                 StoryEnded?.Invoke();
+                onEnded.Invoke();
             }
         }
+
+        static bool IsStoryTag(string t) =>
+            t == "transition" || t.StartsWith("speaker:") || t.StartsWith("scene:") || t.StartsWith("paren:") || t.StartsWith("image:") || t.StartsWith("audio:");
 
         // ---- Voice clips: lines tagged #audio:<file> play in order --------------------------
 
@@ -402,7 +583,7 @@ namespace NarrativeBridge
                 if (!t.StartsWith("audio:")) continue;
                 var file = t.Substring(6).Trim();
                 var dot = file.LastIndexOf('.');
-                var clip = Resources.Load<AudioClip>("NarrativeBridgeAudio/" + (dot > 0 ? file.Substring(0, dot) : file));
+                var clip = Resources.Load<AudioClip>(StoryInfo.AudioFolder + (dot > 0 ? file.Substring(0, dot) : file));
                 if (clip != null) voiceQueue.Enqueue(clip);
                 else Debug.LogWarning("[NarrativeBridge] Voice clip not found: " + file);
             }
@@ -446,12 +627,25 @@ namespace NarrativeBridge
 
         // ---- Scene pictures: the first line of a scene may carry #image:<file> ----------------
 
-        /// <summary>The picture for an #image file name, from Resources/NarrativeBridgeImages, or null.</summary>
+        static readonly Dictionary<string, Texture2D> pictures = new Dictionary<string, Texture2D>();
+
+        /// <summary>
+        /// The picture for an #image file name, or null. Pictures ship as their PNG or JPEG bytes in the package's
+        /// Resources (StoryInfo.ImageFolder + file + ".bytes") and are decoded once, then kept.
+        /// </summary>
         public static Texture2D LoadPicture(string file)
         {
             if (string.IsNullOrEmpty(file)) return null;
-            var dot = file.LastIndexOf('.');
-            return Resources.Load<Texture2D>("NarrativeBridgeImages/" + (dot > 0 ? file.Substring(0, dot) : file));
+            if (pictures.TryGetValue(file, out var cached) && cached != null) return cached;
+            var data = Resources.Load<TextAsset>(StoryInfo.ImageFolder + file);
+            if (data == null) return null;
+            var texture = new Texture2D(2, 2, TextureFormat.RGBA32, false) { name = file, wrapMode = TextureWrapMode.Clamp };
+            // Keep no CPU copy once it's on the GPU (there is no GPU when the editor runs headless).
+            var ok = texture.LoadImage(data.bytes, SystemInfo.graphicsDeviceType != UnityEngine.Rendering.GraphicsDeviceType.Null);
+            Resources.UnloadAsset(data);
+            if (!ok) return null;
+            pictures[file] = texture;
+            return texture;
         }
 
         /// <summary>The picture of the scene the reader is in: the latest #image in the transcript, or null.</summary>
@@ -478,6 +672,22 @@ namespace NarrativeBridge
             if (Array.IndexOf(StoryInfo.Variables, name) < 0)
                 throw new ArgumentException("Not a writable story variable: " + name);
             Story.variablesState[name] = value;
+        }
+
+        void OnVariableObserved(string name, object value)
+        {
+            if (Array.IndexOf(StoryInfo.ItemVariables, name) >= 0) OnItemVariableChanged(name, value);
+            if (silent) return;
+            VariableChanged?.Invoke(name, value);
+            onVariableChanged.Invoke(name, value == null ? "" : value.ToString());
+        }
+
+        /// <summary>Tells listeners the value of every variable, e.g. after a load.</summary>
+        void RaiseAllVariables()
+        {
+            if (Story == null) return;
+            foreach (var v in StoryInfo.ItemVariables) OnVariableObserved(v, Story.variablesState[v]);
+            foreach (var v in StoryInfo.Variables) OnVariableObserved(v, Story.variablesState[v]);
         }
 
         // ---- Inventory synchronisation: the host game is the single source of truth -------
@@ -519,9 +729,10 @@ namespace NarrativeBridge
             SetStatus(TryLoadState(PlayerPrefs.GetString(SaveKey, ""), out var err) ? LoadNote ?? "Loaded." : err);
         }
 
+        /// <summary>The story's state as a string, to keep in your own save system.</summary>
         public string SaveState()
         {
-            return JsonUtility.ToJson(new SaveData { storyVersion = StoryInfo.StoryVersion, inkState = Story.state.ToJson(), choicePath = new List<string>(choicePath) });
+            return JsonUtility.ToJson(new SaveData { storyVersion = StoryInfo.StoryVersion, inkState = Story.state.ToJson(), choicePath = new List<string>(choicePath), startPassage = StartPassage ?? "" });
         }
 
         public bool TryLoadState(string saveJson, out string error)
@@ -531,6 +742,9 @@ namespace NarrativeBridge
             SaveData data = null;
             try { data = JsonUtility.FromJson<SaveData>(saveJson); } catch (Exception e) { error = "Save data is corrupt: " + e.Message; return false; }
             if (data == null || string.IsNullOrEmpty(data.inkState)) { error = "Save data is empty."; return false; }
+            if (Story == null) StartStory();
+            if (Story == null) { error = "The story could not start."; return false; }
+            StartPassage = string.IsNullOrEmpty(data.startPassage) ? null : data.startPassage;
             if (data.storyVersion != StoryInfo.StoryVersion)
             {
                 // Saves from before choices were recorded can't be carried over (JsonUtility turns a
@@ -549,24 +763,27 @@ namespace NarrativeBridge
             transcript.Clear();
             HasEnded = false;
             Restarted?.Invoke();
+            RaiseAllVariables();
             if (Story.canContinue) Advance();
-            else if (IsWaitingForContinue) ContinueShown?.Invoke();
-            else if (Story.currentChoices.Count > 0) ChoicesShown?.Invoke(Story.currentChoices);
+            else if (IsWaitingForContinue) { ContinueShown?.Invoke(); onContinue.Invoke(); }
+            else if (Story.currentChoices.Count > 0) { ChoicesShown?.Invoke(Story.currentChoices); onChoices.Invoke(); }
             return true;
         }
 
-        // A save from another version of the story: play the new version from the start, silently,
-        // making the same choices (matched by their text), so its text and variables apply. Stops at
-        // the first choice the new version no longer offers.
+        // A save from another version of the story: play the new version from the start (or the passage
+        // it was started at), silently, making the same choices (matched by their text), so its text and
+        // variables apply. Stops at the first choice the new version no longer offers.
         void ReplayChoices(List<string> path, string savedVersion)
         {
             Story.ResetState();
+            if (StartPassage != null && Array.IndexOf(StoryInfo.Passages, StartPassage) >= 0) Story.ChoosePathString(StartPassage);
             choicePath.Clear();
             transcript.Clear();
             HasEnded = false;
             StopVoice();
             var followed = 0;
             syncing = true; // the host's inventory is already where the save left it
+            silent = true;
             try
             {
                 // Continue breaks added or removed since the save don't stop it: take or skip them.
@@ -595,8 +812,9 @@ namespace NarrativeBridge
                     else { Story.state.LoadJson(before); break; }
                 }
             }
-            finally { syncing = false; }
+            finally { syncing = false; silent = false; }
             Restarted?.Invoke();
+            RaiseAllVariables();
             LoadNote = followed == path.Count
                 ? "Carried this save over from story version " + savedVersion + ": all " + path.Count + " choices replayed."
                 : "Carried this save over from story version " + savedVersion + ": " + followed + " of " + path.Count + " choices still exist, so it resumes after the last one that does.";
@@ -658,77 +876,94 @@ using UnityEditor;
 using UnityEditor.SceneManagement;
 using UnityEngine;
 
-namespace NarrativeBridge.EditorTools
+namespace __NAMESPACE__.EditorTools
 {
-    [InitializeOnLoad]
+    /// <summary>
+    /// Editor tools for "__MENU_TITLE__": add the story to a scene, a demo scene, the theme, and the smoke test.
+    /// A package is read-only, so the demo scene and the editable theme are made in your project's Assets.
+    /// Nothing here runs by itself: your scenes and build settings are only changed when you ask.
+    /// </summary>
     public static class NarrativeBridgeEditor
     {
-        const string ScenePath = "Assets/NarrativeBridge/Scenes/NarrativeDemo.unity";
-        const string InkPath = "Assets/NarrativeBridge/Ink/MainStory.ink";
-        const string ThemePath = "Assets/NarrativeBridge/Settings/NarrativeTheme.asset";
+        const string Menu = "Tools/Narrative Bridge/__MENU_TITLE__/";
+        const string AssetFolder = "__ASSET_FOLDER__";
+        const string ScenePath = AssetFolder + "/NarrativeDemo.unity";
+        const string ThemePath = AssetFolder + "/NarrativeTheme.asset";
 
-        static NarrativeBridgeEditor()
+        /// <summary>Where the package is on disk (embedded, from disk or from a tarball alike).</summary>
+        static string PackageFolder()
         {
-            // Create the demo scene once, on first open of the generated project.
-            EditorApplication.delayCall += () =>
-            {
-                if (!File.Exists(ScenePath) && !EditorApplication.isPlayingOrWillChangePlaymode) CreateDemoScene();
-            };
+            var info = UnityEditor.PackageManager.PackageInfo.FindForAssembly(typeof(NarrativeController).Assembly);
+            return info != null ? info.resolvedPath : null;
         }
 
-        /// <summary>
-        /// Returns the InkFile imported by Ink Unity Integration. The integration marks master files in a
-        /// deferred pass after import; MainStory.ink includes nothing and is included by nothing, so if that
-        /// pass has not run yet we mark it as a master and reimport so it is compiled now.
-        /// </summary>
-        static Ink.UnityIntegration.InkFile LoadCompiledInkFile()
+        [MenuItem("GameObject/Narrative Bridge/__MENU_TITLE__", false, 10)]
+        static void CreateStoryObjectMenu(MenuCommand command)
         {
-            var inkFile = AssetDatabase.LoadAssetAtPath<Ink.UnityIntegration.InkFile>(InkPath);
-            if (inkFile != null && inkFile.isCompiled) return inkFile;
-            var importer = AssetImporter.GetAtPath(InkPath);
-            if (importer == null) return inkFile;
-            var so = new SerializedObject(importer);
-            var master = so.FindProperty("isMasterFile");
-            if (master != null && !master.boolValue)
-            {
-                master.boolValue = true;
-                so.ApplyModifiedPropertiesWithoutUndo();
-                importer.SaveAndReimport();
-                inkFile = AssetDatabase.LoadAssetAtPath<Ink.UnityIntegration.InkFile>(InkPath);
-            }
-            return inkFile;
+            var go = CreateStoryObject();
+            GameObjectUtility.SetParentAndAlign(go, command.context as GameObject);
+            Undo.RegisterCreatedObjectUndo(go, "Create " + go.name);
+            Selection.activeObject = go;
         }
 
-        [MenuItem("Narrative Bridge/Create Demo Scene")]
-        public static void CreateDemoScene()
+        /// <summary>A GameObject with the story's controller and its story panel, in the open scene.</summary>
+        public static GameObject CreateStoryObject()
         {
-            var scene = EditorSceneManager.NewScene(NewSceneSetup.DefaultGameObjects, NewSceneMode.Single);
-            var controller = new GameObject("Narrative Controller").AddComponent<NarrativeController>();
-            controller.inkFile = LoadCompiledInkFile();
-            // The themed uGUI story panel replaces the bare-bones IMGUI demo.
-            controller.drawDemoUI = false;
-            var view = controller.gameObject.AddComponent<NarrativeView>();
+            var go = new GameObject("__MENU_TITLE__ Story");
+            var controller = go.AddComponent<NarrativeController>();
+            controller.drawDemoUI = false; // the themed story panel replaces the bare-bones IMGUI demo
+            var view = go.AddComponent<NarrativeView>();
             view.controller = controller;
             view.theme = LoadOrCreateTheme();
-            Directory.CreateDirectory(System.IO.Path.GetDirectoryName(ScenePath));
-            EditorSceneManager.SaveScene(scene, ScenePath);
-            EditorBuildSettings.scenes = new[] { new EditorBuildSettingsScene(ScenePath, true) };
+            return go;
+        }
+
+        [MenuItem(Menu + "Create Demo Scene")]
+        public static void CreateDemoScene()
+        {
+            if (!EditorSceneManager.SaveCurrentModifiedScenesIfUserWantsTo()) return;
+            NewDemoScene();
             Debug.Log("[NarrativeBridge] Demo scene created at " + ScenePath + ". Press Play to run the story.");
         }
 
-        /// <summary>The project's theme asset, created from the exported look the first time.</summary>
+        /// <summary>For a new project only (Narrative Bridge's complete-project export calls it on first open).</summary>
+        public static void CreateDemoSceneIfMissing()
+        {
+            if (File.Exists(ScenePath)) return;
+            NewDemoScene();
+            if (EditorBuildSettings.scenes.Length == 0) EditorBuildSettings.scenes = new[] { new EditorBuildSettingsScene(ScenePath, true) };
+            Debug.Log("[NarrativeBridge] Demo scene created at " + ScenePath + ". Press Play to run the story.");
+        }
+
+        static void NewDemoScene()
+        {
+            var scene = EditorSceneManager.NewScene(NewSceneSetup.DefaultGameObjects, NewSceneMode.Single);
+            CreateStoryObject();
+            EnsureFolder(AssetFolder);
+            EditorSceneManager.SaveScene(scene, ScenePath);
+        }
+
+        static void EnsureFolder(string path)
+        {
+            if (AssetDatabase.IsValidFolder(path)) return;
+            var slash = path.LastIndexOf('/');
+            EnsureFolder(path.Substring(0, slash));
+            AssetDatabase.CreateFolder(path.Substring(0, slash), path.Substring(slash + 1));
+        }
+
+        /// <summary>The project's theme asset, made from the exported look the first time.</summary>
         static NarrativeTheme LoadOrCreateTheme()
         {
             var theme = AssetDatabase.LoadAssetAtPath<NarrativeTheme>(ThemePath);
             if (theme != null) return theme;
-            Directory.CreateDirectory(System.IO.Path.GetDirectoryName(ThemePath));
+            EnsureFolder(AssetFolder);
             theme = NarrativeTheme.LoadExported();
             AssetDatabase.CreateAsset(theme, ThemePath);
             AssetDatabase.SaveAssets();
             return theme;
         }
 
-        [MenuItem("Narrative Bridge/Reset Theme to Exported Defaults")]
+        [MenuItem(Menu + "Reset Theme to Exported Defaults")]
         public static void ResetTheme()
         {
             var theme = LoadOrCreateTheme();
@@ -742,7 +977,7 @@ namespace NarrativeBridge.EditorTools
             Debug.Log("[NarrativeBridge] Theme reset to the look exported from Narrative Bridge.");
         }
 
-        [MenuItem("Narrative Bridge/Run Story Smoke Test")]
+        [MenuItem(Menu + "Run Story Smoke Test")]
         public static void RunSmokeTestMenu()
         {
             var ok = SmokeTest(false, out var log);
@@ -750,8 +985,8 @@ namespace NarrativeBridge.EditorTools
         }
 
         /// <summary>
-        /// Headless engine check: Unity -batchmode -projectPath . -executeMethod NarrativeBridge.EditorTools.NarrativeBridgeEditor.RunSmokeTestBatch
-        /// Requires the integration's own import to compile the story (no fallback), then plays it. Exit code 0 = pass.
+        /// Headless engine check: Unity -batchmode -projectPath . -executeMethod __NAMESPACE__.EditorTools.NarrativeBridgeEditor.RunSmokeTestBatch
+        /// Requires the ink compiler inside Unity to compile the story's source (no fallback), then plays it. Exit code 0 = pass.
         /// </summary>
         public static void RunSmokeTestBatch()
         {
@@ -760,22 +995,46 @@ namespace NarrativeBridge.EditorTools
             EditorApplication.Exit(ok ? 0 : 1);
         }
 
-        static bool SmokeTest(bool requireEngineImport, out string log)
+        /// Compiles the package's ink source with Ink Unity Integration's compiler, so the check also covers
+        /// the engine side building the story. Returns the compiled JSON, or null (with the reason in errors).
+        static string CompileInkSource(List<string> errors)
         {
-            // Prefer the integration's own import so this also verifies the engine-side compile.
-            var inkFile = LoadCompiledInkFile();
-            var imported = inkFile != null && inkFile.isCompiled;
-            if (!imported && requireEngineImport)
+            var root = PackageFolder();
+            // Ink.Runtime has a Path too, so System.IO's is named in full.
+            var path = root != null ? System.IO.Path.Combine(root, "Ink~", "MainStory.ink") : null;
+            if (path == null || !File.Exists(path)) { errors.Add("The story's ink source (Ink~/MainStory.ink) is not in the package."); return null; }
+            var problems = new List<string>();
+            var compiler = new Ink.Compiler(File.ReadAllText(path), new Ink.Compiler.Options
             {
-                var why = inkFile == null ? "MainStory.ink was not imported as an InkFile" : string.Join("; ", inkFile.errors.ConvertAll(e => e.content));
-                log = "[NarrativeBridge] Smoke test failed: Ink Unity Integration did not compile the story (" + (why.Length > 0 ? why : "unknown reason") + ").";
+                sourceFilename = "MainStory.ink",
+                errorHandler = (message, type) => { if (type == Ink.ErrorType.Error) problems.Add(message); },
+            });
+            Story compiled = null;
+            try { compiled = compiler.Compile(); } catch (System.Exception e) { problems.Add(e.Message); }
+            if (compiled == null || problems.Count > 0) { errors.Add("The ink compiler in Unity could not compile MainStory.ink: " + string.Join("; ", problems)); return null; }
+            return compiled.ToJson();
+        }
+
+        static bool SmokeTest(bool requireEngineCompile, out string log)
+        {
+            var errors = new List<string>();
+            var engineJson = CompileInkSource(errors);
+            if (engineJson == null && requireEngineCompile)
+            {
+                log = "[NarrativeBridge] Smoke test failed: " + string.Join("; ", errors);
                 return false;
             }
-            var fallback = Resources.Load<TextAsset>(StoryInfo.CompiledResource);
-            string json = imported ? inkFile.storyJson : fallback != null ? fallback.text : null;
-            var source = imported ? "Ink Unity Integration import" : "preflight JSON";
-            if (json == null) { log = "[NarrativeBridge] Smoke test failed: compiled story not found."; return false; }
-            var errors = new List<string>();
+            // The game runs the precompiled story that ships in the package: it must load in this ink runtime.
+            var shipped = Resources.Load<TextAsset>(StoryInfo.CompiledResource);
+            if (shipped == null) errors.Add("The compiled story (Resources/" + StoryInfo.CompiledResource + ".json) did not import.");
+            else
+            {
+                try { new Story(shipped.text); }
+                catch (System.Exception e) { errors.Add("The compiled story does not load: " + e.Message); }
+            }
+            string json = engineJson ?? (shipped != null ? shipped.text : null);
+            var source = engineJson != null ? "ink compiler in Unity" : "shipped JSON";
+            if (json == null) { log = "[NarrativeBridge] Smoke test failed: compiled story not found. " + string.Join("; ", errors); return false; }
             var clipsHeard = new HashSet<string>();
             var picturesSeen = new HashSet<string>();
             int completed = 0;
@@ -805,15 +1064,16 @@ namespace NarrativeBridge.EditorTools
             foreach (var file in clipsHeard)
             {
                 var dot = file.LastIndexOf('.');
-                if (Resources.Load<AudioClip>("NarrativeBridgeAudio/" + (dot > 0 ? file.Substring(0, dot) : file)) == null)
+                if (Resources.Load<AudioClip>(StoryInfo.AudioFolder + (dot > 0 ? file.Substring(0, dot) : file)) == null)
                     errors.Add("Voice clip did not import: " + file);
             }
-            // And every scene picture as a Texture2D.
+            // And every scene picture must decode.
             foreach (var file in picturesSeen)
-                if (NarrativeController.LoadPicture(file) == null) errors.Add("Scene picture did not import: " + file);
+                if (NarrativeController.LoadPicture(file) == null) errors.Add("Scene picture could not be loaded: " + file);
             var carry = SaveCarryOverCheck(errors);
+            var startAt = StartAtCheck(errors);
             var ui = StoryViewCheck(errors);
-            log = "[NarrativeBridge] Smoke test (" + source + "): " + clipsHeard.Count + " voice clip(s) and " + picturesSeen.Count + " picture(s) checked, " + completed + "/" + runs + " playthroughs reached an ending, " + carry + ", " + ui + ", " + errors.Count + " runtime errors." +
+            log = "[NarrativeBridge] Smoke test (" + source + "): " + clipsHeard.Count + " voice clip(s) and " + picturesSeen.Count + " picture(s) checked, " + completed + "/" + runs + " playthroughs reached an ending, " + carry + ", " + startAt + ", " + ui + ", " + errors.Count + " runtime errors." +
                   (errors.Count > 0 ? "\\n" + string.Join("\\n", errors) : "");
             return errors.Count == 0 && completed > 0;
         }
@@ -837,6 +1097,25 @@ namespace NarrativeBridge.EditorTools
                 var got = string.Join(" | ", c.Story.currentChoices.ConvertAll(x => x.text));
                 if (got != expected || c.LoadNote == null) { errors.Add("Save carry-over: expected choices [" + expected + "] but got [" + got + "]"); return "save carry-over failed"; }
                 return "save carry-over passed";
+            }
+            finally { UnityEngine.Object.DestroyImmediate(go); }
+        }
+
+        /// Starts the story at every passage, as a game does for a conversation, without runtime errors.
+        static string StartAtCheck(List<string> errors)
+        {
+            var go = new GameObject("NarrativeBridge start-at check");
+            try
+            {
+                var c = go.AddComponent<NarrativeController>();
+                var before = errors.Count;
+                c.RuntimeError += m => errors.Add("StartAt: " + m);
+                foreach (var p in StoryInfo.Passages)
+                {
+                    c.StartAt(p);
+                    if (c.Story == null || c.StartPassage != p) { errors.Add("StartAt(" + p + ") did not start the story there."); break; }
+                }
+                return errors.Count == before ? "start-at passed (" + StoryInfo.Passages.Length + " passages)" : "start-at failed";
             }
             finally { UnityEngine.Object.DestroyImmediate(go); }
         }
