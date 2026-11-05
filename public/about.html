@@ -1,0 +1,95 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="color-scheme" content="light dark" />
+    <title>About Narrative Bridge — FAQ, known limits and roadmap</title>
+    <meta name="description" content="Narrative Bridge is a free, open-source tool that turns screenplays and prose into playable interactive stories, Ink scripts and Unity or Unreal packages, entirely in your browser." />
+    <link rel="canonical" href="https://flamingairplane.github.io/Script-to-Game-Converter/about.html" />
+    <style>
+      :root { --bg: #fefae0; --fg: #283618; --muted: #5a5f3c; --accent: #8a4b14; --card: #fffdf0; --line: #d9d3b0; }
+      @media (prefers-color-scheme: dark) { :root { --bg: #1c2112; --fg: #f1edd2; --muted: #c9c4a3; --accent: #e9a35f; --card: #252b18; --line: #3d4428; } }
+      * { box-sizing: border-box; }
+      body { margin: 0; background: var(--bg); color: var(--fg); font: 17px/1.6 Georgia, 'Iowan Old Style', serif; }
+      main { max-width: 46rem; margin: 0 auto; padding: 2rem 16px 4rem; }
+      h1 { font-size: 2rem; margin: 0 0 0.25rem; line-height: 1.2; }
+      h2 { margin-top: 2.2rem; border-bottom: 1px solid var(--line); padding-bottom: 0.25rem; }
+      h3 { margin: 1.4rem 0 0.3rem; font-size: 1.05rem; }
+      a { color: var(--accent); }
+      .lede { color: var(--muted); font-size: 1.1rem; }
+      .cta { display: inline-block; margin: 1rem 0; padding: 0.6rem 1.1rem; background: var(--accent); color: var(--bg); border-radius: 6px; text-decoration: none; font-weight: bold; }
+      ul { padding-left: 1.2rem; }
+      li { margin-bottom: 0.35rem; }
+      code { font-size: 0.92em; }
+      footer { margin-top: 3rem; color: var(--muted); font-size: 0.9rem; }
+    </style>
+  </head>
+  <body>
+    <main>
+      <h1>About Narrative Bridge</h1>
+      <p class="lede">
+        A free, open-source tool for writers and game teams: bring in a screenplay or prose, check what was understood, play it, and share it as a
+        web page or hand it to a developer as an Ink story packaged for Unity or Unreal. Everything runs in your browser; nothing is uploaded.
+      </p>
+      <a class="cta" href="./">Open Narrative Bridge</a>
+
+      <h2 id="faq">Questions</h2>
+      <h3>Who is it for?</h3>
+      <p>Screenwriters and novelists who want a playable branching story, and narrative designers who want a clean starting point for a game's dialogue.</p>
+      <h3>What is Ink?</h3>
+      <p>
+        <a href="https://www.inklestudios.com/ink/" rel="noopener">Ink</a> is a scripting language for interactive stories, made by inkle and used in many
+        games. Narrative Bridge writes Ink for you, so you don't need to learn it, but your developer can edit it directly.
+      </p>
+      <h3>Is my script uploaded anywhere?</h3>
+      <p>
+        No. Converting, playing and exporting all happen on your computer. Your work is kept in this browser; save a project file (or, if you choose,
+        your own private GitHub Gist) to move it to another computer.
+      </p>
+      <h3>Which files can I import?</h3>
+      <p>Fountain, Final Draft (.fdx), Word (.docx), PDF, Markdown, plain text, Twine and Ink.</p>
+      <h3>Which conversion mode should I choose?</h3>
+      <p>
+        <em>Faithful</em> keeps your script as written and is the best place to start. <em>Interactive adaptation</em> also suggests choices drawn
+        from your text, which you accept or reject. <em>Structured</em> is for when you've added markers such as <code>@passage</code> to plan branches yourself.
+      </p>
+      <h3>What does my developer get?</h3>
+      <p>
+        For Unity, a package to add to an existing project (Unity 6, or 2022.3 and later) with the compiled story, a ready-made dialogue UI,
+        voice clips, pictures and a sample scene. For Unreal, a C++ project set up for the Inkpot plugin, with a script that fetches it. Either way, the Ink source is included.
+      </p>
+      <h3>Does it cost anything?</h3>
+      <p>No. It's free and open source under the MIT licence.</p>
+      <h3>Can I use it offline?</h3>
+      <p>Yes. After the first visit it works without the internet, and you can install it as an app or download a single-file copy.</p>
+
+      <h2 id="limits">Known limits</h2>
+      <ul>
+        <li>PDF layout is guessed, so check scenes and speakers in Review; a text or Fountain export is more reliable.</li>
+        <li>Formatting (bold, italics, fonts), dual dialogue and revision marks aren't kept; the words and structure are.</li>
+        <li>Old Word .doc files can't be read: save them as .docx first.</li>
+        <li>Work is kept per browser. Safari may clear it after a week without a visit unless you add the site to the Dock.</li>
+        <li>Very long scripts work but take a few seconds more; there's no fixed size limit.</li>
+        <li>The Unreal project needs the free Inkpot plugin; its setup script fetches it, which needs the internet once.</li>
+      </ul>
+
+      <h2 id="roadmap">Roadmap</h2>
+      <ul>
+        <li>More import formats and better PDF reading.</li>
+        <li>Keeping italics and emphasis in the exported story.</li>
+        <li>Side-by-side comparison of two drafts.</li>
+        <li>More export targets, such as Godot.</li>
+      </ul>
+      <p>
+        Ideas welcome: <a href="https://github.com/FlamingAirplane/Script-to-Game-Converter/issues" rel="noopener">suggest one or report a problem</a>.
+        See <a href="https://github.com/FlamingAirplane/Script-to-Game-Converter/blob/main/CHANGELOG.md" rel="noopener">what's new</a>.
+      </p>
+
+      <footer>
+        Narrative Bridge · <a href="https://github.com/FlamingAirplane/Script-to-Game-Converter" rel="noopener">Source on GitHub</a> ·
+        <a href="https://github.com/FlamingAirplane/Script-to-Game-Converter/blob/main/LICENSE" rel="noopener">MIT licence</a>
+      </footer>
+    </main>
+  </body>
+</html>

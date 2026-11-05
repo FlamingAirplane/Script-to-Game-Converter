@@ -12,6 +12,7 @@ export function AdminHost() {
   useEffect(() => {
     const on = () => setOpen(isAdminHash());
     window.addEventListener('hashchange', on);
+    on(); // the address may have changed before this listener was attached
     return () => window.removeEventListener('hashchange', on);
   }, []);
   useEffect(() => {
