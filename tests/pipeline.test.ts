@@ -1271,3 +1271,32 @@ describe('recording sessions', () => {
   });
 });
 
+describe('story map arrows', () => {
+  const card = (x: number, y: number) => ({ x, y, w: 188, h: 56 });
+  it('goes around cards in the way and uses the sides that face each other', async () => {
+    const { routeEdges, routeHits } = await import('../src/core/edgeRouting');
+    // A and B in a row with C between them; D straight below A.
+    const cards = new Map([['a', card(0, 0)], ['c', card(300, 0)], ['b', card(600, 0)], ['d', card(0, 300)]]);
+    const routes = routeEdges(cards, [
+      { id: 'ab', from: 'a', to: 'b' },
+      { id: 'ad', from: 'a', to: 'd' },
+      { id: 'db', from: 'd', to: 'b' },
+    ]);
+    expect(routeHits(routes.get('ab')!, cards.get('c')!)).toBe(false);
+    expect([routes.get('ad')!.fromSide, routes.get('ad')!.toSide]).toEqual(['bottom', 'top']);
+  });
+
+  it('spreads arrows that share a side, in the order of where they go', async () => {
+    const { routeEdges } = await import('../src/core/edgeRouting');
+    const cards = new Map([['a', card(0, 200)], ['b', card(400, 0)], ['c', card(400, 200)], ['d', card(400, 400)]]);
+    const routes = routeEdges(cards, ['b', 'c', 'd'].map((t) => ({ id: t, from: 'a', to: t })));
+    const starts = ['b', 'c', 'd'].map((t) => routes.get(t)!).map((r) => r.d.match(/^M(-?[\d.]+),(-?[\d.]+)/)!.slice(1).map(Number));
+    expect(new Set(starts.map((s) => s.join(','))).size).toBe(3);
+    // All leave by the right side, top to bottom in the order of their targets.
+    expect(starts.every((s) => s[0] === 188)).toBe(true);
+    expect(starts[0][1]).toBeLessThan(starts[1][1]);
+    expect(starts[1][1]).toBeLessThan(starts[2][1]);
+    const self = routeEdges(cards, [{ id: 'loop', from: 'a', to: 'a' }]).get('loop')!;
+    expect(self.d).toMatch(/^M188,/);
+  });
+});

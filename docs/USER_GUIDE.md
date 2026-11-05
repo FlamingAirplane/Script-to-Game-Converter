@@ -153,7 +153,9 @@ every match, and **Replace all** changes them in one step. Undo ↶ reverses it.
 
 ![The story map with passages, routes, the key below, a minimap and a compass](images/graph.jpg)
 
-Every passage is a card and every choice a route between cards. The **key** under the map explains the marks:
+Every passage is a card and every choice a route between cards. Each route leaves and enters its cards by whichever
+sides keep the map tidiest: around other cards rather than through them, crossing as few other routes as it can, with
+routes that share a side spread out in the order of where they go. The **key** under the map explains the marks:
 
 | Mark | Means |
 | --- | --- |
