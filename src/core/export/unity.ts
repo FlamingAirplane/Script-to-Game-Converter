@@ -87,7 +87,7 @@ export const unityAdapter: EngineAdapter = {
       { path: `${sample}StoryInventoryBridge.cs`, content: cs(SAMPLE_INVENTORY_CS) },
       { path: `${sample}StoryEventsListener.cs`, content: cs(SAMPLE_LISTENER_CS) },
       ...commonFiles(story, manifest, `${pkg}NarrativeBridge~/`),
-      ...sourceFiles(story, `${pkg}NarrativeBridge~/`),
+      ...sourceFiles(story, `${pkg}NarrativeBridge~/`, options.originals),
     ];
     const files = await withMetas(packageFiles, pkg, id.name);
     if (layout === 'project') {

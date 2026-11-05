@@ -6,6 +6,7 @@ import { SEMVER, unityPackageId } from '../core/export/unityPackage';
 import inkRuntime from '../../node_modules/inkjs/dist/ink.js?raw';
 import { referencedAudio } from '../core/audio';
 import { referencedImages } from '../core/images';
+import { referencedOriginals } from '../core/isr';
 import type { ProcessedStory } from '../core/pipeline';
 import { collectClips } from './audioStore';
 import { sfx } from './sfx';
@@ -55,7 +56,8 @@ export function ExportView({ processed, stale, onState, project, update }: { pro
     try {
       const audio = await collectClips(referencedAudio(processed.project));
       const images = await collectClips(referencedImages(processed.project));
-      const r = await adapter.export(processed, { engine, ...opts, audio, images });
+      const originals = await collectClips(referencedOriginals(processed.project));
+      const r = await adapter.export(processed, { engine, ...opts, audio, images, originals });
       setResult(r);
       setZip(await zipExport(r));
       setTgz(engine === 'unity' && opts.unityLayout === 'package' ? await unityTarball(r) : null);

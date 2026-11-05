@@ -1315,3 +1315,32 @@ describe('Unity text', () => {
     expect(JSON.parse(String(r.files.find((f) => f.path.endsWith('T/package.json') || f.path.endsWith('.t/package.json'))!.content)).unity).toBe('2022.3');
   });
 });
+
+describe('original files', () => {
+  it('keeps a PDF beside the text taken from it: in the story, Files and exports', async () => {
+    const { prepareInput } = await import('../src/core/parsing/convert');
+    const { storyFiles } = await import('../src/core/files');
+    const bytes = new Uint8Array(readFileSync(new URL('./fixtures/lighthouse.pdf', import.meta.url)));
+    const input = await prepareInput('Lighthouse draft.pdf', bytes);
+    expect(input.original).toMatchObject({ name: 'Lighthouse draft.pdf', mime: 'application/pdf', byteLength: bytes.length });
+    expect(input.original!.id).toMatch(/^orig_[0-9a-f]{20}$/);
+    expect(input.originalBytes).toBe(bytes);
+    // The same file is the same original.
+    expect((await prepareInput('copy.pdf', bytes)).original!.id).toBe(input.original!.id);
+    const { project } = await buildStory([input], { mode: 'faithful' });
+    expect(project.sources[0].original).toEqual(input.original);
+    expect(JSON.stringify(project)).not.toContain('originalBytes');
+    const files = storyFiles(project).filter((f) => f.kind === 'script');
+    expect(files.map((f) => [f.fileName, f.context, f.id ?? null])).toEqual([
+      ['Lighthouse draft.fountain', 'the text taken from Lighthouse draft.pdf', null],
+      ['Lighthouse draft.pdf', 'the original file', input.original!.id],
+    ]);
+    const story = processProject(project);
+    const r = await ADAPTERS.unity.export(story, { engine: 'unity', projectName: 'L', engineVersion: '6000.0', integrationRef: 'v1.2.3', includeDemo: true, originals: { [input.original!.id]: { mime: 'application/pdf', bytes } } });
+    const docs = r.files.filter((f) => f.path.includes('SourceDocuments/'));
+    expect(docs.map((f) => f.path.split('/').pop())).toEqual(['Lighthouse draft.fountain', 'Lighthouse draft.pdf']);
+    expect(docs[1].content).toBe(bytes);
+    // Plain text scripts have no separate original.
+    expect((await prepareInput('a.fountain', 'INT. HALL')).original).toBeUndefined();
+  });
+});
