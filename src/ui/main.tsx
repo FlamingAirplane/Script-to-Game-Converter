@@ -5,13 +5,16 @@ import { GENERATOR_VERSION } from '../core/version';
 import { App } from './App';
 import { AdminHost } from './admin/AdminHost';
 import { applyDesign, designSetting, designState } from './design/design';
+import { loadLiveDesign } from './design/live';
 import { OfflineUpdate } from './OfflineUpdate';
 import { THEME_KEY, applyTheme } from './ThemeToggle';
 import './fonts.css';
 import './styles.css';
 
-// The published design (and, in the admin's browser, their draft) before the first render.
+// The published design (and, in the admin's browser, their draft) before the first render; then the
+// live design is read from its Gist, if there is one, and applied when it arrives.
 applyDesign(designState().design);
+void loadLiveDesign();
 try {
   const theme = designSetting<string>('theme');
   if (!localStorage.getItem(THEME_KEY) && (theme === 'light' || theme === 'dark')) applyTheme(theme);

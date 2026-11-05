@@ -129,6 +129,9 @@ const INK_DEFINES = [
   { name: INK_PACKAGE, expression: '2.0.0', define: 'NARRATIVE_BRIDGE_INK_FILE' },
   // Keyboard shortcuts and the EventSystem's input module also work in games that use only the Input System.
   { name: 'com.unity.inputsystem', expression: '1.0.0', define: 'NARRATIVE_BRIDGE_INPUT_SYSTEM' },
+  // TextMeshPro, Unity's current text: built into uGUI 2.0 (Unity 6), or the TextMeshPro package (2022.3).
+  { name: 'com.unity.ugui', expression: '2.0.0', define: 'NARRATIVE_BRIDGE_TMP' },
+  { name: 'com.unity.textmeshpro', expression: '3.0.0', define: 'NARRATIVE_BRIDGE_TMP' },
 ];
 
 export function runtimeAsmdef(id: UnityPackageId) {
@@ -136,7 +139,7 @@ export function runtimeAsmdef(id: UnityPackageId) {
     name: id.namespace,
     rootNamespace: id.namespace,
     // Optional references (like Unity.InputSystem) are skipped when the game doesn't have them.
-    references: ['Ink-Libraries', 'Ink', 'UnityEngine.UI', 'Unity.InputSystem'],
+    references: ['Ink-Libraries', 'Ink', 'UnityEngine.UI', 'Unity.InputSystem', 'Unity.TextMeshPro'],
     includePlatforms: [],
     excludePlatforms: [],
     allowUnsafeCode: false,
@@ -150,7 +153,7 @@ export function runtimeAsmdef(id: UnityPackageId) {
 }
 
 export function editorAsmdef(id: UnityPackageId) {
-  return { ...runtimeAsmdef(id), name: `${id.namespace}.Editor`, rootNamespace: `${id.namespace}.EditorTools`, references: [id.namespace, 'Ink-Libraries', 'Ink', 'UnityEngine.UI', 'Unity.InputSystem'], includePlatforms: ['Editor'] };
+  return { ...runtimeAsmdef(id), name: `${id.namespace}.Editor`, rootNamespace: `${id.namespace}.EditorTools`, references: [id.namespace, 'Ink-Libraries', 'Ink', 'UnityEngine.UI', 'Unity.InputSystem', 'Unity.TextMeshPro'], includePlatforms: ['Editor'] };
 }
 
 /** The samples' assembly, once imported into a game's Assets from Package Manager. */

@@ -42,7 +42,13 @@
           "format": { "enum": ["txt", "fountain", "md", "ink", "twee"] },
           "sha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
           "byteLength": { "type": "integer", "minimum": 0 },
-          "text": { "type": "string" }
+          "text": { "type": "string" },
+          "original": {
+            "type": "object",
+            "description": "The file the text was taken from (Word, PDF, Final Draft, Twine); its bytes are kept like media, by id.",
+            "required": ["id", "name", "mime", "byteLength"],
+            "properties": { "id": { "type": "string" }, "name": { "type": "string" }, "mime": { "type": "string" }, "byteLength": { "type": "integer" } }
+          }
         }
       }
     },

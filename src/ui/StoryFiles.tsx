@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { storyFiles, zipPaths, type StoryFile, type StoryFileKind } from '../core/files';
 import type { StoryProject } from '../core/isr';
 import { getClip } from './audioStore';
+import { renderClip } from './audioRender';
 import { download } from './common';
 
 // Story settings → Files: everything put into this story, to download again. Scripts as text,
@@ -16,6 +17,7 @@ function size(n: number): string {
 
 async function bytesOf(f: StoryFile): Promise<Uint8Array | string | undefined> {
   if (f.text != null) return f.text;
+  if (f.audio) return (await renderClip(f.audio))?.bytes;
   return f.id ? (await getClip(f.id))?.bytes : undefined;
 }
 
@@ -109,7 +111,7 @@ export function StoryFiles({ project }: { project: StoryProject }) {
                     </span>
                     <span className="file-context muted small" title={f.context}>
                       {f.context}
-                      {f.convertedFrom ? ` (as text; the .${f.convertedFrom} itself isn’t kept)` : ''}
+                      {f.convertedFrom ? ` (as text: it was imported before the .${f.convertedFrom} itself was kept)` : ''}
                     </span>
                     <span className="muted small file-size">{missing ? 'not in this browser' : s != null ? size(s) : ''}</span>
                     <button className="btn tiny" disabled={missing} onClick={() => void one(f)} aria-label={`Download ${f.fileName}`}>

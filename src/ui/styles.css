@@ -1044,6 +1044,12 @@ section.drafts > h2 { margin-top: 26px; }
 .game-exit p { margin: 0; }
 .game-exit strong { color: var(--teal); }
 .t-exit { text-align: center; color: var(--teal); font-style: italic; font-size: 14px; margin: 14px 0; }
+/* Story UI: a reset beside each changed setting, and one per group */
+.theme-field { position: relative; display: flex; align-items: flex-start; gap: 4px; min-width: 0; }
+.theme-field > :first-child { flex: 1; min-width: 0; }
+.theme-field .field-reset { flex: none; padding: 0 5px; font-size: 14px; color: var(--rubric); margin-top: 2px; }
+.theme-field.changed > :first-child .muted.small:first-child::after, .theme-field.changed .colour-field span::after { content: ' ●'; color: var(--warn); font-size: 8px; vertical-align: 2px; }
+.group-reset { margin: 0 0 6px; }
 /* Story settings → Files */
 .story-files { margin-top: 1.5em; }
 .story-files h3 { margin: 0; }
@@ -1085,3 +1091,20 @@ section.drafts > h2 { margin-top: 26px; }
   .session-line .buttons { grid-column: 2 / -1; grid-row: 3; }
   .session-tools input[type='range'], .session-transport input[type='range'] { width: 90px; }
 }
+
+/* Your project on other browsers */
+.projects-sheet { display: flex; flex-direction: column; gap: 8px; }
+.projects-way { border-top: 1px solid var(--rule); padding-top: 8px; }
+.projects-way h3 { margin-top: 0.4em; }
+.cloud-list { list-style: none; margin: 8px 0 0; padding: 0; }
+.cloud-list li { display: grid; grid-template-columns: minmax(0, 1fr) auto auto auto; gap: 4px 12px; align-items: center; padding: 6px 0; border-bottom: 1px dotted var(--rule-2); }
+.cloud-title { display: flex; align-items: center; gap: 8px; min-width: 0; }
+@media (max-width: 760px) { .cloud-list li { grid-template-columns: minmax(0, 1fr) auto; } }
+/* Non-destructive clip edits */
+.voice-clip { position: relative; }
+.voice-clip .icon.edited { color: var(--teal); }
+.clip-editor { position: absolute; z-index: 5; top: calc(100% + 4px); left: 0; width: min(440px, 80vw); background: var(--paper-hi); border: 1px solid var(--rule-2); border-radius: var(--radius-card); padding: 10px 12px; box-shadow: 0 6px 18px color-mix(in srgb, var(--shadow) 25%, transparent); display: flex; flex-direction: column; gap: 6px; }
+.clip-editor p { margin: 0; }
+.clip-edit-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 2px 14px; }
+.clip-edit-field { display: flex; flex-direction: column; }
+.clip-edit-field input { width: 100%; accent-color: var(--teal); }

@@ -144,7 +144,8 @@ Click **Story settings** at the top of the contents.
   or drop a picture on it), and **merge into…** for duplicates (such as "MIRA" and "MIRA (V.O.)"). A portrait shows
   beside the character's lines in Playtest and the playable story, and in Unity's story panel while they speak.
 - **Files:** everything you've put into the story, to download again: the scripts it was made from (a Word, PDF or
-  Final Draft file comes back as the text taken from it), voice recordings (with the line each belongs to), scene
+  Final Draft file comes back both as the original file and as the text taken from it; the original is kept in your
+  browser and in saved project files, and goes into engine exports too), voice recordings (with the line each belongs to), scene
   pictures and character portraits. **Download** saves one; **Download all (.zip)** saves them all, in a folder for
   each kind.
 - **Items** (things the player can carry, like a key) and **Variables** (numbers, true/false values or text the story
@@ -263,7 +264,9 @@ have it yet, and gives the developer ways to connect the story to the game: star
 and variables, and use the game's own inventory and save system.
 
 **Story UI** (Unity only) sets how the story panel looks and behaves in the game: about 70 settings in groups you can
-open and close, with a preview beside them. **Reset to defaults** puts them all back.
+open and close, with a preview beside them. A setting you've changed is marked ● with a **↺** beside it that puts
+just that one back to its default (the chosen look's); each group has **↺ Reset … to defaults**, and **Reset to
+defaults** at the top puts everything back.
 
 - **Look:** *Book*, *Night* or *Minimal* set the colours; changing any colour makes it *Custom*. Your other settings stay.
 - **Colours:** panel, story text, speaker names, scene headings, notes, buttons, button text, highlights and the border.
@@ -309,6 +312,15 @@ your story's text, so it is safe to attach to a bug report. Choose how much to s
 **download** or **clear** it.
 
 ## 10. Saving, drafts and working offline
+
+- **Another browser or computer:** click **⇅ other browsers** in the top bar.
+  - **As a file (no account):** *Save the project file* gives you one file with everything (the story, recordings,
+    recording sessions, pictures, portraits, the original scripts and the Unity settings); open it anywhere with
+    **Open project**.
+  - **In the cloud:** paste a GitHub token (classic, with only the `gist` scope; it stays in your browser and goes
+    only to GitHub) and click **Save this project to the cloud**. It's kept as a *private* Gist in your GitHub
+    account. In any other browser, open the same window, paste the token, click **Show my cloud projects** and
+    **Open** the one you want. Save to the cloud again to update it.
 
 - **Autosave:** your project is remembered in this browser, with room for large projects. *✓ kept in this browser*
   confirms it. If the browser's storage is almost full or stops working, a warning appears instead, and closing the page
@@ -357,9 +369,13 @@ your story's text, so it is safe to attach to a bug report. Choose how much to s
   **Find takes** looks for the pauses between takes (adjust *Sensitivity* and *Pause between takes* if it finds too
   many or too few). Then pick the first line they belong to and **Give the takes to lines in order**. *Lines of* shows
   one character's lines, handy for a session with one actor. ▶ (or Enter) plays a line's stretch; ✕ unlinks it.
-  **Cut and attach** turns each marked stretch into that line's recording, marked ✂ in Review. Open the session again
-  any time to move a line's start or end and cut it again; one Undo takes a whole cut back. The session recording itself
-  stays in this browser; the clips cut from it are saved with your project.
+  Every change is **saved as you make it**, like regions in Pro Tools: a linked line plays its stretch of the session
+  (nothing is copied), marked ✂ in Review, and Undo takes a change back. Open the session again any time to move a
+  line's start or end. The session is kept in your browser and in saved project files; exports get each line as its
+  own file.
+- **Editing a clip:** ✎ beside any recording opens its edits: **trim** the start and end, **fade** in and out, and the
+  **volume** (in decibels). They're saved as you change them and never alter the recording itself; ▶ plays the clip
+  with its edits, **Undo all edits** clears them, and exports get the clip with its edits applied.
 - Recordings and scene pictures travel with the playable story, the Unity and Unreal packages, and saved project
   files.
 

@@ -5,7 +5,8 @@ import { SETTINGS, TOKENS, WORDS } from './tokens';
 // The design of the app itself: overrides of the design variables (shared, or per theme), of any
 // CSS rule, extra CSS, some of the app's words, and defaults for new visitors.
 //
-// - The published design is src/ui/design/published.json, built into the app, so every visitor sees it.
+// - The published design is the live one (a GitHub Gist the admin publishes to, read when the app
+//   opens: no commit or rebuild, see live.ts), or else src/ui/design/published.json, built into the app.
 // - The admin design editor (#admin) edits a draft, kept in that browser only, and shown there
 //   live. Publishing is putting the draft's file in the repository (see the editor's Publish tab).
 
@@ -151,18 +152,43 @@ function readDraft(): DesignDoc | null {
   }
 }
 
+export const LIVE_KEY = 'narrative-bridge.design-live';
+
+/** The live design last read from the Gist, kept so the next visit shows it at once. */
+function readLive(): DesignDoc | null {
+  try {
+    const raw = localStorage.getItem(LIVE_KEY);
+    return raw ? normaliseDesign(JSON.parse(raw)) : null;
+  } catch {
+    return null;
+  }
+}
+
 let draft: DesignDoc | null = readDraft();
+let live: DesignDoc | null = readLive();
 /** The admin can compare with what's published without losing the draft. */
 let previewPublished = false;
 const listeners = new Set<() => void>();
-let snapshot = { design: effective(), draft, previewPublished };
+let snapshot = { design: effective(), draft, previewPublished, published: live ?? PUBLISHED };
 
 function effective(): DesignDoc {
-  return !previewPublished && draft ? draft : PUBLISHED;
+  return !previewPublished && draft ? draft : (live ?? PUBLISHED);
+}
+
+/** The live design, read from the Gist (or null to fall back to the built-in one). Remembered for the next visit. */
+export function setLiveDesign(d: DesignDoc | null) {
+  live = d ? normaliseDesign(d) : null;
+  try {
+    if (live) localStorage.setItem(LIVE_KEY, JSON.stringify(live));
+    else localStorage.removeItem(LIVE_KEY);
+  } catch {
+    /* this visit only */
+  }
+  changed();
 }
 
 function changed() {
-  snapshot = { design: effective(), draft, previewPublished };
+  snapshot = { design: effective(), draft, previewPublished, published: live ?? PUBLISHED };
   applyDesign(snapshot.design);
   for (const l of listeners) l();
 }

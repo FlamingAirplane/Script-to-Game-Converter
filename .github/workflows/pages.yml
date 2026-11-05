@@ -31,9 +31,12 @@ jobs:
       - run: npm run build
         env:
           NB_ADMIN_PASSWORD: ${{ secrets.NB_ADMIN_PASSWORD }}
+          # The live design's Gist (the admin design editor publishes there; no commit needed).
+          NB_DESIGN_GIST: ${{ vars.NB_DESIGN_GIST }}
       - name: Add the offline writer edition to the site
         env:
           NB_ADMIN_PASSWORD: ${{ secrets.NB_ADMIN_PASSWORD }}
+          NB_DESIGN_GIST: ${{ vars.NB_DESIGN_GIST }}
         run: |
           npm run build:single
           cp release/Narrative-Bridge.html dist/Narrative-Bridge.html

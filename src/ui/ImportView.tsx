@@ -13,6 +13,7 @@ import type { FileHandle } from './platform';
 import { RecentFiles } from './RecentFiles';
 import { GettingStarted, USER_GUIDE_URL } from './GettingStarted';
 import { Logo } from './Logo';
+import { putClip } from './audioStore';
 import { designWord, useDesign } from './design/design';
 
 // The hosted site (GitHub Pages) also serves the offline writer edition next to index.html. Hidden in
@@ -131,6 +132,8 @@ export function ImportView({
       try {
         const binary = BINARY_EXTENSIONS.some((e) => f.name.toLowerCase().endsWith(e));
         const prepared = await prepareInput(f.name, binary ? new Uint8Array(await f.arrayBuffer()) : await f.text());
+        // A Word, PDF, Final Draft or Twine file is kept as it is too, so it can be downloaded again.
+        if (prepared.original && prepared.originalBytes) await putClip(prepared.original.id, prepared.original.mime, prepared.originalBytes);
         if (/\.ink$/i.test(f.name)) {
           const inkFeatures = inkUnsupported(prepared.text);
           next.push({ ...prepared, inkFeatures, inkMode: inkFeatures.length ? 'keep' : 'edit' });

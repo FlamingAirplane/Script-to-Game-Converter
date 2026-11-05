@@ -1,6 +1,7 @@
 import type JSZip from 'jszip';
 import type { SourceInput } from '../builder';
 import type { SourceFormat } from '../isr';
+import { sha256 } from '../hash';
 
 // Converters for formats that aren't plain text. Each turns the file into Fountain (screenplays) or
 // Markdown (prose), which the existing parsers then read. The converted text is what the source pane
@@ -255,8 +256,27 @@ export function twineHtmlToTwee(html: string): { text: string; stories: number; 
   return { text: out.join('\n'), stories: stories.length, title };
 }
 
+const ORIGINAL_MIME: Record<ConvertedInput['convertedFrom'], string> = {
+  docx: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+  pdf: 'application/pdf',
+  fdx: 'application/xml',
+  twine: 'text/html',
+};
+
+/** A converted file's own bytes, kept beside its text (id from its content, so the same file is kept once). */
+function withOriginal(input: ConvertedInput, data: string | Uint8Array | ArrayBuffer): SourceInput {
+  const bytes = typeof data === 'string' ? new TextEncoder().encode(data) : data instanceof Uint8Array ? data : new Uint8Array(data);
+  const id = `orig_${[...sha256(bytes).slice(0, 10)].map((b) => b.toString(16).padStart(2, '0')).join('')}`;
+  return { ...input, original: { id, name: input.fileName, mime: ORIGINAL_MIME[input.convertedFrom], byteLength: bytes.length }, originalBytes: bytes };
+}
+
 /** Turn any supported file into parser-ready text. Text formats pass through unchanged. */
 export async function prepareInput(fileName: string, data: string | Uint8Array | ArrayBuffer): Promise<SourceInput> {
+  const input = await convertInput(fileName, data);
+  return 'convertedFrom' in input && input.convertedFrom ? withOriginal(input as ConvertedInput, data) : input;
+}
+
+async function convertInput(fileName: string, data: string | Uint8Array | ArrayBuffer): Promise<SourceInput> {
   const lower = fileName.toLowerCase();
   if (lower.endsWith('.fdx')) {
     const xml = typeof data === 'string' ? data : new TextDecoder().decode(data);

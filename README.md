@@ -76,7 +76,7 @@ npm run test:offline    # the website opens, converts, plays and exports offline
 | **Graph** | The story as an old map: start, endings, unreachable passages, conditional and proposed routes. Drag passages to arrange them (saved with the project), search, minimap; click a passage to edit it. *Save map* downloads the whole map as SVG or PNG. |
 | **Ink** | The deterministic generated Ink, compiled live with the pinned inkjs compiler; compile errors are mapped back to passages. |
 | **Playtest** | Play the compiled story, undo choices, toggle inventory to simulate the host game, save/load (a save from an earlier version of the story carries over, as readers' saves do), hear the dialogue (recorded clips or character voices), and see the automated playthrough report. |
-| **Export** | A playable web page, a Twine file, a recording script (.csv) for voice sessions (recordings come back one file per line, or as one long session whose takes are found and linked to lines, then cut into clips; see `src/core/session.ts`), or a verified Unity / Unreal package (.zip) with manifest, validation report, ISR, source map, voice clips and the original sources. |
+| **Export** | A playable web page, a Twine file, a recording script (.csv) for voice sessions (recordings come back one file per line, or as one long session whose takes are found and linked to lines as non-destructive regions, with trims, fades and gain as edits rendered on export; see `src/core/session.ts` and `src/ui/audioRender.ts`), or a verified Unity / Unreal package (.zip) with manifest, validation report, ISR, source map, voice clips and the original sources. |
 
 **Drafts** are named copies of a story kept in this browser: keep one before a big change and restore it later
 (restoring can be undone). A draft is also kept automatically before a story is replaced by a new conversion or an opened
@@ -218,7 +218,7 @@ revised story versions), the `NarrativeView` story panel, the `NarrativeTheme` l
 `Runtime/Resources/NarrativeBridge/<story>/` (the compiled story, `Theme.json`, voice clips, and scene pictures as PNG/JPEG
 `.bytes` decoded at run time). For connecting it to a game: `StartAt(passage)`, `TagFound` for the story's own tags,
 `VariableChanged`, Inspector UnityEvents, *GameObject → Narrative Bridge → <Story>*, a *Voice Source* for the game's mixer,
-the view's *Sorting Order* and *Keyboard Shortcuts* (Input Manager or Input System), and a *Hooking into your game* sample.
+the view's *Sorting Order* and *Keyboard Shortcuts* (Input Manager or Input System), text drawn with **TextMeshPro** whenever the game has it (built into Unity 6; the TextMeshPro package on 2022.3; Unity's older Text otherwise), and a *Hooking into your game* sample.
 The validated ink is in `Ink~/MainStory.ink`. The **Story UI** settings on the Export page (about 70, described once in
 `UNITY_THEME_FIELDS` in `src/core/export/unityTheme.ts`, which also draws the card's controls) set the panel's colours,
 position, text, speakers, transcript style (everything, the current scene, or one line at a time), typewriter and pacing,
@@ -251,7 +251,12 @@ your browser are included.
   one on your machine. Only a salted PBKDF2 hash is built in, and the editor's code loads only at `#admin`. The site is
   static, so the check runs in the browser: it keeps the editor closed to visitors, and the editor only ever changes the
   look in your own browser. Nobody else sees a change until you publish it.
-- **Publish:** *Save & publish → Download published.json*, then `npm run design:publish -- ~/Downloads/published.json`
+- **Publish live, no commit:** *Save & publish → Publish it for everyone, now*. Paste a GitHub token (classic, with only
+  the `gist` scope; it stays in your browser and goes only to GitHub) and click **Create the live design**: the design
+  goes to a public Gist that every visitor's app reads when it opens. One-time setup:
+  `gh variable set NB_DESIGN_GIST --body <the gist id>` and redeploy. After that, **Publish now** puts a new design live
+  with no commit or rebuild (`src/ui/design/live.ts`).
+- **Or publish with a commit:** *Download published.json*, then `npm run design:publish -- ~/Downloads/published.json`
   (or replace `src/ui/design/published.json`), commit and push to main.
 - `npm run test:admin` checks the whole flow in WebKit and Chromium with a throwaway password.
 

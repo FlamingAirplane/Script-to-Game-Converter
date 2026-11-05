@@ -1362,3 +1362,156 @@ describe('small fixes', () => {
     expect(clipLabel('Mira recording session one 1.02.50–1.05.10.wav')).toBe('Mira recording s…50–1.05.10');
   });
 });
+
+describe('live design', () => {
+  it('reads the published design from its Gist, keeps it for the next visit, and ignores anything else', async () => {
+    const mem = new Map<string, string>();
+    const store = { getItem: (k: string) => mem.get(k) ?? null, setItem: (k: string, v: string) => void mem.set(k, v), removeItem: (k: string) => void mem.delete(k) };
+    Object.assign(globalThis, { localStorage: store, sessionStorage: store });
+    const { loadLiveDesign, setLocalGist, gistId } = await import('../src/ui/design/live');
+    const { designState } = await import('../src/ui/design/design');
+    expect(await loadLiveDesign(async () => new Response('{}'))).toBe('none'); // no Gist yet
+    setLocalGist('0123456789abcdef0123');
+    expect(gistId()).toBe('0123456789abcdef0123');
+    const design = { format: 'narrative-bridge-design', version: 1, name: 'Live', tokens: { '--radius': '8px' }, words: { brand: 'Story Forge' } };
+    const asked: string[] = [];
+    const gist = async (url: string | URL | Request) => {
+      asked.push(String(url));
+      return new Response(JSON.stringify({ files: { 'design.json': { content: JSON.stringify(design) } } }));
+    };
+    expect(await loadLiveDesign(gist as typeof fetch)).toBe('updated');
+    expect(asked).toEqual(['https://api.github.com/gists/0123456789abcdef0123']);
+    expect(designState().design.tokens['--radius']).toBe('8px');
+    expect(designState().published.words.brand).toBe('Story Forge');
+    expect(mem.get('narrative-bridge.design-live')).toContain('Story Forge');
+    expect(await loadLiveDesign(gist as typeof fetch)).toBe('same');
+    // Not a design, or GitHub unreachable: the last copy stays.
+    expect(await loadLiveDesign((async () => new Response(JSON.stringify({ files: { 'design.json': { content: '{"format":"other"}' } } }))) as typeof fetch)).toBe('failed');
+    expect(await loadLiveDesign((async () => { throw new Error('offline'); }) as typeof fetch)).toBe('failed');
+    expect(designState().published.words.brand).toBe('Story Forge');
+  });
+});
+
+describe('projects on other browsers', () => {
+  it('packs every kind of media a project uses', async () => {
+    const { projectMediaRefs } = await import('../src/ui/projectFile');
+    const { project } = await build('@passage hall Hall\nMIRA: Who is there?\n\nMIRA: Hello?\n@end\n', 'm.md', 'structured');
+    const [a, b] = project.passages[0].content.filter((x) => x.type === 'dialogue') as { audio?: unknown }[];
+    a.audio = { id: 'vo_own', name: 'take.wav', mime: 'audio/wav' };
+    b.audio = { id: 'vo_region', name: 'r.wav', mime: 'audio/wav', from: { session: 'ses_1', start: 0, end: 1 }, region: true };
+    project.passages[0].image = { id: 'img_hall', name: 'hall.png', mime: 'image/png' };
+    project.characters[0].portrait = { id: 'img_mira', name: 'mira.png', mime: 'image/png' };
+    project.sessions = [{ id: 'ses_1', name: 'Session.wav', mime: 'audio/wav' }];
+    (project.sources[0] as { original?: unknown }).original = { id: 'orig_1', name: 'm.docx', mime: 'application/x', byteLength: 3 };
+    // A region has no file of its own: the session it plays from goes instead.
+    expect(projectMediaRefs(project).map((r) => r.id).sort()).toEqual(['img_hall', 'img_mira', 'orig_1', 'ses_1', 'vo_own']);
+  });
+
+  it('saves to a private Gist, lists your projects, and opens big ones from the raw file', async () => {
+    const mem = new Map<string, string>();
+    Object.assign(globalThis, { localStorage: { getItem: (k: string) => mem.get(k) ?? null, setItem: (k: string, v: string) => void mem.set(k, v), removeItem: (k: string) => void mem.delete(k) } });
+    const { saveToCloud, listCloudProjects, loadFromCloud, cloudIdOf, parseDescription } = await import('../src/ui/cloud');
+    const calls: { method: string; url: string; body?: { public?: boolean; description?: string; files?: Record<string, unknown> } }[] = [];
+    const real = globalThis.fetch;
+    globalThis.fetch = (async (url: string, init?: RequestInit) => {
+      const method = init?.method ?? 'GET';
+      calls.push({ method, url: String(url), body: init?.body ? JSON.parse(String(init.body)) : undefined });
+      if (method === 'POST') return new Response(JSON.stringify({ id: 'abc123' }));
+      if (method === 'PATCH') return new Response('{}');
+      if (String(url).includes('?per_page')) return new Response(JSON.stringify([{ id: 'abc123', description: 'Narrative Bridge project: The Archive (archive)', updated_at: '2026-11-06T10:00:00Z', html_url: 'https://gist.github.com/abc123' }, { id: 'zzz', description: 'my notes', updated_at: '2026-11-06T11:00:00Z', html_url: '' }]));
+      if (String(url).endsWith('/abc123')) return new Response(JSON.stringify({ description: 'Narrative Bridge project: The Archive (archive)', files: { 'archive.nbproj.json': { filename: 'archive.nbproj.json', truncated: true, content: '{', raw_url: 'https://gist.githubusercontent.com/raw/x' } } }));
+      if (String(url).includes('raw')) return new Response('{"project":"full"}');
+      return new Response('', { status: 500 });
+    }) as typeof fetch;
+    try {
+      expect(await saveToCloud('t', '{"x":1}', 'The Archive', 'archive')).toEqual({ gistId: 'abc123', created: true });
+      expect(calls[0].body).toMatchObject({ public: false, description: 'Narrative Bridge project: The Archive (archive)' });
+      expect(Object.keys(calls[0].body!.files!)).toEqual(['archive.nbproj.json']);
+      expect(cloudIdOf('archive')).toBe('abc123');
+      expect(await saveToCloud('t', '{"x":2}', 'The Archive', 'archive')).toEqual({ gistId: 'abc123', created: false });
+      expect(calls[1].method).toBe('PATCH');
+      expect((await listCloudProjects('t')).map((p) => [p.title, p.projectId])).toEqual([['The Archive', 'archive']]);
+      expect(await loadFromCloud('t', 'abc123')).toBe('{"project":"full"}');
+      expect(parseDescription('something else')).toBeNull();
+      await expect(saveToCloud('t', 'x'.repeat(51 * 1024 * 1024), 'Big', 'big')).rejects.toThrow(/too big/);
+    } finally {
+      globalThis.fetch = real;
+    }
+  });
+});
+
+describe('non-destructive clips', () => {
+  it('trims, fades and changes gain without touching the source', async () => {
+    const { applyEdit, hasEdit, isRendered, audioFileName } = await import('../src/core/audio');
+    const rate = 1000;
+    const src = new Float32Array(rate).fill(0.5); // one second
+    expect(applyEdit(src, rate)).toEqual(src);
+    const out = applyEdit(src, rate, { trimStart: 0.1, trimEnd: 0.2, fadeIn: 0.1, fadeOut: 0.1, gain: 6 });
+    expect(out.length).toBe(700);
+    expect(src[0]).toBe(0.5); // the source is unchanged
+    expect(out[0]).toBe(0); // fades in from silence
+    expect(out[350]).toBeCloseTo(0.5 * Math.pow(10, 6 / 20), 3); // +6 dB in the middle
+    expect(out[699]).toBe(0); // and fades out
+    expect(applyEdit(src, rate, { gain: 30 })[10]).toBe(1); // never clips past full scale
+    expect([hasEdit({}), hasEdit({ gain: 0 }), hasEdit({ fadeIn: 0.2 })]).toEqual([false, false, true]);
+    // A clip plays from its own file until it's a region or edited; then it's rendered as WAV.
+    expect(audioFileName({ id: 'vo_a', mime: 'audio/mpeg' })).toBe('vo_a.mp3');
+    expect(audioFileName({ id: 'vo_a', mime: 'audio/mpeg', edit: { fadeOut: 0.5 } })).toBe('vo_a.wav');
+    expect(isRendered({ region: true })).toBe(true);
+  });
+
+  it('exports a region or edited clip under its WAV name in the Ink and the package', async () => {
+    const { project } = await build('@passage hall Hall\nMIRA: Who is there?\n@end\n', 'r.md', 'structured');
+    const line = project.passages[0].content.find((b) => b.type === 'dialogue') as { audio?: unknown };
+    line.audio = { id: 'vo_mira_x', name: 'Session 0.01.00–0.02.00.wav', mime: 'audio/wav', from: { session: 'ses_1', start: 1, end: 2 }, region: true };
+    const story = processProject(project);
+    expect(story.generated.ink).toContain('#audio:vo_mira_x.wav');
+    const wav = { mime: 'audio/wav', bytes: new Uint8Array([82, 73, 70, 70]) };
+    const r = await ADAPTERS.unity.export(story, { engine: 'unity', projectName: 'R', engineVersion: '6000.0', integrationRef: 'v1.2.3', includeDemo: true, audio: { vo_mira_x: wav } });
+    expect(r.files.some((f) => f.path.endsWith('Audio/vo_mira_x.wav'))).toBe(true);
+  });
+});
+
+describe('Unity text', () => {
+  it('uses TextMeshPro when the game has it, and the older Text otherwise', async () => {
+    const s = SAMPLES.find((x) => x.id === 'archive')!;
+    const r = await ADAPTERS.unity.export(processProject((await build(s.text, s.fileName, 'structured')).project), { engine: 'unity', projectName: 'T', engineVersion: ADAPTERS.unity.defaultEngineVersion, integrationRef: '2.0.0', includeDemo: true });
+    const view = String(r.files.find((f) => f.path.endsWith('NarrativeView.cs'))!.content);
+    expect(view).toContain('#if NARRATIVE_BRIDGE_TMP\nusing UIText = TMPro.TextMeshProUGUI;\n#else\nusing UIText = UnityEngine.UI.Text;');
+    expect(view).not.toMatch(/AddComponent<Text>/);
+    const asmdef = JSON.parse(String(r.files.find((f) => f.path.endsWith('Runtime/NarrativeBridge.T.asmdef'))!.content));
+    expect(asmdef.references).toContain('Unity.TextMeshPro');
+    expect(asmdef.versionDefines).toContainEqual({ name: 'com.unity.ugui', expression: '2.0.0', define: 'NARRATIVE_BRIDGE_TMP' });
+    expect(ADAPTERS.unity.defaultEngineVersion).toMatch(/^6000\./);
+    expect(JSON.parse(String(r.files.find((f) => f.path.endsWith('T/package.json') || f.path.endsWith('.t/package.json'))!.content)).unity).toBe('2022.3');
+  });
+});
+
+describe('original files', () => {
+  it('keeps a PDF beside the text taken from it: in the story, Files and exports', async () => {
+    const { prepareInput } = await import('../src/core/parsing/convert');
+    const { storyFiles } = await import('../src/core/files');
+    const bytes = new Uint8Array(readFileSync(new URL('./fixtures/lighthouse.pdf', import.meta.url)));
+    const input = await prepareInput('Lighthouse draft.pdf', bytes);
+    expect(input.original).toMatchObject({ name: 'Lighthouse draft.pdf', mime: 'application/pdf', byteLength: bytes.length });
+    expect(input.original!.id).toMatch(/^orig_[0-9a-f]{20}$/);
+    expect(input.originalBytes).toBe(bytes);
+    // The same file is the same original.
+    expect((await prepareInput('copy.pdf', bytes)).original!.id).toBe(input.original!.id);
+    const { project } = await buildStory([input], { mode: 'faithful' });
+    expect(project.sources[0].original).toEqual(input.original);
+    expect(JSON.stringify(project)).not.toContain('originalBytes');
+    const files = storyFiles(project).filter((f) => f.kind === 'script');
+    expect(files.map((f) => [f.fileName, f.context, f.id ?? null])).toEqual([
+      ['Lighthouse draft.fountain', 'the text taken from Lighthouse draft.pdf', null],
+      ['Lighthouse draft.pdf', 'the original file', input.original!.id],
+    ]);
+    const story = processProject(project);
+    const r = await ADAPTERS.unity.export(story, { engine: 'unity', projectName: 'L', engineVersion: '6000.0', integrationRef: 'v1.2.3', includeDemo: true, originals: { [input.original!.id]: { mime: 'application/pdf', bytes } } });
+    const docs = r.files.filter((f) => f.path.includes('SourceDocuments/'));
+    expect(docs.map((f) => f.path.split('/').pop())).toEqual(['Lighthouse draft.fountain', 'Lighthouse draft.pdf']);
+    expect(docs[1].content).toBe(bytes);
+    // Plain text scripts have no separate original.
+    expect((await prepareInput('a.fountain', 'INT. HALL')).original).toBeUndefined();
+  });
+});
