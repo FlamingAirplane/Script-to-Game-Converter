@@ -6,6 +6,15 @@
   "required": ["schemaVersion", "project", "sources", "characters", "items", "variables", "passages"],
   "properties": {
     "schemaVersion": { "const": "1.0" },
+    "sessions": {
+      "type": "array",
+      "description": "Voice-session recordings that dialogue clips were cut from (a clip's audio.from names one).",
+      "items": {
+        "type": "object",
+        "required": ["id", "name", "mime"],
+        "properties": { "id": { "type": "string" }, "name": { "type": "string" }, "mime": { "type": "string" }, "durationMs": { "type": "integer" } }
+      }
+    },
     "presentation": {
       "type": "object",
       "description": "How the story looks in a game engine. unity: the Unity story UI theme (see UnityTheme in src/core/isr.ts).",

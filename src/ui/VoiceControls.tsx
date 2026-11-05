@@ -62,6 +62,7 @@ export function VoiceClip({ block, voice, onChange }: { block: Dialogue; voice?:
           </button>
           <span className="clip-name small" title={block.audio.name}>
             {block.audio.durationMs ? `${(block.audio.durationMs / 1000).toFixed(1)}s` : 'clip'}
+            {block.audio.from && <span className="muted" title="Cut from a recording session (Story settings → Recordings → Link a whole session)"> ✂</span>}
           </span>
           <button
             className="icon"
