@@ -742,7 +742,8 @@ input[type='checkbox'], input[type='radio'] { accent-color: var(--ink); }
 /* ---------- Voices ---------- */
 .voice-clip { display: inline-flex; align-items: center; gap: 2px; flex-wrap: wrap; }
 .voice-clip .rec { color: var(--err); border-color: var(--err); }
-.clip-name { color: var(--teal); font-variant-numeric: lining-nums; }
+.clip-name { color: var(--teal); font-variant-numeric: lining-nums; white-space: nowrap; }
+.clip-file { font-family: var(--mono); font-size: 11.5px; }
 .voice-picker { display: inline-flex; align-items: center; gap: 4px; flex-wrap: wrap; }
 .voice-picker select:first-child { max-width: 170px; }
 
@@ -951,6 +952,8 @@ section.drafts > h2 { margin-top: 26px; }
 .block-pause .block-body { align-self: center; }
 .break-sign rect { fill: color-mix(in srgb, var(--pen) 14%, var(--paper-hi)); stroke: var(--pen); stroke-width: 1; }
 .break-sign text { fill: var(--pen); font: 600 10.5px var(--serif); }
+.exit-sign rect { fill: color-mix(in srgb, var(--teal) 14%, var(--paper-hi)); stroke: var(--teal); }
+.exit-sign text { fill: var(--teal); }
 @media (max-width: 760px) {
   .map-frame { flex-direction: column; }
   .map-canvas { min-height: 320px; }

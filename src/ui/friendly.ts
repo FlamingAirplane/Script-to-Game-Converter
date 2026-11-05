@@ -32,6 +32,8 @@ const TITLES: Record<string, string> = {
   UNUSED_ITEM: 'An item is created but never used.',
   EMPTY_PASSAGE: 'This passage has no text.',
   PAUSE_WITHOUT_TEXT: 'A Continue break has nothing to show on one side.',
+  EXIT_NAME_REUSED: 'Two exits to the game share a name.',
+  EXIT_THEN_END: 'The story ends right after an exit to the game.',
   IMAGE_WITHOUT_TEXT: "A scene picture won't show: the passage has no text.",
   MULTIPLE_DIVERTS: 'This passage says where to go next more than once.',
   UNAPPROVED_GENERATED: 'A suggestion is waiting for your OK.',

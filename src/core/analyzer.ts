@@ -144,7 +144,29 @@ export function analyze(project: StoryProject): Analysis {
           }),
         );
     });
+    // An exit at the very end of an ending: when the game resumes the story, it ends at once.
+    const lastShown = [...p.content].reverse().find((b) => shown(b) || b.type === 'exit' || b.type === 'pause');
+    if (lastShown?.type === 'exit' && p.isEnding && !p.divert && !p.choices.some((c) => isActive(c.review)))
+      ds.push(
+        diag('EXIT_THEN_END', 'info', STAGE, `The exit "${lastShown.name}" in "${p.title}" is the last thing before the story ends, so resuming after the game ends the story straight away.`, {
+          entityId: p.id,
+          remediation: 'Add what happens after the gameplay, or have the game end the story itself instead of resuming it.',
+          exportBlocked: false,
+        }),
+      );
   }
+
+  // The game tells exits apart by name: one name in several places is one exit to the game.
+  const exitPlaces = new Map<string, string[]>();
+  for (const p of passages) for (const b of p.content) if (b.type === 'exit') (exitPlaces.get(b.name) ?? exitPlaces.set(b.name, []).get(b.name)!).push(p.title || p.id);
+  for (const [name, places] of exitPlaces)
+    if (places.length > 1)
+      ds.push(
+        diag('EXIT_NAME_REUSED', 'warning', STAGE, `The exit name "${name}" is used ${places.length} times (${[...new Set(places)].join(', ')}), so the game can't tell those exits apart.`, {
+          remediation: 'Give each exit its own name, unless the game should do the same thing at each of them.',
+          exportBlocked: false,
+        }),
+      );
 
   // Reachability over approved edges.
   const reachable = new Set<string>();

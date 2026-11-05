@@ -8,6 +8,12 @@ type Dialogue = Extract<ContentBlock, { type: 'dialogue' }>;
 const preview = new VoiceQueue();
 
 /** Record, attach, play or remove the clip for one line of dialogue. */
+
+/** A clip's file name to show beside its line: without the extension, shortened in the middle if long. */
+export function clipLabel(name: string): string {
+  const base = name.replace(/\.[a-z0-9]+$/i, '');
+  return base.length > 28 ? `${base.slice(0, 16)}…${base.slice(-10)}` : base;
+}
 export function VoiceClip({ block, voice, onChange }: { block: Dialogue; voice?: VoiceSettings; onChange: (audio: AudioRef | undefined) => void }) {
   const [recorder, setRecorder] = useState<Recorder | null>(null);
   const [seconds, setSeconds] = useState(0);
@@ -61,7 +67,8 @@ export function VoiceClip({ block, voice, onChange }: { block: Dialogue; voice?:
             ▶
           </button>
           <span className="clip-name small" title={block.audio.name}>
-            {block.audio.durationMs ? `${(block.audio.durationMs / 1000).toFixed(1)}s` : 'clip'}
+            <span className="clip-file">{clipLabel(block.audio.name)}</span>
+            {block.audio.durationMs ? ` · ${(block.audio.durationMs / 1000).toFixed(1)}s` : ''}
             {block.audio.from && <span className="muted" title="Cut from a recording session (Story settings → Recordings → Link a whole session)"> ✂</span>}
           </span>
           <button
