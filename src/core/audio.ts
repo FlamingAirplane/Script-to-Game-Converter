@@ -9,6 +9,49 @@ export interface AudioRef {
   durationMs?: number;
   /** Cut from a recording session: which one, and where (seconds). See src/core/session.ts. */
   from?: { session: string; start: number; end: number };
+  /**
+   * A region: the clip has no bytes of its own and plays the `from` stretch of its session, like a
+   * region in Pro Tools. Moving its start or end only changes these numbers.
+   */
+  region?: boolean;
+  /** Edits laid over the clip without changing its audio (trim, fades, gain); applied when it plays or exports. */
+  edit?: ClipEdit;
+}
+
+/** Non-destructive edits to a clip. Seconds, and gain in decibels. */
+export interface ClipEdit {
+  trimStart?: number;
+  trimEnd?: number;
+  fadeIn?: number;
+  fadeOut?: number;
+  gain?: number;
+}
+
+export function hasEdit(e?: ClipEdit): boolean {
+  return !!e && !!(e.trimStart || e.trimEnd || e.fadeIn || e.fadeOut || e.gain);
+}
+
+/** Whether a clip is rendered (as WAV) to play or export: a region, or a clip with edits. */
+export function isRendered(ref: Pick<AudioRef, 'region' | 'edit'>): boolean {
+  return !!ref.region || hasEdit(ref.edit);
+}
+
+/** A clip's samples with its edits applied: trimmed, faded in and out, and its gain changed. A new array. */
+export function applyEdit(samples: Float32Array, rate: number, e?: ClipEdit): Float32Array {
+  if (!hasEdit(e)) return samples.slice();
+  const a = Math.min(samples.length, Math.max(0, Math.round((e!.trimStart ?? 0) * rate)));
+  const b = Math.max(a, samples.length - Math.max(0, Math.round((e!.trimEnd ?? 0) * rate)));
+  const out = samples.slice(a, b);
+  const g = e!.gain ? Math.pow(10, e!.gain / 20) : 1;
+  const fi = Math.min(out.length, Math.round((e!.fadeIn ?? 0) * rate));
+  const fo = Math.min(out.length, Math.round((e!.fadeOut ?? 0) * rate));
+  for (let i = 0; i < out.length; i++) {
+    let v = out[i] * g;
+    if (i < fi) v *= i / fi;
+    if (i >= out.length - fo) v *= (out.length - 1 - i) / fo;
+    out[i] = Math.max(-1, Math.min(1, v));
+  }
+  return out;
 }
 
 export interface VoiceSettings {
@@ -30,8 +73,9 @@ export function audioExtension(mime: string): string {
   return 'bin';
 }
 
-export function audioFileName(ref: Pick<AudioRef, 'id' | 'mime'>): string {
-  return `${ref.id}.${audioExtension(ref.mime)}`;
+/** The file a clip is exported as: its own format, or WAV when it's rendered (a region, or edited). */
+export function audioFileName(ref: Pick<AudioRef, 'id' | 'mime'> & Partial<Pick<AudioRef, 'region' | 'edit'>>): string {
+  return `${ref.id}.${isRendered(ref) ? 'wav' : audioExtension(ref.mime)}`;
 }
 
 export function newAudioId(seed: string): string {

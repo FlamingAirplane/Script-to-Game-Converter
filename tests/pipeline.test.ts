@@ -1192,6 +1192,52 @@ describe('admin design editor', () => {
   });
 });
 
+describe('exits to the game', () => {
+  const src = '@passage camp Camp\nWolves circle the fire.\n@exit wolf_fight The player fights the wolves\nThe last wolf runs.\n+ [Rest] -> dawn\n@passage dawn Dawn\nMorning.\n@end\n';
+  it('stops the dialogue at an exit, in Ink and back again', async () => {
+    const { exitOf, EXIT_PREFIX } = await import('../src/core/isr');
+    const { project } = await build(src, 'x.md', 'structured');
+    expect(project.passages[0].content.find((b) => b.type === 'exit')).toMatchObject({ type: 'exit', name: 'wolf_fight', note: 'The player fights the wolves' });
+    const story = processProject(project);
+    expect(story.compile.ok).toBe(true);
+    expect(story.generated.ink).toContain('+ [Back to the game: wolf_fight] // The player fights the wolves\n-');
+    expect(exitOf(`${EXIT_PREFIX}wolf_fight`)).toBe('wolf_fight');
+    expect(exitOf('Rest')).toBeNull();
+    // The game sees the exit as the only choice, and taking it goes on with the scene.
+    const { Story } = await import('inkjs');
+    const s = new Story(story.compile.json!);
+    expect(s.ContinueMaximally()).toContain('Wolves circle the fire.');
+    expect(s.currentChoices.map((c) => c.text)).toEqual(['Back to the game: wolf_fight']);
+    s.ChooseChoiceIndex(0);
+    expect(s.ContinueMaximally()).toContain('The last wolf runs.');
+    // Ink that Narrative Bridge wrote comes back with its exit.
+    const again = await build(story.generated.ink, 'x.ink', 'faithful');
+    expect(again.project.passages.find((p) => p.id === 'camp')!.content.find((b) => b.type === 'exit')).toMatchObject({ name: 'wolf_fight', note: 'The player fights the wolves' });
+  });
+
+  it('lists the exits for the game, and plays through them elsewhere', async () => {
+    const { project } = await build(src, 'x.md', 'structured');
+    const story = processProject(project);
+    const r = await ADAPTERS.unity.export(story, { engine: 'unity', projectName: 'Wolves', engineVersion: '6000.0', integrationRef: 'v1.2.3', includeDemo: true });
+    const text = (end: string) => String(r.files.find((f) => f.path.endsWith(end))!.content);
+    expect(text('StoryInfo.cs')).toContain('public static readonly string[] Exits = { "wolf_fight" };');
+    expect(text('NarrativeController.cs')).toContain('public void ResumeAt(string passage)');
+    expect(text('Samples~/Hooking into your game/StoryExits.cs')).toContain('story.ExitReached += Reached;');
+    // Generated C# without "using System;" must name System's types in full.
+    for (const f of r.files.filter((x) => x.path.endsWith('.cs'))) {
+      const c = String(f.content);
+      if (!c.includes('using System;')) expect(c, f.path).not.toMatch(/[^.\w](Array|StringComparison|Exception)\./);
+      expect(c, f.path).not.toContain('""storyVersion');
+    }
+    const { buildPlayableHtml, buildTwee } = await import('../src/core/export');
+    expect(buildPlayableHtml(story, '/* runtime */')).toContain("Resume the story");
+    // Twine has no game: the exit is a Continue link, with a note.
+    const twee = buildTwee(story, 'sugarcube');
+    expect(twee).toContain('Back to the game: wolf_fight');
+    expect(twee).toMatch(/:: Camp \(continued\)/);
+  });
+});
+
 describe('story files', () => {
   it('lists every file put into a story, with names to save them under and unique zip paths', async () => {
     const { storyFiles, zipPaths, safeFileName } = await import('../src/core/files');
@@ -1375,5 +1421,81 @@ describe('projects on other browsers', () => {
     } finally {
       globalThis.fetch = real;
     }
+  });
+});
+
+describe('non-destructive clips', () => {
+  it('trims, fades and changes gain without touching the source', async () => {
+    const { applyEdit, hasEdit, isRendered, audioFileName } = await import('../src/core/audio');
+    const rate = 1000;
+    const src = new Float32Array(rate).fill(0.5); // one second
+    expect(applyEdit(src, rate)).toEqual(src);
+    const out = applyEdit(src, rate, { trimStart: 0.1, trimEnd: 0.2, fadeIn: 0.1, fadeOut: 0.1, gain: 6 });
+    expect(out.length).toBe(700);
+    expect(src[0]).toBe(0.5); // the source is unchanged
+    expect(out[0]).toBe(0); // fades in from silence
+    expect(out[350]).toBeCloseTo(0.5 * Math.pow(10, 6 / 20), 3); // +6 dB in the middle
+    expect(out[699]).toBe(0); // and fades out
+    expect(applyEdit(src, rate, { gain: 30 })[10]).toBe(1); // never clips past full scale
+    expect([hasEdit({}), hasEdit({ gain: 0 }), hasEdit({ fadeIn: 0.2 })]).toEqual([false, false, true]);
+    // A clip plays from its own file until it's a region or edited; then it's rendered as WAV.
+    expect(audioFileName({ id: 'vo_a', mime: 'audio/mpeg' })).toBe('vo_a.mp3');
+    expect(audioFileName({ id: 'vo_a', mime: 'audio/mpeg', edit: { fadeOut: 0.5 } })).toBe('vo_a.wav');
+    expect(isRendered({ region: true })).toBe(true);
+  });
+
+  it('exports a region or edited clip under its WAV name in the Ink and the package', async () => {
+    const { project } = await build('@passage hall Hall\nMIRA: Who is there?\n@end\n', 'r.md', 'structured');
+    const line = project.passages[0].content.find((b) => b.type === 'dialogue') as { audio?: unknown };
+    line.audio = { id: 'vo_mira_x', name: 'Session 0.01.00–0.02.00.wav', mime: 'audio/wav', from: { session: 'ses_1', start: 1, end: 2 }, region: true };
+    const story = processProject(project);
+    expect(story.generated.ink).toContain('#audio:vo_mira_x.wav');
+    const wav = { mime: 'audio/wav', bytes: new Uint8Array([82, 73, 70, 70]) };
+    const r = await ADAPTERS.unity.export(story, { engine: 'unity', projectName: 'R', engineVersion: '6000.0', integrationRef: 'v1.2.3', includeDemo: true, audio: { vo_mira_x: wav } });
+    expect(r.files.some((f) => f.path.endsWith('Audio/vo_mira_x.wav'))).toBe(true);
+  });
+});
+
+describe('Unity text', () => {
+  it('uses TextMeshPro when the game has it, and the older Text otherwise', async () => {
+    const s = SAMPLES.find((x) => x.id === 'archive')!;
+    const r = await ADAPTERS.unity.export(processProject((await build(s.text, s.fileName, 'structured')).project), { engine: 'unity', projectName: 'T', engineVersion: ADAPTERS.unity.defaultEngineVersion, integrationRef: '2.0.0', includeDemo: true });
+    const view = String(r.files.find((f) => f.path.endsWith('NarrativeView.cs'))!.content);
+    expect(view).toContain('#if NARRATIVE_BRIDGE_TMP\nusing UIText = TMPro.TextMeshProUGUI;\n#else\nusing UIText = UnityEngine.UI.Text;');
+    expect(view).not.toMatch(/AddComponent<Text>/);
+    const asmdef = JSON.parse(String(r.files.find((f) => f.path.endsWith('Runtime/NarrativeBridge.T.asmdef'))!.content));
+    expect(asmdef.references).toContain('Unity.TextMeshPro');
+    expect(asmdef.versionDefines).toContainEqual({ name: 'com.unity.ugui', expression: '2.0.0', define: 'NARRATIVE_BRIDGE_TMP' });
+    expect(ADAPTERS.unity.defaultEngineVersion).toMatch(/^6000\./);
+    expect(JSON.parse(String(r.files.find((f) => f.path.endsWith('T/package.json') || f.path.endsWith('.t/package.json'))!.content)).unity).toBe('2022.3');
+  });
+});
+
+describe('original files', () => {
+  it('keeps a PDF beside the text taken from it: in the story, Files and exports', async () => {
+    const { prepareInput } = await import('../src/core/parsing/convert');
+    const { storyFiles } = await import('../src/core/files');
+    const bytes = new Uint8Array(readFileSync(new URL('./fixtures/lighthouse.pdf', import.meta.url)));
+    const input = await prepareInput('Lighthouse draft.pdf', bytes);
+    expect(input.original).toMatchObject({ name: 'Lighthouse draft.pdf', mime: 'application/pdf', byteLength: bytes.length });
+    expect(input.original!.id).toMatch(/^orig_[0-9a-f]{20}$/);
+    expect(input.originalBytes).toBe(bytes);
+    // The same file is the same original.
+    expect((await prepareInput('copy.pdf', bytes)).original!.id).toBe(input.original!.id);
+    const { project } = await buildStory([input], { mode: 'faithful' });
+    expect(project.sources[0].original).toEqual(input.original);
+    expect(JSON.stringify(project)).not.toContain('originalBytes');
+    const files = storyFiles(project).filter((f) => f.kind === 'script');
+    expect(files.map((f) => [f.fileName, f.context, f.id ?? null])).toEqual([
+      ['Lighthouse draft.fountain', 'the text taken from Lighthouse draft.pdf', null],
+      ['Lighthouse draft.pdf', 'the original file', input.original!.id],
+    ]);
+    const story = processProject(project);
+    const r = await ADAPTERS.unity.export(story, { engine: 'unity', projectName: 'L', engineVersion: '6000.0', integrationRef: 'v1.2.3', includeDemo: true, originals: { [input.original!.id]: { mime: 'application/pdf', bytes } } });
+    const docs = r.files.filter((f) => f.path.includes('SourceDocuments/'));
+    expect(docs.map((f) => f.path.split('/').pop())).toEqual(['Lighthouse draft.fountain', 'Lighthouse draft.pdf']);
+    expect(docs[1].content).toBe(bytes);
+    // Plain text scripts have no separate original.
+    expect((await prepareInput('a.fountain', 'INT. HALL')).original).toBeUndefined();
   });
 });

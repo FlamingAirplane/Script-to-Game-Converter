@@ -87,7 +87,7 @@ you change them. Give each character a portrait in Review → Story settings →
 Your voice actors can work from the **recording script** (Export page): it names the file for every line. Click
 **Add recordings…** and pick all their files at once to attach each to its line. If they recorded one long session
 instead, click **Link a whole session…**: it finds the takes, gives them to the lines in order, and you drag or type to
-adjust each line's start and end before cutting them into clips.
+adjust each line's start and end; it's saved as you go. ✎ beside any recording trims it, fades it and changes its volume without touching the recording.
 
 To get any of your files back (scripts, recordings, pictures, portraits), open **Review → Story settings → Files**:
 download one, or **Download all (.zip)**.
@@ -97,6 +97,10 @@ picture*, or drop an image there.
 
 To make the player click **Continue** before the rest of a passage appears, open the **Graph**, click the passage, and
 click **+ Continue break** between two of its lines.
+
+If your story is part of a game with more than dialogue (exploring, fights, puzzles), add **+ Exit to game** in Review
+where the dialogue should stop and the game take over. Name it (the game sees the name) and say what happens; the game
+picks the story up again afterwards, where it left off or at another passage.
 
 ## Shortcuts
 
