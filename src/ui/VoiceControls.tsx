@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
-import type { AudioRef, VoiceSettings } from '../core/audio';
+import { hasEdit, type AudioRef, type ClipEdit, type VoiceSettings } from '../core/audio';
 import type { ContentBlock } from '../core/isr';
-import { deleteClip, startRecording, storeClip, type Recorder } from './audioStore';
+import { startRecording, storeClip, type Recorder } from './audioStore';
 import { useSystemVoices, VoiceQueue } from './voice';
 
 type Dialogue = Extract<ContentBlock, { type: 'dialogue' }>;
@@ -12,6 +12,7 @@ export function VoiceClip({ block, voice, onChange }: { block: Dialogue; voice?:
   const [recorder, setRecorder] = useState<Recorder | null>(null);
   const [seconds, setSeconds] = useState(0);
   const [error, setError] = useState('');
+  const [editing, setEditing] = useState(false);
   const file = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -23,8 +24,8 @@ export function VoiceClip({ block, voice, onChange }: { block: Dialogue; voice?:
 
   const save = async (blob: Blob, name: string) => {
     try {
+      // The clip it replaces stays in the browser, so Undo can bring it back.
       const ref = await storeClip(blob, name, block.speakerId);
-      if (block.audio) await deleteClip(block.audio.id);
       onChange(ref);
       setError('');
     } catch (e) {
@@ -68,13 +69,14 @@ export function VoiceClip({ block, voice, onChange }: { block: Dialogue; voice?:
             className="icon"
             title="Remove clip"
             aria-label="Remove voice clip"
-            onClick={() => {
-              void deleteClip(block.audio!.id);
-              onChange(undefined);
-            }}
+            onClick={() => onChange(undefined)}
           >
             ×
           </button>
+          <button className={`icon${hasEdit(block.audio.edit) ? ' edited' : ''}`} aria-expanded={editing} title="Trim, fade and change the volume (the recording itself is never changed)" aria-label="Edit voice clip" onClick={() => setEditing(!editing)}>
+            ✎
+          </button>
+          {editing && <ClipEditor audio={block.audio} onChange={onChange} onPlay={(a) => (preview.stop(), preview.enqueue([{ text: block.text, audio: a }]))} onClose={() => setEditing(false)} />}
         </>
       ) : (
         <>
@@ -103,6 +105,58 @@ export function VoiceClip({ block, voice, onChange }: { block: Dialogue; voice?:
       />
       {error && <span className="error-text small">{error}</span>}
     </span>
+  );
+}
+
+/**
+ * Non-destructive edits to a clip, like a region's in Pro Tools: trim, fades and gain, plus where a
+ * session region sits in its session. Each change is saved to the story straight away (Undo takes it
+ * back); the recording itself is never changed. ▶ plays the clip with its edits.
+ */
+function ClipEditor({ audio, onChange, onPlay, onClose }: { audio: AudioRef; onChange: (a: AudioRef) => void; onPlay: (a: AudioRef) => void; onClose: () => void }) {
+  const e = audio.edit ?? {};
+  const length = (audio.region && audio.from ? audio.from.end - audio.from.start : (audio.durationMs ?? 10000) / 1000) || 10;
+  const setEdit = (patch: Partial<ClipEdit>) => {
+    const next: ClipEdit = { ...e, ...patch };
+    for (const k of Object.keys(next) as (keyof ClipEdit)[]) if (!next[k]) delete next[k];
+    onChange({ ...audio, edit: Object.keys(next).length ? next : undefined });
+  };
+  const num = (key: keyof ClipEdit, label: string, min: number, max: number, step: number, unit: string) => (
+    <label className="clip-edit-field">
+      <span className="muted small">
+        {label}: {(e[key] ?? 0).toFixed(unit === 'dB' ? 1 : 2)} {unit}
+      </span>
+      <input type="range" min={min} max={max} step={step} value={e[key] ?? 0} onChange={(ev) => setEdit({ [key]: Number(ev.target.value) })} aria-label={label} />
+    </label>
+  );
+  return (
+    <div className="clip-editor" role="group" aria-label="Edit voice clip">
+      {audio.region && audio.from && (
+        <p className="muted small">
+          A stretch of a recording session, {audio.from.start.toFixed(2)}–{audio.from.end.toFixed(2)} s. Move it in Story settings → Recordings → Link a whole session.
+        </p>
+      )}
+      <div className="clip-edit-grid">
+        {num('trimStart', 'Trim start', 0, Math.max(0.1, length / 2), 0.01, 's')}
+        {num('trimEnd', 'Trim end', 0, Math.max(0.1, length / 2), 0.01, 's')}
+        {num('fadeIn', 'Fade in', 0, Math.min(3, length / 2), 0.01, 's')}
+        {num('fadeOut', 'Fade out', 0, Math.min(3, length / 2), 0.01, 's')}
+        {num('gain', 'Volume', -24, 12, 0.5, 'dB')}
+      </div>
+      <div className="row">
+        <button className="btn tiny" onClick={() => onPlay(audio)}>
+          ▶ Play with edits
+        </button>
+        <button className="btn tiny ghost" disabled={!hasEdit(audio.edit)} onClick={() => onChange({ ...audio, edit: undefined })}>
+          Undo all edits
+        </button>
+        <span className="spacer" />
+        <span className="muted small">Saved as you go; the recording is never changed.</span>
+        <button className="btn tiny" onClick={onClose}>
+          Done
+        </button>
+      </div>
+    </div>
   );
 }
 

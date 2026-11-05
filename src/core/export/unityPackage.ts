@@ -129,6 +129,9 @@ const INK_DEFINES = [
   { name: INK_PACKAGE, expression: '2.0.0', define: 'NARRATIVE_BRIDGE_INK_FILE' },
   // Keyboard shortcuts and the EventSystem's input module also work in games that use only the Input System.
   { name: 'com.unity.inputsystem', expression: '1.0.0', define: 'NARRATIVE_BRIDGE_INPUT_SYSTEM' },
+  // TextMeshPro, Unity's current text: built into uGUI 2.0 (Unity 6), or the TextMeshPro package (2022.3).
+  { name: 'com.unity.ugui', expression: '2.0.0', define: 'NARRATIVE_BRIDGE_TMP' },
+  { name: 'com.unity.textmeshpro', expression: '3.0.0', define: 'NARRATIVE_BRIDGE_TMP' },
 ];
 
 export function runtimeAsmdef(id: UnityPackageId) {
@@ -136,7 +139,7 @@ export function runtimeAsmdef(id: UnityPackageId) {
     name: id.namespace,
     rootNamespace: id.namespace,
     // Optional references (like Unity.InputSystem) are skipped when the game doesn't have them.
-    references: ['Ink-Libraries', 'Ink', 'UnityEngine.UI', 'Unity.InputSystem'],
+    references: ['Ink-Libraries', 'Ink', 'UnityEngine.UI', 'Unity.InputSystem', 'Unity.TextMeshPro'],
     includePlatforms: [],
     excludePlatforms: [],
     allowUnsafeCode: false,
@@ -150,7 +153,7 @@ export function runtimeAsmdef(id: UnityPackageId) {
 }
 
 export function editorAsmdef(id: UnityPackageId) {
-  return { ...runtimeAsmdef(id), name: `${id.namespace}.Editor`, rootNamespace: `${id.namespace}.EditorTools`, references: [id.namespace, 'Ink-Libraries', 'Ink', 'UnityEngine.UI', 'Unity.InputSystem'], includePlatforms: ['Editor'] };
+  return { ...runtimeAsmdef(id), name: `${id.namespace}.Editor`, rootNamespace: `${id.namespace}.EditorTools`, references: [id.namespace, 'Ink-Libraries', 'Ink', 'UnityEngine.UI', 'Unity.InputSystem', 'Unity.TextMeshPro'], includePlatforms: ['Editor'] };
 }
 
 /** The samples' assembly, once imported into a game's Assets from Package Manager. */
@@ -390,5 +393,63 @@ public class StoryEventsListener : MonoBehaviour
     void OnTag(string tag) => Debug.Log("Story tag: #" + tag);
     void OnVariable(string name, object value) => Debug.Log("Story variable " + name + " = " + value);
     void OnEnded() => Debug.Log("The story has ended.");
+}
+`;
+
+export const SAMPLE_EXITS_CS = `using System.Collections.Generic;
+using UnityEngine;
+using UnityEngine.Events;
+using __NAMESPACE__;
+
+/// <summary>
+/// Hands the story over to your gameplay at its exits, without code: list each exit (StoryInfo.Exits) with
+/// what to do when the dialogue reaches it (enable the player's controls, load the fight, start a timer).
+/// When the gameplay is done, call ResumeStory() (go on from the exit) or ResumeStoryAt("passage") (go on
+/// somewhere else, e.g. after the player lost), from a UnityEvent, a trigger or your own script.
+/// </summary>
+public class StoryExits : MonoBehaviour
+{
+    [System.Serializable]
+    public class Exit
+    {
+        [Tooltip("One of StoryInfo.Exits, as named in Narrative Bridge.")]
+        public string name;
+        public UnityEvent onReached = new UnityEvent();
+    }
+
+    public NarrativeController story;
+    public List<Exit> exits = new List<Exit>();
+    [Tooltip("Any exit, after its own event.")]
+    public UnityEvent onAnyExit = new UnityEvent();
+    public UnityEvent onResumed = new UnityEvent();
+
+    void OnEnable()
+    {
+        if (story == null) story = GetComponent<NarrativeController>();
+        if (story == null) return;
+        story.ExitReached += Reached;
+        story.Resumed += Resumed;
+    }
+
+    void OnDisable()
+    {
+        if (story == null) return;
+        story.ExitReached -= Reached;
+        story.Resumed -= Resumed;
+    }
+
+    void Reached(string exit)
+    {
+        foreach (var e in exits) if (e.name == exit) e.onReached.Invoke();
+        onAnyExit.Invoke();
+    }
+
+    void Resumed() => onResumed.Invoke();
+
+    /// <summary>Goes on with the dialogue from the exit it stopped at.</summary>
+    public void ResumeStory() { if (story != null) story.Resume(); }
+
+    /// <summary>Goes on with the dialogue at another passage (see StoryInfo.Passages).</summary>
+    public void ResumeStoryAt(string passage) { if (story != null) story.ResumeAt(passage); }
 }
 `;

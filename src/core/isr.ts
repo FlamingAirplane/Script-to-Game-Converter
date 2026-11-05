@@ -24,6 +24,23 @@ export interface SourceDocument {
   sha256: string;
   byteLength: number;
   text: string; // original source is preserved verbatim
+  /**
+   * The file this text was taken from, when it wasn't text (Word, PDF, Final Draft, Twine). Its bytes
+   * live in the browser like other media (and in saved project files), under `id`.
+   */
+  original?: OriginalFile;
+}
+
+export interface OriginalFile {
+  id: string;
+  name: string;
+  mime: string;
+  byteLength: number;
+}
+
+/** Every original file the project keeps (see SourceDocument.original). */
+export function referencedOriginals(project: { sources: { original?: OriginalFile }[] }): OriginalFile[] {
+  return project.sources.flatMap((s) => (s.original ? [s.original] : []));
 }
 
 export type SourceFormat = 'txt' | 'fountain' | 'md' | 'ink' | 'twee';
@@ -76,10 +93,29 @@ export type ContentBlock =
   | { type: 'effect'; effect: Effect; origin: Provenance; review?: ReviewStatus; source?: SourceRef }
   | { type: 'unsupported'; text: string; reason: string; origin: Provenance; source?: SourceRef }
   /** A Continue break: what follows appears only once the reader chooses Continue. */
-  | { type: 'pause'; origin: Provenance; source?: SourceRef };
+  | { type: 'pause'; origin: Provenance; source?: SourceRef }
+  /**
+   * An exit to the game: the dialogue stops here and the game plays (a fight, exploring, a puzzle)
+   * until it resumes the story, where it left off or at another passage. `name` is how the game
+   * knows which exit it is; `note` says what the game should do.
+   */
+  | { type: 'exit'; name: string; note?: string; origin: Provenance; source?: SourceRef };
 
 /** The choice text of a Continue break, in Ink and every reader. */
 export const CONTINUE_TEXT = 'Continue';
+
+/** An exit to the game is, in Ink, a lone choice with this text before the exit's name. */
+export const EXIT_PREFIX = 'Back to the game: ';
+
+/** An exit's name made safe for code: letters, digits and underscores. */
+export function exitName(name: string): string {
+  return slugify(name) || 'exit';
+}
+
+/** The exit named by a choice's text, or null when it isn't an exit. */
+export function exitOf(choiceText: string): string | null {
+  return choiceText.startsWith(EXIT_PREFIX) ? choiceText.slice(EXIT_PREFIX.length).trim() || null : null;
+}
 
 export interface Choice {
   id: string;

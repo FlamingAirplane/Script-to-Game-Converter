@@ -57,7 +57,7 @@ export const unrealAdapter: EngineAdapter = {
       { path: `${root}Content/NarrativeBridge/README.md`, content: 'Import ../../StorySource/MainStory.ink here (drag into the Content Browser) to create the Inkpot story asset.\n' },
       { path: `${root}README.md`, content: readme(story, options, name) },
       ...commonFiles(story, manifest, `${root}NarrativeBridge/`),
-      ...sourceFiles(story, `${root}NarrativeBridge/`),
+      ...sourceFiles(story, `${root}NarrativeBridge/`, options.originals),
     ];
     const result: ExportResult = {
       engine: 'unreal',

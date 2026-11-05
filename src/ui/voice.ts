@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import type { AudioRef, VoiceSettings } from '../core/audio';
-import { clipUrl, getClip } from './audioStore';
+import { clipUrl } from './audioStore';
+import { renderClip } from './audioRender';
 
 // Plays dialogue in order: a line's recorded clip if it has one, otherwise the browser's speech
 // voice chosen for that character. Used by Playtest and the voice "Test" buttons.
@@ -60,7 +61,7 @@ export class VoiceQueue {
 
   private async play(item: VoiceItem): Promise<void> {
     if (item.audio) {
-      const clip = await getClip(item.audio.id);
+      const clip = await renderClip(item.audio);
       if (clip) {
         const url = clipUrl(clip);
         const a = new Audio(url);

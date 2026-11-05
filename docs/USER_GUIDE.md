@@ -109,9 +109,15 @@ suggestions to review. Type in *Filter passages…* to narrow it down. Press **[
   **Describe it** for players who use a screen reader. **Replace…** and **Remove** change it; Undo brings one back.
 - **Content:** each block is *action* (narration), *dialogue*, a *transition*, a *note* (kept as a comment) or an
   *effect* (such as giving an item). Click text to edit it. The **L12** link on each block jumps to that line of the
-  original script. Add blocks with **+ narration**, **+ dialogue**, **+ effect** and **+ Continue break**.
+  original script. Add blocks with **+ narration**, **+ dialogue**, **+ effect**, **+ Continue break** and **+ Exit to game**.
 - **Continue breaks:** a *break* line means the player clicks **Continue** before the next lines appear, so a long
   passage can be read a little at a time. Add them here or, more easily, from the Graph (section 5).
+- **Exits to the game:** for games with more than dialogue (exploring, fights, puzzles), an *Exit to game* block is
+  where the dialogue stops and the game takes over. Give it a **name** the game will see (like `wolf_fight`) and a note
+  of what happens in the game. In Unity, the story panel steps aside there; when the gameplay is done, the game resumes
+  the dialogue from the exit, or at another passage (say, one for winning and one for losing), and it can set the
+  story's variables and items first, so what happened in the game changes what's said next. Playtest and the playable
+  story show *The game takes over here* with a **Resume** button in its place. In Twine, an exit becomes a Continue link.
 - **Choices:** each has its wording, where it leads (→, with ↗ to jump there), conditions (**+ condition**, for example
   *has the brass key*), effects (**+ effect**), and **once only** (the choice disappears after it is picked). Add one with
   **+ Add choice**. **Then** sets where the story goes when there are no choices, or **End the story here**.
@@ -138,7 +144,8 @@ Click **Story settings** at the top of the contents.
   or drop a picture on it), and **merge into…** for duplicates (such as "MIRA" and "MIRA (V.O.)"). A portrait shows
   beside the character's lines in Playtest and the playable story, and in Unity's story panel while they speak.
 - **Files:** everything you've put into the story, to download again: the scripts it was made from (a Word, PDF or
-  Final Draft file comes back as the text taken from it), voice recordings (with the line each belongs to), scene
+  Final Draft file comes back both as the original file and as the text taken from it; the original is kept in your
+  browser and in saved project files, and goes into engine exports too), voice recordings (with the line each belongs to), scene
   pictures and character portraits. **Download** saves one; **Download all (.zip)** saves them all, in a folder for
   each kind.
 - **Items** (things the player can carry, like a key) and **Variables** (numbers, true/false values or text the story
@@ -353,9 +360,13 @@ your story's text, so it is safe to attach to a bug report. Choose how much to s
   **Find takes** looks for the pauses between takes (adjust *Sensitivity* and *Pause between takes* if it finds too
   many or too few). Then pick the first line they belong to and **Give the takes to lines in order**. *Lines of* shows
   one character's lines, handy for a session with one actor. ▶ (or Enter) plays a line's stretch; ✕ unlinks it.
-  **Cut and attach** turns each marked stretch into that line's recording, marked ✂ in Review. Open the session again
-  any time to move a line's start or end and cut it again; one Undo takes a whole cut back. The session recording itself
-  stays in this browser; the clips cut from it are saved with your project.
+  Every change is **saved as you make it**, like regions in Pro Tools: a linked line plays its stretch of the session
+  (nothing is copied), marked ✂ in Review, and Undo takes a change back. Open the session again any time to move a
+  line's start or end. The session is kept in your browser and in saved project files; exports get each line as its
+  own file.
+- **Editing a clip:** ✎ beside any recording opens its edits: **trim** the start and end, **fade** in and out, and the
+  **volume** (in decibels). They're saved as you change them and never alter the recording itself; ▶ plays the clip
+  with its edits, **Undo all edits** clears them, and exports get the clip with its edits applied.
 - Recordings and scene pictures travel with the playable story, the Unity and Unreal packages, and saved project
   files.
 
@@ -402,6 +413,7 @@ Write these on their own lines in any script to control the structure exactly (t
 - [Markdown link choice](#target)
 -> target                                    continue to another passage
 @pause                                       a Continue break: the player clicks Continue to read on
+@exit wolf_fight The player fights wolves    an exit to the game: the dialogue stops while the game plays
 @end                                         end the story here
 ## Heading {#custom_id}                      a Markdown heading as a passage with a chosen id
 ```
