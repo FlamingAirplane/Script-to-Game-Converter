@@ -133,7 +133,7 @@ export function ExportView({ processed, stale, onState, project, update }: { pro
             </label>
           )}
           <label className="field">
-            <span className="muted small">{asPackage ? 'Oldest Unity version to support' : `${adapter.label} version`}</span>
+            <span className="muted small">{asPackage ? 'Unity version you build with (the package works in 2022.3 and later)' : `${adapter.label} version`}</span>
             <input className="input mono" value={opts.engineVersion} onChange={(e) => setOpts({ ...opts, engineVersion: e.target.value })} />
           </label>
           <label className="field">

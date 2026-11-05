@@ -1300,3 +1300,18 @@ describe('story map arrows', () => {
     expect(self.d).toMatch(/^M188,/);
   });
 });
+
+describe('Unity text', () => {
+  it('uses TextMeshPro when the game has it, and the older Text otherwise', async () => {
+    const s = SAMPLES.find((x) => x.id === 'archive')!;
+    const r = await ADAPTERS.unity.export(processProject((await build(s.text, s.fileName, 'structured')).project), { engine: 'unity', projectName: 'T', engineVersion: ADAPTERS.unity.defaultEngineVersion, integrationRef: '2.0.0', includeDemo: true });
+    const view = String(r.files.find((f) => f.path.endsWith('NarrativeView.cs'))!.content);
+    expect(view).toContain('#if NARRATIVE_BRIDGE_TMP\nusing UIText = TMPro.TextMeshProUGUI;\n#else\nusing UIText = UnityEngine.UI.Text;');
+    expect(view).not.toMatch(/AddComponent<Text>/);
+    const asmdef = JSON.parse(String(r.files.find((f) => f.path.endsWith('Runtime/NarrativeBridge.T.asmdef'))!.content));
+    expect(asmdef.references).toContain('Unity.TextMeshPro');
+    expect(asmdef.versionDefines).toContainEqual({ name: 'com.unity.ugui', expression: '2.0.0', define: 'NARRATIVE_BRIDGE_TMP' });
+    expect(ADAPTERS.unity.defaultEngineVersion).toMatch(/^6000\./);
+    expect(JSON.parse(String(r.files.find((f) => f.path.endsWith('T/package.json') || f.path.endsWith('.t/package.json'))!.content)).unity).toBe('2022.3');
+  });
+});
