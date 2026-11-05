@@ -1089,6 +1089,14 @@ section.drafts > h2 { margin-top: 26px; }
   .session-tools input[type='range'], .session-transport input[type='range'] { width: 90px; }
 }
 
+/* Your project on other browsers */
+.projects-sheet { display: flex; flex-direction: column; gap: 8px; }
+.projects-way { border-top: 1px solid var(--rule); padding-top: 8px; }
+.projects-way h3 { margin-top: 0.4em; }
+.cloud-list { list-style: none; margin: 8px 0 0; padding: 0; }
+.cloud-list li { display: grid; grid-template-columns: minmax(0, 1fr) auto auto auto; gap: 4px 12px; align-items: center; padding: 6px 0; border-bottom: 1px dotted var(--rule-2); }
+.cloud-title { display: flex; align-items: center; gap: 8px; min-width: 0; }
+@media (max-width: 760px) { .cloud-list li { grid-template-columns: minmax(0, 1fr) auto; } }
 /* Non-destructive clip edits */
 .voice-clip { position: relative; }
 .voice-clip .icon.edited { color: var(--teal); }

@@ -10,10 +10,8 @@ import { ImportView } from './ImportView';
 import { InkView } from './InkView';
 import { passageForEntity } from './projectOps';
 import { ReviewView, STORY_SETTINGS } from './ReviewView';
-import { base64ToBytes, bytesToBase64, referencedAudio } from '../core/audio';
-import { referencedImages } from '../core/images';
-import { referencedOriginals } from '../core/isr';
-import { collectClips, putClip } from './audioStore';
+import { packProject, unpackProject } from './projectFile';
+import { ProjectsSheet } from './ProjectsSheet';
 import { errorData, log } from '../core/log';
 import { Logo } from './Logo';
 import { designSetting, useWord } from './design/design';
@@ -81,6 +79,7 @@ export function App() {
   const [tab, setTab] = useState<Tab>(initial ? 'review' : 'import');
   const [soundOn, setSoundOn] = useState(sfx.enabled);
   const [showKeys, setShowKeys] = useState(false);
+  const [showProjects, setShowProjects] = useState(false);
   const [panelView, setPanelView] = useState<PanelView>('notes');
   // "Dialogue only": hide narration, transitions, notes and effects in Review and Playtest.
   const [dialogueOnly, setDialogueOnlyState] = useState(() => {
@@ -397,12 +396,9 @@ export function App() {
   const saveProject = async (as = false) => {
     if (!project) return;
     const snapshot = project;
-    // Scene pictures share the "audio" map with voice clips (same store, keyed by id), so older versions still open the file.
-    // Regions have no bytes of their own: the session recordings they play from are saved instead,
-    // and so are the original Word, PDF, Final Draft and Twine files the scripts were taken from.
-    const clips = await collectClips([...referencedAudio(project).filter((a) => !a.region), ...referencedImages(project), ...(project.sessions ?? []), ...referencedOriginals(project)]);
-    const audio = Object.fromEntries(Object.entries(clips).map(([id, c]) => [id, { mime: c.mime, data: bytesToBase64(c.bytes) }]));
-    const json = JSON.stringify({ project, parseDiagnostics, audio }, null, 2);
+    // Everything the project uses goes in the file, so it opens the same in any browser (projectFile.ts).
+    const { json, files } = await packProject(project, parseDiagnostics);
+    const audio = { length: files };
     try {
       let target: FileHandle | 'downloaded' | null;
       if (projectFile && !as) {
@@ -416,7 +412,7 @@ export function App() {
         void rememberRecent(target, project.project.title);
       }
       void requestPersistence();
-      appLog.info('Saved project file', { passages: project.passages.length, clips: Object.keys(audio).length, bytes: json.length, toFile: target !== 'downloaded' });
+      appLog.info('Saved project file', { passages: project.passages.length, clips: audio.length, bytes: json.length, toFile: target !== 'downloaded' });
     } catch (e) {
       appLog.error('Could not save the project file', errorData(e));
       alert(`Could not save the project file: ${e instanceof Error ? e.message : e}`);
@@ -430,17 +426,22 @@ export function App() {
     if (picked) await openProject(picked.file, picked.handle);
   };
 
-  const openProject = async (file: File, handle?: FileHandle) => {
+  const openProject = (file: File, handle?: FileHandle) => openProjectText(file.text(), 'file', handle);
+
+  /** Opens a project from a project file's text (a file, or the cloud). */
+  const openProjectText = async (text: Promise<string>, from: 'file' | 'cloud', handle?: FileHandle) => {
     try {
-      const data = JSON.parse(await file.text());
-      for (const [id, c] of Object.entries((data.audio ?? {}) as Record<string, { mime: string; data: string }>)) await putClip(id, c.mime, base64ToBytes(c.data));
-      appLog.info('Opened project file', { bytes: file.size, clips: Object.keys(data.audio ?? {}).length });
-      const p: StoryProject = data.project?.schemaVersion ? data.project : data;
-      const errs = validateSchema(p).filter((d) => d.severity === 'error');
-      if (errs.length) return alert(`Not a valid Narrative Bridge project:\n${errs.map((e) => e.message).join('\n')}`);
-      await keepBeforeReplacing('Before opening a project file');
+      let unpacked: Awaited<ReturnType<typeof unpackProject>>;
+      try {
+        unpacked = await unpackProject(await text);
+      } catch (e) {
+        return alert(e instanceof Error ? e.message : String(e));
+      }
+      const p = unpacked.project;
+      appLog.info(from === 'cloud' ? 'Opened project from the cloud' : 'Opened project file', { files: unpacked.files });
+      await keepBeforeReplacing(from === 'cloud' ? 'Before opening a project from the cloud' : 'Before opening a project file');
       undoStack.current = [];
-      setParseDiagnostics(data.parseDiagnostics ?? []);
+      setParseDiagnostics(unpacked.parseDiagnostics);
       setProject(p);
       setProjectFile(handle ?? null);
       setSavedToFile(handle ? p : null);
@@ -564,6 +565,9 @@ export function App() {
           Open project
         </button>
         <input ref={openRef} type="file" accept=".json" hidden onChange={(e) => e.target.files?.[0] && openProject(e.target.files[0])} />
+        <button className="btn tiny ghost" onClick={() => setShowProjects(true)} title="Carry on in another browser: as a file, or through the cloud">
+          ⇅ other browsers
+        </button>
         {project && (
           <button className="btn tiny ghost" onClick={() => void saveProject()} title={projectFile ? `Save to ${projectFile.name} (⌘S)` : 'Save the project as a file (⌘S)'}>
             Save project
@@ -651,6 +655,16 @@ export function App() {
         )}
       </div>
       {showKeys && <ShortcutSheet onClose={() => setShowKeys(false)} />}
+      {showProjects && (
+        <ProjectsSheet
+          project={project}
+          parseDiagnostics={parseDiagnostics}
+          onSaveFile={() => void saveProject(true)}
+          onOpenFile={() => void chooseProject()}
+          onOpenCloud={(text) => void openProjectText(text, 'cloud')}
+          onClose={() => setShowProjects(false)}
+        />
+      )}
     </div>
   );
 }

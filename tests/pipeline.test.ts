@@ -1376,6 +1376,54 @@ describe('live design', () => {
   });
 });
 
+describe('projects on other browsers', () => {
+  it('packs every kind of media a project uses', async () => {
+    const { projectMediaRefs } = await import('../src/ui/projectFile');
+    const { project } = await build('@passage hall Hall\nMIRA: Who is there?\n\nMIRA: Hello?\n@end\n', 'm.md', 'structured');
+    const [a, b] = project.passages[0].content.filter((x) => x.type === 'dialogue') as { audio?: unknown }[];
+    a.audio = { id: 'vo_own', name: 'take.wav', mime: 'audio/wav' };
+    b.audio = { id: 'vo_region', name: 'r.wav', mime: 'audio/wav', from: { session: 'ses_1', start: 0, end: 1 }, region: true };
+    project.passages[0].image = { id: 'img_hall', name: 'hall.png', mime: 'image/png' };
+    project.characters[0].portrait = { id: 'img_mira', name: 'mira.png', mime: 'image/png' };
+    project.sessions = [{ id: 'ses_1', name: 'Session.wav', mime: 'audio/wav' }];
+    (project.sources[0] as { original?: unknown }).original = { id: 'orig_1', name: 'm.docx', mime: 'application/x', byteLength: 3 };
+    // A region has no file of its own: the session it plays from goes instead.
+    expect(projectMediaRefs(project).map((r) => r.id).sort()).toEqual(['img_hall', 'img_mira', 'orig_1', 'ses_1', 'vo_own']);
+  });
+
+  it('saves to a private Gist, lists your projects, and opens big ones from the raw file', async () => {
+    const mem = new Map<string, string>();
+    Object.assign(globalThis, { localStorage: { getItem: (k: string) => mem.get(k) ?? null, setItem: (k: string, v: string) => void mem.set(k, v), removeItem: (k: string) => void mem.delete(k) } });
+    const { saveToCloud, listCloudProjects, loadFromCloud, cloudIdOf, parseDescription } = await import('../src/ui/cloud');
+    const calls: { method: string; url: string; body?: { public?: boolean; description?: string; files?: Record<string, unknown> } }[] = [];
+    const real = globalThis.fetch;
+    globalThis.fetch = (async (url: string, init?: RequestInit) => {
+      const method = init?.method ?? 'GET';
+      calls.push({ method, url: String(url), body: init?.body ? JSON.parse(String(init.body)) : undefined });
+      if (method === 'POST') return new Response(JSON.stringify({ id: 'abc123' }));
+      if (method === 'PATCH') return new Response('{}');
+      if (String(url).includes('?per_page')) return new Response(JSON.stringify([{ id: 'abc123', description: 'Narrative Bridge project: The Archive (archive)', updated_at: '2026-11-06T10:00:00Z', html_url: 'https://gist.github.com/abc123' }, { id: 'zzz', description: 'my notes', updated_at: '2026-11-06T11:00:00Z', html_url: '' }]));
+      if (String(url).endsWith('/abc123')) return new Response(JSON.stringify({ description: 'Narrative Bridge project: The Archive (archive)', files: { 'archive.nbproj.json': { filename: 'archive.nbproj.json', truncated: true, content: '{', raw_url: 'https://gist.githubusercontent.com/raw/x' } } }));
+      if (String(url).includes('raw')) return new Response('{"project":"full"}');
+      return new Response('', { status: 500 });
+    }) as typeof fetch;
+    try {
+      expect(await saveToCloud('t', '{"x":1}', 'The Archive', 'archive')).toEqual({ gistId: 'abc123', created: true });
+      expect(calls[0].body).toMatchObject({ public: false, description: 'Narrative Bridge project: The Archive (archive)' });
+      expect(Object.keys(calls[0].body!.files!)).toEqual(['archive.nbproj.json']);
+      expect(cloudIdOf('archive')).toBe('abc123');
+      expect(await saveToCloud('t', '{"x":2}', 'The Archive', 'archive')).toEqual({ gistId: 'abc123', created: false });
+      expect(calls[1].method).toBe('PATCH');
+      expect((await listCloudProjects('t')).map((p) => [p.title, p.projectId])).toEqual([['The Archive', 'archive']]);
+      expect(await loadFromCloud('t', 'abc123')).toBe('{"project":"full"}');
+      expect(parseDescription('something else')).toBeNull();
+      await expect(saveToCloud('t', 'x'.repeat(51 * 1024 * 1024), 'Big', 'big')).rejects.toThrow(/too big/);
+    } finally {
+      globalThis.fetch = real;
+    }
+  });
+});
+
 describe('non-destructive clips', () => {
   it('trims, fades and changes gain without touching the source', async () => {
     const { applyEdit, hasEdit, isRendered, audioFileName } = await import('../src/core/audio');

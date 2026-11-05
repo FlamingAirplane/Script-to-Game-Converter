@@ -313,6 +313,15 @@ your story's text, so it is safe to attach to a bug report. Choose how much to s
 
 ## 10. Saving, drafts and working offline
 
+- **Another browser or computer:** click **⇅ other browsers** in the top bar.
+  - **As a file (no account):** *Save the project file* gives you one file with everything (the story, recordings,
+    recording sessions, pictures, portraits, the original scripts and the Unity settings); open it anywhere with
+    **Open project**.
+  - **In the cloud:** paste a GitHub token (classic, with only the `gist` scope; it stays in your browser and goes
+    only to GitHub) and click **Save this project to the cloud**. It's kept as a *private* Gist in your GitHub
+    account. In any other browser, open the same window, paste the token, click **Show my cloud projects** and
+    **Open** the one you want. Save to the cloud again to update it.
+
 - **Autosave:** your project is remembered in this browser, with room for large projects. *✓ kept in this browser*
   confirms it. If the browser's storage is almost full or stops working, a warning appears instead, and closing the page
   asks first: use **Save project** then.
