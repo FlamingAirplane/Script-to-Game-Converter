@@ -1191,3 +1191,29 @@ describe('admin design editor', () => {
     for (const t of TOKENS) expect(root, t.name).toContain(`${t.name}:`);
   });
 });
+
+describe('story files', () => {
+  it('lists every file put into a story, with names to save them under and unique zip paths', async () => {
+    const { storyFiles, zipPaths, safeFileName } = await import('../src/core/files');
+    const { project } = await build('@passage hall Hall\nThe hall is dark.\n\nMIRA: Who is there?\n\nMIRA: Hello?\n@end\n', 'scene one.md', 'structured');
+    project.sources.push({ ...project.sources[0], id: 'pdf', fileName: 'Draft 2.pdf', format: 'fountain', text: 'INT. HALL' });
+    const lines = project.passages[0].content.filter((b) => b.type === 'dialogue');
+    (lines[0] as { audio?: unknown }).audio = { id: 'vo_a', name: 'take1.wav', mime: 'audio/wav' };
+    (lines[1] as { audio?: unknown }).audio = { id: 'vo_b', name: 'take1.wav', mime: 'audio/wav' };
+    project.passages[0].image = { id: 'img_hall', name: 'hall.png', mime: 'image/png' };
+    project.characters[0].portrait = { id: 'img_mira', name: 'mira face.jpg', mime: 'image/jpeg' };
+    const files = storyFiles(project);
+    expect(files.map((f) => [f.kind, f.fileName])).toEqual([
+      ['script', 'scene one.md'],
+      ['script', 'Draft 2.fountain'],
+      ['picture', 'hall.png'],
+      ['recording', 'take1.wav'],
+      ['recording', 'take1.wav'],
+      ['portrait', 'mira face.jpg'],
+    ]);
+    expect(files[1]).toMatchObject({ convertedFrom: 'pdf', text: 'INT. HALL' });
+    expect(files[3].context).toContain('Who is there?');
+    expect(zipPaths(files)).toEqual(['Scripts/scene one.md', 'Scripts/Draft 2.fountain', 'Scene pictures/hall.png', 'Recordings/take1.wav', 'Recordings/take1 (2).wav', 'Portraits/mira face.jpg']);
+    expect(safeFileName('a/b:c?.wav')).toBe('a_b_c_.wav');
+  });
+});

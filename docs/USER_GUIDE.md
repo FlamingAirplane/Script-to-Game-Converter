@@ -137,6 +137,10 @@ Click **Story settings** at the top of the contents.
 - **Characters:** display names, aliases found in the script, a voice for each, a **portrait** (click **+ Portrait**
   or drop a picture on it), and **merge into…** for duplicates (such as "MIRA" and "MIRA (V.O.)"). A portrait shows
   beside the character's lines in Playtest and the playable story, and in Unity's story panel while they speak.
+- **Files:** everything you've put into the story, to download again: the scripts it was made from (a Word, PDF or
+  Final Draft file comes back as the text taken from it), voice recordings (with the line each belongs to), scene
+  pictures and character portraits. **Download** saves one; **Download all (.zip)** saves them all, in a folder for
+  each kind.
 - **Items** (things the player can carry, like a key) and **Variables** (numbers, true/false values or text the story
   tracks).
 

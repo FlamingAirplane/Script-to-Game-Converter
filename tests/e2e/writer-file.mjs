@@ -334,6 +334,18 @@ for (const [name, type] of [['WebKit', webkit], ['Chromium', chromium]]) {
       const zip = await JSZip.loadAsync(readFileSync(await zipDl.path()));
       if (!Object.keys(zip.files).some((f) => /Resources\/NarrativeBridge\/[^/]+\/Images\/img_.+\.png\.bytes$/.test(f))) throw new Error('Unity zip has no scene picture');
     });
+    await step('every file put into the story downloads again, one at a time or all as a zip', async () => {
+      await page.getByRole('button', { name: /Review/ }).click();
+      await page.locator('.story-entry', { hasText: 'Story settings' }).click();
+      const files = page.locator('.story-files');
+      await files.waitFor({ timeout: 5000 });
+      const [one] = await Promise.all([page.waitForEvent('download'), files.getByRole('button', { name: 'Download tower.png' }).click()]);
+      const png = readFileSync(await one.path());
+      if (one.suggestedFilename() !== 'tower.png' || png.subarray(1, 4).toString() !== 'PNG') throw new Error(`not the picture: ${one.suggestedFilename()}`);
+      const [all] = await Promise.all([page.waitForEvent('download'), files.getByRole('button', { name: 'Download all (.zip)' }).click()]);
+      const names = Object.keys((await JSZip.loadAsync(readFileSync(await all.path()))).files);
+      for (const want of [/^Scripts\/.+/, /^Scene pictures\/tower\.png$/, /^Recordings\/.+\.wav$/]) if (!names.some((n) => want.test(n))) throw new Error(`zip has no ${want}: ${names.join(', ')}`);
+    });
     await step('opens a Twine story to keep working on it', async () => {
       await page.getByRole('button', { name: /Import/ }).first().click();
       await page.locator('.dropzone input[type=file]').setInputFiles(fileURLToPath(new URL('../fixtures/orchard.twee', import.meta.url)));
