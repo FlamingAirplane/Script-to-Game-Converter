@@ -3,6 +3,8 @@ import { Story } from 'inkjs';
 import { Fragment, useCallback, useEffect, useRef, useState } from 'react';
 import { fnv1a } from '../core/hash';
 import { lockedChoices } from '../core/gating';
+import { referencedImages } from '../core/images';
+import { usePictures } from './pictures';
 import { CONTINUE_TEXT, itemVar } from '../core/isr';
 import type { ProcessedStory } from '../core/pipeline';
 import { audioFileName, referencedAudio } from '../core/audio';
@@ -22,9 +24,9 @@ interface Line {
   pause?: boolean;
 }
 
-/** A Continue break: the story offers only "Continue" (see inkgen.ts). */
 /** The passage (Ink knot) the reader is in: where the story last read from, even when it offers no choices. */
 const knotOf = (s: Story) => (s.state.previousPointer?.path?.toString() ?? s.currentChoices[0]?.sourcePath ?? '').split('.')[0];
+/** A Continue break: the story offers only "Continue" (see inkgen.ts). */
 const isPause = (s: Story) => s.currentChoices.length === 1 && s.currentChoices[0].text === CONTINUE_TEXT;
 
 /** Story state at the start of the current stretch of text, so a state change can replay it. */
@@ -146,6 +148,8 @@ export function PlaytestView({
   // Clips by the file name used in #audio tags, and voices by speaker id.
   const clipsByFile = new Map(referencedAudio(processed.project).map((r) => [audioFileName(r), r]));
   const voicesBySpeaker = new Map(processed.project.characters.map((c) => [c.id, c.voice]));
+  // Scene pictures by the file name used in #image tags.
+  const pictures = usePictures(referencedImages(processed.project));
   const speakRef = useRef<(l: Line[]) => void>(() => {});
   speakRef.current = (newLines: Line[]) => {
     if (!voicesRef.current) return;
@@ -303,6 +307,10 @@ export function PlaytestView({
     restart,
     voices: toggleVoices,
   };
+  const pictureFor = (l: Line) => {
+    const file = l.tags.find((t) => t.startsWith('image:'))?.slice(6);
+    return file ? pictures.get(file) : undefined;
+  };
   const ended = choices.length === 0;
   // Choices the reader can't take yet. Not at a Continue break: a passage's choices come after its last break.
   const locked =
@@ -363,6 +371,11 @@ export function PlaytestView({
             ) : (
               <Fragment key={i}>
                 {l.tags.find((t) => t.startsWith('scene:')) && <span className="t-scene">{l.tags.find((t) => t.startsWith('scene:'))!.slice(6)}</span>}
+                {pictureFor(l) && (
+                  <figure className="t-picture">
+                    <img src={pictureFor(l)!.url} alt={pictureFor(l)!.alt} />
+                  </figure>
+                )}
                 <p className={l.tags.includes('transition') ? 't-transition' : `t-action${i === dropCapAt ? ' drop' : ''}`}>{l.text}</p>
               </Fragment>
             ),

@@ -121,6 +121,9 @@ export function analyze(project: StoryProject): Analysis {
       ds.push(diag('ALL_CHOICES_CONDITIONAL', 'warning', STAGE, `Every choice in "${p.title}" is conditional; if none are available the player is stuck.`, { entityId: p.id, remediation: 'Add an unconditional choice or a fallback divert.', exportBlocked: false }));
     if (p.content.filter((b) => b.type !== 'pause').length === 0 && passages.length > 1)
       ds.push(diag('EMPTY_PASSAGE', 'info', STAGE, `"${p.title}" has no narrative content.`, { entityId: p.id, exportBlocked: false }));
+    // A scene picture rides on the passage's first line of text (#image), so it needs one.
+    if (p.image && !p.content.some((b) => b.type === 'action' || b.type === 'dialogue' || b.type === 'transition'))
+      ds.push(diag('IMAGE_WITHOUT_TEXT', 'warning', STAGE, `The picture for "${p.title}" won't show: the passage has no text for it to open.`, { entityId: p.id, remediation: 'Add a line of narration or dialogue to the passage.', exportBlocked: false }));
     // A Continue break should have something to show on each side, or the reader clicks Continue for nothing.
     const shown = (b: (typeof p.content)[number]) => b.type === 'action' || b.type === 'dialogue' || b.type === 'transition';
     const visible = (b: (typeof p.content)[number]) => b.type === 'pause' || shown(b);

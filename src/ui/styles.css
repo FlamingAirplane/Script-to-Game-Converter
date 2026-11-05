@@ -955,3 +955,20 @@ section.drafts > h2 { margin-top: 26px; }
 .choice-btn.locked:hover::before { left: 4px; }
 .choice-btn.locked .locked-text { text-decoration: line-through; text-decoration-color: var(--rule-2); }
 .choice-btn.locked .locked-needs { font: normal 13px var(--serif); font-variant: small-caps; text-transform: lowercase; letter-spacing: 0.06em; }
+
+/* Review: the scene picture */
+.scene-picture { margin: 0 0 18px; padding: 10px 12px; border: 1px dashed transparent; border-radius: 2px; }
+.scene-picture.over { border-color: var(--rubric); background: var(--pen-bg); }
+.scene-picture h3 { margin-top: 0; }
+.scene-picture-row { display: flex; gap: 16px; align-items: flex-start; flex-wrap: wrap; }
+.scene-thumb { width: 200px; max-width: 100%; max-height: 150px; object-fit: cover; border: 1px solid var(--rule); border-radius: 2px; display: flex; align-items: center; justify-content: center; min-height: 80px; }
+.scene-picture-info { flex: 1; min-width: min(100%, 220px); display: flex; flex-direction: column; gap: 8px; }
+.scene-picture-info .field { margin-bottom: 0; }
+/* Playtest: a scene picture at the start of its scene */
+.t-picture { margin: 14px 0 18px; text-align: center; }
+.t-picture img { max-width: 100%; max-height: 50vh; border-radius: 2px; box-shadow: 0 2px 10px color-mix(in srgb, var(--shadow) 18%, transparent); }
+/* Add recordings: drop zone */
+.recordings-import { margin-top: 12px; padding: 8px 10px; border: 1px dashed var(--rule); border-radius: 2px; }
+.recordings-import.over { border-color: var(--rubric); background: var(--pen-bg); }
+.recordings-import p { margin: 0 0 8px; }
+.recordings-import p[role='status'] { margin: 8px 0 0; }

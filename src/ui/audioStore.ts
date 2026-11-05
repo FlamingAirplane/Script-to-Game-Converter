@@ -1,4 +1,5 @@
 import { encodeWav, NATIVE_AUDIO, newAudioId, type AudioAssets, type AudioRef } from '../core/audio';
+import { newImageId, type ImageRef } from '../core/images';
 import { errorData, log } from '../core/log';
 
 const logger = log('audio');
@@ -47,8 +48,8 @@ export async function deleteClip(id: string): Promise<void> {
   }
 }
 
-/** Clip bytes for the given references (missing ones are simply left out). */
-export async function collectClips(refs: AudioRef[]): Promise<AudioAssets> {
+/** Stored bytes (voice clips or scene pictures) for the given references; missing ones are left out. */
+export async function collectClips(refs: { id: string }[]): Promise<AudioAssets> {
   const out: AudioAssets = {};
   for (const r of refs) {
     const c = await getClip(r.id);
@@ -128,4 +129,45 @@ export async function startRecording(): Promise<Recorder> {
 
 export function clipUrl(clip: { mime: string; bytes: Uint8Array }): string {
   return URL.createObjectURL(new Blob([clip.bytes as BlobPart], { type: clip.mime }));
+}
+
+/** Pictures larger than this on their longest side are scaled down: plenty for a 4K screen, and keeps files small. */
+const MAX_PICTURE_SIDE = 2560;
+
+/**
+ * Stores a scene picture (in the same browser store as voice clips). PNG and JPEG are kept as they are
+ * unless very large; other formats (WebP, GIF, HEIC where the browser reads it…) become PNG, which every
+ * engine loads. JPEGs stay JPEG so photos stay small.
+ */
+export async function storeImage(file: Blob, name: string, seed: string): Promise<ImageRef> {
+  let bitmap: ImageBitmap;
+  try {
+    bitmap = await createImageBitmap(file);
+  } catch {
+    logger.warn('Could not decode picture', { type: file.type || 'unknown', bytes: file.size });
+    throw new Error('This picture could not be read. Use PNG, JPEG or WebP.');
+  }
+  const { width, height } = bitmap;
+  const kept = file.type === 'image/png' || file.type === 'image/jpeg';
+  let mime: ImageRef['mime'] = file.type === 'image/jpeg' ? 'image/jpeg' : 'image/png';
+  let bytes: Uint8Array;
+  let size = { width, height };
+  if (kept && Math.max(width, height) <= MAX_PICTURE_SIDE) bytes = new Uint8Array(await file.arrayBuffer());
+  else {
+    const k = Math.min(1, MAX_PICTURE_SIDE / Math.max(width, height));
+    size = { width: Math.round(width * k), height: Math.round(height * k) };
+    const canvas = document.createElement('canvas');
+    canvas.width = size.width;
+    canvas.height = size.height;
+    canvas.getContext('2d')!.drawImage(bitmap, 0, 0, size.width, size.height);
+    const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, mime, 0.9));
+    if (!blob) throw new Error('This picture could not be converted.');
+    mime = blob.type === 'image/jpeg' ? 'image/jpeg' : 'image/png';
+    bytes = new Uint8Array(await blob.arrayBuffer());
+  }
+  bitmap.close();
+  const id = newImageId(seed);
+  await putClip(id, mime, bytes);
+  logger.info('Stored scene picture', { id, mime, bytes: bytes.length, originalType: file.type || 'unknown', ...size });
+  return { id, name, mime, ...size };
 }

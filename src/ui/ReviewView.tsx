@@ -6,6 +6,8 @@ import type { ProcessedStory } from '../core/pipeline';
 import { Badge, ProvenanceBadge, SeverityIcon } from './common';
 import { friendly } from './friendly';
 import { VoiceClip, VoicePicker } from './VoiceControls';
+import { ScenePicture } from './ScenePicture';
+import { RecordingsImport } from './RecordingsImport';
 import { formatMinutes, storyStats } from '../core/stats';
 import { DraftShelf } from './Drafts';
 import { type Update, addChoice, addPassage, deletePassage, findText, mergeCharacter, movePassage, renamePassage, replaceText } from './projectOps';
@@ -285,6 +287,8 @@ function PassageEditor({
           ))}
         </ul>
       )}
+
+      <ScenePicture passage={passage} update={update} />
 
       <section className="blocks">
         <h3>Content</h3>
@@ -784,6 +788,9 @@ function StorySettings({ project, update, onKeepDraft, onRestoreDraft }: { proje
           )}
         </tbody>
       </table>
+
+      <h3>Recordings</h3>
+      <RecordingsImport project={project} update={update} />
 
       <h3>Items</h3>
       <p className="muted small">Each item becomes an Ink Boolean <code>has_&lt;id&gt;</code>. In a real game the host inventory should stay authoritative.</p>

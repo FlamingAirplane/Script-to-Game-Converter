@@ -12,6 +12,7 @@ const BASE = {
   showSceneHeadings: true,
   showChoiceNumbers: true,
   showToolbar: true,
+  showPictures: true,
   continueLabel: 'Continue',
   endLabel: 'The End',
 } as const;
@@ -49,6 +50,7 @@ export function normaliseUnityTheme(t: Partial<UnityTheme> | undefined): UnityTh
     showSceneHeadings: bool(t?.showSceneHeadings, d.showSceneHeadings),
     showChoiceNumbers: bool(t?.showChoiceNumbers, d.showChoiceNumbers),
     showToolbar: bool(t?.showToolbar, d.showToolbar),
+    showPictures: bool(t?.showPictures, d.showPictures),
     continueLabel: text(t?.continueLabel, d.continueLabel),
     endLabel: text(t?.endLabel, d.endLabel),
   };

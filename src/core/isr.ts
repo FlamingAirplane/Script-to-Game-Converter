@@ -2,6 +2,7 @@
 // Versioned independently of the application (see SCHEMA_VERSION).
 
 import type { AudioRef, VoiceSettings } from './audio';
+import type { ImageRef } from './images';
 
 export const SCHEMA_VERSION = '1.0';
 
@@ -94,6 +95,8 @@ export interface Passage {
   title: string;
   sourceId?: string; // e.g. scene_01
   sceneHeading?: string;
+  /** A picture for the scene, shown when the passage begins. */
+  image?: ImageRef;
   content: ContentBlock[];
   choices: Choice[];
   divert?: string; // unconditional continuation when there are no choices
@@ -149,6 +152,8 @@ export interface UnityTheme {
   showChoiceNumbers: boolean;
   /** Restart, Save and Load buttons under the story. */
   showToolbar: boolean;
+  /** Scene pictures fill the screen behind the panel. */
+  showPictures: boolean;
   continueLabel: string;
   endLabel: string;
 }

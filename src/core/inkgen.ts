@@ -1,4 +1,5 @@
 import { audioFileName } from './audio';
+import { imageFileName } from './images';
 import { GENERATOR_VERSION } from './version';
 import { CONTINUE_TEXT, isActive, itemVar, type Condition, type Effect, type Passage, type StoryProject } from './isr';
 
@@ -121,7 +122,7 @@ export function generateInk(project: StoryProject): GeneratedInk {
     const sceneTag = () => {
       if (!firstText) return '';
       firstText = false;
-      return p.sceneHeading ? ` #scene:${escapeTagValue(p.sceneHeading)}` : '';
+      return `${p.sceneHeading ? ` #scene:${escapeTagValue(p.sceneHeading)}` : ''}${p.image ? ` #image:${imageFileName(p.image)}` : ''}`;
     };
     for (const b of p.content) {
       switch (b.type) {

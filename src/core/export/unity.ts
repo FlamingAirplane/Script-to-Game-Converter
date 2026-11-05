@@ -1,6 +1,6 @@
 import { log } from '../log';
 import type { ProcessedStory } from '../pipeline';
-import { assertExportable, audioFiles, buildManifest, commonFiles, itemVarNames, json, sourceFiles, storyVersion, verifyExport } from './common';
+import { assertExportable, audioFiles, buildManifest, imageFiles, commonFiles, itemVarNames, json, sourceFiles, storyVersion, verifyExport } from './common';
 import type { EngineAdapter, ExportFile, ExportOptions, ExportResult } from './types';
 import { normaliseUnityTheme, unityThemeJson } from './unityTheme';
 import { THEME_CS, VIEW_CS } from './unityUi';
@@ -30,10 +30,13 @@ export const unityAdapter: EngineAdapter = {
     const root = `${options.projectName}/`;
     const manifest = await buildManifest(story, options, this);
     const voice = audioFiles(story, options.audio, `${root}${NB}/Resources/NarrativeBridgeAudio/`);
+    // Scene pictures load at run time with Resources.Load<Texture2D>, by file name without the extension.
+    const pictures = imageFiles(story, options.images, `${root}${NB}/Resources/NarrativeBridgeImages/`);
     const files: ExportFile[] = [
       { path: `${root}${NB}/Ink/MainStory.ink`, content: story.generated.ink },
       { path: `${root}${NB}/Resources/MainStory.compiled.json`, content: story.compile.json! },
       ...voice.files,
+      ...pictures.files,
       { path: `${root}${NB}/Scripts/StoryInfo.cs`, content: storyInfoCs(story) },
       { path: `${root}${NB}/Scripts/IInventoryAuthority.cs`, content: INVENTORY_CS },
       { path: `${root}${NB}/Scripts/NarrativeController.cs`, content: CONTROLLER_CS },
@@ -66,6 +69,7 @@ export const unityAdapter: EngineAdapter = {
       },
     };
     for (const name of voice.missing) result.report.warnings.push(`Voice clip "${name}" is missing from this browser, so it was left out of the package.`);
+    for (const name of pictures.missing) result.report.warnings.push(`Scene picture "${name}" is missing from this browser, so it was left out of the package.`);
     finalize(result, story, [`${root}${NB}/Ink/MainStory.ink`, `${root}${NB}/Resources/MainStory.compiled.json`, `${root}Packages/manifest.json`]);
     return result;
   },
@@ -255,6 +259,8 @@ namespace NarrativeBridge
             public string Scene;
             /// <summary>A stage direction for the speaker (from #paren), or null.</summary>
             public string Paren;
+            /// <summary>The scene picture this line opens (file name from #image), or null. See LoadPicture.</summary>
+            public string Image;
             /// <summary>A choice the player made (shown in the transcript), not story text.</summary>
             public bool IsChoice;
             public bool IsTransition;
@@ -419,13 +425,14 @@ namespace NarrativeBridge
 
         static Line ParseLine(string raw, List<string> tags)
         {
-            string speaker = null, scene = null, paren = null;
+            string speaker = null, scene = null, paren = null, image = null;
             var transition = false;
             foreach (var t in tags)
             {
                 if (t.StartsWith("speaker:")) speaker = t.Substring(8).Trim();
                 else if (t.StartsWith("scene:")) scene = t.Substring(6).Trim();
                 else if (t.StartsWith("paren:")) paren = t.Substring(6).Trim();
+                else if (t.StartsWith("image:")) image = t.Substring(6).Trim();
                 else if (t == "transition") transition = true;
             }
             var text = raw;
@@ -434,7 +441,27 @@ namespace NarrativeBridge
                 var colon = raw.IndexOf(": ", StringComparison.Ordinal);
                 if (colon > 0) { speaker = raw.Substring(0, colon); text = raw.Substring(colon + 2); }
             }
-            return new Line { Speaker = speaker, Text = text, Tags = tags, Scene = scene, Paren = paren, IsTransition = transition };
+            return new Line { Speaker = speaker, Text = text, Tags = tags, Scene = scene, Paren = paren, Image = image, IsTransition = transition };
+        }
+
+        // ---- Scene pictures: the first line of a scene may carry #image:<file> ----------------
+
+        /// <summary>The picture for an #image file name, from Resources/NarrativeBridgeImages, or null.</summary>
+        public static Texture2D LoadPicture(string file)
+        {
+            if (string.IsNullOrEmpty(file)) return null;
+            var dot = file.LastIndexOf('.');
+            return Resources.Load<Texture2D>("NarrativeBridgeImages/" + (dot > 0 ? file.Substring(0, dot) : file));
+        }
+
+        /// <summary>The picture of the scene the reader is in: the latest #image in the transcript, or null.</summary>
+        public string CurrentPicture
+        {
+            get
+            {
+                for (int i = transcript.Count - 1; i >= 0; i--) if (transcript[i].Image != null) return transcript[i].Image;
+                return null;
+            }
         }
 
         // ---- Variables -------------------------------------------------------------------
@@ -750,6 +777,7 @@ namespace NarrativeBridge.EditorTools
             if (json == null) { log = "[NarrativeBridge] Smoke test failed: compiled story not found."; return false; }
             var errors = new List<string>();
             var clipsHeard = new HashSet<string>();
+            var picturesSeen = new HashSet<string>();
             int completed = 0;
             var rng = new System.Random(1234);
             const int runs = 50;
@@ -764,7 +792,10 @@ namespace NarrativeBridge.EditorTools
                     {
                         story.Continue();
                         foreach (var t in story.currentTags)
+                        {
                             if (t.StartsWith("audio:")) clipsHeard.Add(t.Substring(6).Trim());
+                            else if (t.StartsWith("image:")) picturesSeen.Add(t.Substring(6).Trim());
+                        }
                     }
                     if (story.currentChoices.Count == 0) { completed++; break; }
                     story.ChooseChoiceIndex(rng.Next(story.currentChoices.Count));
@@ -777,9 +808,12 @@ namespace NarrativeBridge.EditorTools
                 if (Resources.Load<AudioClip>("NarrativeBridgeAudio/" + (dot > 0 ? file.Substring(0, dot) : file)) == null)
                     errors.Add("Voice clip did not import: " + file);
             }
+            // And every scene picture as a Texture2D.
+            foreach (var file in picturesSeen)
+                if (NarrativeController.LoadPicture(file) == null) errors.Add("Scene picture did not import: " + file);
             var carry = SaveCarryOverCheck(errors);
             var ui = StoryViewCheck(errors);
-            log = "[NarrativeBridge] Smoke test (" + source + "): " + clipsHeard.Count + " voice clip(s) checked, " + completed + "/" + runs + " playthroughs reached an ending, " + carry + ", " + ui + ", " + errors.Count + " runtime errors." +
+            log = "[NarrativeBridge] Smoke test (" + source + "): " + clipsHeard.Count + " voice clip(s) and " + picturesSeen.Count + " picture(s) checked, " + completed + "/" + runs + " playthroughs reached an ending, " + carry + ", " + ui + ", " + errors.Count + " runtime errors." +
                   (errors.Count > 0 ? "\\n" + string.Join("\\n", errors) : "");
             return errors.Count == 0 && completed > 0;
         }
@@ -823,8 +857,16 @@ namespace NarrativeBridge.EditorTools
                 c.StartStory();
                 if (c.Story == null || view.Canvas == null) { errors.Add("Story UI: the panel was not built."); return "story UI failed"; }
                 var steps = 0;
+                var pictures = 0;
                 while (!c.HasEnded && steps++ < 200)
                 {
+                    // The scene the reader is in shows its picture (when the theme shows pictures).
+                    var file = c.CurrentPicture;
+                    if (file != null && view.theme.showPictures)
+                    {
+                        if (view.Picture == null) { errors.Add("Story UI: the scene picture " + file + " is not shown."); return "story UI failed"; }
+                        pictures++;
+                    }
                     var expected = c.IsWaitingForContinue ? 1 : c.Story.currentChoices.Count;
                     if (view.Buttons.Count != expected) { errors.Add("Story UI: expected " + expected + " button(s) but the panel shows " + view.Buttons.Count + "."); return "story UI failed"; }
                     var before = c.Transcript.Count + "/" + c.Story.state.currentTurnIndex;
@@ -833,7 +875,7 @@ namespace NarrativeBridge.EditorTools
                 }
                 if (!c.HasEnded) return "story UI passed (" + steps + " steps, no ending within the check)";
                 if (view.Buttons.Count != 0) { errors.Add("Story UI: buttons are still shown after the ending."); return "story UI failed"; }
-                return "story UI passed";
+                return "story UI passed" + (pictures > 0 ? " with pictures" : "");
             }
             finally { UnityEngine.Object.DestroyImmediate(go); }
         }

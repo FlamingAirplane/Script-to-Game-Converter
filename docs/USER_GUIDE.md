@@ -104,6 +104,9 @@ suggestions to review. Type in *Filter passages…* to narrow it down. Press **[
 - **Its title and id.** The id is how choices refer to it; renaming it updates every reference.
 - **Buttons:** **All content / Dialogue only** (hide everything except spoken lines), **Hide source** (the original
   script beside the passage), ↑ ↓ to reorder, **Make start**, and **Delete**.
+- **Scene picture:** **+ Add a picture** (or drop an image on it) to show a picture when this passage begins: in
+  Playtest, the playable story, and the game. PNG, JPEG, WebP and GIF work; very large pictures are scaled down.
+  **Describe it** for players who use a screen reader. **Replace…** and **Remove** change it; Undo brings one back.
 - **Content:** each block is *action* (narration), *dialogue*, a *transition*, a *note* (kept as a comment) or an
   *effect* (such as giving an item). Click text to edit it. The **L12** link on each block jumps to that line of the
   original script. Add blocks with **+ narration**, **+ dialogue**, **+ effect** and **+ Continue break**.
@@ -243,7 +246,8 @@ setup instructions for the developer.
 - **Where it sits:** along the bottom, in the centre, down the left or right, or full screen.
 - **Colours** for the panel, text, buttons and speaker names, and how see-through the panel is.
 - **Text size**, and a **typewriter** speed (letters a second, or off so each line appears at once).
-- Whether to show speaker names, scene headings, choice numbers, and the Restart, Save and Load buttons.
+- Whether to show speaker names, scene headings, choice numbers, the Restart, Save and Load buttons, and scene
+  pictures (they fill the screen behind the panel).
 - The words on the **Continue** button and at the ending.
 
 These settings are saved with your project. Your developer can change any of them later in Unity by selecting
@@ -302,8 +306,14 @@ your story's text, so it is safe to attach to a bug report. Choose how much to s
 - **Recordings:** beside any line of dialogue in Review, press **●** to record it with your microphone, **♪** to attach
   an audio file (WAV, MP3 or OGG; other formats are converted), and ▶ to play it back. A line with a recording uses it
   instead of the voice.
-- Recordings travel with the playable story, the Unity and Unreal packages, and saved project files. The recording
-  script export tells your voice actors which file name to use for each line.
+- **Many recordings at once:** download the **recording script** on the Export page. It lists every line of dialogue
+  with the file name to save each recording as (the *Clip* column). Once your actors send the files back, click
+  **Add recordings…** (on the Export page under the recording script, or in Story settings under *Recordings*) and pick
+  them all, or drop them there. Each file is attached to its line; a file named by its row number, like `12.wav`, works
+  too, and one for a line that already has a recording replaces it. Files that match no line are listed, and one Undo
+  takes the whole batch back off.
+- Recordings and scene pictures travel with the playable story, the Unity and Unreal packages, and saved project
+  files.
 
 ## 12. Keyboard shortcuts
 

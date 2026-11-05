@@ -81,6 +81,12 @@ building the game. It includes your story, your original script and instructions
 For Unity, **Story UI** on the same page sets how the story looks in the game: a look to start from, where the panel
 sits, colours, text size, typewriter speed, and the words on the Continue button, with a preview as you change them.
 
+Your voice actors can work from the **recording script** (Export page): it names the file for every line. Click
+**Add recordings…** and pick all their files at once to attach each to its line.
+
+To show a picture when a scene begins, open the passage in **Review** and click **+ Add a picture** under *Scene
+picture*, or drop an image there.
+
 To make the player click **Continue** before the rest of a passage appears, open the **Graph**, click the passage, and
 click **+ Continue break** between two of its lines.
 

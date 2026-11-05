@@ -48,6 +48,8 @@ namespace NarrativeBridge
         public bool showChoiceNumbers = true;
         [Tooltip("Restart, Save and Load buttons under the story.")]
         public bool showToolbar = true;
+        [Tooltip("Show scene pictures (#image) full screen behind the panel.")]
+        public bool showPictures = true;
 
         [Header("Words")]
         public string continueLabel = "Continue";
@@ -63,7 +65,7 @@ namespace NarrativeBridge
             public string background, text, accent, muted, continueLabel, endLabel;
             public int fontSize;
             public float panelOpacity, charactersPerSecond, panelXMin, panelYMin, panelXMax, panelYMax;
-            public bool showSpeakers, showSceneHeadings, showChoiceNumbers, showToolbar;
+            public bool showSpeakers, showSceneHeadings, showChoiceNumbers, showToolbar, showPictures;
         }
 
         /// <summary>Applies a theme exported from Narrative Bridge (NarrativeBridgeTheme.json).</summary>
@@ -87,6 +89,7 @@ namespace NarrativeBridge
             showSceneHeadings = e.showSceneHeadings;
             showChoiceNumbers = e.showChoiceNumbers;
             showToolbar = e.showToolbar;
+            showPictures = e.showPictures;
             if (!string.IsNullOrEmpty(e.continueLabel)) continueLabel = e.continueLabel;
             if (!string.IsNullOrEmpty(e.endLabel)) endLabel = e.endLabel;
         }
@@ -148,6 +151,8 @@ namespace NarrativeBridge
         readonly Queue<KeyValuePair<Text, string>> typing = new Queue<KeyValuePair<Text, string>>();
         Font font;
         RectTransform lines, choiceArea;
+        RawImage picture;
+        AspectRatioFitter pictureFit;
         ScrollRect scroll;
         Text status;
         Coroutine typer;
@@ -222,6 +227,17 @@ namespace NarrativeBridge
             scaler.uiScaleMode = CanvasScaler.ScaleMode.ScaleWithScreenSize;
             scaler.referenceResolution = new Vector2(1920, 1080);
             scaler.matchWidthOrHeight = 0.5f;
+
+            // The scene picture fills the screen behind the panel, cropped to keep its shape.
+            var art = Child("Scene Picture", canvasObject.transform);
+            art.anchorMin = Vector2.zero;
+            art.anchorMax = Vector2.one;
+            art.offsetMin = art.offsetMax = Vector2.zero;
+            picture = art.gameObject.AddComponent<RawImage>();
+            picture.raycastTarget = false;
+            picture.enabled = false;
+            pictureFit = art.gameObject.AddComponent<AspectRatioFitter>();
+            pictureFit.aspectMode = AspectRatioFitter.AspectMode.EnvelopeParent;
 
             var panel = Child("Panel", canvasObject.transform);
             panel.anchorMin = theme.panelMin;
@@ -305,6 +321,7 @@ namespace NarrativeBridge
             StopTyping();
             for (int i = lines.childCount - 1; i >= 0; i--) Discard(lines.GetChild(i).gameObject);
             ClearChoices();
+            ShowPicture(null);
         }
 
         void OnLine(NarrativeController.Line line) => ShowLine(line, Application.isPlaying && theme.charactersPerSecond > 0f);
@@ -322,9 +339,23 @@ namespace NarrativeBridge
             if (choiceArea != null) AddText(choiceArea, theme.endLabel, theme.fontSize, theme.accent, FontStyle.Italic, TextAnchor.MiddleCenter);
         }
 
+        /// <summary>Shows a scene picture (an #image file name) behind the panel, or hides it for null.</summary>
+        public void ShowPicture(string file)
+        {
+            if (picture == null) return;
+            var texture = NarrativeController.LoadPicture(file);
+            picture.texture = texture;
+            picture.enabled = texture != null;
+            if (texture != null) pictureFit.aspectRatio = (float)texture.width / Mathf.Max(1, texture.height);
+        }
+
+        /// <summary>The picture being shown, or null.</summary>
+        public Texture Picture => picture != null && picture.enabled ? picture.texture : null;
+
         void ShowLine(NarrativeController.Line line, bool animate)
         {
             if (lines == null) return;
+            if (line.Image != null && theme.showPictures) ShowPicture(line.Image);
             if (line.IsChoice)
             {
                 AddText(lines, line.Text, Mathf.RoundToInt(theme.fontSize * 0.8f), theme.muted, FontStyle.Italic, TextAnchor.UpperCenter);

@@ -1,5 +1,6 @@
 import type { ProcessedStory } from '../pipeline';
 import { audioFileName, bytesToBase64, referencedAudio, type AudioAssets } from '../audio';
+import { imageFileName, referencedImages } from '../images';
 import { log } from '../log';
 import { assertExportable, storyVersion } from './common';
 
@@ -26,7 +27,7 @@ export function playableFileName(story: ProcessedStory): string {
   return `${story.project.project.id || 'story'}.html`;
 }
 
-export function buildPlayableHtml(story: ProcessedStory, inkRuntimeJs: string, audio: AudioAssets = {}): string {
+export function buildPlayableHtml(story: ProcessedStory, inkRuntimeJs: string, audio: AudioAssets = {}, images: AudioAssets = {}): string {
   assertExportable(story);
   const { title, author, id } = story.project.project;
   const runtime = scriptSafe(inkRuntimeJs.replace(/\/\/# sourceMappingURL=.*$/m, ''));
@@ -36,12 +37,19 @@ export function buildPlayableHtml(story: ProcessedStory, inkRuntimeJs: string, a
     const a = audio[ref.id];
     if (a) clips[audioFileName(ref)] = `data:${a.mime};base64,${bytesToBase64(a.bytes)}`;
   }
+  // Scene pictures likewise, keyed by the file name used in #image tags, with their descriptions.
+  const pictures: Record<string, { src: string; alt: string }> = {};
+  for (const ref of referencedImages(story.project)) {
+    const a = images[ref.id];
+    if (a) pictures[imageFileName(ref)] = { src: `data:${a.mime};base64,${bytesToBase64(a.bytes)}`, alt: ref.alt ?? '' };
+  }
   const voices = Object.fromEntries(story.project.characters.filter((c) => c.voice).map((c) => [c.id, c.voice]));
   const meta = jsonSafe(
     JSON.stringify({ title, author: author ?? '', saveKey: `narrative-bridge.play.${id}`, version: storyVersion(story), voices, hasClips: Object.keys(clips).length > 0 }),
   );
   const clipJson = jsonSafe(JSON.stringify(clips));
-  log('export').info('Built playable story', { clips: Object.keys(clips).length, voices: Object.keys(voices).length, storyBytes: story.compile.json!.length });
+  const pictureJson = jsonSafe(JSON.stringify(pictures));
+  log('export').info('Built playable story', { clips: Object.keys(clips).length, pictures: Object.keys(pictures).length, voices: Object.keys(voices).length, storyBytes: story.compile.json!.length });
   return `<!doctype html>
 <html lang="en">
 <head>
@@ -76,6 +84,7 @@ export function buildPlayableHtml(story: ProcessedStory, inkRuntimeJs: string, a
 <script id="story-json" type="application/json">${jsonSafe(story.compile.json!)}</script>
 <script id="story-meta" type="application/json">${meta}</script>
 <script id="story-audio" type="application/json">${clipJson}</script>
+<script id="story-pictures" type="application/json">${pictureJson}</script>
 <script>${PLAYER_JS}</script>
 </body>
 </html>
@@ -105,6 +114,7 @@ font-size:13px;font-variant:small-caps;text-transform:lowercase;letter-spacing:.
 .text p{margin:0 0 4px;text-indent:1.4em;text-align:justify;hyphens:auto}
 .text>p:first-child{text-indent:0}.text>p:first-child::first-letter{float:left;font-size:3.3em;line-height:.9;padding:4px 8px 0 0;color:var(--rubric)}
 .scene{display:block;text-align:center;text-indent:0;font-size:13px;font-variant:small-caps;text-transform:lowercase;letter-spacing:.2em;color:var(--faded);margin:24px 0 10px}
+.picture{margin:18px 0 22px;text-align:center}.picture img{max-width:100%;max-height:60vh;border-radius:2px;box-shadow:0 2px 10px rgba(40,54,24,.18)}
 .scene:before{content:'❧';display:block;color:var(--rubric);font-size:18px;letter-spacing:0}
 .text p.dialogue{text-indent:0;text-align:left;margin:10px 0 10px 2.2em}
 .speaker{display:block;font-size:13px;font-variant:small-caps;text-transform:lowercase;letter-spacing:.16em;font-weight:600;color:var(--ink2)}
@@ -171,6 +181,7 @@ const PLAYER_JS = `
 
   // ---- Voices: recorded clips, else the browser's speech voice set for the character ----
   var clips = JSON.parse(document.getElementById('story-audio').textContent);
+  var pictures = JSON.parse(document.getElementById('story-pictures').textContent);
   var voiceOn = meta.hasClips;
   try { var pref = localStorage.getItem('narrative-bridge.play.voices'); if (pref) voiceOn = pref === 'on'; } catch (e) {}
   var queue = [], playing = null;
@@ -239,7 +250,7 @@ const PLAYER_JS = `
       var raw = (story.Continue() || '').trim();
       if (!raw) continue;
       var tags = story.currentTags || [];
-      var line = { text: raw, scene: tag(tags, 'scene'), transition: tags.indexOf('transition') >= 0, audio: tag(tags, 'audio'), who: tag(tags, 'speaker') };
+      var line = { text: raw, scene: tag(tags, 'scene'), transition: tags.indexOf('transition') >= 0, audio: tag(tags, 'audio'), image: tag(tags, 'image'), who: tag(tags, 'speaker') };
       if (tag(tags, 'speaker') !== null) {
         var i = raw.indexOf(': ');
         if (i > 0) { line.speaker = raw.slice(0, i); line.text = raw.slice(i + 2); }
@@ -264,6 +275,14 @@ const PLAYER_JS = `
       if (l.pause) return; // a Continue break: the page simply goes on
       if (l.chosen) { box.appendChild(el('p', 'chosen', l.chosen)); return; }
       if (l.scene) box.appendChild(el('span', 'scene', l.scene));
+      var pic = l.image && pictures[l.image];
+      if (pic) {
+        var fig = el('figure', 'picture'), img = el('img');
+        img.src = pic.src;
+        img.alt = pic.alt;
+        fig.appendChild(img);
+        box.appendChild(fig);
+      }
       if (l.speaker) {
         var p = el('p', 'dialogue');
         p.appendChild(el('span', 'speaker', l.speaker));
