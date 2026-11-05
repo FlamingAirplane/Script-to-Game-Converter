@@ -10,6 +10,7 @@ import {
   type Condition,
   type ContentBlock,
   type ConversionMode,
+  type OriginalFile,
   type Effect,
   type Item,
   type Passage,
@@ -38,6 +39,10 @@ export interface SourceInput {
   inkMode?: 'edit' | 'keep';
   /** Something the writer should know about the conversion (shown as a note in Diagnostics). */
   note?: string;
+  /** The converted file itself (its description; the browser keeps the bytes, see originalBytes). */
+  original?: OriginalFile;
+  /** The converted file's bytes, for the browser to keep. Not part of the story. */
+  originalBytes?: Uint8Array;
 }
 
 const CONVERTED_LABEL = { fdx: 'Final Draft', docx: 'Word', pdf: 'PDF', twine: "Twine's web page format" } as const;
@@ -111,6 +116,7 @@ export async function buildStory(inputs: SourceInput[], options: BuildOptions): 
       sha256: await sha256Hex(input.text),
       byteLength,
       text: input.text,
+      ...(input.original ? { original: input.original } : {}),
     };
     sources.push(doc);
     const parsed1 = logger.time('Parsed document');
