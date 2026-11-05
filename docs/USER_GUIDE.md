@@ -144,7 +144,8 @@ Click **Story settings** at the top of the contents.
   or drop a picture on it), and **merge into…** for duplicates (such as "MIRA" and "MIRA (V.O.)"). A portrait shows
   beside the character's lines in Playtest and the playable story, and in Unity's story panel while they speak.
 - **Files:** everything you've put into the story, to download again: the scripts it was made from (a Word, PDF or
-  Final Draft file comes back as the text taken from it), voice recordings (with the line each belongs to), scene
+  Final Draft file comes back both as the original file and as the text taken from it; the original is kept in your
+  browser and in saved project files, and goes into engine exports too), voice recordings (with the line each belongs to), scene
   pictures and character portraits. **Download** saves one; **Download all (.zip)** saves them all, in a folder for
   each kind.
 - **Items** (things the player can carry, like a key) and **Variables** (numbers, true/false values or text the story
@@ -263,7 +264,9 @@ have it yet, and gives the developer ways to connect the story to the game: star
 and variables, and use the game's own inventory and save system.
 
 **Story UI** (Unity only) sets how the story panel looks and behaves in the game: about 70 settings in groups you can
-open and close, with a preview beside them. **Reset to defaults** puts them all back.
+open and close, with a preview beside them. A setting you've changed is marked ● with a **↺** beside it that puts
+just that one back to its default (the chosen look's); each group has **↺ Reset … to defaults**, and **Reset to
+defaults** at the top puts everything back.
 
 - **Look:** *Book*, *Night* or *Minimal* set the colours; changing any colour makes it *Custom*. Your other settings stay.
 - **Colours:** panel, story text, speaker names, scene headings, notes, buttons, button text, highlights and the border.

@@ -24,6 +24,23 @@ export interface SourceDocument {
   sha256: string;
   byteLength: number;
   text: string; // original source is preserved verbatim
+  /**
+   * The file this text was taken from, when it wasn't text (Word, PDF, Final Draft, Twine). Its bytes
+   * live in the browser like other media (and in saved project files), under `id`.
+   */
+  original?: OriginalFile;
+}
+
+export interface OriginalFile {
+  id: string;
+  name: string;
+  mime: string;
+  byteLength: number;
+}
+
+/** Every original file the project keeps (see SourceDocument.original). */
+export function referencedOriginals(project: { sources: { original?: OriginalFile }[] }): OriginalFile[] {
+  return project.sources.flatMap((s) => (s.original ? [s.original] : []));
 }
 
 export type SourceFormat = 'txt' | 'fountain' | 'md' | 'ink' | 'twee';
