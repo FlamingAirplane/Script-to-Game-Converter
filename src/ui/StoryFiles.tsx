@@ -109,7 +109,7 @@ export function StoryFiles({ project }: { project: StoryProject }) {
                     </span>
                     <span className="file-context muted small" title={f.context}>
                       {f.context}
-                      {f.convertedFrom ? ` (as text; the .${f.convertedFrom} itself isn’t kept)` : ''}
+                      {f.convertedFrom ? ` (as text: it was imported before the .${f.convertedFrom} itself was kept)` : ''}
                     </span>
                     <span className="muted small file-size">{missing ? 'not in this browser' : s != null ? size(s) : ''}</span>
                     <button className="btn tiny" disabled={missing} onClick={() => void one(f)} aria-label={`Download ${f.fileName}`}>

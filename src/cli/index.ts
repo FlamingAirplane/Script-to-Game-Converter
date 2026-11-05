@@ -80,10 +80,13 @@ async function load(args: Args) {
     return processProject(project, data.parseDiagnostics ?? []);
   }
   const inputs = await Promise.all(
-    files.map((f) => {
+    files.map(async (f) => {
       if (!existsSync(f)) usage(`File not found: ${f}`);
       const binary = BINARY_EXTENSIONS.some((e) => f.toLowerCase().endsWith(e));
-      return prepareInput(basename(f), binary ? new Uint8Array(readFileSync(f)) : readFileSync(f, 'utf8'));
+      const input = await prepareInput(basename(f), binary ? new Uint8Array(readFileSync(f)) : readFileSync(f, 'utf8'));
+      // A converted file (Word, PDF…) goes into exports as it is too.
+      if (input.original && input.originalBytes) audioAssets[input.original.id] = { mime: input.original.mime, bytes: input.originalBytes };
+      return input;
     }),
   );
   // Ink: editable when possible unless told otherwise (see SourceInput.inkMode).
@@ -196,6 +199,7 @@ async function main() {
           unityLayout: args['unity-project'] ? 'project' : 'package',
           packageVersion: typeof args['package-version'] === 'string' ? args['package-version'] : undefined,
           audio: audioAssets,
+          originals: audioAssets,
         });
         const outDir = resolve(args.out);
         for (const f of result.files) {
