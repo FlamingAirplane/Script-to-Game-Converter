@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { PUBLISHED, sameDesign, useDesign } from '../design/design';
+import { sameDesign, useDesign } from '../design/design';
 
 // The hidden way into the design editor: the page's address ending in #admin. Nothing links to it.
 // The editor itself (and its lock screen) is a separate chunk, loaded only then.
@@ -8,7 +8,7 @@ const isAdminHash = () => location.hash === '#admin';
 
 export function AdminHost() {
   const [open, setOpen] = useState(isAdminHash);
-  const { draft, previewPublished } = useDesign();
+  const { draft, previewPublished, published } = useDesign();
   useEffect(() => {
     const on = () => setOpen(isAdminHash());
     window.addEventListener('hashchange', on);
@@ -31,7 +31,7 @@ export function AdminHost() {
     };
   }, [open]);
   // A draft only exists in the browser it was made in (the admin's), so this shows only there.
-  if (open || !draft || sameDesign(draft, PUBLISHED)) return null;
+  if (open || !draft || sameDesign(draft, published)) return null;
   return (
     <button className="design-draft-pill" onClick={() => (location.hash = 'admin')} title="This browser is showing an unpublished design draft. Open the design editor.">
       {previewPublished ? 'Published design (draft hidden)' : 'Design draft'}
