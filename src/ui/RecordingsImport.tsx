@@ -1,8 +1,11 @@
-import { useRef, useState } from 'react';
+import { lazy, Suspense, useRef, useState } from 'react';
 import { matchRecordings } from '../core/export';
 import type { StoryProject } from '../core/isr';
 import { storeClip } from './audioStore';
 import type { Update } from './projectOps';
+
+// The session tool is large and used now and then, so it loads when opened.
+const SessionLinker = lazy(() => import('./SessionLinker').then((m) => ({ default: m.SessionLinker })));
 
 /**
  * "Add recordings…": pick many audio files at once (or drop them here) and each is attached to the line of
@@ -13,6 +16,7 @@ export function RecordingsImport({ project, update }: { project: StoryProject; u
   const [busy, setBusy] = useState(false);
   const [result, setResult] = useState<{ attached: number; unmatched: string[]; failed: string[] } | null>(null);
   const [over, setOver] = useState(false);
+  const [sessionOpen, setSessionOpen] = useState(false);
   const lines = project.passages.reduce((n, p) => n + p.content.filter((b) => b.type === 'dialogue').length, 0);
   const recorded = project.passages.reduce((n, p) => n + p.content.filter((b) => b.type === 'dialogue' && b.audio).length, 0);
 
@@ -63,7 +67,15 @@ export function RecordingsImport({ project, update }: { project: StoryProject; u
       </p>
       <button className="btn" disabled={busy || !lines} onClick={() => input.current?.click()}>
         {busy ? 'Adding…' : 'Add recordings…'}
+      </button>{' '}
+      <button className="btn" disabled={!lines} onClick={() => setSessionOpen(true)} title="One long recording of a voice session: mark where each line is in it, and each becomes that line's clip">
+        Link a whole session…
       </button>
+      {sessionOpen && (
+        <Suspense fallback={<p className="muted small">Opening…</p>}>
+          <SessionLinker project={project} update={update} onClose={() => setSessionOpen(false)} />
+        </Suspense>
+      )}
       {result && (
         <p className="small" role="status">
           {result.attached ? `Attached ${result.attached} recording${result.attached === 1 ? '' : 's'}.` : 'No recordings attached.'}
