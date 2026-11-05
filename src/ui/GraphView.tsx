@@ -4,6 +4,7 @@ import { plainKey } from './Shortcuts';
 import type { StoryGraph } from '../core/analyzer';
 import { errorData, log } from '../core/log';
 import { CARD, storyLayout, type Position } from '../core/layout';
+import { routeEdges } from '../core/edgeRouting';
 import type { StoryProject } from '../core/isr';
 import { PassageInspector } from './PassageInspector';
 import { countBreaks, type Update } from './projectOps';
@@ -272,6 +273,11 @@ export function GraphView({
   }, [query, graph.nodes]);
 
   // Parallel edges between the same two passages get their own lane so they don't draw on top of each other.
+  // Each arrow leaves and enters its cards by whichever sides make the least clutter (see edgeRouting.ts).
+  const routes = useMemo(
+    () => routeEdges(new Map([...placed].map(([id, p]) => [id, { x: p.x, y: p.y, w: W, h: H }])), edges.filter((e) => placed.has(e.to)).map((e) => ({ id: e.id, from: e.from, to: e.to }))),
+    [placed, edges],
+  );
   const lanes = useMemo(() => {
     const groups = new Map<string, string[]>();
     for (const e of edges) {
@@ -542,20 +548,9 @@ export function GraphView({
                   </g>
                 );
               }
-              const forward = b.x > a.x + W / 2;
-              const x1 = forward ? a.x + W : a.x + W / 2 + lane * 18;
-              const y1 = forward ? a.y + H / 2 + clampLane(lane * 10) : a.y + H;
-              const x2 = forward ? b.x : b.x + W / 2 + lane * 18;
-              const y2 = forward ? b.y + H / 2 + clampLane(lane * 10) : b.y + H;
-              const dx = Math.max(40, (x2 - x1) / 2);
-              const sag = Math.max(50, Math.abs(x2 - x1) * 0.25) + (lane + (n - 1) / 2) * 24;
-              const c1 = forward ? [x1 + dx, y1 + lane * 26] : [x1, y1 + sag];
-              const c2 = forward ? [x2 - dx, y2 + lane * 26] : [x2, y2 + sag];
-              const end = forward ? [x2, y2] : [x2, y2 + 2];
-              const d = `M${x1},${y1} C${c1[0]},${c1[1]} ${c2[0]},${c2[1]} ${end[0]},${end[1]}`;
-              // Midpoint of the cubic Bézier (t = 0.5) for the label.
-              const mx = (x1 + 3 * c1[0] + 3 * c2[0] + end[0]) / 8;
-              const my = (y1 + 3 * c1[1] + 3 * c2[1] + end[1]) / 8;
+              const route = routes.get(e.id)!;
+              const d = route.d;
+              const [mx, my] = route.mid;
               return (
                 <g key={e.id} onPointerEnter={() => setHoverEdge(e.id)} onPointerLeave={() => setHoverEdge(null)}>
                   <path d={d} className="edge-hit" />
