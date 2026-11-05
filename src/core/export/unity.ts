@@ -35,7 +35,8 @@ import {
 export const unityAdapter: EngineAdapter = {
   id: 'unity',
   label: 'Unity',
-  defaultEngineVersion: '2022.3.62f1',
+  // Unity 6.3 LTS, the newest Unity, for a complete new project. Packages still support 2022.3 and later.
+  defaultEngineVersion: '6000.3.23f1',
   integration: {
     name: 'Ink Unity Integration',
     repository: 'https://github.com/inkle/ink-unity-integration.git',
@@ -43,7 +44,7 @@ export const unityAdapter: EngineAdapter = {
   },
   requirements: (o) => [
     o.unityLayout === 'project'
-      ? { id: 'unity', label: `Unity ${o.engineVersion} (2022.3 LTS or later)`, detail: 'Install through Unity Hub.', probe: { paths: ['/Applications/Unity/Hub/Editor', 'C:\\Program Files\\Unity\\Hub\\Editor', '~/Unity/Hub/Editor'] } }
+      ? { id: 'unity', label: `Unity ${o.engineVersion} (Unity 6 recommended; 2022.3 LTS or later)`, detail: 'Install through Unity Hub.', probe: { paths: ['/Applications/Unity/Hub/Editor', 'C:\\Program Files\\Unity\\Hub\\Editor', '~/Unity/Hub/Editor'] } }
       : { id: 'unity', label: 'Your Unity project (2022.3 LTS or later)', detail: 'The package adds the story to a game you already have; nothing in your project is replaced.', probe: { paths: ['/Applications/Unity/Hub/Editor', 'C:\\Program Files\\Unity\\Hub\\Editor', '~/Unity/Hub/Editor'] } },
     { id: 'git', label: 'Git on PATH', detail: 'Unity Package Manager needs git to fetch Ink Unity Integration from GitHub (skip if your game already has it).', probe: { command: 'git --version' } },
   ],
@@ -63,7 +64,7 @@ export const unityAdapter: EngineAdapter = {
     const cs = (template: string) => fillTemplate(template, id, { __INK_URL__: unityPackageUrl(options.integrationRef), __ASSET_FOLDER__: `Assets/NarrativeBridge/${id.namespace.split('.').pop()}` });
     const sample = `${pkg}Samples~/Hooking into your game/`;
     const packageFiles: ExportFile[] = [
-      { path: `${pkg}package.json`, content: json(packageJson(id, { version, title: story.project.project.title, description: packageDescription(story), unity: minimumUnity(options.engineVersion) })) },
+      { path: `${pkg}package.json`, content: json(packageJson(id, { version, title: story.project.project.title, description: packageDescription(story), unity: '2022.3' })) },
       { path: `${pkg}README.md`, content: packageReadme(story, options, id) },
       { path: `${pkg}CHANGELOG.md`, content: `# Changelog\n\n## ${version}\n\nExported from Narrative Bridge (story version \`${storyVersion(story)}\`).\n` },
       // The canonical, validated Ink. Folders ending in ~ aren't imported by Unity: the smoke test compiles it.
@@ -312,7 +313,8 @@ scenes, typing and pacing, choices and buttons, toolbar, scene pictures, charact
 \`Assets/NarrativeBridge/${id.namespace.split('.').pop()}/\` from the look chosen in Narrative Bridge, and you can change it in the
 Inspector, even while playing. The view's *Sorting Order* sets where it draws among your canvases, *Keyboard
 Shortcuts* (1-9 choose, Space or Return continue) can be turned off, and it uses your scene's EventSystem when there
-is one (it works with the Input Manager and the Input System package).
+is one (it works with the Input Manager and the Input System package). Its text is TextMeshPro whenever your game has it
+(built into Unity 6, or the TextMeshPro package on 2022.3): set *TMP Font* on the theme to use your own font asset.
 
 ## Updating
 Export the story again and replace this folder (or install the new .tgz). Script GUIDs stay the same, so your scenes
@@ -1271,6 +1273,12 @@ namespace __NAMESPACE__.EditorTools
                 view.Build();
                 c.StartStory();
                 if (c.Story == null || view.Canvas == null) { errors.Add("Story UI: the panel was not built."); return "story UI failed"; }
+                var textKind = "Text";
+#if NARRATIVE_BRIDGE_TMP
+                // Unity's current text system when the game has it.
+                if (view.Canvas.GetComponentsInChildren<TMPro.TextMeshProUGUI>(true).Length == 0) { errors.Add("Story UI: TextMeshPro is available but the panel doesn't use it."); return "story UI failed"; }
+                textKind = "TextMeshPro";
+#endif
                 var steps = 0;
                 var pictures = 0;
                 var portraits = 0;
@@ -1309,7 +1317,7 @@ namespace __NAMESPACE__.EditorTools
                 }
                 if (!c.HasEnded) return "story UI passed (" + steps + " steps, no ending within the check)";
                 if (view.Buttons.Count != 0) { errors.Add("Story UI: buttons are still shown after the ending."); return "story UI failed"; }
-                return "story UI passed" + (pictures > 0 ? " with pictures" : "") + (portraits > 0 ? (pictures > 0 ? " and portraits" : " with portraits") : "") + (exits > 0 ? ", " + exits + " exit(s) to the game and back" : "");
+                return "story UI passed (" + textKind + ")" + (pictures > 0 ? " with pictures" : "") + (portraits > 0 ? (pictures > 0 ? " and portraits" : " with portraits") : "") + (exits > 0 ? ", " + exits + " exit(s) to the game and back" : "");
             }
             finally { UnityEngine.Object.DestroyImmediate(go); }
         }

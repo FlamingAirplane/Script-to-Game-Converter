@@ -218,7 +218,7 @@ revised story versions), the `NarrativeView` story panel, the `NarrativeTheme` l
 `Runtime/Resources/NarrativeBridge/<story>/` (the compiled story, `Theme.json`, voice clips, and scene pictures as PNG/JPEG
 `.bytes` decoded at run time). For connecting it to a game: `StartAt(passage)`, `TagFound` for the story's own tags,
 `VariableChanged`, Inspector UnityEvents, *GameObject → Narrative Bridge → <Story>*, a *Voice Source* for the game's mixer,
-the view's *Sorting Order* and *Keyboard Shortcuts* (Input Manager or Input System), and a *Hooking into your game* sample.
+the view's *Sorting Order* and *Keyboard Shortcuts* (Input Manager or Input System), text drawn with **TextMeshPro** whenever the game has it (built into Unity 6; the TextMeshPro package on 2022.3; Unity's older Text otherwise), and a *Hooking into your game* sample.
 The validated ink is in `Ink~/MainStory.ink`. The **Story UI** settings on the Export page (about 70, described once in
 `UNITY_THEME_FIELDS` in `src/core/export/unityTheme.ts`, which also draws the card's controls) set the panel's colours,
 position, text, speakers, transcript style (everything, the current scene, or one line at a time), typewriter and pacing,
