@@ -257,7 +257,9 @@ have it yet, and gives the developer ways to connect the story to the game: star
 and variables, and use the game's own inventory and save system.
 
 **Story UI** (Unity only) sets how the story panel looks and behaves in the game: about 70 settings in groups you can
-open and close, with a preview beside them. **Reset to defaults** puts them all back.
+open and close, with a preview beside them. A setting you've changed is marked ● with a **↺** beside it that puts
+just that one back to its default (the chosen look's); each group has **↺ Reset … to defaults**, and **Reset to
+defaults** at the top puts everything back.
 
 - **Look:** *Book*, *Night* or *Minimal* set the colours; changing any colour makes it *Custom*. Your other settings stay.
 - **Colours:** panel, story text, speaker names, scene headings, notes, buttons, button text, highlights and the border.

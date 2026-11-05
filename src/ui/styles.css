@@ -1031,6 +1031,12 @@ section.drafts > h2 { margin-top: 26px; }
 .design-draft-pill { position: fixed; left: 12px; bottom: 12px; z-index: 50; font: 12px/1.4 system-ui, sans-serif; padding: 4px 11px; border-radius: 99px; border: 1px solid #b07d1a; background: #fff6dd; color: #6b4a00; cursor: pointer; box-shadow: 0 2px 8px rgba(0, 0, 0, 0.25); }
 .design-draft-pill:hover { background: #ffeeb8; }
 
+/* Story UI: a reset beside each changed setting, and one per group */
+.theme-field { position: relative; display: flex; align-items: flex-start; gap: 4px; min-width: 0; }
+.theme-field > :first-child { flex: 1; min-width: 0; }
+.theme-field .field-reset { flex: none; padding: 0 5px; font-size: 14px; color: var(--rubric); margin-top: 2px; }
+.theme-field.changed > :first-child .muted.small:first-child::after, .theme-field.changed .colour-field span::after { content: ' ●'; color: var(--warn); font-size: 8px; vertical-align: 2px; }
+.group-reset { margin: 0 0 6px; }
 /* Story settings → Files */
 .story-files { margin-top: 1.5em; }
 .story-files h3 { margin: 0; }
