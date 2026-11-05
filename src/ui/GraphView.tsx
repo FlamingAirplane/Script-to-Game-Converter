@@ -154,11 +154,11 @@ function RouteSign({ kind, x, y }: { kind: 'cond' | 'pending'; x: number; y: num
 }
 
 /** How many Continue breaks a passage has, pinned to its card's bottom edge (decorative: the card's text says it). */
-function BreakSign({ count, x, y }: { count: number; x: number; y: number }) {
-  const label = `⏸ ${count}`;
+function BreakSign({ count, x, y, exit }: { count: number; x: number; y: number; exit?: boolean }) {
+  const label = `${exit ? '⇥' : '⏸'} ${count}`;
   const w = label.length * 6.4 + 12;
   return (
-    <g className="break-sign" transform={`translate(${x},${y})`} aria-hidden pointerEvents="none">
+    <g className={exit ? 'break-sign exit-sign' : 'break-sign'} transform={`translate(${x},${y})`} aria-hidden pointerEvents="none">
       <rect width={w} height={17} rx={8.5} />
       <text x={w / 2} y={12.5} textAnchor="middle">
         {label}
@@ -199,6 +199,12 @@ function MapKey({ hiddenGated }: { hiddenGated: number }) {
           <BreakSign count={2} x={2} y={1} />
         </svg>{' '}
         Continue breaks inside the passage
+      </li>
+      <li>
+        <svg width="40" height="20" aria-hidden>
+          <BreakSign count={1} x={2} y={1} exit />
+        </svg>{' '}
+        exits to the game (gameplay takes over)
       </li>
     </ul>
   );
@@ -242,6 +248,7 @@ export function GraphView({
   // The passage panel: open after a passage is clicked (or chosen with Space), closed with Esc or ×.
   const [inspecting, setInspecting] = useState(false);
   const breaks = useMemo(() => new Map(project.passages.map((p) => [p.id, countBreaks(p)])), [project]);
+  const exits = useMemo(() => new Map(project.passages.map((p) => [p.id, p.content.filter((b) => b.type === 'exit').map((b) => (b.type === 'exit' ? b.name : ''))])), [project]);
   const auto = useMemo(() => storyLayout(graph, start), [graph, start]);
   const [dragging, setDragging] = useState<{ id: string; pos: Position } | null>(null);
   const placed = useMemo(() => {
@@ -572,6 +579,7 @@ export function GraphView({
                 out ? `${out} route${out === 1 ? '' : 's'} lead${out === 1 ? 's' : ''} on.` : '',
                 reached ? `Reached in ${reached} automated test play${reached === 1 ? '' : 's'}.` : '',
                 breaks.get(n.id) ? `${breaks.get(n.id)} Continue break${breaks.get(n.id) === 1 ? '' : 's'}.` : '',
+                exits.get(n.id)?.length ? `Exits to the game: ${exits.get(n.id)!.join(', ')}.` : '',
               ]
                 .filter(Boolean)
                 .join(' ');
@@ -615,6 +623,7 @@ export function GraphView({
                     return <NodeTag key={t} kind={t} x={x} />;
                   })}
                   {!!breaks.get(n.id) && <BreakSign count={breaks.get(n.id)!} x={W - 46} y={H - 9} />}
+                  {!!exits.get(n.id)?.length && <BreakSign count={exits.get(n.id)!.length} x={breaks.get(n.id) ? W - 92 : W - 46} y={H - 9} exit />}
                 </g>
               );
             })}

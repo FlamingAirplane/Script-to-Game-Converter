@@ -17,6 +17,8 @@ concurrency:
 jobs:
   test:
     runs-on: ubuntu-latest
+    # A job that hangs fails after this long instead of running on (time waiting for a runner is not counted).
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-node@v7
@@ -30,6 +32,7 @@ jobs:
 
   e2e:
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-node@v7
@@ -39,6 +42,8 @@ jobs:
       - run: npm ci
       - run: npx playwright-core install --with-deps webkit chromium
       - run: npm run test:e2e
+      - name: No WCAG 2.1 A/AA accessibility problems, light or dark
+        run: node tests/e2e/a11y.mjs
       - name: No screen scrolls sideways (320–2560 px)
         run: |
           node tests/e2e/overflow.mjs

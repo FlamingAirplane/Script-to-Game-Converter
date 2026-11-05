@@ -1347,6 +1347,22 @@ describe('story map arrows', () => {
   });
 });
 
+describe('small fixes', () => {
+  it('warns about exits the game can’t tell apart, and an exit right before the end', async () => {
+    const { project } = await build('@passage a A\nOne.\n@exit fight\nTwo.\n-> b\n@passage b B\nThree.\n@exit fight\n@end\n', 'e.md', 'structured');
+    const codes = analyze(project).diagnostics.map((d) => d.code);
+    expect(codes).toContain('EXIT_NAME_REUSED');
+    expect(codes).toContain('EXIT_THEN_END');
+  });
+
+  it('shows a clip’s file name, shortened in the middle when long', async () => {
+    const { clipLabel } = await import('../src/ui/VoiceControls');
+    expect(clipLabel('take1.wav')).toBe('take1');
+    expect(clipLabel('Mira session 1.02.50–1.05.10.wav')).toBe('Mira session 1.02.50–1.05.10');
+    expect(clipLabel('Mira recording session one 1.02.50–1.05.10.wav')).toBe('Mira recording s…50–1.05.10');
+  });
+});
+
 describe('live design', () => {
   it('reads the published design from its Gist, keeps it for the next visit, and ignores anything else', async () => {
     const mem = new Map<string, string>();
