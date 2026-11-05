@@ -11,7 +11,7 @@ let enabled = (() => {
     // Someone who hasn't chosen gets the design's default (see the admin design editor).
     return saved ? saved !== 'off' : designSetting<boolean>('sound');
   } catch {
-    return true;
+    return false;
   }
 })();
 

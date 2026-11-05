@@ -30,13 +30,13 @@ import { useProcessedStory } from './useProcessedStory';
 
 type Tab = 'import' | 'review' | 'graph' | 'ink' | 'play' | 'export';
 // Tabs read as chapters of the book, numbered in roman numerals.
-const TABS: { id: Tab; label: string; key: string; numeral: string }[] = [
-  { id: 'import', label: 'Import', key: '1', numeral: 'I' },
-  { id: 'review', label: 'Review', key: '2', numeral: 'II' },
-  { id: 'graph', label: 'Graph', key: '3', numeral: 'III' },
-  { id: 'ink', label: 'Ink', key: '4', numeral: 'IV' },
-  { id: 'play', label: 'Playtest', key: '5', numeral: 'V' },
-  { id: 'export', label: 'Export', key: '6', numeral: 'VI' },
+const TABS: { id: Tab; label: string; key: string; numeral: string; about: string }[] = [
+  { id: 'import', label: 'Import', key: '1', numeral: 'I', about: 'Bring in a script, or try a sample' },
+  { id: 'review', label: 'Review', key: '2', numeral: 'II', about: 'Check and edit each passage (a scene or page of the story)' },
+  { id: 'graph', label: 'Graph', key: '3', numeral: 'III', about: 'The story map: every passage and the choices between them' },
+  { id: 'ink', label: 'Ink', key: '4', numeral: 'IV', about: 'The story in Ink, the scripting language game engines read' },
+  { id: 'play', label: 'Playtest', key: '5', numeral: 'V', about: 'Play the story as a player would' },
+  { id: 'export', label: 'Export', key: '6', numeral: 'VI', about: 'Share it as a web page, or package it for Unity or Unreal' },
 ];
 
 const STAGES: { state: ConversionState; label: string }[] = [
@@ -71,6 +71,15 @@ function loadSaved(): Saved | null {
 
 /** Projects larger than this are autosaved to IndexedDB only (localStorage holds about 5 MB in all). */
 const QUICK_COPY_LIMIT = 1_500_000;
+
+/** "just now", "5 min ago", "2 h ago", or a date. */
+function ago(at: number): string {
+  const min = Math.round((Date.now() - at) / 60_000);
+  if (min < 1) return 'just now';
+  if (min < 60) return `${min} min ago`;
+  if (min < 24 * 60) return `${Math.round(min / 60)} h ago`;
+  return new Date(at).toLocaleDateString();
+}
 
 export function App() {
   const initial = useMemo(loadSaved, []);
@@ -225,6 +234,40 @@ export function App() {
   // The project file this story was opened from or saved to (Chrome/Edge), so Save writes back to it.
   const [projectFile, setProjectFile] = useState<FileHandle | null>(null);
   const [savedToFile, setSavedToFile] = useState<StoryProject | null>(null);
+  // When this project was last saved to a file or the cloud (remembered per project), and which version.
+  const [copy, setCopy] = useState<{ at: number; project: StoryProject | null } | null>(null);
+  const baseline = useRef<StoryProject | null>(project);
+  const [remindLater, setRemindLater] = useState(0);
+  // Since when the project has had work that isn't in a saved copy; the reminder waits a few minutes.
+  const unsaved = !!project && project !== copy?.project && project !== baseline.current;
+  const unsavedSince = useRef(0);
+  if (!unsaved) unsavedSince.current = 0;
+  else if (!unsavedSince.current) unsavedSince.current = Date.now();
+  const [, tick] = useState(0);
+  useEffect(() => {
+    const t = setInterval(() => tick((n) => n + 1), 60_000); // keeps "saved 5 min ago" current
+    return () => clearInterval(t);
+  }, []);
+  const projectKey = project ? `narrative-bridge.copy-saved.${project.project.id}` : '';
+  useEffect(() => {
+    if (!projectKey) return;
+    try {
+      const at = Number(localStorage.getItem(projectKey));
+      setCopy((c) => (c && c.project?.project.id === project?.project.id ? c : at ? { at, project: null } : null));
+    } catch {
+      /* not remembered */
+    }
+    // only when another project is opened
+  }, [projectKey]);
+  const markCopied = (p: StoryProject) => {
+    const at = Date.now();
+    setCopy({ at, project: p });
+    try {
+      localStorage.setItem(`narrative-bridge.copy-saved.${p.project.id}`, String(at));
+    } catch {
+      /* not remembered */
+    }
+  };
 
   const lastEdit = useRef<{ group: string; at: number } | null>(null);
   /**
@@ -355,6 +398,7 @@ export function App() {
     appLog.info('Restored a draft', { passages: d.passages, otherStory: !!replacing });
   };
 
+  const [justImported, setJustImported] = useState(false);
   const convert = async (inputs: SourceInput[], mode: ConversionMode, title?: string) => {
     setBusy(true);
     try {
@@ -369,6 +413,7 @@ export function App() {
       void requestPersistence();
       setSelected(p.project.startPassage);
       setExportState(null);
+      setJustImported(true);
       setTab('review');
     } finally {
       setBusy(false);
@@ -406,6 +451,7 @@ export function App() {
         target = projectFile;
       } else target = await saveFile(`${project.project.id}.nbproj.json`, json, 'application/json', 'project');
       if (!target) return; // cancelled
+      markCopied(snapshot);
       if (target !== 'downloaded') {
         setProjectFile(target);
         setSavedToFile(snapshot);
@@ -443,6 +489,8 @@ export function App() {
       undoStack.current = [];
       setParseDiagnostics(unpacked.parseDiagnostics);
       setProject(p);
+      baseline.current = p;
+      markCopied(p); // it came from a saved copy
       setProjectFile(handle ?? null);
       setSavedToFile(handle ? p : null);
       if (handle) void rememberRecent(handle, p.project.title);
@@ -521,8 +569,8 @@ export function App() {
               </span>
             ) : (
               autosave === 'saved' && (
-                <span className="autosave" title="Every change is kept in this browser. Use Save project for a file you can back up or share.">
-                  ✓ kept in this browser
+                <span className="autosave" title="Every change is kept in this browser, which can be cleared. Use Save project for a file you can back up or open anywhere.">
+                  ✓ kept in this browser · {copy ? `saved to a file ${ago(copy.at)}` : 'not saved to a file yet'}
                 </span>
               )
             )}
@@ -539,19 +587,20 @@ export function App() {
           </>
         )}
         <span className="spacer" />
-        <button className="btn tiny ghost" onClick={undo} disabled={!undoStack.current.length} title="Undo (⌘Z)">
-          ↶
+        <button className="btn tiny ghost" onClick={undo} disabled={!undoStack.current.length} title="Undo your last change (⌘Z)" aria-label="Undo">
+          ↶ <span className="tb-word">undo</span>
         </button>
-        <button className="btn tiny ghost" onClick={redo} disabled={!redoStack.current.length} title="Redo (⇧⌘Z)">
-          ↷
+        <button className="btn tiny ghost" onClick={redo} disabled={!redoStack.current.length} title="Redo (⇧⌘Z)" aria-label="Redo">
+          ↷ <span className="tb-word">redo</span>
         </button>
-        <button className="btn tiny ghost" onClick={() => setShowKeys(true)} title="Keyboard shortcuts (?)">
-          ⌨ keys
+        <button className="btn tiny ghost" onClick={() => setShowKeys(true)} title="Keyboard shortcuts (?)" aria-label="Keyboard shortcuts">
+          ⌨ <span className="tb-word">shortcuts</span>
         </button>
         <ThemeToggle />
         <button
           className="btn tiny ghost"
           aria-pressed={soundOn}
+          aria-label="Book sounds"
           title={soundOn ? 'Book sounds on (page turns, choices, endings). Click to mute.' : 'Book sounds off. Click to turn on.'}
           onClick={() => {
             sfx.setEnabled(!soundOn);
@@ -559,14 +608,14 @@ export function App() {
             if (!soundOn) sfx.choice();
           }}
         >
-          {soundOn ? '♪ sounds' : '♪ muted'}
+          <span aria-hidden>{soundOn ? '♪' : '♪̸'}</span> <span className="tb-word">sounds</span>
         </button>
         <button className="btn tiny ghost" onClick={() => void chooseProject()}>
           Open project
         </button>
         <input ref={openRef} type="file" accept=".json" hidden onChange={(e) => e.target.files?.[0] && openProject(e.target.files[0])} />
-        <button className="btn tiny ghost" onClick={() => setShowProjects(true)} title="Carry on in another browser: as a file, or through the cloud">
-          ⇅ other browsers
+        <button className="btn tiny ghost" onClick={() => setShowProjects(true)} title="Carry on in another browser or computer: as a file, or through the cloud">
+          ⇅ Move to another browser
         </button>
         {project && (
           <button className="btn tiny ghost" onClick={() => void saveProject()} title={projectFile ? `Save to ${projectFile.name} (⌘S)` : 'Save the project as a file (⌘S)'}>
@@ -591,9 +640,24 @@ export function App() {
         )}
       </header>
 
+      {unsaved && Date.now() - unsavedSince.current > 5 * 60_000 && Date.now() > remindLater && (!copy || Date.now() - copy.at > 15 * 60_000) && (
+        <div className="save-reminder" role="status">
+          <span>
+            {copy ? `Your last saved copy is from ${ago(copy.at)}.` : 'This project is only in this browser so far.'} Browsers can clear what they keep, so save a copy you can
+            open anywhere.
+          </span>
+          <button className="btn small primary" onClick={() => void saveProject()}>
+            Save a copy now
+          </button>
+          <button className="btn small ghost" onClick={() => setRemindLater(Date.now() + 30 * 60_000)}>
+            Later
+          </button>
+        </div>
+      )}
+
       <nav className="tabs" aria-label="Chapters">
         {TABS.map((t) => (
-          <button key={t.id} className={`tab ${tab === t.id ? 'active' : ''}`} aria-current={tab === t.id ? 'page' : undefined} disabled={t.id !== 'import' && !processed} onClick={() => setTab(t.id)} title={`⌘${t.key}`}>
+          <button key={t.id} className={`tab ${tab === t.id ? 'active' : ''}`} aria-current={tab === t.id ? 'page' : undefined} disabled={t.id !== 'import' && !processed} onClick={() => setTab(t.id)} title={t.id !== 'import' && !processed ? `${t.about}. Import a script (or try a sample) first.` : `${t.about} (⌘${t.key})`}>
             <span className="tab-num">{t.numeral}</span>
             {t.label}
             {t.id === 'review' && counts && counts.review > 0 && <span className="tab-count review">{counts.review}</span>}
@@ -618,6 +682,21 @@ export function App() {
         <div className="content" key={`page-${tab}`}>
           <Suspense fallback={<p className="muted pad">Turning the page…</p>}>
           {tab === 'import' && <ImportView onConvert={convert} busy={busy} onRestoreDraft={(id) => void restoreDraft(id)} onOpenProject={(f, h) => void openProject(f, h)} incoming={incoming} />}
+          {processed && tab === 'review' && justImported && (
+            <ImportSummary
+              passages={processed.project.passages.length}
+              characters={processed.project.characters.length}
+              choices={processed.project.passages.reduce((n, ps) => n + ps.choices.length, 0)}
+              endings={processed.analysis.endings.length}
+              counts={{
+                error: processed.diagnostics.filter((d) => d.severity === 'error').length,
+                warning: processed.diagnostics.filter((d) => d.severity === 'warning').length,
+                review: processed.diagnostics.filter((d) => d.severity === 'review').length,
+              }}
+              onDiagnostics={() => setShowDiag(true)}
+              onClose={() => setJustImported(false)}
+            />
+          )}
           {processed && tab === 'review' && <ReviewView processed={{ ...processed, project: project! }} selected={selected} onSelect={setSelected} update={update} dialogueOnly={dialogueOnly} onDialogueOnly={setDialogueOnly} onKeepDraft={(label) => keepDraft(project!, parseDiagnostics, label)} onRestoreDraft={(id) => void restoreDraft(id)} />}
           {processed && tab === 'graph' && (
             <GraphView
@@ -662,9 +741,48 @@ export function App() {
           onSaveFile={() => void saveProject(true)}
           onOpenFile={() => void chooseProject()}
           onOpenCloud={(text) => void openProjectText(text, 'cloud')}
+          onCloudSaved={() => project && markCopied(project)}
           onClose={() => setShowProjects(false)}
         />
       )}
     </div>
+  );
+}
+
+function ImportSummary(props: {
+  passages: number;
+  characters: number;
+  choices: number;
+  endings: number;
+  counts: { error: number; warning: number; review: number };
+  onDiagnostics: () => void;
+  onClose: () => void;
+}) {
+  const n = (k: number, one: string, many = one + 's') => `${k} ${k === 1 ? one : many}`;
+  const { error, warning, review } = props.counts;
+  const issues = error + warning + review;
+  return (
+    <section className="import-summary card" role="status" aria-label="What was understood">
+      <h2 className="import-summary-title">What was understood</h2>
+      <p>
+        {n(props.passages, 'passage')} · {n(props.characters, 'character')} · {n(props.choices, 'choice')} · {n(props.endings, 'ending')}
+      </p>
+      <p className="small">
+        {issues === 0
+          ? '✓ Nothing to check: it built cleanly. Try it on the Play tab.'
+          : `${[error && n(error, 'error'), warning && n(warning, 'warning'), review && n(review, 'thing', 'things') + ' to review'].filter(Boolean).join(', ')}. ` +
+            'Errors stop the export; warnings and reviews are worth a look but don’t.'}
+      </p>
+      <div className="row">
+        {issues > 0 && (
+          <button className="btn small" onClick={props.onDiagnostics}>
+            Show what to check
+          </button>
+        )}
+        <button className="btn small ghost" onClick={props.onClose}>
+          Got it
+        </button>
+      </div>
+    </section>
   );
 }

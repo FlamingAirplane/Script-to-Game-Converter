@@ -43,20 +43,16 @@ export function GettingStarted() {
       </div>
       <ol className="guide-steps">
         <li>
-          <strong>Bring your script.</strong> Drag in a screenplay (Final Draft, Word, PDF, Fountain or a plain-text export) or a prose
-          document (Word, PDF or Markdown), or paste text below. You can also open a Twine or Ink story to keep working on it. Not sure? Try a sample at the bottom first.
+          <strong>Bring your script:</strong> drop in a screenplay or prose file (Final Draft, Word, PDF, Fountain, text), or paste it.
         </li>
         <li>
-          <strong>Pick how interactive it should be.</strong> <em>Faithful</em> keeps your story exactly as written. <em>Interactive adaptation</em>{' '}
-          suggests choices for you to accept or reject — nothing changes without your say-so.
+          <strong>Pick a mode:</strong> <em>Faithful</em> keeps it as written; <em>Interactive adaptation</em> suggests choices for your OK.
         </li>
         <li>
-          <strong>Review and play.</strong> Check each scene in <em>Review</em>, then play it in <em>Playtest</em> exactly as a player would. Anything
-          that needs attention shows up in the <em>Diagnostics</em> list on the right, in plain words.
+          <strong>Review and play</strong> each scene, and fix anything listed under <em>Diagnostics</em> (the notes on the right).
         </li>
         <li>
-          <strong>Hand it to your developer.</strong> In <em>Export</em>, download the Unity or Unreal package and send that one .zip to whoever is
-          building the game. It contains everything they need.
+          <strong>Export</strong> a playable web page to share, or a package for your game developer (Unity or Unreal).
         </li>
       </ol>
       <p className="muted small">

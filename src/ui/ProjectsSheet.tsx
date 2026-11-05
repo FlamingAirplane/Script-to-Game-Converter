@@ -16,6 +16,7 @@ export function ProjectsSheet({
   onSaveFile,
   onOpenFile,
   onOpenCloud,
+  onCloudSaved,
   onClose,
 }: {
   project: StoryProject | null;
@@ -23,6 +24,7 @@ export function ProjectsSheet({
   onSaveFile: () => void;
   onOpenFile: () => void;
   onOpenCloud: (text: Promise<string>) => void;
+  onCloudSaved?: () => void;
   onClose: () => void;
 }) {
   const [token, setToken] = useState(savedToken);
@@ -63,6 +65,7 @@ export function ProjectsSheet({
       if (!project) return;
       const { json, missing } = await packProject(project, parseDiagnostics);
       const r = await saveToCloud(token.trim(), json, project.project.title, project.project.id);
+      onCloudSaved?.();
       setNote(`${r.created ? 'Saved to the cloud for the first time' : 'Saved to the cloud'} (${Math.max(1, Math.round(json.length / 1024))} KB).${missing ? ` ${missing} file(s) weren't in this browser, so they were left out.` : ''} Open it from any browser with your token.`);
       setList(await listCloudProjects(token.trim()));
     });

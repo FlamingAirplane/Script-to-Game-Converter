@@ -1105,3 +1105,36 @@ section.drafts > h2 { margin-top: 26px; }
 .clip-edit-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 2px 14px; }
 .clip-edit-field { display: flex; flex-direction: column; }
 .clip-edit-field input { width: 100%; accent-color: var(--teal); }
+
+/* Import: try a sample first, with a picture of the result */
+.try-first { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.1fr); gap: 26px; align-items: center; margin: 4px 0 26px; padding: 20px 22px; border: 1px solid var(--rule); border-radius: var(--radius-card); background: var(--paper-hi) var(--grain); }
+.try-copy h2 { font-variant: small-caps; text-transform: lowercase; letter-spacing: 0.08em; color: var(--rubric); font-size: var(--card-heading-size); margin-bottom: 4px; }
+.try-main { width: auto; margin-top: 8px; }
+.try-more { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-top: 12px; }
+.try-demo { margin: 0; }
+.try-demo img { width: 100%; height: auto; display: block; border-radius: 2px; box-shadow: 0 2px 12px color-mix(in srgb, var(--shadow) 30%, transparent); }
+.try-demo figcaption { margin-top: 6px; text-align: center; }
+.mode-when { display: block; margin-top: 3px; color: var(--ink-2); font-style: italic; }
+@media (max-width: 760px) { .try-first { grid-template-columns: minmax(0, 1fr); } }
+
+/* Top bar: words beside the glyphs, dropped on narrow screens (the buttons keep their labels for screen readers). */
+@media (max-width: 760px) { .tb-word { display: none; } }
+
+/* Reminder to save a copy outside the browser */
+.save-reminder { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; margin: 0 var(--page-margin) 8px; padding: 8px 14px; border-radius: var(--radius-card); background: var(--note-bg); border: 1px solid color-mix(in srgb, var(--warn) 40%, transparent); color: var(--ink); font-size: 14px; }
+.save-reminder span { flex: 1 1 280px; }
+
+/* Export: what the developer gets */
+.package-contents > summary { cursor: pointer; list-style: none; }
+.package-contents > summary h2 { display: inline; }
+.contents-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 240px), 1fr)); gap: 6px 26px; margin-top: 8px; }
+.contents-grid h3 { margin-top: 0.6em; }
+.contents-grid ul { margin: 4px 0; padding-left: 18px; }
+.contents-grid li { margin: 4px 0; }
+.export-view .package-contents { margin-bottom: 18px; }
+
+.import-summary { margin: 0 0 1rem; padding: 0.9rem 1.1rem; border-left: 4px solid var(--accent, currentColor); }
+.import-summary-title { font-size: 1.05rem; margin: 0 0 0.35rem; }
+.import-summary p { margin: 0 0 0.5rem; }
+.limits li { margin-bottom: 0.4rem; }
+.install-btn { white-space: nowrap; }

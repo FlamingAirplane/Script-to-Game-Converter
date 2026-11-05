@@ -47,7 +47,7 @@ export function ThemeToggle() {
   const l = LABEL[choice];
   return (
     <button className="btn tiny ghost theme-toggle" onClick={() => choose(NEXT[choice])} title={l.title} aria-label={`Theme: ${l.text}`}>
-      <span aria-hidden>{l.icon}</span> {l.text}
+      <span aria-hidden>{l.icon}</span> <span className="tb-word">theme:</span> {l.text}
     </button>
   );
 }

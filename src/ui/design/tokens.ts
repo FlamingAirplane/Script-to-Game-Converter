@@ -138,7 +138,7 @@ export const WORDS: Record<string, [string, string]> = {
   subtitle: ['Subtitle (title page)', 'Turn a script into a playable story'],
   lede: [
     'Introduction (title page)',
-    'Import a screenplay or structured prose, review what was understood, then export a validated Ink story packaged for Unity or Unreal Engine. Everything runs locally in your browser — nothing is uploaded.',
+    'Bring in a screenplay or prose, check what was understood, and play it. Then share it as a web page anyone can play, or hand your developer an Ink story (Ink is the scripting language many games use for dialogue) packaged for Unity or Unreal. Everything runs in your browser — nothing is uploaded.',
   ],
 };
 
@@ -155,5 +155,5 @@ export interface SettingDef {
 export const SETTINGS: SettingDef[] = [
   { key: 'theme', label: 'Theme for new visitors', hint: 'auto follows their system setting.', type: 'choice', choices: ['auto', 'light', 'dark'], default: 'auto' },
   { key: 'showLocked', label: 'Show locked choices', hint: 'Playtest and Graph show choices that need an item or value.', type: 'boolean', default: true },
-  { key: 'sound', label: 'Sound effects', hint: 'The quiet page and stamp sounds.', type: 'boolean', default: true },
+  { key: 'sound', label: 'Sound effects', hint: 'The quiet page and stamp sounds. Off unless someone turns them on.', type: 'boolean', default: false },
 ];

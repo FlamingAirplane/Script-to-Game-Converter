@@ -15,6 +15,9 @@ import { Badge, SeverityIcon, download } from './common';
 import type { StoryProject } from '../core/isr';
 import type { Update } from './projectOps';
 import { UnityThemeEditor } from './UnityThemeEditor';
+import { INK_COMPILER } from '../core/version';
+
+const INKJS_VERSION = INK_COMPILER.version;
 import { RecordingsImport } from './RecordingsImport';
 
 // `stale`: an edit is still being processed, so exports wait for it rather than packaging the previous version.
@@ -97,6 +100,8 @@ export function ExportView({ processed, stale, onState, project, update }: { pro
           </button>
         ))}
       </section>
+
+      <PackageContents engine={engine} layout={opts.unityLayout} />
 
       <div className="export-grid">
         <section className="card">
@@ -345,4 +350,96 @@ function previewText(content: string | Uint8Array | undefined): string {
   if (content === undefined) return '';
   if (typeof content === 'string') return content.slice(0, 20000);
   return `(audio file, ${(content.length / 1024).toFixed(1)} KB)`;
+}
+
+/** What a developer gets in the .zip, what they still do, and which versions it targets, in plain words. */
+function PackageContents({ engine, layout }: { engine: EngineTarget; layout: 'package' | 'project' }) {
+  const a = ADAPTERS[engine];
+  const unity = engine === 'unity';
+  return (
+    <details className="card package-contents" open>
+      <summary>
+        <h2>What your developer gets</h2>
+      </summary>
+      <div className="contents-grid">
+        <div>
+          <h3>In the .zip</h3>
+          <ul className="small">
+            <li>
+              <strong>Your story in Ink</strong>, the scripting language for game stories (<code>.ink</code>), checked and compiled, ready to run.
+            </li>
+            {unity ? (
+              <>
+                <li>
+                  {layout === 'package' ? (
+                    <>
+                      <strong>A Unity package</strong> they add to the game they already have: nothing in their project is replaced.
+                    </>
+                  ) : (
+                    <>
+                      <strong>A complete Unity project</strong> that opens to a demo scene, with the same package inside.
+                    </>
+                  )}
+                </li>
+                <li>
+                  <strong>Ready-made code</strong> that plays the story: lines, choices, Continue breaks, exits to the game, saves, and items (C#).
+                </li>
+                <li>
+                  <strong>A story panel</strong> styled with the Story UI settings below, which they can change in Unity.
+                </li>
+              </>
+            ) : (
+              <>
+                <li>
+                  <strong>An Unreal project</strong> (C++) set up for the Inkpot plugin, with a script that fetches Inkpot.
+                </li>
+                <li>
+                  <strong>A Blueprint-friendly component</strong> that plays the story: lines, choices, variables and saves.
+                </li>
+              </>
+            )}
+            <li>Your recordings, scene pictures and portraits, your original script, and a report of every check that passed.</li>
+          </ul>
+        </div>
+        <div>
+          <h3>What they still do</h3>
+          <ul className="small">
+            {unity ? (
+              <>
+                <li>Add the package (or open the project) in Unity. It offers to install Ink Unity Integration if the game doesn’t have it.</li>
+                <li>Put the story where it belongs in the game (a menu adds it to a scene), and connect it to their gameplay: the README in the package explains how.</li>
+                <li>Swap in the game’s own art, fonts and sounds if they want.</li>
+              </>
+            ) : (
+              <>
+                <li>Run the setup script (it fetches Inkpot), then open the project in Unreal and let it build.</li>
+                <li>Add the story component to the game and hook it to their own interface.</li>
+              </>
+            )}
+          </ul>
+        </div>
+        <div>
+          <h3>Versions</h3>
+          <ul className="small">
+            {unity ? (
+              <>
+                <li>Unity 6 (recommended) or 2022.3 LTS and later</li>
+                <li>
+                  {a.integration.name} {a.integration.defaultRef}
+                </li>
+              </>
+            ) : (
+              <>
+                <li>Unreal Engine {a.defaultEngineVersion} or later</li>
+                <li>
+                  {a.integration.name} at the ref set below (pin a release for repeatable builds)
+                </li>
+              </>
+            )}
+            <li>Ink compiled with inkjs {INKJS_VERSION}</li>
+          </ul>
+        </div>
+      </div>
+    </details>
+  );
 }
