@@ -1,18 +1,20 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent } from 'react';
 import type { StoryProject } from '../core/isr';
 import { assignInOrder, detectSegments, formatTime, parseTime, sessionLines, type Segment, type SessionLine } from '../core/session';
-import { clipUrl, decodeSession, getClip, putClip, storeCut, storeSession } from './audioStore';
+import { newAudioId } from '../core/audio';
+import { clipName } from '../core/session';
+import { clipUrl, decodeSession, getClip, putClip, storeSession } from './audioStore';
+import { forgetDecoded } from './audioRender';
 import type { Update } from './projectOps';
 
 // "Link a recording session": load one long recording of a voice session, mark where each line of
 // dialogue is in it (type the times, drag on the waveform, or set them from the playhead while it plays;
 // or let it find the takes and give them to the lines in order), then cut each marked stretch out as
-// that line's clip. Clips remember where they came from, so the links can be opened and changed again.
+// that line's clip. Like regions in Pro Tools, a linked line plays its stretch of the session (no copy
+// is made), and every change is saved to the story as you make it; Undo takes it back.
 
 type Decoded = { samples: Float32Array; rate: number };
-type Drafts = Record<string, Segment | null>;
 
-const same = (a?: Segment | null, b?: Segment | null) => (!a && !b) || (!!a && !!b && Math.abs(a.start - b.start) < 0.0005 && Math.abs(a.end - b.end) < 0.0005);
 
 export function SessionLinker({ project, update, onClose }: { project: StoryProject; update: Update; onClose: () => void }) {
   const sessions = project.sessions ?? [];
@@ -25,7 +27,6 @@ export function SessionLinker({ project, update, onClose }: { project: StoryProj
   const [error, setError] = useState('');
   const [note, setNote] = useState('');
   const lines = useMemo(() => sessionLines(project), [project]);
-  const [drafts, setDrafts] = useState<Drafts>({});
   const [active, setActive] = useState<string | null>(null);
   const [speaker, setSpeaker] = useState('');
   const [onlyOpen, setOnlyOpen] = useState(false);
@@ -44,16 +45,14 @@ export function SessionLinker({ project, update, onClose }: { project: StoryProj
 
   // The links as they are in the project, for this session.
   const saved = useMemo(() => {
-    const m: Drafts = {};
+    const m: Record<string, Segment> = {};
     for (const l of lines) if (l.from && l.from.session === sessionId) m[l.slot] = { start: l.from.start, end: l.from.end };
     return m;
   }, [lines, sessionId]);
   useEffect(() => {
-    setDrafts(saved);
     setTakes([]);
   }, [sessionId]);
-  const linkOf = (slot: string): Segment | null => (slot in drafts ? drafts[slot] : (saved[slot] ?? null));
-  const changed = lines.filter((l) => !same(linkOf(l.slot), saved[l.slot] ?? null));
+  const linkOf = (slot: string): Segment | null => saved[slot] ?? null;
 
   // Load (and decode) the selected session's recording.
   useEffect(() => {
@@ -135,7 +134,31 @@ export function SessionLinker({ project, update, onClose }: { project: StoryProj
     else a.pause();
   };
 
-  const setLink = (slot: string, seg: Segment | null) => setDrafts((d) => ({ ...d, [slot]: seg && seg.end > seg.start ? { start: round(seg.start), end: round(seg.end) } : null }));
+  // A link is a region of the session, saved straight away (quick changes to one line are one Undo step).
+  const setLinks = (links: Record<string, Segment | null>, group?: string) => {
+    if (!session) return;
+    update((d) => {
+      for (const [slot, raw] of Object.entries(links)) {
+        const line = lines.find((l) => l.slot === slot);
+        const b = line && d.passages.find((p) => p.id === line.passageId)?.content[line.index];
+        if (b?.type !== 'dialogue') continue;
+        const seg = raw && raw.end > raw.start ? { start: round(raw.start), end: round(raw.end) } : null;
+        if (seg) {
+          const same = b.audio?.region && b.audio.from?.session === session.id;
+          b.audio = {
+            id: same ? b.audio!.id : newAudioId(b.speakerId),
+            name: clipName(session, seg),
+            mime: 'audio/wav',
+            durationMs: Math.round((seg.end - seg.start) * 1000),
+            from: { session: session.id, ...seg },
+            region: true,
+            ...(same && b.audio!.edit ? { edit: b.audio!.edit } : {}),
+          };
+        } else if (b.audio?.from?.session === session.id) delete b.audio;
+      }
+    }, group);
+  };
+  const setLink = (slot: string, seg: Segment | null) => setLinks({ [slot]: seg }, `session-link:${slot}`);
   const setEdge = (slot: string, edge: 'start' | 'end', t: number) => {
     const cur = linkOf(slot) ?? { start: t, end: t };
     const next = { ...cur, [edge]: t };
@@ -171,6 +194,7 @@ export function SessionLinker({ project, update, onClose }: { project: StoryProj
   const relinkSession = async (f: File) => {
     if (!session) return;
     await putClip(session.id, session.mime, new Uint8Array(await f.arrayBuffer()));
+    forgetDecoded(session.id);
     setSessionId(null);
     setTimeout(() => setSessionId(session.id));
   };
@@ -185,42 +209,12 @@ export function SessionLinker({ project, update, onClose }: { project: StoryProj
     const from = Math.max(0, shown.findIndex((l) => l.slot === active));
     const slots = shown.slice(from).map((l) => l.slot);
     const given = assignInOrder(slots, takes);
-    setDrafts((d) => ({ ...d, ...given }));
+    setLinks(given);
     const n = Object.keys(given).length;
-    setNote(`Gave ${n} take${n === 1 ? '' : 's'} to ${n} line${n === 1 ? '' : 's'}${takes.length > slots.length ? `; ${takes.length - slots.length} take(s) were left over` : ''}. Check them, then cut.`);
-  };
-
-  const apply = async () => {
-    if (!session || !decoded) return;
-    setBusy('Cutting clips…');
-    try {
-      const cuts: { line: SessionLine; seg: Segment | null; ref?: Awaited<ReturnType<typeof storeCut>> }[] = [];
-      for (const l of changed) {
-        const seg = linkOf(l.slot);
-        cuts.push({ line: l, seg, ref: seg ? await storeCut(session, decoded, seg, l.speakerId) : undefined });
-      }
-      // One edit, so a single Undo takes them all back.
-      update((d) => {
-        for (const c of cuts) {
-          const b = d.passages.find((p) => p.id === c.line.passageId)?.content[c.line.index];
-          if (b?.type !== 'dialogue') continue;
-          if (c.ref) b.audio = c.ref;
-          else if (b.audio?.from?.session === session.id) delete b.audio;
-        }
-      });
-      setDrafts({});
-      const made = cuts.filter((c) => c.ref).length;
-      const removed = cuts.length - made;
-      setNote(`Cut ${made} clip${made === 1 ? '' : 's'}${removed ? ` and unlinked ${removed} line${removed === 1 ? '' : 's'}` : ''}. Undo takes them back.`);
-    } catch (e) {
-      setError(e instanceof Error ? e.message : String(e));
-    } finally {
-      setBusy('');
-    }
+    setNote(`Gave ${n} take${n === 1 ? '' : 's'} to ${n} line${n === 1 ? '' : 's'}${takes.length > slots.length ? `; ${takes.length - slots.length} take(s) were left over` : ''}. Check them; they're saved already.`);
   };
 
   const close = () => {
-    if (changed.length && !confirm(`${changed.length} line${changed.length === 1 ? ' has' : 's have'} links that haven’t been cut yet. Close anyway?`)) return;
     audio.current?.pause();
     onClose();
   };
@@ -376,7 +370,7 @@ export function SessionLinker({ project, update, onClose }: { project: StoryProj
                   key={l.slot}
                   line={l}
                   seg={linkOf(l.slot)}
-                  changed={!same(linkOf(l.slot), saved[l.slot] ?? null)}
+                  changed={false}
                   active={l.slot === active}
                   otherClip={l.hasClip && !saved[l.slot]}
                   onActivate={() => setActive(l.slot)}
@@ -391,15 +385,13 @@ export function SessionLinker({ project, update, onClose }: { project: StoryProj
         )}
         {session && (
           <div className="session-footer row wrap">
-            <span className="muted small">The session recording stays in this browser; the clips cut from it are saved with your project.</span>
+            <span className="muted small">
+              Saved as you go: each line plays its stretch of the session (nothing is copied), and Undo takes a change back. The session is kept in this
+              browser and in saved project files; exports get each line as its own file.
+            </span>
             <span className="spacer" />
-            {changed.length > 0 && (
-              <button className="btn small ghost" onClick={() => setDrafts({})}>
-                Discard changes
-              </button>
-            )}
-            <button className="btn primary" disabled={!changed.length || !!busy || !decoded} onClick={() => void apply()}>
-              {changed.length ? `Cut and attach ${changed.length} clip${changed.length === 1 ? '' : 's'}` : 'Nothing to cut'}
+            <button className="btn primary" onClick={close}>
+              Done
             </button>
           </div>
         )}

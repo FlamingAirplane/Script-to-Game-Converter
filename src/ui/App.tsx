@@ -398,8 +398,9 @@ export function App() {
     if (!project) return;
     const snapshot = project;
     // Scene pictures share the "audio" map with voice clips (same store, keyed by id), so older versions still open the file.
-    // So do the original Word, PDF, Final Draft and Twine files the scripts were taken from.
-    const clips = await collectClips([...referencedAudio(project), ...referencedImages(project), ...referencedOriginals(project)]);
+    // Regions have no bytes of their own: the session recordings they play from are saved instead,
+    // and so are the original Word, PDF, Final Draft and Twine files the scripts were taken from.
+    const clips = await collectClips([...referencedAudio(project).filter((a) => !a.region), ...referencedImages(project), ...(project.sessions ?? []), ...referencedOriginals(project)]);
     const audio = Object.fromEntries(Object.entries(clips).map(([id, c]) => [id, { mime: c.mime, data: bytesToBase64(c.bytes) }]));
     const json = JSON.stringify({ project, parseDiagnostics, audio }, null, 2);
     try {

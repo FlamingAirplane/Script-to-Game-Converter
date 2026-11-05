@@ -360,9 +360,9 @@ for (const [name, type] of [['WebKit', webkit], ['Chromium', chromium]]) {
       let first = '';
       for (let i = 0; i < 30 && !first; i++) first = (await start.inputValue()) || (await page.waitForTimeout(100), '');
       if (!/^0:00\.[89]\d$/.test(first)) throw new Error(`line 1 starts at ${first}`);
-      await sheet.getByRole('button', { name: /^Cut and attach \d+ clips?$/ }).click();
-      await sheet.getByText(/^Cut \d+ clips?/).waitFor({ timeout: 10000 });
-      await sheet.getByRole('button', { name: 'Close' }).click();
+      // Saved as it's made: each line is now a region of the session.
+      await sheet.getByText(/they're saved already/).waitFor({ timeout: 5000 });
+      await sheet.getByRole('button', { name: 'Done' }).click();
       await page.locator('.passage-item').first().click();
       await page.locator('.clip-name', { hasText: '✂' }).first().waitFor({ timeout: 5000 });
     });

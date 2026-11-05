@@ -1,6 +1,6 @@
 import { encodeWav, NATIVE_AUDIO, newAudioId, type AudioAssets, type AudioRef } from '../core/audio';
 import { newImageId, type ImageRef } from '../core/images';
-import { clipName, cutSamples, type Segment, type SessionRef } from '../core/session';
+import type { SessionRef } from '../core/session';
 import { errorData, log } from '../core/log';
 
 const logger = log('audio');
@@ -200,12 +200,4 @@ export async function decodeSession(bytes: Uint8Array): Promise<{ samples: Float
     for (let i = 0; i < ch.length; i++) samples[i] += ch[i] / buf.numberOfChannels;
   }
   return { samples, rate: buf.sampleRate };
-}
-
-/** Cuts a stretch of a decoded session and keeps it as a clip; its reference says where it came from. */
-export async function storeCut(session: SessionRef, decoded: { samples: Float32Array; rate: number }, seg: Segment, seed: string): Promise<AudioRef> {
-  const bytes = encodeWav([cutSamples(decoded.samples, decoded.rate, seg)], decoded.rate);
-  const id = newAudioId(seed);
-  await putClip(id, 'audio/wav', bytes);
-  return { id, name: clipName(session, seg), mime: 'audio/wav', durationMs: Math.round((seg.end - seg.start) * 1000), from: { session: session.id, start: seg.start, end: seg.end } };
 }

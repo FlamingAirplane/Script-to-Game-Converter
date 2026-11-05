@@ -9,6 +9,7 @@ import { referencedImages } from '../core/images';
 import { referencedOriginals } from '../core/isr';
 import type { ProcessedStory } from '../core/pipeline';
 import { collectClips } from './audioStore';
+import { renderClips } from './audioRender';
 import { sfx } from './sfx';
 import { Badge, SeverityIcon, download } from './common';
 import type { StoryProject } from '../core/isr';
@@ -54,7 +55,7 @@ export function ExportView({ processed, stale, onState, project, update }: { pro
     setError('');
     onState('Exporting');
     try {
-      const audio = await collectClips(referencedAudio(processed.project));
+      const audio = await renderClips(referencedAudio(processed.project));
       const images = await collectClips(referencedImages(processed.project));
       const originals = await collectClips(referencedOriginals(processed.project));
       const r = await adapter.export(processed, { engine, ...opts, audio, images, originals });
@@ -287,7 +288,7 @@ function ShareSection({ processed, stale, project, update }: { processed: Proces
             disabled={blocked}
             onClick={() =>
               run(async () => {
-                const audio = await collectClips(referencedAudio(processed.project));
+                const audio = await renderClips(referencedAudio(processed.project));
                 const images = await collectClips(referencedImages(processed.project));
                 download(playableFileName(processed), buildPlayableHtml(processed, inkRuntime, audio, images), 'text/html');
               })
