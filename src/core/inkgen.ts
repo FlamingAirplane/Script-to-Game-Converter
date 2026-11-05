@@ -1,7 +1,7 @@
 import { audioFileName } from './audio';
 import { imageFileName } from './images';
 import { GENERATOR_VERSION } from './version';
-import { CONTINUE_TEXT, isActive, itemVar, type Condition, type Effect, type Passage, type StoryProject } from './isr';
+import { CONTINUE_TEXT, EXIT_PREFIX, exitName, isActive, itemVar, type Condition, type Effect, type Passage, type StoryProject } from './isr';
 
 // Deterministic, template-based Ink generation. Same ISR in → byte-identical Ink out.
 //
@@ -154,6 +154,12 @@ export function generateInk(project: StoryProject): GeneratedInk {
           // A Continue break: a lone sticky choice and a gather, so every Ink player shows a Continue
           // button and what follows waits for it. (Sticky, so revisiting the passage never runs dry.)
           emit(`+ [${CONTINUE_TEXT}]`, p.id);
+          emit('-', p.id);
+          break;
+        case 'exit':
+          // An exit to the game: a lone choice the game takes when it resumes the story (players
+          // without a game show it as a Resume button), then a gather.
+          emit(`+ [${escapeInk(EXIT_PREFIX + exitName(b.name))}]${b.note ? ` // ${b.note.replace(/\s+/g, ' ')}` : ''}`, p.id);
           emit('-', p.id);
           break;
       }

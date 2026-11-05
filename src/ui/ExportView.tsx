@@ -6,6 +6,7 @@ import { SEMVER, unityPackageId } from '../core/export/unityPackage';
 import inkRuntime from '../../node_modules/inkjs/dist/ink.js?raw';
 import { referencedAudio } from '../core/audio';
 import { referencedImages } from '../core/images';
+import { referencedOriginals } from '../core/isr';
 import type { ProcessedStory } from '../core/pipeline';
 import { collectClips } from './audioStore';
 import { renderClips } from './audioRender';
@@ -56,7 +57,8 @@ export function ExportView({ processed, stale, onState, project, update }: { pro
     try {
       const audio = await renderClips(referencedAudio(processed.project));
       const images = await collectClips(referencedImages(processed.project));
-      const r = await adapter.export(processed, { engine, ...opts, audio, images });
+      const originals = await collectClips(referencedOriginals(processed.project));
+      const r = await adapter.export(processed, { engine, ...opts, audio, images, originals });
       setResult(r);
       setZip(await zipExport(r));
       setTgz(engine === 'unity' && opts.unityLayout === 'package' ? await unityTarball(r) : null);
@@ -134,7 +136,7 @@ export function ExportView({ processed, stale, onState, project, update }: { pro
             </label>
           )}
           <label className="field">
-            <span className="muted small">{asPackage ? 'Oldest Unity version to support' : `${adapter.label} version`}</span>
+            <span className="muted small">{asPackage ? 'Unity version you build with (the package works in 2022.3 and later)' : `${adapter.label} version`}</span>
             <input className="input mono" value={opts.engineVersion} onChange={(e) => setOpts({ ...opts, engineVersion: e.target.value })} />
           </label>
           <label className="field">

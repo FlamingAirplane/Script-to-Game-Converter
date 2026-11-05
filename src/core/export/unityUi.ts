@@ -53,8 +53,12 @@ namespace __NAMESPACE__
         [Range(0, 12)] public int borderWidth = 0;
 
         [Header("Text")]
-        [Tooltip("Leave empty for Unity's built-in font.")]
+        [Tooltip("Leave empty for Unity's built-in font. With TextMeshPro, used only when TMP Font is empty (made into a font asset).")]
         public Font font;
+#if NARRATIVE_BRIDGE_TMP
+        [Tooltip("TextMeshPro font asset for the story. Empty: your project's default TMP font, or one made from Font.")]
+        public TMPro.TMP_FontAsset tmpFont;
+#endif
         [Tooltip("At the reference resolution; the UI scales with the screen.")]
         [Range(12, 72)] public int fontSize = 30;
         [Range(0.7f, 2.5f)] public float lineSpacing = 1f;
@@ -249,6 +253,19 @@ namespace __NAMESPACE__
 
         public Font ResolveFont() => font != null ? font : Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
 
+#if NARRATIVE_BRIDGE_TMP
+        /// <summary>The TextMeshPro font: tmpFont, else the project's default (TMP Settings), else one made from ResolveFont().</summary>
+        public TMPro.TMP_FontAsset ResolveFontAsset()
+        {
+            if (tmpFont != null) return tmpFont;
+            if (Resources.Load<TMPro.TMP_Settings>("TMP Settings") != null && TMPro.TMP_Settings.defaultFontAsset != null) return TMPro.TMP_Settings.defaultFontAsset;
+            if (madeFontAsset == null) madeFontAsset = TMPro.TMP_FontAsset.CreateFontAsset(ResolveFont());
+            return madeFontAsset;
+        }
+
+        [NonSerialized] TMPro.TMP_FontAsset madeFontAsset;
+#endif
+
         static Color Parse(string html, Color fallback) => !string.IsNullOrEmpty(html) && ColorUtility.TryParseHtmlString(html, out var c) ? c : fallback;
         static T ParseEnum<T>(string value, T fallback) where T : struct => !string.IsNullOrEmpty(value) && Enum.TryParse(value, true, out T v) ? v : fallback;
 
@@ -274,6 +291,11 @@ using Ink.Runtime;
 using UnityEngine;
 using UnityEngine.EventSystems;
 using UnityEngine.UI;
+#if NARRATIVE_BRIDGE_TMP
+using UIText = TMPro.TextMeshProUGUI;
+#else
+using UIText = UnityEngine.UI.Text;
+#endif
 
 namespace __NAMESPACE__
 {
@@ -296,6 +318,11 @@ namespace __NAMESPACE__
         public bool keyboardShortcuts = true;
         [Tooltip("Add an EventSystem when the scene has none, so the buttons can be clicked.")]
         public bool createEventSystem = true;
+        [Tooltip("Hide the story panel while the game plays after an exit to the game, and show it again when the story resumes.")]
+        public bool hideDuringExits = true;
+
+        /// <summary>Whether the panel is showing (it hides during exits to the game).</summary>
+        public bool Visible => Canvas != null && Canvas.enabled;
 
         public Canvas Canvas { get; private set; }
         public IReadOnlyList<Button> Buttons => buttons;
@@ -305,7 +332,7 @@ namespace __NAMESPACE__
         {
             public NarrativeController.Line Line;
             public GameObject Root;
-            public Text Body;
+            public UIText Body;
             public string Prefix = "";
             public string Text = "";
         }
@@ -314,13 +341,16 @@ namespace __NAMESPACE__
         readonly List<Entry> entries = new List<Entry>();
         readonly Queue<Entry> typing = new Queue<Entry>();
         Font font;
+#if NARRATIVE_BRIDGE_TMP
+        TMPro.TMP_FontAsset fontAsset;
+#endif
         RectTransform panel, lines, choiceArea, portraitRect;
         VerticalLayoutGroup column;
         RawImage picture, portrait;
         Image pictureShade;
         AspectRatioFitter pictureFit, portraitFit;
         ScrollRect scroll;
-        Text status;
+        UIText status;
         Coroutine typer, autoNext;
         bool skipTyping, choicesWaiting, subscribed, waitingForNextLine;
         string lastSpeaker;
@@ -350,6 +380,8 @@ namespace __NAMESPACE__
             controller.StoryEnded += OnEnded;
             controller.Restarted += ClearStory;
             controller.StatusChanged += OnStatus;
+            controller.ExitReached += OnExit;
+            controller.Resumed += OnResumed;
             subscribed = true;
         }
 
@@ -362,6 +394,8 @@ namespace __NAMESPACE__
             controller.StoryEnded -= OnEnded;
             controller.Restarted -= ClearStory;
             controller.StatusChanged -= OnStatus;
+            controller.ExitReached -= OnExit;
+            controller.Resumed -= OnResumed;
             if (theme != null) theme.Changed -= OnThemeChanged;
             subscribed = false;
         }
@@ -387,6 +421,9 @@ namespace __NAMESPACE__
             lastSpeaker = null;
             portraitOnRight = portraitOnRightNow = theme.portraitSide == NarrativeTheme.PortraitSide.Right;
             font = theme.ResolveFont();
+#if NARRATIVE_BRIDGE_TMP
+            fontAsset = theme.ResolveFontAsset();
+#endif
             if (controller != null) controller.voiceVolume = theme.voiceVolume;
 
             var canvasObject = new GameObject("Story UI", typeof(RectTransform), typeof(Canvas), typeof(CanvasScaler), typeof(GraphicRaycaster));
@@ -510,6 +547,7 @@ namespace __NAMESPACE__
 
         void ClearStory()
         {
+            if (Canvas != null) Canvas.enabled = true;
             if (lines == null) return;
             StopTyping();
             for (int i = lines.childCount - 1; i >= 0; i--) Discard(lines.GetChild(i).gameObject);
@@ -524,6 +562,13 @@ namespace __NAMESPACE__
         void OnLine(NarrativeController.Line line) => ShowLine(line, Application.isPlaying);
         void OnChoices(IReadOnlyList<Choice> choices) => QueueChoices();
         void OnContinue() => QueueChoices();
+
+        // An exit to the game: once the lines before it have been shown, the panel steps aside.
+        void OnExit(string exit) => QueueChoices();
+        void OnResumed()
+        {
+            if (Canvas != null) Canvas.enabled = true;
+        }
         void OnStatus(string message)
         {
             if (status != null) status.text = message;
@@ -679,7 +724,7 @@ namespace __NAMESPACE__
                 var label = (name ?? "") + (paren != null ? (name != null ? " " : "") + paren : "") + ": ";
                 if (line.Text.IndexOf('<') < 0 && label.IndexOf('<') < 0)
                 {
-                    e.Body.supportRichText = true;
+                    SetRichText(e.Body, true);
                     e.Prefix = "<color=#" + ColorUtility.ToHtmlStringRGBA(theme.speakerColour) + "><b>" + label + "</b></color>";
                 }
                 else e.Prefix = label;
@@ -808,6 +853,13 @@ namespace __NAMESPACE__
             choicesWaiting = false;
             ClearChoices();
             if (choiceArea == null || controller == null || controller.Story == null) return;
+            if (Canvas != null) Canvas.enabled = true;
+            if (controller.IsAtExit)
+            {
+                // The game plays now; it resumes the story with controller.Resume() or ResumeAt(passage).
+                if (hideDuringExits && Canvas != null) Canvas.enabled = false;
+                return;
+            }
             if (controller.IsWaitingForContinue)
             {
                 AddButton(ContinueText(), controller.Continue, TextAnchor.MiddleCenter);
@@ -898,22 +950,57 @@ namespace __NAMESPACE__
         static TextAnchor Anchor(NarrativeTheme.TextAlign a) =>
             a == NarrativeTheme.TextAlign.Center ? TextAnchor.UpperCenter : a == NarrativeTheme.TextAlign.Right ? TextAnchor.UpperRight : TextAnchor.UpperLeft;
 
-        Text AddText(Transform parent, string value, int size, Color color, FontStyle style, TextAnchor anchor)
+        // Text is TextMeshPro when the game has it (Unity 6, or the TextMeshPro package), and Unity's
+        // older Text component otherwise; the story panel looks the same either way.
+        UIText AddText(Transform parent, string value, int size, Color color, FontStyle style, TextAnchor anchor)
         {
-            var t = Child("Text", parent).gameObject.AddComponent<Text>();
-            t.font = font;
+            var t = Child("Text", parent).gameObject.AddComponent<UIText>();
             t.fontSize = size;
             t.color = color;
+            t.raycastTarget = false;
+#if NARRATIVE_BRIDGE_TMP
+            if (fontAsset != null) t.font = fontAsset;
+            t.fontStyle = style == FontStyle.Bold ? TMPro.FontStyles.Bold : style == FontStyle.Italic ? TMPro.FontStyles.Italic : style == FontStyle.BoldAndItalic ? TMPro.FontStyles.Bold | TMPro.FontStyles.Italic : TMPro.FontStyles.Normal;
+            t.alignment = TmpAlignment(anchor);
+            // TextMeshPro's line spacing is added space, in hundredths of the text size.
+            t.lineSpacing = (theme.lineSpacing - 1f) * 100f;
+            t.overflowMode = TMPro.TextOverflowModes.Overflow;
+#else
+            t.font = font;
             t.fontStyle = style;
             t.alignment = anchor;
             t.lineSpacing = theme.lineSpacing;
-            t.supportRichText = false; // story text is shown as written, never read as markup
             t.horizontalOverflow = HorizontalWrapMode.Wrap;
             t.verticalOverflow = VerticalWrapMode.Overflow;
-            t.raycastTarget = false;
+#endif
+            SetRichText(t, false); // story text is shown as written, never read as markup
             t.text = value;
             return t;
         }
+
+        static void SetRichText(UIText t, bool on)
+        {
+#if NARRATIVE_BRIDGE_TMP
+            t.richText = on;
+#else
+            t.supportRichText = on;
+#endif
+        }
+
+#if NARRATIVE_BRIDGE_TMP
+        static TMPro.TextAlignmentOptions TmpAlignment(TextAnchor a)
+        {
+            switch (a)
+            {
+                case TextAnchor.UpperCenter: return TMPro.TextAlignmentOptions.Top;
+                case TextAnchor.UpperRight: return TMPro.TextAlignmentOptions.TopRight;
+                case TextAnchor.MiddleLeft: return TMPro.TextAlignmentOptions.Left;
+                case TextAnchor.MiddleCenter: return TMPro.TextAlignmentOptions.Center;
+                case TextAnchor.MiddleRight: return TMPro.TextAlignmentOptions.Right;
+                default: return TMPro.TextAlignmentOptions.TopLeft;
+            }
+        }
+#endif
 
         Button AddButton(string label, UnityEngine.Events.UnityAction onClick, TextAnchor anchor)
         {

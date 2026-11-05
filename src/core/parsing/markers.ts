@@ -1,4 +1,4 @@
-import type { CompareOp, Condition, Effect } from '../isr';
+import { exitName, type CompareOp, type Condition, type Effect } from '../isr';
 import type { Marker } from './types';
 
 // Structured-import marker grammar, shared by all text parsers:
@@ -10,11 +10,12 @@ import type { Marker } from './types';
 //   @var <id> = <true|false|number|"text">
 //   @give <item>   @take <item>   @set <var> = <value>   @add <var> <n>
 //   @pause                           a Continue break: what follows waits for the reader
+//   @exit fight [note]               an exit to the game: the dialogue stops until the game resumes it
 //   * [Choice text] -> target        once-only choice
 //   + {has key} [Choice text] -> target @take key     sticky, gated choice with effects
 //   - [Choice text](#target)         Markdown link form
 
-const KEYWORDS = new Set(['passage', 'start', 'end', 'pause', 'item', 'var', 'give', 'take', 'set', 'add']);
+const KEYWORDS = new Set(['passage', 'start', 'end', 'pause', 'exit', 'item', 'var', 'give', 'take', 'set', 'add']);
 
 export function isMarkerLine(line: string): boolean {
   const t = line.trim();
@@ -95,6 +96,11 @@ export function parseMarker(line: string): Marker | null {
       return { type: 'end' };
     case 'pause':
       return { type: 'pause' };
+    case 'exit': {
+      // @exit wolf_fight  The player fights the wolves; anything after the name is a note for the game.
+      const p = /^(\S+)\s*(.*)$/.exec(rest.trim());
+      return p ? { type: 'exit', name: exitName(p[1]), ...(p[2].trim() ? { note: p[2].trim() } : {}) } : { type: 'exit', name: 'exit' };
+    }
     case 'item': {
       const p = /^([A-Za-z_]\w*)\s*(?:"([^"]*)")?\s*(consumable)?/.exec(rest);
       return p ? { type: 'item', id: p[1], displayName: p[2], consumable: !!p[3] } : null;

@@ -229,6 +229,16 @@ function scan(text: string): { blocks: ParsedBlock[]; unsupported: InkFeature[] 
 
     // A Continue break: "+ [Continue]" followed by a bare gather "-", with no other choices open.
     // The reader chooses Continue to see what follows (see inkgen.ts).
+    // An exit to the game: "+ [Back to the game: name]" then "-", the same way.
+    const exitMatch = /^\+\s*\[Back to the game: (\w+)\]\s*(?:\/\/\s*(.*))?$/.exec(raw.trim()); // (the note is a trailing comment, which t has lost)
+    if (exitMatch && !weaveOpen && lines[i + 1]?.trim() === '-') {
+      blocks.push({ kind: 'marker', marker: { type: 'exit', name: exitMatch[1], ...(exitMatch[2]?.trim() ? { note: exitMatch[2].trim() } : {}) }, line: ln, endLine: ln + 1 });
+      i++;
+      bodyStart = false;
+      sawText = true;
+      choice = null;
+      continue;
+    }
     if (/^\+\s*\[Continue\]$/.test(t) && !weaveOpen && lines[i + 1]?.trim() === '-') {
       blocks.push({ kind: 'marker', marker: { type: 'pause' }, line: ln, endLine: ln + 1 });
       i++;

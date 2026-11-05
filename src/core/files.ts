@@ -22,7 +22,7 @@ export interface StoryFile {
   mime: string;
   /** Scripts: their text. */
   text?: string;
-  /** Scripts: the format the original was converted from, when it wasn't text (e.g. "docx"). */
+  /** Scripts: the format the original was converted from, when it wasn't text and the original isn't kept (older projects). */
   convertedFrom?: string;
 }
 
@@ -56,11 +56,13 @@ export function storyFiles(project: StoryProject): StoryFile[] {
     files.push({
       kind: 'script',
       fileName: safeFileName(own ? s.fileName : withExtension(s.fileName, ext), `script.${ext}`),
-      context: from ? `the text of ${s.fileName}` : 'the original script',
+      context: from ? `the text taken from ${s.fileName}` : 'the original script',
       mime: 'text/plain',
       text: s.text,
-      convertedFrom: from,
+      convertedFrom: from && !s.original ? from : undefined,
     });
+    if (s.original)
+      files.push({ kind: 'script', fileName: safeFileName(s.original.name, `original.${from ?? 'bin'}`), context: 'the original file', id: s.original.id, mime: s.original.mime });
   }
   const speakers = new Map(project.characters.map((c) => [c.id, c.displayName]));
   const seen = new Set<string>();

@@ -80,8 +80,21 @@ function stripSourceText(story: ProcessedStory) {
   return { ...story.project, sources: story.project.sources.map(({ text: _text, ...rest }) => rest) };
 }
 
-export function sourceFiles(story: ProcessedStory, prefix: string): ExportFile[] {
-  return story.project.sources.map((s) => ({ path: `${prefix}SourceDocuments/${s.fileName.replace(/[^\w.\- ]/g, '_')}`, content: s.text }));
+/**
+ * The scripts the story was made from: each as text (a converted one with its text's own extension),
+ * and the original Word, PDF, Final Draft or Twine file itself when it's in `originals`.
+ */
+export function sourceFiles(story: ProcessedStory, prefix: string, originals?: AudioAssets): ExportFile[] {
+  const safe = (n: string) => n.replace(/[^\w.\- ]/g, '_');
+  const ext: Record<string, string> = { txt: 'txt', fountain: 'fountain', md: 'md', ink: 'ink', twee: 'twee' };
+  return story.project.sources.flatMap((s) => {
+    const own = s.fileName.toLowerCase().endsWith(`.${ext[s.format]}`) || !s.original;
+    const textName = own ? s.fileName : `${s.fileName.replace(/\.[a-z0-9]+$/i, '')}.${ext[s.format] ?? 'txt'}`;
+    const out: ExportFile[] = [{ path: `${prefix}SourceDocuments/${safe(textName)}`, content: s.text }];
+    const bytes = s.original && originals?.[s.original.id];
+    if (bytes && !own) out.push({ path: `${prefix}SourceDocuments/${safe(s.original!.name)}`, content: bytes.bytes });
+    return out;
+  });
 }
 
 export function validationReport(story: ProcessedStory) {
