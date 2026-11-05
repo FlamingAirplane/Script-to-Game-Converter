@@ -76,7 +76,9 @@ In the **Export** tab, under *Share without a game engine*:
 ## Handing off to a developer
 
 In the **Export** tab, choose Unity or Unreal, click **Build package**, then **Download .zip**. Send that one zip file to whoever is
-building the game. It includes your story, your original script and instructions for them.
+building the game. It includes your story, your original script and instructions for them. For Unity it's a package they
+add to the game they already have (nothing in their project is replaced); choose *A complete new Unity project* instead to
+try the story on its own.
 
 For Unity, **Story UI** on the same page sets how the story looks in the game: a look to start from, where the panel
 sits, colours, text size, typewriter speed, and the words on the Continue button, with a preview as you change them.

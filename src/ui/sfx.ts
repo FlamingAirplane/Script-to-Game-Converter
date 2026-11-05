@@ -1,3 +1,4 @@
+import { designSetting } from './design/design';
 // Book sounds, synthesised with the Web Audio API (no audio files, nothing to license):
 // a papery page turn, a soft quill tap for choices, a small bell for endings, and an embossing
 // stamp when an export is bound. Quiet by design, and switchable from the cover band.
@@ -6,7 +7,9 @@ const KEY = 'narrative-bridge.sounds';
 let ctx: AudioContext | null = null;
 let enabled = (() => {
   try {
-    return localStorage.getItem(KEY) !== 'off';
+    const saved = localStorage.getItem(KEY);
+    // Someone who hasn't chosen gets the design's default (see the admin design editor).
+    return saved ? saved !== 'off' : designSetting<boolean>('sound');
   } catch {
     return true;
   }

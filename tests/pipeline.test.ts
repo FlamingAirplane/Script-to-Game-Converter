@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest';
 import { reviewAll } from '../src/core/adapt';
 import { analyze } from '../src/core/analyzer';
 import { buildStory } from '../src/core/builder';
-import { ADAPTERS, ExportBlockedError } from '../src/core/export';
+import { ADAPTERS, ExportBlockedError, type ExportResult } from '../src/core/export';
 import { conditionToInk, escapeInk, generateInk } from '../src/core/inkgen';
 import { slugify, uniqueId, type StoryProject } from '../src/core/isr';
 import { fountainParser } from '../src/core/parsing/fountain';
@@ -625,7 +625,7 @@ describe('dialogue audio', () => {
       const r = await a.export(story, { engine, projectName: 'A', engineVersion: a.defaultEngineVersion, integrationRef: 'v1.0.0', includeDemo: true, audio });
       const clip = r.files.find((f) => f.path.endsWith('vo_mira_1.wav'))!;
       expect(clip.content).toBe(bytes);
-      expect(clip.path).toContain(engine === 'unity' ? 'Resources/NarrativeBridgeAudio/' : 'StorySource/VoiceClips/');
+      expect(clip.path).toContain(engine === 'unity' ? 'Runtime/Resources/NarrativeBridge/a/Audio/' : 'StorySource/VoiceClips/');
       expect(r.report.errors).toEqual([]);
     }
     const missing = await ADAPTERS.unity.export(story, { engine: 'unity', projectName: 'A', engineVersion: '6000.0', integrationRef: 'v1.0.0', includeDemo: true });
@@ -878,22 +878,136 @@ describe('Unity story UI', () => {
   it('ships the uGUI view, the theme and the uGUI package', async () => {
     const { project } = await build('@passage a A\nOne.\n@pause\nTwo.\n@end\n', 'u.md', 'structured');
     const r = await unity(project);
-    expect(JSON.parse(file(r, 'Packages/manifest.json')).dependencies['com.unity.ugui']).toBeTruthy();
-    expect(file(r, 'Scripts/NarrativeView.cs')).toContain('class NarrativeView');
-    expect(file(r, 'Scripts/NarrativeTheme.cs')).toContain('class NarrativeTheme : ScriptableObject');
+    expect(JSON.parse(file(r, '/package.json')).dependencies['com.unity.ugui']).toBeTruthy();
+    expect(file(r, 'Runtime/NarrativeView.cs')).toContain('class NarrativeView');
+    expect(file(r, 'Runtime/NarrativeTheme.cs')).toContain('class NarrativeTheme : ScriptableObject');
     const controller = r.files.map((f) => String(f.content)).find((c) => c.includes('IsWaitingForContinue'))!;
     expect(controller).toContain('ContinueShown');
     // Ink's Object and Unity's Object are both in scope there, so Unity's must be named in full.
-    expect(file(r, 'Scripts/NarrativeView.cs')).not.toMatch(/[^.\w]Object\.Destroy/);
-    const theme = JSON.parse(file(r, 'Resources/NarrativeBridgeTheme.json'));
+    expect(file(r, 'Runtime/NarrativeView.cs')).not.toMatch(/[^.\w]Object\.Destroy/);
+    const theme = JSON.parse(file(r, '/Theme.json'));
     expect(theme).toMatchObject({ preset: 'book', layout: 'bottom', continueLabel: 'Continue', panelYMin: 0.03 });
   });
 
   it('exports the project theme, filled in from its preset and made safe', async () => {
     const { project } = await build('@passage a A\nOne.\n@end\n', 'u.md', 'structured');
     project.presentation = { unity: { preset: 'night', layout: 'center', fontSize: 400, continueLabel: '  Next  ', endLabel: '', text: 'red' } as never };
-    const theme = JSON.parse(file(await unity(project), 'Resources/NarrativeBridgeTheme.json'));
+    const theme = JSON.parse(file(await unity(project), '/Theme.json'));
     expect(theme).toMatchObject({ preset: 'night', background: '#1f2913', text: '#fefae0', layout: 'center', fontSize: 56, continueLabel: 'Next', endLabel: 'The End', panelXMin: 0.2 });
+  });
+});
+
+describe('Unity package', () => {
+  const archive = async () => {
+    const s = SAMPLES.find((x) => x.id === 'archive')!;
+    return processProject((await build(s.text, s.fileName, 'structured')).project);
+  };
+  const opts = { engine: 'unity' as const, projectName: 'Locked Archive', engineVersion: ADAPTERS.unity.defaultEngineVersion, integrationRef: '2.0.0', includeDemo: true };
+  const text = (r: ExportResult, end: string) => String(r.files.find((f) => f.path.endsWith(end))?.content ?? '');
+  const guid = (meta: string) => /guid: ([0-9a-f]{32})/.exec(meta)?.[1];
+
+  it('is a Unity package with its own namespace and assemblies, and a .meta for everything Unity imports', async () => {
+    const r = await ADAPTERS.unity.export(await archive(), { ...opts, packageVersion: '1.2.0' });
+    expect(r.report.errors).toEqual([]);
+    expect(r.rootName).toBe('com.narrativebridge.locked-archive');
+    expect(r.unityPackage).toMatchObject({ name: 'com.narrativebridge.locked-archive', version: '1.2.0', root: 'com.narrativebridge.locked-archive/', namespace: 'NarrativeBridge.LockedArchive' });
+    const paths = r.files.map((f) => f.path);
+    const pkg = JSON.parse(text(r, 'locked-archive/package.json'));
+    expect(pkg).toMatchObject({ name: 'com.narrativebridge.locked-archive', version: '1.2.0', unity: '2022.3' });
+    expect(pkg.dependencies).not.toHaveProperty('com.inkle.ink-unity-integration');
+    for (const sample of pkg.samples) expect(paths.some((p) => p.startsWith(`com.narrativebridge.locked-archive/${sample.path}/`))).toBe(true);
+    // Every file and folder Unity imports has a .meta; folders ending in ~ are skipped, and need none.
+    const root = 'com.narrativebridge.locked-archive/';
+    const imported = paths.filter((p) => !p.endsWith('.meta') && !p.slice(root.length).split('/').some((x) => x.endsWith('~')));
+    for (const p of imported) expect(paths, p).toContain(`${p}.meta`);
+    for (const dir of ['Runtime', 'Runtime/Resources', 'Editor', 'Editor/Setup']) expect(text(r, `${root}${dir}.meta`)).toContain('folderAsset: yes');
+    expect(paths.filter((p) => p.endsWith('.meta') && p.includes('~'))).toEqual([]);
+    expect(text(r, 'NarrativeController.cs.meta')).toContain('MonoImporter:');
+    expect(text(r, 'package.json.meta')).toContain('PackageManifestImporter:');
+    const guids = r.files.filter((f) => f.path.endsWith('.meta')).map((f) => guid(String(f.content)));
+    expect(new Set(guids).size).toBe(guids.length);
+    // Exporting again keeps the GUIDs, so a game's scenes keep their references to the scripts.
+    const again = await ADAPTERS.unity.export(await archive(), opts);
+    expect(guid(text(again, 'NarrativeController.cs.meta'))).toBe(guid(text(r, 'NarrativeController.cs.meta')));
+    const other = await ADAPTERS.unity.export(await archive(), { ...opts, projectName: 'Other Story' });
+    expect(guid(text(other, 'NarrativeController.cs.meta'))).not.toBe(guid(text(r, 'NarrativeController.cs.meta')));
+    // The scripts only compile once Ink is in the project, and the setup assembly (which installs it) needs nothing.
+    const runtime = JSON.parse(text(r, 'Runtime/NarrativeBridge.LockedArchive.asmdef'));
+    expect(runtime.defineConstraints).toEqual(['NARRATIVE_BRIDGE_INK']);
+    expect(runtime.versionDefines).toContainEqual({ name: 'com.inkle.ink-unity-integration', expression: '1.0.0', define: 'NARRATIVE_BRIDGE_INK' });
+    const setup = JSON.parse(text(r, 'NarrativeBridge.LockedArchive.Setup.asmdef'));
+    expect([setup.references, setup.defineConstraints]).toEqual([[], []]);
+    expect(text(r, 'InkSetup.cs')).toContain('const string InkPackage = "https://github.com/inkle/ink-unity-integration.git?path=/Packages/com.inkle.ink-unity-integration#2.0.0";');
+    // Every script is in the story's namespace, with no template tokens left.
+    for (const f of r.files.filter((x) => x.path.endsWith('.cs'))) {
+      const c = String(f.content);
+      expect(c, f.path).toMatch(/namespace NarrativeBridge\.LockedArchive\b|using NarrativeBridge\.LockedArchive;/);
+      expect(c, f.path).not.toMatch(/__[A-Z_]+__/);
+      // Ink.Runtime has Object and Path types too: with it in scope, Unity's and System.IO's are named in full.
+      if (c.includes('using Ink.Runtime;')) expect(c, f.path).not.toMatch(/[^.\w](Object|Path)\.[A-Z]/);
+    }
+    const info = text(r, 'StoryInfo.cs');
+    const knots = [...(await archive()).generated.ink.matchAll(/^=== (\w+) ===$/gm)].map((m) => `"${m[1]}"`);
+    expect(info).toContain(`Passages = { ${knots.join(', ')} };`);
+    expect(info).toContain('public const string ResourceFolder = "NarrativeBridge/locked-archive/";');
+    expect(text(r, 'NarrativeBridgeEditor.cs')).toContain('const string AssetFolder = "Assets/NarrativeBridge/LockedArchive";');
+    // The package never edits a game's build settings or scenes by itself (only the complete project does, on first open).
+    expect(text(r, 'NarrativeBridgeEditor.cs')).not.toContain('[InitializeOnLoad]');
+    expect(text(r, 'Ink~/MainStory.ink')).toBe((await archive()).generated.ink);
+  });
+
+  it('can still be a complete Unity project, with the same package inside', async () => {
+    const r = await ADAPTERS.unity.export(await archive(), { ...opts, projectName: 'Archive', unityLayout: 'project' });
+    expect(r.report.errors).toEqual([]);
+    expect(r.rootName).toBe('Archive');
+    expect(r.unityPackage?.root).toBe('Archive/Packages/com.narrativebridge.archive/');
+    expect(JSON.parse(text(r, 'Archive/Packages/manifest.json')).dependencies['com.inkle.ink-unity-integration']).toContain('#2.0.0');
+    expect(text(r, 'Archive/Packages/com.narrativebridge.archive/package.json')).toContain('"name": "com.narrativebridge.archive"');
+    expect(text(r, 'Assets/Editor/OpenDemoOnFirstOpen.cs')).toContain('NarrativeBridge.Archive.EditorTools.NarrativeBridgeEditor, NarrativeBridge.Archive.Editor');
+    const bare = await ADAPTERS.unity.export(await archive(), { ...opts, projectName: 'Archive', unityLayout: 'project', includeDemo: false });
+    expect(bare.files.some((f) => f.path.endsWith('OpenDemoOnFirstOpen.cs'))).toBe(false);
+  });
+
+  it('packs the package as a .tgz for Package Manager', async () => {
+    const { unityTarball, unityTarballName } = await import('../src/core/export');
+    const r = await ADAPTERS.unity.export(await archive(), opts);
+    const tgz = (await unityTarball(r))!;
+    expect(unityTarballName(r)).toBe('com.narrativebridge.locked-archive-1.0.0.tgz');
+    const { gunzipSync } = await import('node:zlib');
+    const tarBytes = gunzipSync(tgz);
+    const entries = new Map<string, Buffer>();
+    for (let at = 0; at + 512 <= tarBytes.length; ) {
+      const h = tarBytes.subarray(at, at + 512);
+      if (h.every((b) => b === 0)) break;
+      const str = (o: number, n: number) => h.subarray(o, o + n).toString().replace(/\0.*$/s, '');
+      const size = parseInt(str(124, 12), 8);
+      let sum = 0;
+      for (let i = 0; i < 512; i++) sum += i >= 148 && i < 156 ? 32 : h[i];
+      expect(parseInt(str(148, 8), 8)).toBe(sum);
+      const prefix = str(345, 155);
+      entries.set(prefix ? `${prefix}/${str(0, 100)}` : str(0, 100), tarBytes.subarray(at + 512, at + 512 + size));
+      at += 512 + Math.ceil(size / 512) * 512;
+    }
+    const inPackage = r.files.filter((f) => f.path.startsWith(r.unityPackage!.root));
+    expect(entries.size).toBe(inPackage.length);
+    expect(JSON.parse(entries.get('package/package.json')!.toString()).name).toBe('com.narrativebridge.locked-archive');
+    const long = inPackage.find((f) => f.path.includes('Samples~'))!;
+    expect(entries.get(`package/${long.path.slice(r.unityPackage!.root.length)}`)!.toString()).toBe(long.content);
+    const { splitTarPath } = await import('../src/core/export/tar');
+    const deep = `package/${'d'.repeat(90)}/${'f'.repeat(90)}.cs`;
+    expect(splitTarPath(deep)).toEqual({ prefix: `package/${'d'.repeat(90)}`, name: `${'f'.repeat(90)}.cs` });
+  });
+
+  it('names the package, namespace and menus safely', async () => {
+    const { unityPackageId } = await import('../src/core/export/unityPackage');
+    expect(unityPackageId('LockedArchive', 'The Locked Archive')).toEqual({ name: 'com.narrativebridge.locked-archive', slug: 'locked-archive', namespace: 'NarrativeBridge.LockedArchive', menuTitle: 'The Locked Archive' });
+    expect(unityPackageId('42 Days', 'Rock & Roll / Live').name).toBe('com.narrativebridge.story-42-days');
+    expect(unityPackageId('42 Days', 'Rock & Roll / Live').menuTitle).toBe('Rock Roll Live');
+    expect(unityPackageId('Ink', 'Ink').namespace).toBe('NarrativeBridge.InkStory');
+    const { minimumUnity } = await import('../src/core/export/unity');
+    expect(['2022.3.62f1', '6000.0.40f1', '2021.3.1f1', 'latest'].map(minimumUnity)).toEqual(['2022.3', '6000.0', '2022.3', '2022.3']);
+    const r = await ADAPTERS.unity.export(await archive(), { ...opts, packageVersion: 'one' });
+    expect(r.unityPackage?.version).toBe('1.0.0');
   });
 });
 
@@ -939,7 +1053,7 @@ describe('scene pictures and recordings', () => {
     expect(inkUnsupported(story.generated.ink)).toEqual([]);
     const opts = { engineVersion: '6000.0', integrationRef: 'v1.2.3', includeDemo: true, images: { img_hall_1: png } };
     const unity = await ADAPTERS.unity.export(story, { engine: 'unity', projectName: 'P', ...opts });
-    expect(unity.files.map((f) => f.path)).toContain('P/Assets/NarrativeBridge/Resources/NarrativeBridgeImages/img_hall_1.png');
+    expect(unity.files.map((f) => f.path)).toContain('com.narrativebridge.p/Runtime/Resources/NarrativeBridge/p/Images/img_hall_1.png.bytes');
     expect(unity.report.warnings.filter((w) => /picture/.test(w))).toEqual([]);
     const unreal = await ADAPTERS.unreal.export(story, { engine: 'unreal', projectName: 'P', ...opts, engineVersion: '5.7' });
     expect(unreal.files.map((f) => f.path)).toContain('P/StorySource/Images/img_hall_1.png');
@@ -970,5 +1084,66 @@ describe('scene pictures and recordings', () => {
     ]);
     // "2.wav" is the second line, already matched; "01.ogg" is the first, already matched too.
     expect(r.unmatched).toEqual(['notes.wav', '2.wav', '01.ogg']);
+  });
+});
+
+describe('admin design editor', () => {
+  it('turns a design into CSS that wins over the app, per theme, and keeps files safe', async () => {
+    const { designCss, normaliseDesign, designChanges, ruleKey, splitRuleKey } = await import('../src/ui/design/design');
+    const d = normaliseDesign({
+      format: 'narrative-bridge-design',
+      tokens: { '--radius': '9px', 'not a var': '1px', '--bad': 'x } body { display: none' },
+      light: { '--paper': '#ffffff' },
+      dark: { '--paper': '#000000' },
+      rules: { '.btn': { 'letter-spacing': '0.2em', 'bad prop': 'x' }, [ruleKey('.ribbon', '(max-width: 760px)')]: { display: 'block' }, 'a { b': { color: 'red' } },
+      words: { brand: 'Story Forge', unknown: 'x' },
+      settings: { sound: false, theme: 'sepia', showLocked: 'yes' },
+    });
+    expect(d.tokens).toEqual({ '--radius': '9px', '--bad': 'x  body  display: none' });
+    expect(Object.keys(d.rules)).toEqual(['.btn', '@media (max-width: 760px)|.ribbon']);
+    expect(d.words).toEqual({ brand: 'Story Forge' });
+    expect(d.settings).toEqual({ sound: false });
+    expect(designChanges(d)).toBe(8);
+    expect(splitRuleKey('@media (max-width: 760px)|.ribbon')).toEqual({ media: '(max-width: 760px)', selector: '.ribbon' });
+    const css = designCss(d);
+    expect(css).toContain(":root:root:root { --radius: 9px;");
+    expect(css).toContain(":root:root:root[data-theme='light'] { --paper: #ffffff; }");
+    expect(css).toContain("@media (prefers-color-scheme: dark) { :root:root:root:not([data-theme='light']) { --paper: #000000; } }");
+    expect(css).toContain('.btn { letter-spacing: 0.2em; }');
+    expect(css).toContain('@media (max-width: 760px) { .ribbon { display: block; } }');
+    expect(css).not.toMatch(/\}\s*body\s*\{/);
+  });
+
+  it('checks the password the way the build hashed it, and reads colours and rules', async () => {
+    const { pbkdf2Sync } = await import('node:crypto');
+    const { checkPassword, stretch } = await import('../src/ui/admin/lock');
+    const salt = Buffer.from('0123456789abcdef');
+    const lock = { salt: salt.toString('base64'), hash: pbkdf2Sync('open sesame', salt, 1000, 32, 'sha256').toString('base64'), iterations: 1000 };
+    expect(await stretch('open sesame', lock.salt, 1000)).toBe(lock.hash);
+    expect(await checkPassword('open sesame', lock)).toBe(true);
+    expect(await checkPassword('open sesame ', lock)).toBe(false);
+    expect(await checkPassword('', lock)).toBe(false);
+    expect(await checkPassword('open sesame', null)).toBe(false);
+    const { parseColour, formatColour } = await import('../src/ui/admin/AdminRoot');
+    expect(parseColour('#abc')).toEqual({ hex: '#aabbcc', alpha: 1 });
+    expect(parseColour('rgba(96, 108, 56, 0.1)')).toEqual({ hex: '#606c38', alpha: 0.1 });
+    expect(parseColour('color-mix(in srgb, red 10%, transparent)')).toBeNull();
+    expect(formatColour('#606c38', 0.25)).toBe('rgba(96, 108, 56, 0.25)');
+    expect(formatColour('#606c38', 1)).toBe('#606c38');
+    const { parseDeclarations, splitTopLevel } = await import('../src/ui/admin/rules');
+    expect(parseDeclarations('color: red; background: url("a;b.png") no-repeat; padding: 2px !important; --x: 1')).toEqual([
+      { prop: 'color', value: 'red', important: false },
+      { prop: 'background', value: 'url("a;b.png") no-repeat', important: false },
+      { prop: 'padding', value: '2px', important: true },
+      { prop: '--x', value: '1', important: false },
+    ]);
+    expect(splitTopLevel('.a:is(.b, .c), .d', ',')).toEqual(['.a:is(.b, .c)', '.d']);
+  });
+
+  it('lists every design variable the stylesheet defines', async () => {
+    const { TOKENS } = await import('../src/ui/design/tokens');
+    const css = readFileSync(new URL('../src/ui/styles.css', import.meta.url), 'utf8');
+    const root = css.slice(css.indexOf(':root {'), css.indexOf('}', css.indexOf(':root {')));
+    for (const t of TOKENS) expect(root, t.name).toContain(`${t.name}:`);
   });
 });

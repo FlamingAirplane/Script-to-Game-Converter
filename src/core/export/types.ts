@@ -21,6 +21,13 @@ export interface ExportOptions {
   images?: AudioAssets;
   /** Unity story UI look; defaults to the project's (presentation.unity), then to the Book preset. */
   unityTheme?: UnityTheme;
+  /**
+   * Unity: "package" (the default) is a Unity package to add to an existing game; "project" wraps the
+   * same package in a new Unity project with a demo scene.
+   */
+  unityLayout?: 'package' | 'project';
+  /** Unity: the package's semantic version, e.g. 1.2.0 (defaults to 1.0.0). */
+  packageVersion?: string;
 }
 
 export interface ExportFile {
@@ -42,6 +49,8 @@ export interface ExportResult {
   files: ExportFile[];
   manifest: ExportManifest;
   report: ExportReport;
+  /** Unity: the package inside the files (root is its path prefix, ending in "/"), for the .tgz download. */
+  unityPackage?: { name: string; version: string; root: string; namespace: string };
 }
 
 export interface ExportManifest {

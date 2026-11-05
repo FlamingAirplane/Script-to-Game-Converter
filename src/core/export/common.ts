@@ -163,12 +163,12 @@ export function verifyExport(result: ExportResult, story: ProcessedStory, requir
 }
 
 /** Picture files for every scene picture the story refers to, and the names of any missing from `assets`. */
-export function imageFiles(story: ProcessedStory, assets: AudioAssets | undefined, dir: string): { files: ExportFile[]; missing: string[] } {
+export function imageFiles(story: ProcessedStory, assets: AudioAssets | undefined, dir: string, suffix = ''): { files: ExportFile[]; missing: string[] } {
   const files: ExportFile[] = [];
   const missing: string[] = [];
   for (const ref of referencedImages(story.project)) {
     const a = assets?.[ref.id];
-    if (a) files.push({ path: `${dir}${imageFileName(ref)}`, content: a.bytes });
+    if (a) files.push({ path: `${dir}${imageFileName(ref)}${suffix}`, content: a.bytes });
     else missing.push(ref.name);
   }
   return { files, missing };

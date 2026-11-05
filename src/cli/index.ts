@@ -24,6 +24,7 @@ Usage:
   narrative-bridge validate <files... | project.nbproj.json>
   narrative-bridge export <files... | project.nbproj.json> --engine unity|unreal|web|twine|script --out <dir>
                                       [--name ProjectName] [--engine-version 2022.3.62f1] [--ref <tag|sha>] [--no-demo]
+                                      Unity: a package for an existing game; [--unity-project] for a new project, [--package-version 1.0.0]
                                       [--story-only]  (twine: just passages, text and links; no code, styling or variables)
   narrative-bridge doctor [--engine unity|unreal]
 
@@ -191,6 +192,9 @@ async function main() {
           engineVersion: typeof args['engine-version'] === 'string' ? args['engine-version'] : adapter.defaultEngineVersion,
           integrationRef: typeof args.ref === 'string' ? args.ref : adapter.integration.defaultRef,
           includeDemo: !args['no-demo'],
+          // Unity: a package for an existing game (default), or --unity-project for a complete new project.
+          unityLayout: args['unity-project'] ? 'project' : 'package',
+          packageVersion: typeof args['package-version'] === 'string' ? args['package-version'] : undefined,
           audio: audioAssets,
         });
         const outDir = resolve(args.out);
