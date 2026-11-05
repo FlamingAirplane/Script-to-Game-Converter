@@ -367,7 +367,7 @@ describe('share exports', () => {
     const json = /<script id="story-json" type="application\/json">([\s\S]*?)<\/script>/.exec(html)![1];
     expect(json).not.toMatch(/<\/script|<!--/i);
     expect(JSON.stringify(JSON.parse(json))).toContain('</script><!--');
-    expect(html.match(/<script/g)!.length).toBe(6); // runtime, story, meta, clips, pictures, player
+    expect(html.match(/<script/g)!.length).toBe(7); // runtime, story, meta, clips, pictures, portraits, player
   });
 
   /** Passages of a Twee file by name, and the targets of every [[link]] in them. */
@@ -893,7 +893,7 @@ describe('Unity story UI', () => {
     const { project } = await build('@passage a A\nOne.\n@end\n', 'u.md', 'structured');
     project.presentation = { unity: { preset: 'night', layout: 'center', fontSize: 400, continueLabel: '  Next  ', endLabel: '', text: 'red' } as never };
     const theme = JSON.parse(file(await unity(project), '/Theme.json'));
-    expect(theme).toMatchObject({ preset: 'night', background: '#1f2913', text: '#fefae0', layout: 'center', fontSize: 56, continueLabel: 'Next', endLabel: 'The End', panelXMin: 0.2 });
+    expect(theme).toMatchObject({ preset: 'night', background: '#1f2913', text: '#fefae0', layout: 'center', fontSize: 72, continueLabel: 'Next', endLabel: 'The End', panelXMin: 0.2 });
   });
 });
 
@@ -1008,6 +1008,50 @@ describe('Unity package', () => {
     expect(['2022.3.62f1', '6000.0.40f1', '2021.3.1f1', 'latest'].map(minimumUnity)).toEqual(['2022.3', '6000.0', '2022.3', '2022.3']);
     const r = await ADAPTERS.unity.export(await archive(), { ...opts, packageVersion: 'one' });
     expect(r.unityPackage?.version).toBe('1.0.0');
+  });
+});
+
+describe('Unity story UI settings and portraits', () => {
+  it('checks every setting, keeps a custom panel, and reads themes saved before the colours were split', async () => {
+    const { normaliseUnityTheme, UNITY_THEME_FIELDS } = await import('../src/core/export/unityTheme');
+    const t = normaliseUnityTheme({ preset: 'custom', accent: '#112233', muted: '#445566', layout: 'custom', panelXMin: 0.5, panelXMax: 0.51, panelYMin: 0.2, panelYMax: 0.9, transcript: 'sideways', portraitSide: 'alternate', portraitHeight: 5000, autoAdvanceDelay: -3, saveLabel: '  Keep  ' } as never);
+    // Older themes had one accent for speaker names and buttons, and muted headings.
+    expect([t.speakerColour, t.buttonColour, t.borderColour, t.sceneColour]).toEqual(['#112233', '#112233', '#112233', '#445566']);
+    expect([t.panelXMin, t.panelXMax, t.panelYMin, t.panelYMax]).toEqual([0.5, 0.55, 0.2, 0.9]);
+    expect([t.transcript, t.portraitSide, t.portraitHeight, t.autoAdvanceDelay, t.saveLabel]).toEqual(['history', 'alternate', 1000, 0.2, 'Keep']);
+    // A preset layout decides the panel's corners.
+    expect(normaliseUnityTheme({ layout: 'right', panelXMin: 0 } as never).panelXMin).toBe(0.57);
+    // Every setting reaches the C# theme: a field, and a field of the exported JSON's class.
+    const { THEME_CS } = await import('../src/core/export/unityUi');
+    const exported = THEME_CS.slice(THEME_CS.indexOf('class Exported'), THEME_CS.indexOf('public void ApplyExported'));
+    for (const f of UNITY_THEME_FIELDS) {
+      if (f.key === 'layout') continue; // reaches Unity as the panel's corners (panelXMin…)
+      expect(exported, f.key).toMatch(new RegExp(`[ ,]${f.key}[,;]`));
+      if (!/^panel[XY]M|^reference(Width|Height)$/.test(f.key)) expect(THEME_CS, f.key).toMatch(new RegExp(`public [\\w.]+ ${f.key} =`));
+    }
+    expect(UNITY_THEME_FIELDS.length).toBeGreaterThanOrEqual(60);
+  });
+
+  it('shows the speaking character’s portrait in Unity and the playable story', async () => {
+    const { buildPlayableHtml } = await import('../src/core/export');
+    const { referencedImages } = await import('../src/core/images');
+    const { project } = await build('@passage hall Hall\nThe hall is dark.\n\nMIRA: Who is there?\n\nTOMAS: Only me.\n@end\n', 'p.md', 'structured');
+    const mira = project.characters.find((c) => c.displayName.toUpperCase() === 'MIRA')!;
+    mira.portrait = { id: 'img_portrait_mira_1', name: 'mira.png', mime: 'image/png', alt: 'Portrait of Mira' };
+    expect(referencedImages(project).map((r) => r.id)).toContain('img_portrait_mira_1');
+    const story = processProject(project);
+    const png = { mime: 'image/png', bytes: new Uint8Array([137, 80, 78, 71]) };
+    const r = await ADAPTERS.unity.export(story, { engine: 'unity', projectName: 'P', engineVersion: '6000.0', integrationRef: 'v1.2.3', includeDemo: true, images: { img_portrait_mira_1: png } });
+    expect(r.report.warnings.filter((w) => /picture/.test(w))).toEqual([]);
+    expect(r.files.map((f) => f.path)).toContain('com.narrativebridge.p/Runtime/Resources/NarrativeBridge/p/Images/img_portrait_mira_1.png.bytes');
+    const info = String(r.files.find((f) => f.path.endsWith('StoryInfo.cs'))!.content);
+    expect(info).toContain(`PortraitSpeakers = { "${mira.id}" };`);
+    expect(info).toContain('PortraitFiles = { "img_portrait_mira_1.png" };');
+    const controller = String(r.files.find((f) => f.path.endsWith('NarrativeController.cs'))!.content);
+    expect(controller).toContain('public static Texture2D LoadPortrait(string speakerId)');
+    expect(String(r.files.find((f) => f.path.endsWith('NarrativeView.cs'))!.content)).toContain('public Texture Portrait =>');
+    const html = buildPlayableHtml(story, '/* runtime */', {}, { img_portrait_mira_1: png });
+    expect(JSON.parse(/<script id="story-portraits" type="application\/json">([^<]*)<\/script>/.exec(html)![1])).toEqual({ [mira.id]: 'img_portrait_mira_1.png' });
   });
 });
 

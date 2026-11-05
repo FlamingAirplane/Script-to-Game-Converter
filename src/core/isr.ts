@@ -33,6 +33,8 @@ export interface Character {
   aliases: string[];
   /** Browser text-to-speech voice used in Playtest and the playable story. */
   voice?: VoiceSettings;
+  /** A picture of the character, shown while they speak (Playtest, the playable story, Unity). */
+  portrait?: ImageRef;
 }
 
 export interface Item {
@@ -132,30 +134,114 @@ export interface StoryProject {
  * The Unity story UI's look, chosen on the Export page and exported as NarrativeBridgeTheme.json
  * (the developer can change it further in Unity's Inspector). Colours are #rrggbb.
  */
+/**
+ * The Unity story UI's look and behaviour (presentation.unity). Every field is described, with its
+ * range and default, in UNITY_THEME_FIELDS (src/core/export/unityTheme.ts), which also checks saved
+ * values; the generated NarrativeTheme (C#) has the same fields.
+ */
 export interface UnityTheme {
   preset: 'book' | 'night' | 'minimal' | 'custom';
+  // Colours
   background: string;
   text: string;
-  /** Speaker names, choice buttons and the Continue button. */
+  /** Choice buttons and the Continue button. */
   accent: string;
-  /** Scene headings, stage directions and the status line. */
+  /** Stage directions, transitions, choices made and the status line. */
   muted: string;
+  speakerColour: string;
+  sceneColour: string;
+  buttonColour: string;
+  choiceTextColour: string;
+  borderColour: string;
+  // Panel
+  layout: 'bottom' | 'center' | 'left' | 'right' | 'full' | 'custom';
+  /** The panel's corners as fractions of the screen (origin bottom-left); used by the custom layout. */
+  panelXMin: number;
+  panelYMin: number;
+  panelXMax: number;
+  panelYMax: number;
   /** How opaque the story panel is, 0–1. */
   panelOpacity: number;
-  layout: 'bottom' | 'center' | 'left' | 'right' | 'full';
-  /** Text size in pixels at 1920×1080 (the UI scales with the screen). */
+  padding: number;
+  borderWidth: number;
+  // Text
+  /** Text size in pixels at the reference resolution (the UI scales with the screen). */
   fontSize: number;
+  lineSpacing: number;
+  /** Space between lines of the story, as a fraction of the text size. */
+  paragraphSpacing: number;
+  textAlign: 'left' | 'center' | 'right';
+  /** history: everything so far scrolls; scene: cleared at each new scene; line: only the latest line. */
+  transcript: 'history' | 'scene' | 'line';
+  showChoiceHistory: boolean;
+  // Speakers and scenes
+  showSpeakers: boolean;
+  speakerStyle: 'above' | 'inline';
+  speakerScale: number;
+  speakerUppercase: boolean;
+  showParentheticals: boolean;
+  showSceneHeadings: boolean;
+  sceneScale: number;
+  sceneUppercase: boolean;
+  // Typing and pacing
   /** Typewriter speed in characters per second; 0 shows each line at once. */
   charactersPerSecond: number;
-  showSpeakers: boolean;
-  showSceneHeadings: boolean;
+  /** Extra pause, in seconds, after . ! ? and other sentence ends while typing. */
+  punctuationPause: number;
+  /** Each new line fades in over this many seconds. */
+  lineFade: number;
+  clickToSkip: boolean;
+  /** Go on past Continue breaks by itself, after autoAdvanceDelay seconds. */
+  autoAdvance: boolean;
+  autoAdvanceDelay: number;
+  // Choices and buttons
   showChoiceNumbers: boolean;
+  choiceAlign: 'left' | 'center';
+  choiceScale: number;
+  /** Button height as a multiple of the text size. */
+  choiceHeight: number;
+  choiceSpacing: number;
+  buttonOpacity: number;
+  buttonHoverOpacity: number;
+  continueLabel: string;
+  continueArrow: boolean;
+  endLabel: string;
+  // Toolbar
   /** Restart, Save and Load buttons under the story. */
   showToolbar: boolean;
+  showRestart: boolean;
+  showSave: boolean;
+  showLoad: boolean;
+  showStatus: boolean;
+  restartLabel: string;
+  saveLabel: string;
+  loadLabel: string;
+  // Scene pictures
   /** Scene pictures fill the screen behind the panel. */
   showPictures: boolean;
-  continueLabel: string;
-  endLabel: string;
+  pictureFit: 'cover' | 'contain';
+  /** Darkens the picture behind the panel, 0–0.9. */
+  pictureDim: number;
+  pictureFade: number;
+  // Character portraits
+  /** The speaking character's portrait (see Character.portrait). */
+  showPortraits: boolean;
+  /** above: standing on top of the panel; inside: within the panel, beside the text. */
+  portraitPlacement: 'above' | 'inside';
+  /** alternate: each new speaker takes the other side, as in a conversation. */
+  portraitSide: 'left' | 'right' | 'alternate';
+  /** Height in pixels at the reference resolution. */
+  portraitHeight: number;
+  portraitMirrorRight: boolean;
+  portraitFade: number;
+  /** Keep the last speaker's portrait during narration (otherwise it's hidden). */
+  keepPortraitForNarration: boolean;
+  // Screen and sound
+  referenceWidth: number;
+  referenceHeight: number;
+  /** 0 scales the UI with the screen's width, 1 with its height. */
+  matchWidthOrHeight: number;
+  voiceVolume: number;
 }
 
 export function itemVar(itemId: string): string {

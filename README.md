@@ -214,9 +214,14 @@ revised story versions), the `NarrativeView` story panel, the `NarrativeTheme` l
 `.bytes` decoded at run time). For connecting it to a game: `StartAt(passage)`, `TagFound` for the story's own tags,
 `VariableChanged`, Inspector UnityEvents, *GameObject → Narrative Bridge → <Story>*, a *Voice Source* for the game's mixer,
 the view's *Sorting Order* and *Keyboard Shortcuts* (Input Manager or Input System), and a *Hooking into your game* sample.
-The validated ink is in `Ink~/MainStory.ink`. The **Story UI** settings on the Export page set the panel's look (position,
-colours, opacity, text size, typewriter speed, which parts show, button words); the game's editable `NarrativeTheme`
-asset is made in `Assets/NarrativeBridge/<Story>/`.
+The validated ink is in `Ink~/MainStory.ink`. The **Story UI** settings on the Export page (about 70, described once in
+`UNITY_THEME_FIELDS` in `src/core/export/unityTheme.ts`, which also draws the card's controls) set the panel's colours,
+position, text, speakers, transcript style (everything, the current scene, or one line at a time), typewriter and pacing,
+buttons, toolbar, scene pictures, character portraits, reference resolution and voice volume; the game's editable
+`NarrativeTheme` asset, with the same fields, is made in `Assets/NarrativeBridge/<Story>/`. **Character portraits**
+(Story settings → Characters) ship as `.bytes` next to the scene pictures; `StoryInfo.PortraitSpeakers`/`PortraitFiles`
+map speaker ids to them, `NarrativeController.LoadPortrait(line.SpeakerId)` loads one, and the view shows the speaker's
+portrait standing on the panel or inside it, left, right or taking turns.
 
 The smoke test compiles the ink with the ink compiler inside Unity, plays it 50 times, checks every voice clip and picture,
 carries a save over, starts at every passage and clicks through the story panel:

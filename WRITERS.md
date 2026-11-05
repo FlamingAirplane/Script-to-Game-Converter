@@ -80,8 +80,9 @@ building the game. It includes your story, your original script and instructions
 add to the game they already have (nothing in their project is replaced); choose *A complete new Unity project* instead to
 try the story on its own.
 
-For Unity, **Story UI** on the same page sets how the story looks in the game: a look to start from, where the panel
-sits, colours, text size, typewriter speed, and the words on the Continue button, with a preview as you change them.
+For Unity, **Story UI** on the same page sets how the story looks and behaves in the game (about 70 settings: colours,
+where the panel sits, text, speakers, typing and pacing, buttons, pictures and character portraits), with a preview as
+you change them. Give each character a portrait in Review → Story settings → Characters, and it shows while they speak.
 
 Your voice actors can work from the **recording script** (Export page): it names the file for every line. Click
 **Add recordings…** and pick all their files at once to attach each to its line.

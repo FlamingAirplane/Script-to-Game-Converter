@@ -134,8 +134,9 @@ Click **Story settings** at the top of the contents.
 - **At a glance:** words, reading time, choices, endings, minutes of spoken dialogue, and a table of lines, words and
   recorded clips per character. Useful when planning a voice session.
 - **Drafts:** see [Saving, drafts and working offline](#10-saving-drafts-and-working-offline).
-- **Characters:** display names, aliases found in the script, a voice for each, and **merge into…** for duplicates
-  (such as "MIRA" and "MIRA (V.O.)").
+- **Characters:** display names, aliases found in the script, a voice for each, a **portrait** (click **+ Portrait**
+  or drop a picture on it), and **merge into…** for duplicates (such as "MIRA" and "MIRA (V.O.)"). A portrait shows
+  beside the character's lines in Playtest and the playable story, and in Unity's story panel while they speak.
 - **Items** (things the player can carry, like a key) and **Variables** (numbers, true/false values or text the story
   tracks).
 
@@ -249,15 +250,28 @@ instructions for the developer. The Unity package installs the free Ink Unity In
 have it yet, and gives the developer ways to connect the story to the game: start it at any passage, react to its tags
 and variables, and use the game's own inventory and save system.
 
-**Story UI** (Unity only) sets how the story panel looks in the game, with a preview beside the settings:
+**Story UI** (Unity only) sets how the story panel looks and behaves in the game: about 70 settings in groups you can
+open and close, with a preview beside them. **Reset to defaults** puts them all back.
 
-- **Look:** *Book*, *Night* or *Minimal* to start from; changing any colour makes it *Custom*.
-- **Where it sits:** along the bottom, in the centre, down the left or right, or full screen.
-- **Colours** for the panel, text, buttons and speaker names, and how see-through the panel is.
-- **Text size**, and a **typewriter** speed (letters a second, or off so each line appears at once).
-- Whether to show speaker names, scene headings, choice numbers, the Restart, Save and Load buttons, and scene
-  pictures (they fill the screen behind the panel).
-- The words on the **Continue** button and at the ending.
+- **Look:** *Book*, *Night* or *Minimal* set the colours; changing any colour makes it *Custom*. Your other settings stay.
+- **Colours:** panel, story text, speaker names, scene headings, notes, buttons, button text, highlights and the border.
+- **Panel:** where it sits (bottom, centre, left, right, full screen, or *Custom* with its four edges), how see-through it
+  is, padding and a border.
+- **Text:** size, line spacing, space between lines, alignment, and **what stays on screen**: everything (scrolling),
+  only the current scene, or only the latest line, one at a time, like a visual novel.
+- **Speakers and scenes:** names above the line or before it (*NAME: …*), their size and capitals, stage directions,
+  and scene headings with their size and capitals.
+- **Typing and pacing:** the typewriter speed, a pause after each sentence, lines that fade in, whether a click finishes
+  the line, and going on past Continue breaks by itself after a few seconds.
+- **Choices and buttons:** numbers, alignment, text size, height, spacing, how solid the buttons are (and when pointed
+  at), and the words on the Continue button (with or without its arrow) and at the ending.
+- **Toolbar:** the Restart, Save and Load buttons each on or off with your own words, and the status messages.
+- **Scene pictures:** on or off, filling the screen or shown whole, darkened behind the panel, and how fast they fade in.
+- **Character portraits:** the speaking character's portrait on or off, standing on the panel or inside it beside the
+  text, on the left, the right, or taking turns as a conversation goes back and forth, its height, mirrored on the
+  right so characters face each other, its fade, and whether it stays during narration.
+- **Screen and sound:** the screen size the panel is designed for, whether it scales with the width or height, and the
+  volume of voice clips.
 
 These settings are saved with your project. Your developer can change any of them later in Unity by selecting the
 *NarrativeTheme* asset in *Assets/NarrativeBridge/(your story)*; changes show while the game runs.

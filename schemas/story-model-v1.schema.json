@@ -42,7 +42,16 @@
       "items": {
         "type": "object",
         "required": ["id", "displayName", "aliases"],
-        "properties": { "id": { "$ref": "#/$defs/identifier" }, "displayName": { "type": "string" }, "aliases": { "type": "array", "items": { "type": "string" } } }
+        "properties": {
+          "id": { "$ref": "#/$defs/identifier" },
+          "displayName": { "type": "string" },
+          "aliases": { "type": "array", "items": { "type": "string" } },
+          "portrait": {
+            "type": "object",
+            "required": ["id", "name", "mime"],
+            "properties": { "id": { "type": "string" }, "name": { "type": "string" }, "mime": { "enum": ["image/png", "image/jpeg"] }, "width": { "type": "integer" }, "height": { "type": "integer" }, "alt": { "type": "string" } }
+          }
+        }
       }
     },
     "items": {

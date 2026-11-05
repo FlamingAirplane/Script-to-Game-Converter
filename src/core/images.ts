@@ -21,9 +21,17 @@ export function newImageId(seed: string): string {
   return `img_${seed.replace(/[^a-z0-9_]/gi, '_').slice(0, 32)}_${rand}`;
 }
 
-/** Every picture the project's passages refer to. */
-export function referencedImages(project: { passages: { image?: ImageRef }[] }): ImageRef[] {
+/** Every picture the project refers to: scene pictures and character portraits. */
+export function referencedImages(project: { passages: { image?: ImageRef }[]; characters?: { portrait?: ImageRef }[] }): ImageRef[] {
   const out = new Map<string, ImageRef>();
   for (const p of project.passages) if (p.image) out.set(p.image.id, p.image);
+  for (const c of project.characters ?? []) if (c.portrait) out.set(c.portrait.id, c.portrait);
   return [...out.values()];
+}
+
+/** Speaker id (the #speaker tag) → that character's portrait file name, for characters that have one. */
+export function portraitFiles(project: { characters: { id: string; portrait?: ImageRef }[] }): Record<string, string> {
+  const out: Record<string, string> = {};
+  for (const c of project.characters) if (c.portrait) out[c.id] = imageFileName(c.portrait);
+  return out;
 }
