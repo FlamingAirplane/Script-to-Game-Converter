@@ -334,6 +334,50 @@ for (const [name, type] of [['WebKit', webkit], ['Chromium', chromium]]) {
       const zip = await JSZip.loadAsync(readFileSync(await zipDl.path()));
       if (!Object.keys(zip.files).some((f) => /Resources\/NarrativeBridge\/[^/]+\/Images\/img_.+\.png\.bytes$/.test(f))) throw new Error('Unity zip has no scene picture');
     });
+    await step('a whole recording session: takes are found, given to lines in order and cut into clips', async () => {
+      // A 10-second session with three spoken stretches in room tone.
+      const rate = 16000, n = rate * 10, data = Buffer.alloc(44 + n * 2);
+      data.write('RIFF', 0); data.writeUInt32LE(36 + n * 2, 4); data.write('WAVE', 8); data.write('fmt ', 12); data.writeUInt32LE(16, 16); data.writeUInt16LE(1, 20); data.writeUInt16LE(1, 22);
+      data.writeUInt32LE(rate, 24); data.writeUInt32LE(rate * 2, 28); data.writeUInt16LE(2, 32); data.writeUInt16LE(16, 34); data.write('data', 36); data.writeUInt32LE(n * 2, 40);
+      for (let i = 0; i < n; i++) {
+        const t = i / rate;
+        const loud = (t > 1 && t < 2.2) || (t > 4 && t < 5) || (t > 7 && t < 8.5);
+        data.writeInt16LE(Math.round(loud ? Math.sin(i / 4) * 12000 : Math.sin(i * 12.9898) * 60), 44 + i * 2);
+      }
+      const session = join(mkdtempSync(join(tmpdir(), 'nb-session-')), 'Session one.wav');
+      writeFileSync(session, data);
+      await page.getByRole('button', { name: /Review/ }).click();
+      await page.locator('.story-entry', { hasText: 'Story settings' }).click();
+      await page.getByRole('button', { name: 'Link a whole session…' }).first().click();
+      const sheet = page.getByRole('dialog', { name: 'Recording session' });
+      await sheet.locator('input[aria-label="Session recording file"]').setInputFiles(session);
+      await sheet.locator('.session-transport', { hasText: '/ 0:10.00' }).waitFor({ timeout: 10000 });
+      await sheet.getByRole('button', { name: 'Find takes' }).click();
+      await sheet.getByText('Found 3 takes').waitFor({ timeout: 5000 });
+      await sheet.locator('.session-line').first().click();
+      await sheet.getByRole('button', { name: /takes to lines in order/ }).click();
+      const start = sheet.getByRole('textbox', { name: 'Line 1 start' });
+      let first = '';
+      for (let i = 0; i < 30 && !first; i++) first = (await start.inputValue()) || (await page.waitForTimeout(100), '');
+      if (!/^0:00\.[89]\d$/.test(first)) throw new Error(`line 1 starts at ${first}`);
+      await sheet.getByRole('button', { name: /^Cut and attach \d+ clips?$/ }).click();
+      await sheet.getByText(/^Cut \d+ clips?/).waitFor({ timeout: 10000 });
+      await sheet.getByRole('button', { name: 'Close' }).click();
+      await page.locator('.passage-item').first().click();
+      await page.locator('.clip-name', { hasText: '✂' }).first().waitFor({ timeout: 5000 });
+    });
+    await step('every file put into the story downloads again, one at a time or all as a zip', async () => {
+      await page.getByRole('button', { name: /Review/ }).click();
+      await page.locator('.story-entry', { hasText: 'Story settings' }).click();
+      const files = page.locator('.story-files');
+      await files.waitFor({ timeout: 5000 });
+      const [one] = await Promise.all([page.waitForEvent('download'), files.getByRole('button', { name: 'Download tower.png' }).click()]);
+      const png = readFileSync(await one.path());
+      if (one.suggestedFilename() !== 'tower.png' || png.subarray(1, 4).toString() !== 'PNG') throw new Error(`not the picture: ${one.suggestedFilename()}`);
+      const [all] = await Promise.all([page.waitForEvent('download'), files.getByRole('button', { name: 'Download all (.zip)' }).click()]);
+      const names = Object.keys((await JSZip.loadAsync(readFileSync(await all.path()))).files);
+      for (const want of [/^Scripts\/.+/, /^Scene pictures\/tower\.png$/, /^Recordings\/.+\.wav$/]) if (!names.some((n) => want.test(n))) throw new Error(`zip has no ${want}: ${names.join(', ')}`);
+    });
     await step('opens a Twine story to keep working on it', async () => {
       await page.getByRole('button', { name: /Import/ }).first().click();
       await page.locator('.dropzone input[type=file]').setInputFiles(fileURLToPath(new URL('../fixtures/orchard.twee', import.meta.url)));

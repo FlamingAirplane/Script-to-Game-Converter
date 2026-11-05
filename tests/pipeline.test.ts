@@ -1237,3 +1237,112 @@ describe('exits to the game', () => {
     expect(twee).toMatch(/:: Camp \(continued\)/);
   });
 });
+
+describe('story files', () => {
+  it('lists every file put into a story, with names to save them under and unique zip paths', async () => {
+    const { storyFiles, zipPaths, safeFileName } = await import('../src/core/files');
+    const { project } = await build('@passage hall Hall\nThe hall is dark.\n\nMIRA: Who is there?\n\nMIRA: Hello?\n@end\n', 'scene one.md', 'structured');
+    project.sources.push({ ...project.sources[0], id: 'pdf', fileName: 'Draft 2.pdf', format: 'fountain', text: 'INT. HALL' });
+    const lines = project.passages[0].content.filter((b) => b.type === 'dialogue');
+    (lines[0] as { audio?: unknown }).audio = { id: 'vo_a', name: 'take1.wav', mime: 'audio/wav' };
+    (lines[1] as { audio?: unknown }).audio = { id: 'vo_b', name: 'take1.wav', mime: 'audio/wav' };
+    project.passages[0].image = { id: 'img_hall', name: 'hall.png', mime: 'image/png' };
+    project.characters[0].portrait = { id: 'img_mira', name: 'mira face.jpg', mime: 'image/jpeg' };
+    const files = storyFiles(project);
+    expect(files.map((f) => [f.kind, f.fileName])).toEqual([
+      ['script', 'scene one.md'],
+      ['script', 'Draft 2.fountain'],
+      ['picture', 'hall.png'],
+      ['recording', 'take1.wav'],
+      ['recording', 'take1.wav'],
+      ['portrait', 'mira face.jpg'],
+    ]);
+    expect(files[1]).toMatchObject({ convertedFrom: 'pdf', text: 'INT. HALL' });
+    expect(files[3].context).toContain('Who is there?');
+    expect(zipPaths(files)).toEqual(['Scripts/scene one.md', 'Scripts/Draft 2.fountain', 'Scene pictures/hall.png', 'Recordings/take1.wav', 'Recordings/take1 (2).wav', 'Portraits/mira face.jpg']);
+    expect(safeFileName('a/b:c?.wav')).toBe('a_b_c_.wav');
+  });
+});
+
+describe('recording sessions', () => {
+  it('reads and writes times', async () => {
+    const { formatTime, parseTime } = await import('../src/core/session');
+    expect([formatTime(0), formatTime(75.5), formatTime(3723.4)]).toEqual(['0:00.00', '1:15.50', '1:02:03.40']);
+    expect(['1:15.5', '75.5', '1:02:03.4', '1:15,5', 'abc', '1:75', ''].map(parseTime)).toEqual([75.5, 75.5, 3723.4, 75.5, null, null, null]);
+  });
+
+  it('finds the takes in a session and gives them to lines in order, cutting them cleanly', async () => {
+    const { detectSegments, assignInOrder, cutSamples } = await import('../src/core/session');
+    const rate = 8000;
+    // Quiet room tone, with three spoken takes at 1–2 s, 3–3.6 s and 5–6.5 s, and a click at 4.3 s (too short to be a take).
+    const s = new Float32Array(rate * 8);
+    for (let i = 0; i < s.length; i++) s[i] = Math.sin(i * 12.9898) * 0.002;
+    const speak = (a: number, b: number) => {
+      for (let i = a * rate; i < b * rate; i++) s[i] = Math.sin(i / 3) * 0.5;
+    };
+    speak(1, 2);
+    speak(3, 3.6);
+    speak(5, 6.5);
+    for (let i = 4.3 * rate; i < 4.3 * rate + 40; i++) s[i] = 0.6;
+    const takes = detectSegments(s, rate);
+    expect(takes).toHaveLength(3);
+    takes.forEach((t, i) => {
+      const [a, b] = [[1, 2], [3, 3.6], [5, 6.5]][i];
+      expect(t.start).toBeGreaterThan(a - 0.2);
+      expect(t.start).toBeLessThanOrEqual(a);
+      expect(t.end).toBeGreaterThanOrEqual(b);
+      expect(t.end).toBeLessThan(b + 0.2);
+    });
+    // A long minimum pause joins takes that are close together.
+    expect(detectSegments(s, rate, { minGap: 1.5 }).length).toBeLessThan(3);
+    expect(assignInOrder(['a', 'b'], takes)).toEqual({ a: takes[0], b: takes[1] });
+    const cut = cutSamples(s, rate, { start: 1, end: 2 });
+    expect(cut.length).toBe(rate);
+    expect(Math.abs(cut[0])).toBe(0); // faded in
+    expect(detectSegments(new Float32Array(rate), rate)).toEqual([]);
+  });
+
+  it('lists the lines in recording-script order with where their clips came from', async () => {
+    const { sessionLines, clipName } = await import('../src/core/session');
+    const { project } = await build('@passage hall Hall\nThe hall is dark.\n\nMIRA: Who is there?\n\nTOMAS: Only me.\n@end\n', 'p.md', 'structured');
+    const second = project.passages[0].content.filter((b) => b.type === 'dialogue')[1] as { audio?: unknown };
+    second.audio = { id: 'vo_x', name: 'x.wav', mime: 'audio/wav', from: { session: 'ses_1', start: 3, end: 4.5 } };
+    const lines = sessionLines(project);
+    expect(lines.map((l) => [l.number, l.speaker, l.text, l.from?.start])).toEqual([
+      [1, 'MIRA', 'Who is there?', undefined],
+      [2, 'TOMAS', 'Only me.', 3],
+    ]);
+    expect(lines[0].slot).toMatch(/^hall_\d{3}$/);
+    expect(clipName({ id: 'ses_1', name: 'Mira day 1.wav', mime: 'audio/wav' }, { start: 62.5, end: 65.1 })).toBe('Mira day 1 1.02.50–1.05.10.wav');
+  });
+});
+
+describe('story map arrows', () => {
+  const card = (x: number, y: number) => ({ x, y, w: 188, h: 56 });
+  it('goes around cards in the way and uses the sides that face each other', async () => {
+    const { routeEdges, routeHits } = await import('../src/core/edgeRouting');
+    // A and B in a row with C between them; D straight below A.
+    const cards = new Map([['a', card(0, 0)], ['c', card(300, 0)], ['b', card(600, 0)], ['d', card(0, 300)]]);
+    const routes = routeEdges(cards, [
+      { id: 'ab', from: 'a', to: 'b' },
+      { id: 'ad', from: 'a', to: 'd' },
+      { id: 'db', from: 'd', to: 'b' },
+    ]);
+    expect(routeHits(routes.get('ab')!, cards.get('c')!)).toBe(false);
+    expect([routes.get('ad')!.fromSide, routes.get('ad')!.toSide]).toEqual(['bottom', 'top']);
+  });
+
+  it('spreads arrows that share a side, in the order of where they go', async () => {
+    const { routeEdges } = await import('../src/core/edgeRouting');
+    const cards = new Map([['a', card(0, 200)], ['b', card(400, 0)], ['c', card(400, 200)], ['d', card(400, 400)]]);
+    const routes = routeEdges(cards, ['b', 'c', 'd'].map((t) => ({ id: t, from: 'a', to: t })));
+    const starts = ['b', 'c', 'd'].map((t) => routes.get(t)!).map((r) => r.d.match(/^M(-?[\d.]+),(-?[\d.]+)/)!.slice(1).map(Number));
+    expect(new Set(starts.map((s) => s.join(','))).size).toBe(3);
+    // All leave by the right side, top to bottom in the order of their targets.
+    expect(starts.every((s) => s[0] === 188)).toBe(true);
+    expect(starts[0][1]).toBeLessThan(starts[1][1]);
+    expect(starts[1][1]).toBeLessThan(starts[2][1]);
+    const self = routeEdges(cards, [{ id: 'loop', from: 'a', to: 'a' }]).get('loop')!;
+    expect(self.d).toMatch(/^M188,/);
+  });
+});

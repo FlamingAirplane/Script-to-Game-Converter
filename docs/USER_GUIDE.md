@@ -143,6 +143,10 @@ Click **Story settings** at the top of the contents.
 - **Characters:** display names, aliases found in the script, a voice for each, a **portrait** (click **+ Portrait**
   or drop a picture on it), and **merge into…** for duplicates (such as "MIRA" and "MIRA (V.O.)"). A portrait shows
   beside the character's lines in Playtest and the playable story, and in Unity's story panel while they speak.
+- **Files:** everything you've put into the story, to download again: the scripts it was made from (a Word, PDF or
+  Final Draft file comes back as the text taken from it), voice recordings (with the line each belongs to), scene
+  pictures and character portraits. **Download** saves one; **Download all (.zip)** saves them all, in a folder for
+  each kind.
 - **Items** (things the player can carry, like a key) and **Variables** (numbers, true/false values or text the story
   tracks).
 
@@ -155,7 +159,9 @@ every match, and **Replace all** changes them in one step. Undo ↶ reverses it.
 
 ![The story map with passages, routes, the key below, a minimap and a compass](images/graph.jpg)
 
-Every passage is a card and every choice a route between cards. The **key** under the map explains the marks:
+Every passage is a card and every choice a route between cards. Each route leaves and enters its cards by whichever
+sides keep the map tidiest: around other cards rather than through them, crossing as few other routes as it can, with
+routes that share a side spread out in the order of where they go. The **key** under the map explains the marks:
 
 | Mark | Means |
 | --- | --- |
@@ -341,6 +347,19 @@ your story's text, so it is safe to attach to a bug report. Choose how much to s
   them all, or drop them there. Each file is attached to its line; a file named by its row number, like `12.wav`, works
   too, and one for a line that already has a recording replaces it. Files that match no line are listed, and one Undo
   takes the whole batch back off.
+- **A whole recording session:** if your actor recorded everything in one long file, click **Link a whole session…**
+  (next to *Add recordings…*) and load it. You see its waveform (the whole session, and a zoomed view you can scroll by
+  clicking the whole one) and every line of dialogue. Mark where each line is:
+  - pick a line, then **drag across the zoomed waveform** over its take;
+  - or type its **start** and **end** (like `1:02.50`);
+  - or play the session and press **I** at the start and **O** at the end (or the ⇤ ⇥ buttons).
+
+  **Find takes** looks for the pauses between takes (adjust *Sensitivity* and *Pause between takes* if it finds too
+  many or too few). Then pick the first line they belong to and **Give the takes to lines in order**. *Lines of* shows
+  one character's lines, handy for a session with one actor. ▶ (or Enter) plays a line's stretch; ✕ unlinks it.
+  **Cut and attach** turns each marked stretch into that line's recording, marked ✂ in Review. Open the session again
+  any time to move a line's start or end and cut it again; one Undo takes a whole cut back. The session recording itself
+  stays in this browser; the clips cut from it are saved with your project.
 - Recordings and scene pictures travel with the playable story, the Unity and Unreal packages, and saved project
   files.
 

@@ -8,6 +8,7 @@ import { friendly } from './friendly';
 import { VoiceClip, VoicePicker } from './VoiceControls';
 import { ScenePicture } from './ScenePicture';
 import { CharacterPortrait } from './CharacterPortrait';
+import { StoryFiles } from './StoryFiles';
 import { RecordingsImport } from './RecordingsImport';
 import { formatMinutes, storyStats } from '../core/stats';
 import { DraftShelf } from './Drafts';
@@ -820,6 +821,8 @@ function StorySettings({ project, update, onKeepDraft, onRestoreDraft }: { proje
 
       <h3>Recordings</h3>
       <RecordingsImport project={project} update={update} />
+
+      <StoryFiles project={project} />
 
       <h3>Items</h3>
       <p className="muted small">Each item becomes an Ink Boolean <code>has_&lt;id&gt;</code>. In a real game the host inventory should stay authoritative.</p>

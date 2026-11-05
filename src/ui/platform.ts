@@ -48,6 +48,14 @@ const TYPES: Record<string, PickerType> = {
   svg: { description: 'SVG image', accept: { 'image/svg+xml': ['.svg'] } },
   png: { description: 'PNG image', accept: { 'image/png': ['.png'] } },
   txt: { description: 'Text', accept: { 'text/plain': ['.txt'] } },
+  jpg: { description: 'JPEG image', accept: { 'image/jpeg': ['.jpg', '.jpeg'] } },
+  jpeg: { description: 'JPEG image', accept: { 'image/jpeg': ['.jpg', '.jpeg'] } },
+  wav: { description: 'WAV audio', accept: { 'audio/wav': ['.wav'] } },
+  mp3: { description: 'MP3 audio', accept: { 'audio/mpeg': ['.mp3'] } },
+  ogg: { description: 'Ogg audio', accept: { 'audio/ogg': ['.ogg'] } },
+  fountain: { description: 'Fountain screenplay', accept: { 'text/plain': ['.fountain'] } },
+  md: { description: 'Markdown', accept: { 'text/markdown': ['.md'] } },
+  tgz: { description: 'Unity package (tarball)', accept: { 'application/gzip': ['.tgz'] } },
 };
 
 const isAbort = (e: unknown) => (e as { name?: string })?.name === 'AbortError';

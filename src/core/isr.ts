@@ -3,6 +3,7 @@
 
 import type { AudioRef, VoiceSettings } from './audio';
 import type { ImageRef } from './images';
+import type { SessionRef } from './session';
 
 export const SCHEMA_VERSION = '1.0';
 
@@ -147,6 +148,8 @@ export interface StoryProject {
   layout?: Record<string, { x: number; y: number }>;
   /** How the story looks when played in a game engine (absent = defaults). */
   presentation?: { unity?: UnityTheme };
+  /** Long voice-session recordings that lines' clips were cut from (see src/core/session.ts). */
+  sessions?: SessionRef[];
 }
 
 /**
