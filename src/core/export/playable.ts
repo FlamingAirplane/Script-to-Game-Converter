@@ -2,6 +2,7 @@ import type { ProcessedStory } from '../pipeline';
 import { audioFileName, bytesToBase64, referencedAudio, type AudioAssets } from '../audio';
 import { imageFileName, portraitFiles, referencedImages } from '../images';
 import { log } from '../log';
+import { EXIT_PREFIX } from '../isr';
 import { assertExportable, storyVersion } from './common';
 
 // "Playable story" export: one self-contained HTML file (Ink runtime + compiled story + a small
@@ -117,7 +118,7 @@ font-size:13px;font-variant:small-caps;text-transform:lowercase;letter-spacing:.
 .text p{margin:0 0 4px;text-indent:1.4em;text-align:justify;hyphens:auto}
 .text>p:first-child{text-indent:0}.text>p:first-child::first-letter{float:left;font-size:3.3em;line-height:.9;padding:4px 8px 0 0;color:var(--rubric)}
 .scene{display:block;text-align:center;text-indent:0;font-size:13px;font-variant:small-caps;text-transform:lowercase;letter-spacing:.2em;color:var(--faded);margin:24px 0 10px}
-.picture{margin:18px 0 22px;text-align:center}.dialogue.with-portrait{display:flow-root}.portrait{float:left;width:64px;height:64px;object-fit:cover;border-radius:50%;margin:2px 14px 4px 0;box-shadow:0 1px 4px rgba(40,54,24,.25)}.picture img{max-width:100%;max-height:60vh;border-radius:2px;box-shadow:0 2px 10px rgba(40,54,24,.18)}
+.picture{margin:18px 0 22px;text-align:center}.game-exit{border:1px dashed #2f6458;border-radius:3px;padding:12px 16px;text-align:center}.game-exit p{margin:0 0 10px;font-style:italic}.game-played{text-align:center;color:#2f6458}.dialogue.with-portrait{display:flow-root}.portrait{float:left;width:64px;height:64px;object-fit:cover;border-radius:50%;margin:2px 14px 4px 0;box-shadow:0 1px 4px rgba(40,54,24,.25)}.picture img{max-width:100%;max-height:60vh;border-radius:2px;box-shadow:0 2px 10px rgba(40,54,24,.18)}
 .scene:before{content:'❧';display:block;color:var(--rubric);font-size:18px;letter-spacing:0}
 .text p.dialogue{text-indent:0;text-align:left;margin:10px 0 10px 2.2em}
 .speaker{display:block;font-size:13px;font-variant:small-caps;text-transform:lowercase;letter-spacing:.16em;font-weight:600;color:var(--ink2)}
@@ -277,6 +278,7 @@ const PLAYER_JS = `
     box.textContent = '';
     lines.forEach(function (l) {
       if (l.pause) return; // a Continue break: the page simply goes on
+      if (l.chosen && l.chosen.indexOf('${EXIT_PREFIX}') === 0) { box.appendChild(el('p', 'chosen game-played', '⇥ the game played here ⇤')); return; }
       if (l.chosen) { box.appendChild(el('p', 'chosen', l.chosen)); return; }
       if (l.scene) box.appendChild(el('span', 'scene', l.scene));
       var pic = l.image && pictures[l.image];
@@ -315,6 +317,18 @@ const PLAYER_JS = `
       nav.appendChild(again);
     }
     var pause = isPause();
+    var exit = exitName();
+    if (exit) {
+      // An exit to the game: in a game, gameplay happens here until the game resumes the story.
+      var box2 = el('div', 'game-exit');
+      box2.appendChild(el('p', '', 'The game takes over here (' + exit + '). In the game, the player plays until it resumes the story.'));
+      var r = el('button', 'choice continue', 'Resume the story');
+      r.onclick = function () { choose(choices[0].index, choices[0].text); };
+      box2.appendChild(r);
+      nav.appendChild(box2);
+      $('undo').disabled = !history.length;
+      return;
+    }
     choices.forEach(function (c) {
       var b = el('button', pause ? 'choice continue' : 'choice', c.text);
       b.onclick = function () { choose(c.index, c.text); };
@@ -351,6 +365,12 @@ const PLAYER_JS = `
       }
       return true;
     } finally { replaying = false; }
+  }
+
+  // An exit to the game (see inkgen.ts): its name, or null.
+  function exitName() {
+    var c = story.currentChoices;
+    return c.length === 1 && c[0].text.indexOf('${EXIT_PREFIX}') === 0 ? c[0].text.slice(${EXIT_PREFIX.length}) : null;
   }
 
   // A Continue break: the only thing to do is go on (see inkgen.ts).

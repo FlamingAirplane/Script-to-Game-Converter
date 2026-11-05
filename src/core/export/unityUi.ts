@@ -318,6 +318,11 @@ namespace __NAMESPACE__
         public bool keyboardShortcuts = true;
         [Tooltip("Add an EventSystem when the scene has none, so the buttons can be clicked.")]
         public bool createEventSystem = true;
+        [Tooltip("Hide the story panel while the game plays after an exit to the game, and show it again when the story resumes.")]
+        public bool hideDuringExits = true;
+
+        /// <summary>Whether the panel is showing (it hides during exits to the game).</summary>
+        public bool Visible => Canvas != null && Canvas.enabled;
 
         public Canvas Canvas { get; private set; }
         public IReadOnlyList<Button> Buttons => buttons;
@@ -375,6 +380,8 @@ namespace __NAMESPACE__
             controller.StoryEnded += OnEnded;
             controller.Restarted += ClearStory;
             controller.StatusChanged += OnStatus;
+            controller.ExitReached += OnExit;
+            controller.Resumed += OnResumed;
             subscribed = true;
         }
 
@@ -387,6 +394,8 @@ namespace __NAMESPACE__
             controller.StoryEnded -= OnEnded;
             controller.Restarted -= ClearStory;
             controller.StatusChanged -= OnStatus;
+            controller.ExitReached -= OnExit;
+            controller.Resumed -= OnResumed;
             if (theme != null) theme.Changed -= OnThemeChanged;
             subscribed = false;
         }
@@ -538,6 +547,7 @@ namespace __NAMESPACE__
 
         void ClearStory()
         {
+            if (Canvas != null) Canvas.enabled = true;
             if (lines == null) return;
             StopTyping();
             for (int i = lines.childCount - 1; i >= 0; i--) Discard(lines.GetChild(i).gameObject);
@@ -552,6 +562,13 @@ namespace __NAMESPACE__
         void OnLine(NarrativeController.Line line) => ShowLine(line, Application.isPlaying);
         void OnChoices(IReadOnlyList<Choice> choices) => QueueChoices();
         void OnContinue() => QueueChoices();
+
+        // An exit to the game: once the lines before it have been shown, the panel steps aside.
+        void OnExit(string exit) => QueueChoices();
+        void OnResumed()
+        {
+            if (Canvas != null) Canvas.enabled = true;
+        }
         void OnStatus(string message)
         {
             if (status != null) status.text = message;
@@ -836,6 +853,13 @@ namespace __NAMESPACE__
             choicesWaiting = false;
             ClearChoices();
             if (choiceArea == null || controller == null || controller.Story == null) return;
+            if (Canvas != null) Canvas.enabled = true;
+            if (controller.IsAtExit)
+            {
+                // The game plays now; it resumes the story with controller.Resume() or ResumeAt(passage).
+                if (hideDuringExits && Canvas != null) Canvas.enabled = false;
+                return;
+            }
             if (controller.IsWaitingForContinue)
             {
                 AddButton(ContinueText(), controller.Continue, TextAnchor.MiddleCenter);

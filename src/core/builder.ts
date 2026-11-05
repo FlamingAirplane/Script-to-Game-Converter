@@ -335,6 +335,8 @@ function assemble(
             return null;
           case 'pause':
             return { type: 'pause', origin: 'source', source: s };
+          case 'exit':
+            return { type: 'exit', name: m.name, ...(m.note ? { note: m.note } : {}), origin: 'source', source: s };
           case 'divert':
             if (p.divert) diagnostics.push(diag('MULTIPLE_DIVERTS', 'warning', 'parsing', `Passage "${p.id}" has more than one divert; the last one wins.`, { entityId: p.id, source: s, exportBlocked: false }));
             p.divert = m.target;

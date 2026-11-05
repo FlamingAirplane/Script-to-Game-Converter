@@ -359,6 +359,13 @@ function PassageEditor({
           >
             + Continue break
           </button>
+          <button
+            className="btn tiny"
+            title="The dialogue stops here and the game plays (a fight, exploring, a puzzle) until it resumes the story. Name it so the game knows which exit this is."
+            onClick={() => edit((p) => p.content.push({ type: 'exit', name: `exit_${p.content.filter((b) => b.type === 'exit').length + 1}`, origin: 'user_authored' }))}
+          >
+            + Exit to game
+          </button>
         </div>
       </section>
 
@@ -440,7 +447,7 @@ function BlockRow({
   return (
     <div className={`block block-${block.type}`}>
       <div className="block-gutter">
-        <span className="block-type">{block.type === 'pause' ? 'break' : block.type}</span>
+        <span className="block-type">{block.type === 'pause' ? 'break' : block.type === 'exit' ? 'to game' : block.type}</span>
         {block.source && (
           <button className="link mono small" onClick={() => onFocusLine(block.source!.line)} title="Show in source">
             L{block.source.line}
@@ -473,6 +480,23 @@ function BlockRow({
           <p className="pause-rule">
             <span>Continue</span> the reader clicks Continue here before reading on
           </p>
+        )}
+        {block.type === 'exit' && (
+          <div className="exit-block">
+            <p className="pause-rule exit-rule">
+              <span>⇥ Back to the game</span> the dialogue stops; the game plays until it resumes the story
+            </p>
+            <div className="row wrap">
+              <label className="field exit-name">
+                <span className="muted small">Exit name (the game sees this)</span>
+                <input className="input small mono" value={block.name} onChange={(e) => onChange(touched({ ...block, name: e.target.value.replace(/[^A-Za-z0-9_]+/g, '_').toLowerCase() }))} aria-label="Exit name" />
+              </label>
+              <label className="field exit-note">
+                <span className="muted small">What happens in the game (a note for the developer)</span>
+                <input className="input small" value={block.note ?? ''} placeholder="e.g. The player fights the wolves" onChange={(e) => onChange(touched({ ...block, note: e.target.value || undefined }))} aria-label="What happens in the game" />
+              </label>
+            </div>
+          </div>
         )}
         {block.type === 'unsupported' && (
           <div>

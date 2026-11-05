@@ -109,9 +109,15 @@ suggestions to review. Type in *Filter passages…* to narrow it down. Press **[
   **Describe it** for players who use a screen reader. **Replace…** and **Remove** change it; Undo brings one back.
 - **Content:** each block is *action* (narration), *dialogue*, a *transition*, a *note* (kept as a comment) or an
   *effect* (such as giving an item). Click text to edit it. The **L12** link on each block jumps to that line of the
-  original script. Add blocks with **+ narration**, **+ dialogue**, **+ effect** and **+ Continue break**.
+  original script. Add blocks with **+ narration**, **+ dialogue**, **+ effect**, **+ Continue break** and **+ Exit to game**.
 - **Continue breaks:** a *break* line means the player clicks **Continue** before the next lines appear, so a long
   passage can be read a little at a time. Add them here or, more easily, from the Graph (section 5).
+- **Exits to the game:** for games with more than dialogue (exploring, fights, puzzles), an *Exit to game* block is
+  where the dialogue stops and the game takes over. Give it a **name** the game will see (like `wolf_fight`) and a note
+  of what happens in the game. In Unity, the story panel steps aside there; when the gameplay is done, the game resumes
+  the dialogue from the exit, or at another passage (say, one for winning and one for losing), and it can set the
+  story's variables and items first, so what happened in the game changes what's said next. Playtest and the playable
+  story show *The game takes over here* with a **Resume** button in its place. In Twine, an exit becomes a Continue link.
 - **Choices:** each has its wording, where it leads (→, with ↗ to jump there), conditions (**+ condition**, for example
   *has the brass key*), effects (**+ effect**), and **once only** (the choice disappears after it is picked). Add one with
   **+ Add choice**. **Then** sets where the story goes when there are no choices, or **End the story here**.
@@ -403,6 +409,7 @@ Write these on their own lines in any script to control the structure exactly (t
 - [Markdown link choice](#target)
 -> target                                    continue to another passage
 @pause                                       a Continue break: the player clicks Continue to read on
+@exit wolf_fight The player fights wolves    an exit to the game: the dialogue stops while the game plays
 @end                                         end the story here
 ## Heading {#custom_id}                      a Markdown heading as a passage with a chosen id
 ```

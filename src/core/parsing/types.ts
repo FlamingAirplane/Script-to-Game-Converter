@@ -9,6 +9,8 @@ export type Marker =
   | { type: 'divert'; target: string }
   /** A Continue break: what follows waits for the reader. */
   | { type: 'pause' }
+  /** An exit to the game: the dialogue stops until the game resumes it. */
+  | { type: 'exit'; name: string; note?: string }
   /** The passage's scene heading (Ink #scene tags, Twine scene lines). */
   | { type: 'heading'; text: string }
   | { type: 'item'; id: string; displayName?: string; consumable: boolean }

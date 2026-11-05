@@ -5,7 +5,7 @@ import { fnv1a } from '../core/hash';
 import { lockedChoices } from '../core/gating';
 import { portraitFiles, referencedImages } from '../core/images';
 import { usePictures } from './pictures';
-import { CONTINUE_TEXT, itemVar } from '../core/isr';
+import { CONTINUE_TEXT, exitOf, itemVar } from '../core/isr';
 import type { ProcessedStory } from '../core/pipeline';
 import { audioFileName, referencedAudio } from '../core/audio';
 import { Badge, Empty } from './common';
@@ -256,6 +256,9 @@ export function PlaytestView({
       </div>
     );
 
+  const exitNote = (name: string): string | undefined => {
+    for (const p of processed.project.passages) for (const b of p.content) if (b.type === 'exit' && b.name === name && b.note) return b.note;
+  };
   const choose = (i: number, text: string) => {
     voiceQueue.current.stop();
     const s = story.current!;
@@ -365,7 +368,11 @@ export function PlaytestView({
           {lines.map((l, i) =>
             dialogueOnly && l.kind === 'text' && !l.speaker ? null :
             l.pause ? null :
-            l.kind === 'choice' ? (
+            l.kind === 'choice' && exitOf(l.text) ? (
+              <p key={i} className="t-exit">
+                ⇥ the game played here ({exitOf(l.text)}) ⇤
+              </p>
+            ) : l.kind === 'choice' ? (
               <p key={i} className="t-choice">
                 › {l.text}
               </p>
@@ -392,11 +399,25 @@ export function PlaytestView({
           <div ref={bottom} />
         </div>
         <div className="choices">
-          {choices.map((c) => (
-            <button key={c.index} className={`choice-btn${choices.length === 1 && c.text === CONTINUE_TEXT ? ' continue' : ''}`} onClick={() => choose(c.index, c.text)}>
-              {c.text}
-            </button>
-          ))}
+          {choices.length === 1 && exitOf(choices[0].text) ? (
+            // An exit to the game: in the game, gameplay happens here until it resumes the story.
+            <div className="game-exit" role="group" aria-label="Exit to the game">
+              <p>
+                <strong>⇥ The game takes over here</strong> <code>{exitOf(choices[0].text)}</code>
+              </p>
+              {exitNote(exitOf(choices[0].text)!) && <p className="muted small">{exitNote(exitOf(choices[0].text)!)}</p>}
+              <p className="muted small">In the game, the dialogue stops and the player plays until the game resumes the story. Here, resume it yourself.</p>
+              <button className="choice-btn continue" onClick={() => choose(choices[0].index, choices[0].text)}>
+                Resume the story
+              </button>
+            </div>
+          ) : (
+            choices.map((c) => (
+              <button key={c.index} className={`choice-btn${choices.length === 1 && c.text === CONTINUE_TEXT ? ' continue' : ''}`} onClick={() => choose(c.index, c.text)}>
+                {c.text}
+              </button>
+            ))
+          )}
           {locked.map((l) => (
             <p key={l.choice.id} className="choice-btn locked" aria-disabled="true">
               <span className="locked-text">{l.choice.text}</span>

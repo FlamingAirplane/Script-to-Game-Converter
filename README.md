@@ -138,6 +138,7 @@ Existing interactive stories can be opened and worked on like any other project.
 - [Markdown link choice](#target)
 -> target   /   @end                         divert / ending
 @pause                                       Continue break: the player clicks Continue to read on
+@exit wolf_fight The player fights wolves    exit to the game: the dialogue stops while the game plays
 ## Heading {#custom_id}                      Markdown heading as a passage
 ```
 
@@ -148,6 +149,10 @@ See [`src/samples.ts`](src/samples.ts) for complete examples.
 - Items are Booleans: `VAR has_<item> = false`. Conditions compile from an expression tree (never raw strings).
 - Dialogue: `NAME: text #speaker:<id>`; parentheticals add `#paren:…`; recorded lines add `#audio:<file>`; the first line of a scene carries `#scene:<heading>` and, if the passage has a picture, `#image:<file>` (PNG or JPEG); transitions carry `#transition`.
 - Choices are sticky (`+`) unless marked once-only (`*`). A passage's divert becomes an invisible fallback choice when the passage also has choices, so players never get stuck.
+- An exit to the game (`@exit name note`, or **+ Exit to game** in Review) is a single sticky choice
+  `+ [Back to the game: name] // note` followed by a gather `-`: a game (Unity's `NarrativeController`) stops there, raises
+  `ExitReached(name)`, and goes on when the game calls `Resume()` or `ResumeAt("passage")`; players without a game show a
+  Resume button. The Ink importer reads it back as an exit.
 - A Continue break (`@pause`, or **+ Continue break** on the Graph or in Review) is a single sticky choice `+ [Continue]`
   followed by a gather `-`. The Ink importer reads that exact pair back as a break, but only outside an open set of
   choices; hand-written gathers elsewhere still count as unsupported. Twine exports split the passage into
