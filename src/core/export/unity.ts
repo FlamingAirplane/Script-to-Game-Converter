@@ -60,11 +60,14 @@ export const unityAdapter: EngineAdapter = {
     const pkg = layout === 'package' ? `${id.name}/` : `${projectRoot}Packages/${id.name}/`;
     const res = `${pkg}Runtime/Resources/NarrativeBridge/${id.slug}/`;
     const manifest = await buildManifest(story, options, this);
-    const voice = audioFiles(story, options.audio, `${res}Audio/`);
+    // Voice clips and pictures sit in Resources, or (Addressables) in Runtime/StoryAssets, which isn't built into the
+    // game by itself: the package's editor code puts them in an Addressables group.
+    const media = options.unityAddressables ? `${pkg}Runtime/StoryAssets/` : res;
+    const voice = audioFiles(story, options.audio, `${media}Audio/`);
     // Scene pictures ship as their PNG/JPEG bytes (Images/<file>.bytes) and are decoded at run time: no
     // texture import settings to depend on, the same in every Unity version, and kept at full size.
-    const pictures = imageFiles(story, options.images, `${res}Images/`, '.bytes');
-    const cs = (template: string) => fillTemplate(template, id, { __INK_URL__: unityPackageUrl(options.integrationRef), __ASSET_FOLDER__: `Assets/NarrativeBridge/${id.namespace.split('.').pop()}` });
+    const pictures = imageFiles(story, options.images, `${media}Images/`, '.bytes');
+    const cs = (template: string) => fillTemplate(template, id, { __INK_URL__: unityPackageUrl(options.integrationRef), __ASSET_FOLDER__: `Assets/NarrativeBridge/${id.namespace.split('.').pop()}`, __USES_ADDRESSABLES__: options.unityAddressables ? 'true' : 'false' });
     const sample = `${pkg}Samples~/Hooking into your game/`;
     // Playthrough routes for the package's tests; not for Ink with randomness, which needn't replay the same way.
     const routes = /RANDOM\(|\{~/.test(story.generated.ink) ? [] : storyRoutes(story.compile.json!, story.project);
@@ -75,7 +78,7 @@ export const unityAdapter: EngineAdapter = {
       // The canonical, validated Ink. Folders ending in ~ aren't imported by Unity: the smoke test compiles it.
       { path: `${pkg}Ink~/MainStory.ink`, content: story.generated.ink },
       { path: `${pkg}Runtime/${id.namespace}.asmdef`, content: json(runtimeAsmdef(id)) },
-      { path: `${pkg}Runtime/StoryInfo.cs`, content: storyInfoCs(story, id) },
+      { path: `${pkg}Runtime/StoryInfo.cs`, content: storyInfoCs(story, id, !!options.unityAddressables) },
       { path: `${pkg}Runtime/IInventoryAuthority.cs`, content: cs(INVENTORY_CS) },
       { path: `${pkg}Runtime/GatedChoice.cs`, content: cs(GATED_CHOICE_CS) },
       { path: `${pkg}Runtime/SaveStorage.cs`, content: cs(SAVE_STORAGE_CS) },
@@ -94,6 +97,7 @@ export const unityAdapter: EngineAdapter = {
       { path: `${pkg}Editor/StoryDebuggerWindow.cs`, content: cs(DEBUGGER_CS) },
       { path: `${pkg}Editor/StoryRoutes.cs`, content: storyRoutesCs(routes, id) },
       { path: `${pkg}Editor/PlaythroughRunner.cs`, content: cs(ROUTES_RUNNER_CS) },
+      { path: `${pkg}Editor/AddressablesSetup.cs`, content: cs(ADDRESSABLES_SETUP_CS) },
       { path: `${pkg}Tests/Editor/${id.namespace}.Tests.asmdef`, content: json(testsAsmdef(id)) },
       { path: `${pkg}Tests/Editor/PlaythroughTests.cs`, content: cs(ROUTE_TESTS_CS) },
       { path: `${pkg}Editor/Setup/${id.namespace}.Setup.asmdef`, content: json(setupAsmdef(id)) },
@@ -183,6 +187,8 @@ function projectManifest(o: ExportOptions, id: string) {
       'com.unity.ugui': '1.0.0',
       // The Test Runner, for the story's playthrough tests.
       'com.unity.test-framework': '1.4.6',
+      // Voice clips and pictures loaded on demand (2.x is for Unity 6; 1.x for 2022.3).
+      ...(o.unityAddressables ? { 'com.unity.addressables': /^6\d{3}\./.test(o.engineVersion) ? '2.11.2' : '1.29.0' } : {}),
     },
     // Shows the story package's tests in the Test Runner.
     testables: [id],
@@ -288,7 +294,7 @@ export function conditionCs(c: Condition): string {
   }
 }
 
-function storyInfoCs(story: ProcessedStory, id: UnityPackageId): string {
+function storyInfoCs(story: ProcessedStory, id: UnityPackageId, addressables = false): string {
   const items = itemVarNames(story);
   const vars = story.project.variables.map((v) => v.id);
   const passages = [...story.generated.ink.matchAll(/^=== (\w+) ===$/gm)].map((m) => m[1]);
@@ -322,6 +328,12 @@ namespace ${id.namespace}
         public const string ThemeResource = ResourceFolder + "Theme";
         public const string AudioFolder = ResourceFolder + "Audio/";
         public const string ImageFolder = ResourceFolder + "Images/";
+        /// <summary>Voice clips and pictures load on demand with Addressables (see AddressPrefix), not from Resources.</summary>
+        public static readonly bool UsesAddressables = ${addressables};
+        /// <summary>Their Addressables addresses: AddressPrefix + "Audio/&lt;clip&gt;" and AddressPrefix + "Images/&lt;file&gt;".</summary>
+        public const string AddressPrefix = ${csString(`NarrativeBridge/${id.slug}/`)};
+        /// <summary>Where those files are in the package (with Addressables).</summary>
+        public const string StoryAssetsFolder = ${csString(`Packages/${id.name}/Runtime/StoryAssets/`)};
 
         /// <summary>Every passage (ink knot) the story can start at: NarrativeController.StartAt(name).</summary>
         public static readonly string[] Passages = { ${passages.map(csString).join(', ')} };
@@ -448,6 +460,18 @@ instant), whether it goes on by itself, high contrast (light text on a solid dar
 in PlayerPrefs and shared by every Narrative Bridge story in the game. Your own options menu can set the same things
 through \`NarrativeSettings\` (\`TextScale\`, \`TypingSpeed\`, \`AutoAdvance\`, \`HighContrast\`, \`VoiceVolume\`, \`Reset()\`); the
 menu's words are in the view's *Settings Words*.
+
+## Voice clips and pictures${o.unityAddressables ? ' (Addressables)' : ''}
+${o.unityAddressables ? `This story loads its voice clips and pictures **on demand with Addressables**, so they aren't all built into the game.
+They're in \`Runtime/StoryAssets/\`, and the package puts them in an Addressables group, *${id.menuTitle} Story*, at the
+addresses the controller asks for (\`StoryInfo.AddressPrefix\` + \`Audio/<clip>\` or \`Images/<file>\`). That happens by itself
+the first time; after updating the package, run *Tools → Narrative Bridge → ${id.menuTitle} → Set Up Addressables*. The package
+offers to install Addressables (\`com.unity.addressables\`) if the project doesn't have it. Build the Addressables content with
+your game as usual (*Window → Asset Management → Addressables → Groups → Build*, or on player build). Voice clips and the
+story panel's pictures load without waiting (as WebGL needs); \`LoadPicture\` and \`LoadVoiceClip\` wait, and
+\`LoadPictureAsync\` / \`LoadVoiceClipAsync\` don't. \`NarrativeController.ReleaseLoadedMedia()\` lets go of what has loaded so far.` : `Voice clips and pictures are in the package's Resources, so they're always built into the game. For long or heavily voiced
+stories, export with *Load voice clips and pictures on demand (Addressables)* in Narrative Bridge's advanced settings instead.
+From code: \`LoadVoiceClip\`, \`LoadPicture\` (and their \`Async\` versions) and \`ReleaseLoadedMedia()\`.`}
 
 ## Updating
 Export the story again and replace this folder (or install the new .tgz). Script GUIDs stay the same, so your scenes
@@ -925,6 +949,10 @@ using System.Collections.Generic;
 using Ink.Runtime;
 using UnityEngine;
 using UnityEngine.Events;
+#if NARRATIVE_BRIDGE_ADDRESSABLES
+using UnityEngine.AddressableAssets;
+using UnityEngine.ResourceManagement.AsyncOperations;
+#endif
 
 namespace __NAMESPACE__
 {
@@ -1128,7 +1156,13 @@ namespace __NAMESPACE__
         readonly List<Line> transcript = new List<Line>();
         IInventoryAuthority authority;
         AudioSource voice;
-        readonly Queue<AudioClip> voiceQueue = new Queue<AudioClip>();
+        // Voice clips to play in order; one may still be loading (Addressables).
+        class VoiceItem
+        {
+            public AudioClip Clip;
+            public bool Loading;
+        }
+        readonly Queue<VoiceItem> voiceQueue = new Queue<VoiceItem>();
         bool syncing, silent;
         string status = "";
         Vector2 scroll;
@@ -1312,11 +1346,9 @@ namespace __NAMESPACE__
             foreach (var t in line.Tags)
             {
                 if (!t.StartsWith("audio:")) continue;
-                var file = t.Substring(6).Trim();
-                var dot = file.LastIndexOf('.');
-                var clip = Resources.Load<AudioClip>(StoryInfo.AudioFolder + (dot > 0 ? file.Substring(0, dot) : file));
-                if (clip != null) voiceQueue.Enqueue(clip);
-                else Debug.LogWarning("[NarrativeBridge] Voice clip not found: " + file);
+                var item = new VoiceItem { Loading = true };
+                voiceQueue.Enqueue(item);
+                LoadVoiceClipAsync(t.Substring(6).Trim(), clip => { item.Clip = clip; item.Loading = false; });
             }
         }
 
@@ -1328,9 +1360,12 @@ namespace __NAMESPACE__
 
         void Update()
         {
-            if (voice != null && !voice.isPlaying && voiceQueue.Count > 0)
+            // The next clip plays when the last has finished (and once it has loaded).
+            while (voice != null && !voice.isPlaying && voiceQueue.Count > 0 && !voiceQueue.Peek().Loading)
             {
-                voice.clip = voiceQueue.Dequeue();
+                var next = voiceQueue.Dequeue();
+                if (next.Clip == null) continue;
+                voice.clip = next.Clip;
                 voice.volume = voiceVolume;
                 voice.Play();
             }
@@ -1360,25 +1395,162 @@ namespace __NAMESPACE__
         // ---- Scene pictures: the first line of a scene may carry #image:<file> ----------------
 
         static readonly Dictionary<string, Texture2D> pictures = new Dictionary<string, Texture2D>();
+        static readonly Dictionary<string, AudioClip> clips = new Dictionary<string, AudioClip>();
+
+        // ---- Loading voice clips and pictures: from Resources, or on demand with Addressables ------
 
         /// <summary>
-        /// The picture for an #image file name, or null. Pictures ship as their PNG or JPEG bytes in the package's
-        /// Resources (StoryInfo.ImageFolder + file + ".bytes") and are decoded once, then kept.
+        /// The picture for an #image file name, or null. Pictures ship as their PNG or JPEG bytes (StoryInfo.ImageFolder +
+        /// file + ".bytes" in Resources, or AddressPrefix + "Images/" + file with Addressables) and are decoded once, then
+        /// kept. With Addressables this waits for the load; LoadPictureAsync doesn't (needed on WebGL).
         /// </summary>
         public static Texture2D LoadPicture(string file)
         {
             if (string.IsNullOrEmpty(file)) return null;
             if (pictures.TryGetValue(file, out var cached) && cached != null) return cached;
-            var data = Resources.Load<TextAsset>(StoryInfo.ImageFolder + file);
+            if (!StoryInfo.UsesAddressables) return Decode(file, Resources.Load<TextAsset>(StoryInfo.ImageFolder + file), true);
+#if UNITY_EDITOR
+            // Outside Play mode Addressables has no content to load from: read the package's file itself.
+            if (!Application.isPlaying) return Decode(file, UnityEditor.AssetDatabase.LoadAssetAtPath<TextAsset>(StoryInfo.StoryAssetsFolder + "Images/" + file + ".bytes"), false);
+#endif
+#if NARRATIVE_BRIDGE_ADDRESSABLES
+            var handle = Addressables.LoadAssetAsync<TextAsset>(StoryInfo.AddressPrefix + "Images/" + file);
+            var data = handle.WaitForCompletion();
+            var texture = Decode(file, handle.Status == AsyncOperationStatus.Succeeded ? data : null, false);
+            Addressables.Release(handle);
+            return texture;
+#else
+            NoAddressables();
+            return null;
+#endif
+        }
+
+        /// <summary>Loads a picture without waiting, then calls done with it (or null). At once when it's already loaded.</summary>
+        public static void LoadPictureAsync(string file, Action<Texture2D> done)
+        {
+            if (string.IsNullOrEmpty(file)) { done(null); return; }
+            if ((pictures.TryGetValue(file, out var cached) && cached != null) || !StoryInfo.UsesAddressables || !Application.isPlaying) { done(LoadPicture(file)); return; }
+#if NARRATIVE_BRIDGE_ADDRESSABLES
+            var handle = Addressables.LoadAssetAsync<TextAsset>(StoryInfo.AddressPrefix + "Images/" + file);
+            handle.Completed += op =>
+            {
+                var texture = pictures.TryGetValue(file, out var c) && c != null ? c : Decode(file, op.Status == AsyncOperationStatus.Succeeded ? op.Result : null, false);
+                Addressables.Release(op);
+                done(texture);
+            };
+#else
+            NoAddressables();
+            done(null);
+#endif
+        }
+
+        static Texture2D Decode(string file, TextAsset data, bool fromResources)
+        {
             if (data == null) return null;
             var texture = new Texture2D(2, 2, TextureFormat.RGBA32, false) { name = file, wrapMode = TextureWrapMode.Clamp };
             // Keep no CPU copy once it's on the GPU (there is no GPU when the editor runs headless).
             var ok = texture.LoadImage(data.bytes, SystemInfo.graphicsDeviceType != UnityEngine.Rendering.GraphicsDeviceType.Null);
-            Resources.UnloadAsset(data);
+            if (fromResources) Resources.UnloadAsset(data);
             if (!ok) return null;
             pictures[file] = texture;
             return texture;
         }
+
+        static string ClipName(string file)
+        {
+            var dot = file.LastIndexOf('.');
+            return dot > 0 ? file.Substring(0, dot) : file;
+        }
+
+        /// <summary>A voice clip by its #audio file name, or null. With Addressables this waits for the load.</summary>
+        public static AudioClip LoadVoiceClip(string file)
+        {
+            var name = ClipName(file);
+            if (clips.TryGetValue(name, out var cached) && cached != null) return cached;
+            AudioClip clip = null;
+            if (!StoryInfo.UsesAddressables) clip = Resources.Load<AudioClip>(StoryInfo.AudioFolder + name);
+#if UNITY_EDITOR
+            else if (!Application.isPlaying)
+            {
+                // Outside Play mode Addressables has no content to load from: find the package's clip itself.
+                foreach (var guid in UnityEditor.AssetDatabase.FindAssets(name + " t:AudioClip", new[] { StoryInfo.StoryAssetsFolder + "Audio" }))
+                {
+                    var path = UnityEditor.AssetDatabase.GUIDToAssetPath(guid);
+                    if (System.IO.Path.GetFileNameWithoutExtension(path) == name) { clip = UnityEditor.AssetDatabase.LoadAssetAtPath<AudioClip>(path); break; }
+                }
+            }
+#endif
+            else
+            {
+#if NARRATIVE_BRIDGE_ADDRESSABLES
+                var handle = Addressables.LoadAssetAsync<AudioClip>(StoryInfo.AddressPrefix + "Audio/" + name);
+                clip = handle.WaitForCompletion();
+                if (handle.Status != AsyncOperationStatus.Succeeded) clip = null;
+                else loadedClips.Add(handle);
+#else
+                NoAddressables();
+#endif
+            }
+            if (clip != null) clips[name] = clip;
+            return clip;
+        }
+
+        /// <summary>Loads a voice clip without waiting, then calls done with it (or null). At once when it's already loaded.</summary>
+        public static void LoadVoiceClipAsync(string file, Action<AudioClip> done)
+        {
+            var name = ClipName(file);
+            if ((clips.TryGetValue(name, out var cached) && cached != null) || !StoryInfo.UsesAddressables || !Application.isPlaying)
+            {
+                var clip = LoadVoiceClip(file);
+                if (clip == null) Debug.LogWarning("[NarrativeBridge] Voice clip not found: " + file);
+                done(clip);
+                return;
+            }
+#if NARRATIVE_BRIDGE_ADDRESSABLES
+            var handle = Addressables.LoadAssetAsync<AudioClip>(StoryInfo.AddressPrefix + "Audio/" + name);
+            handle.Completed += op =>
+            {
+                AudioClip clip = null;
+                if (op.Status == AsyncOperationStatus.Succeeded) { clip = op.Result; clips[name] = clip; loadedClips.Add(op); }
+                else Debug.LogWarning("[NarrativeBridge] Voice clip not found in Addressables: " + StoryInfo.AddressPrefix + "Audio/" + name);
+                done(clip);
+            };
+#else
+            NoAddressables();
+            done(null);
+#endif
+        }
+
+#if NARRATIVE_BRIDGE_ADDRESSABLES
+        static readonly List<AsyncOperationHandle<AudioClip>> loadedClips = new List<AsyncOperationHandle<AudioClip>>();
+#endif
+
+        /// <summary>Lets go of every voice clip and picture loaded so far (they load again when needed), e.g. between chapters.</summary>
+        public static void ReleaseLoadedMedia()
+        {
+            foreach (var t in pictures.Values)
+            {
+                if (t == null) continue;
+                if (Application.isPlaying) UnityEngine.Object.Destroy(t);
+                else UnityEngine.Object.DestroyImmediate(t);
+            }
+            pictures.Clear();
+            clips.Clear();
+#if NARRATIVE_BRIDGE_ADDRESSABLES
+            foreach (var h in loadedClips) if (h.IsValid()) Addressables.Release(h);
+            loadedClips.Clear();
+#endif
+        }
+
+#if !NARRATIVE_BRIDGE_ADDRESSABLES
+        static bool warnedAddressables;
+        static void NoAddressables()
+        {
+            if (warnedAddressables) return;
+            warnedAddressables = true;
+            Debug.LogError("[NarrativeBridge] This story loads its voice clips and pictures with Addressables, but the Addressables package (com.unity.addressables) isn't installed.");
+        }
+#endif
 
         /// <summary>A character's portrait file name (in StoryInfo.ImageFolder), by speaker id, or null.</summary>
         public static string PortraitFile(string speakerId)
@@ -2006,6 +2178,74 @@ namespace __NAMESPACE__.Tests
 }
 `;
 
+const ADDRESSABLES_SETUP_CS = `#if NARRATIVE_BRIDGE_ADDRESSABLES
+using System.Collections.Generic;
+using UnityEditor;
+using UnityEditor.AddressableAssets;
+using UnityEditor.AddressableAssets.Settings;
+using UnityEditor.AddressableAssets.Settings.GroupSchemas;
+using UnityEngine;
+
+namespace __NAMESPACE__.EditorTools
+{
+    /// <summary>
+    /// When the story loads its voice clips and pictures with Addressables (StoryInfo.UsesAddressables), puts them in an
+    /// Addressables group, "__MENU_TITLE__ Story", with the addresses the controller asks for. It runs by itself when the
+    /// group is missing; Tools → Narrative Bridge → __MENU_TITLE__ → Set Up Addressables runs it again (after an update).
+    /// </summary>
+    [InitializeOnLoad]
+    public static class AddressablesSetup
+    {
+        public const string GroupName = "__MENU_TITLE__ Story";
+        const string Folder = "Packages/__PACKAGE__/Runtime/StoryAssets";
+
+        static AddressablesSetup()
+        {
+            if (!StoryInfo.UsesAddressables) return;
+            EditorApplication.delayCall += () =>
+            {
+                var settings = AddressableAssetSettingsDefaultObject.Settings;
+                if (settings == null || settings.FindGroup(GroupName) == null) SetUp();
+            };
+        }
+
+        [MenuItem("Tools/Narrative Bridge/__MENU_TITLE__/Set Up Addressables")]
+        static void SetUpMenu()
+        {
+            if (!StoryInfo.UsesAddressables) { Debug.Log("[NarrativeBridge] This story keeps its voice clips and pictures in Resources; export it with Addressables to load them on demand."); return; }
+            Debug.Log("[NarrativeBridge] " + SetUp() + " voice clip(s) and picture(s) are in the Addressables group " + GroupName + ".");
+        }
+
+        /// <summary>Adds every voice clip and picture to the group with its address; returns how many.</summary>
+        public static int SetUp()
+        {
+            var settings = AddressableAssetSettingsDefaultObject.GetSettings(true);
+            var group = settings.FindGroup(GroupName);
+            if (group == null) group = settings.CreateGroup(GroupName, false, false, false, null, typeof(BundledAssetGroupSchema), typeof(ContentUpdateGroupSchema));
+            var count = 0;
+            if (!AssetDatabase.IsValidFolder(Folder)) return 0;
+            foreach (var guid in AssetDatabase.FindAssets("", new[] { Folder }))
+            {
+                var path = AssetDatabase.GUIDToAssetPath(guid);
+                if (AssetDatabase.IsValidFolder(path)) continue;
+                var rel = path.Substring(Folder.Length + 1);
+                string address;
+                if (rel.StartsWith("Audio/")) address = "Audio/" + System.IO.Path.GetFileNameWithoutExtension(rel);
+                else if (rel.StartsWith("Images/") && rel.EndsWith(".bytes")) address = rel.Substring(0, rel.Length - ".bytes".Length);
+                else continue;
+                var entry = settings.CreateOrMoveEntry(guid, group, false, false);
+                entry.address = StoryInfo.AddressPrefix + address;
+                count++;
+            }
+            settings.SetDirty(AddressableAssetSettings.ModificationEvent.BatchModification, null, true, true);
+            AssetDatabase.SaveAssets();
+            return count;
+        }
+    }
+}
+#endif
+`;
+
 const EDITOR_CS = `using System.Collections.Generic;
 using System.IO;
 using Ink.Runtime;
@@ -2224,15 +2464,15 @@ namespace __NAMESPACE__.EditorTools
             // Every voice clip a line refers to must have imported as an AudioClip.
             foreach (var file in clipsHeard)
             {
-                var dot = file.LastIndexOf('.');
-                if (Resources.Load<AudioClip>(StoryInfo.AudioFolder + (dot > 0 ? file.Substring(0, dot) : file)) == null)
-                    errors.Add("Voice clip did not import: " + file);
+                if (NarrativeController.LoadVoiceClip(file) == null)
+                    errors.Add("Voice clip did not import" + (StoryInfo.UsesAddressables ? " (or isn't in Addressables)" : "") + ": " + file);
             }
             // And every scene picture and character portrait must decode.
             foreach (var file in picturesSeen)
                 if (NarrativeController.LoadPicture(file) == null) errors.Add("Scene picture could not be loaded: " + file);
             foreach (var speaker in StoryInfo.PortraitSpeakers)
                 if (NarrativeController.LoadPortrait(speaker) == null) errors.Add("Portrait could not be loaded: " + speaker);
+            var addressables = AddressablesCheck(clipsHeard, picturesSeen, errors);
             var carry = SaveCarryOverCheck(errors);
             var startAt = StartAtCheck(errors);
             var exit = ExitCheck(errors);
@@ -2247,7 +2487,7 @@ namespace __NAMESPACE__.EditorTools
                 if (!routesOk) errors.Add(routeLog);
                 routeResult = routesOk ? "playthrough routes passed (" + StoryRoutes.All.Length + ")" : "playthrough routes failed";
             }
-            log = "[NarrativeBridge] Smoke test (" + source + "): " + clipsHeard.Count + " voice clip(s), " + picturesSeen.Count + " picture(s) and " + StoryInfo.PortraitSpeakers.Length + " portrait(s) checked, " + completed + "/" + runs + " playthroughs reached an ending, "  + carry + ", " + startAt + ", " + exit + ", " + ui + ", " + gates + ", " + cueResult + ", " + slots + ", " + routeResult + ", " + errors.Count + " runtime errors." +
+            log = "[NarrativeBridge] Smoke test (" + source + "): " + clipsHeard.Count + " voice clip(s), " + picturesSeen.Count + " picture(s) and " + StoryInfo.PortraitSpeakers.Length + " portrait(s) checked" + addressables + ", " + completed + "/" + runs + " playthroughs reached an ending, "  + carry + ", " + startAt + ", " + exit + ", " + ui + ", " + gates + ", " + cueResult + ", " + slots + ", " + routeResult + ", " + errors.Count + " runtime errors." +
                   (errors.Count > 0 ? "\\n" + string.Join("\\n", errors) : "");
             return errors.Count == 0 && completed > 0;
         }
@@ -2354,6 +2594,31 @@ namespace __NAMESPACE__.EditorTools
             }
             catch (System.Exception e) { errors.Add("Cue: " + e.Message); return "cues failed"; }
             finally { UnityEngine.Object.DestroyImmediate(go); }
+        }
+
+        /// With Addressables: every voice clip, picture and portrait is in the story's group, at the address the
+        /// controller asks for (the group is set up first if it's missing).
+        static string AddressablesCheck(HashSet<string> clipsHeard, HashSet<string> picturesSeen, List<string> errors)
+        {
+            if (!StoryInfo.UsesAddressables) return "";
+#if NARRATIVE_BRIDGE_ADDRESSABLES
+            var settings = UnityEditor.AddressableAssets.AddressableAssetSettingsDefaultObject.Settings;
+            if (settings == null || settings.FindGroup(AddressablesSetup.GroupName) == null) AddressablesSetup.SetUp();
+            settings = UnityEditor.AddressableAssets.AddressableAssetSettingsDefaultObject.Settings;
+            var group = settings != null ? settings.FindGroup(AddressablesSetup.GroupName) : null;
+            if (group == null) { errors.Add("Addressables: the group " + AddressablesSetup.GroupName + " could not be made."); return " (Addressables failed)"; }
+            var addresses = new HashSet<string>();
+            foreach (var e in group.entries) addresses.Add(e.address);
+            var wanted = new List<string>();
+            foreach (var file in clipsHeard) { var dot = file.LastIndexOf('.'); wanted.Add(StoryInfo.AddressPrefix + "Audio/" + (dot > 0 ? file.Substring(0, dot) : file)); }
+            foreach (var file in picturesSeen) wanted.Add(StoryInfo.AddressPrefix + "Images/" + file);
+            foreach (var f in StoryInfo.PortraitFiles) wanted.Add(StoryInfo.AddressPrefix + "Images/" + f);
+            foreach (var a in wanted) if (!addresses.Contains(a)) errors.Add("Addressables: nothing has the address " + a + ".");
+            return " (with Addressables, " + addresses.Count + " in the group)";
+#else
+            errors.Add("This story loads its voice clips and pictures with Addressables, but the Addressables package isn't installed.");
+            return " (Addressables missing)";
+#endif
         }
 
         /// Every locked-choice condition names a real passage and real story variables.

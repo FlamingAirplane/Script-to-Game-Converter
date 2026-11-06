@@ -26,7 +26,7 @@ export function ExportView({ processed, stale, onState, project, update, onRevie
   const [engine, setEngine] = useState<EngineTarget>('unity');
   const adapter = ADAPTERS[engine];
   const defaultName = processed.project.project.title.replace(/[^\w]+/g, '') || 'NarrativeProject';
-  const [opts, setOpts] = useState({ projectName: defaultName, engineVersion: adapter.defaultEngineVersion, integrationRef: adapter.integration.defaultRef, includeDemo: true, unityLayout: 'package' as 'package' | 'project', packageVersion: '1.0.0' });
+  const [opts, setOpts] = useState({ projectName: defaultName, engineVersion: adapter.defaultEngineVersion, integrationRef: adapter.integration.defaultRef, includeDemo: true, unityLayout: 'package' as 'package' | 'project', packageVersion: '1.0.0', unityAddressables: false });
   const [result, setResult] = useState<ExportResult | null>(null);
   const [zip, setZip] = useState<Uint8Array | null>(null);
   const [tgz, setTgz] = useState<Uint8Array | null>(null);
@@ -162,7 +162,7 @@ export function ExportView({ processed, stale, onState, project, update, onRevie
             </label>
           )}
           <details className="advanced">
-            <summary>Advanced: versions{asPackage ? ' and package version' : ''}</summary>
+            <summary>Advanced: versions{engine === 'unity' ? ' and loading' : ''}</summary>
           <label className="field">
             <span className="muted small">{asPackage ? 'Unity version you build with (the package works in 2022.3 and later)' : `${adapter.label} version`}</span>
             <input className="input mono" value={opts.engineVersion} onChange={(e) => setOpts({ ...opts, engineVersion: e.target.value })} />
@@ -173,6 +173,15 @@ export function ExportView({ processed, stale, onState, project, update, onRevie
             </span>
             <input className="input mono" value={opts.integrationRef} onChange={(e) => setOpts({ ...opts, integrationRef: e.target.value.trim() })} />
           </label>
+          {engine === 'unity' && (
+            <label className="check">
+              <input type="checkbox" checked={opts.unityAddressables} onChange={(e) => setOpts({ ...opts, unityAddressables: e.target.checked })} />
+              <span>
+                Load voice clips and pictures on demand (Addressables)
+                <span className="muted small"> · for long or heavily voiced stories: they aren’t all built into the game. The package sets up the Addressables group itself.</span>
+              </span>
+            </label>
+          )}
           </details>
           {!asPackage && (
             <label className="check">

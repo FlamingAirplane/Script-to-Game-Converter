@@ -792,7 +792,16 @@ namespace __NAMESPACE__
         public void ShowPicture(string file)
         {
             if (picture == null) return;
-            var texture = NarrativeController.LoadPicture(file);
+            wantedPicture = file;
+            if (file == null) { ApplyPicture(null); return; }
+            // At once from Resources; when loaded with Addressables (unless another picture was asked for meanwhile).
+            NarrativeController.LoadPictureAsync(file, t => { if (picture != null && wantedPicture == file) ApplyPicture(t); });
+        }
+
+        string wantedPicture, wantedPortrait;
+
+        void ApplyPicture(Texture2D texture)
+        {
             var changed = picture.texture != texture;
             picture.texture = texture;
             picture.enabled = texture != null;
@@ -809,7 +818,14 @@ namespace __NAMESPACE__
         public void ShowPortrait(string speakerId)
         {
             if (portrait == null) return;
-            var texture = speakerId != null && theme.showPortraits ? NarrativeController.LoadPortrait(speakerId) : null;
+            wantedPortrait = speakerId;
+            var file = speakerId != null && theme.showPortraits ? NarrativeController.PortraitFile(speakerId) : null;
+            if (file == null) { ApplyPortrait(speakerId, null); return; }
+            NarrativeController.LoadPictureAsync(file, t => { if (portrait != null && wantedPortrait == speakerId) ApplyPortrait(speakerId, t); });
+        }
+
+        void ApplyPortrait(string speakerId, Texture2D texture)
+        {
             if (texture == null)
             {
                 portrait.enabled = false;
