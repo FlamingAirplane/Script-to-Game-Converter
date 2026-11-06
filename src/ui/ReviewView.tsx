@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { reviewAll } from '../core/adapt';
 import { conditionToInk, effectToInk } from '../core/inkgen';
-import { uniqueId, type Choice, type CompareOp, type Condition, type ContentBlock, type Effect, type Passage, type StoryProject } from '../core/isr';
+import { cueName, uniqueId, type Choice, type CompareOp, type Condition, type ContentBlock, type Effect, type Passage, type StoryProject } from '../core/isr';
 import type { ProcessedStory } from '../core/pipeline';
 import { Badge, ProvenanceBadge, SeverityIcon } from './common';
 import { friendly } from './friendly';
@@ -13,6 +13,15 @@ import { RecordingsImport } from './RecordingsImport';
 import { formatMinutes, storyStats } from '../core/stats';
 import { DraftShelf } from './Drafts';
 import { type Update, addChoice, addPassage, deletePassage, findText, mergeCharacter, movePassage, renamePassage, replaceText } from './projectOps';
+
+/** Cues the game is likely to know, with what their value means (see NarrativeCuePlayer in the Unity package). */
+const CUE_SUGGESTIONS: [string, string][] = [
+  ['music', 'Which track (e.g. calm); empty stops the music'],
+  ['sound', 'Which sound (e.g. door_creak)'],
+  ['shake', 'How strong, 0–1 (e.g. 0.5)'],
+  ['stop_music', 'Nothing needed'],
+  ['ambience', 'Which background sound (e.g. rain)'],
+];
 
 
 export const STORY_SETTINGS = '__story__';
@@ -416,6 +425,13 @@ function PassageEditor({
           >
             + Exit to game
           </button>
+          <button
+            className="btn tiny"
+            title="A cue for the game here: music, a sound, a camera shake. Readers don’t see it; in Unity it plays without code."
+            onClick={() => edit((p) => p.content.push({ type: 'cue', name: 'music', origin: 'user_authored' }))}
+          >
+            + Cue
+          </button>
         </div>
       </section>
 
@@ -544,6 +560,35 @@ function BlockRow({
               <label className="field exit-note">
                 <span className="muted small">What happens in the game (a note for the developer)</span>
                 <input className="input small" value={block.note ?? ''} placeholder="e.g. The player fights the wolves" onChange={(e) => onChange(touched({ ...block, note: e.target.value || undefined }))} aria-label="What happens in the game" />
+              </label>
+            </div>
+          </div>
+        )}
+        {block.type === 'cue' && (
+          <div className="exit-block">
+            <p className="pause-rule exit-rule">
+              <span>♪ Cue</span> the game reacts here (music, a sound, a shake); readers don’t see it
+            </p>
+            <div className="row wrap">
+              <label className="field exit-name">
+                <span className="muted small">Cue</span>
+                <input
+                  className="input small mono"
+                  list="cue-names"
+                  value={block.name}
+                  onChange={(e) => onChange(touched({ ...block, name: e.target.value.replace(/[^A-Za-z0-9_]+/g, '_').toLowerCase() }))}
+                  onBlur={() => onChange({ ...block, name: cueName(block.name) })}
+                  aria-label="Cue name"
+                />
+                <datalist id="cue-names">
+                  {CUE_SUGGESTIONS.map(([n]) => (
+                    <option key={n} value={n} />
+                  ))}
+                </datalist>
+              </label>
+              <label className="field exit-note">
+                <span className="muted small">{CUE_SUGGESTIONS.find(([n]) => n === block.name)?.[1] ?? 'Value (optional), e.g. which track or how strong'}</span>
+                <input className="input small" value={block.value ?? ''} placeholder="e.g. calm" onChange={(e) => onChange(touched({ ...block, value: e.target.value || undefined }))} aria-label="Cue value" />
               </label>
             </div>
           </div>

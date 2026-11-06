@@ -2,6 +2,8 @@ import { diag, type Diagnostic } from './diagnostics';
 import { sha256Hex } from './hash';
 import { log } from './log';
 import {
+  cueName,
+  cueValue,
   SCHEMA_VERSION,
   slugify,
   uniqueId,
@@ -337,6 +339,8 @@ function assemble(
             return { type: 'pause', origin: 'source', source: s };
           case 'exit':
             return { type: 'exit', name: m.name, ...(m.note ? { note: m.note } : {}), origin: 'source', source: s };
+          case 'cue':
+            return { type: 'cue', name: cueName(m.name), ...(cueValue(m.value) ? { value: cueValue(m.value) } : {}), origin: 'source', source: s };
           case 'divert':
             if (p.divert) diagnostics.push(diag('MULTIPLE_DIVERTS', 'warning', 'parsing', `Passage "${p.id}" has more than one divert; the last one wins.`, { entityId: p.id, source: s, exportBlocked: false }));
             p.divert = m.target;

@@ -99,7 +99,12 @@ export type ContentBlock =
    * until it resumes the story, where it left off or at another passage. `name` is how the game
    * knows which exit it is; `note` says what the game should do.
    */
-  | { type: 'exit'; name: string; note?: string; origin: Provenance; source?: SourceRef };
+  | { type: 'exit'; name: string; note?: string; origin: Provenance; source?: SourceRef }
+  /**
+   * A cue for the game at this point: music, a sound, a camera shake, anything the game reacts to. In Ink it's a tag
+   * (#music:calm, #shake) on the next line; Unity's NarrativeCuePlayer plays it without code. Readers ignore it.
+   */
+  | { type: 'cue'; name: string; value?: string; origin: Provenance; source?: SourceRef };
 
 /** The choice text of a Continue break, in Ink and every reader. */
 export const CONTINUE_TEXT = 'Continue';
@@ -110,6 +115,27 @@ export const EXIT_PREFIX = 'Back to the game: ';
 /** An exit's name made safe for code: letters, digits and underscores. */
 export function exitName(name: string): string {
   return slugify(name) || 'exit';
+}
+
+/** Tags Narrative Bridge writes itself, which a cue can't be called. */
+export const RESERVED_TAGS = new Set(['speaker', 'scene', 'paren', 'image', 'audio', 'transition', 'title', 'author', 'choice']);
+
+/** A cue's name made safe for a tag (letters, digits and underscores), never one of Narrative Bridge's own tags. */
+export function cueName(name: string): string {
+  const n = slugify(name) || 'cue';
+  return RESERVED_TAGS.has(n) ? `${n}_cue` : n;
+}
+
+/** A cue's value made safe for a tag: no # or line breaks, spaces tidied. */
+export function cueValue(value: string | undefined): string | undefined {
+  const v = (value ?? '').replace(/[#\n\r]/g, ' ').replace(/\s+/g, ' ').trim();
+  return v || undefined;
+}
+
+/** A cue as its Ink tag text, e.g. "music:calm" or "shake". */
+export function cueTag(name: string, value?: string): string {
+  const v = cueValue(value);
+  return v ? `${cueName(name)}:${v}` : cueName(name);
 }
 
 /** The exit named by a choice's text, or null when it isn't an exit. */

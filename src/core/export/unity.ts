@@ -1,7 +1,7 @@
 import { log } from '../log';
 import type { ProcessedStory } from '../pipeline';
 import { portraitFiles } from '../images';
-import { exitName, isActive, itemVar, type Condition } from '../isr';
+import { cueName, cueTag, exitName, isActive, itemVar, type Condition } from '../isr';
 import { describeCondition } from '../gating';
 import { assertExportable, audioFiles, buildManifest, imageFiles, commonFiles, itemVarNames, json, sourceFiles, storyVersion, verifyExport } from './common';
 import type { EngineAdapter, ExportFile, ExportOptions, ExportResult } from './types';
@@ -74,6 +74,7 @@ export const unityAdapter: EngineAdapter = {
       { path: `${pkg}Runtime/StoryInfo.cs`, content: storyInfoCs(story, id) },
       { path: `${pkg}Runtime/IInventoryAuthority.cs`, content: cs(INVENTORY_CS) },
       { path: `${pkg}Runtime/GatedChoice.cs`, content: cs(GATED_CHOICE_CS) },
+      { path: `${pkg}Runtime/NarrativeCuePlayer.cs`, content: cs(CUE_PLAYER_CS) },
       { path: `${pkg}Runtime/NarrativeController.cs`, content: cs(CONTROLLER_CS) },
       { path: `${pkg}Runtime/NarrativeTheme.cs`, content: cs(THEME_CS) },
       { path: `${pkg}Runtime/NarrativeView.cs`, content: cs(VIEW_CS) },
@@ -239,6 +240,9 @@ function storyInfoCs(story: ProcessedStory, id: UnityPackageId): string {
   const passages = [...story.generated.ink.matchAll(/^=== (\w+) ===$/gm)].map((m) => m[1]);
   const portraits = Object.entries(portraitFiles(story.project));
   const exits = [...new Set(story.project.passages.flatMap((p) => p.content.flatMap((b) => (b.type === 'exit' ? [exitName(b.name)] : []))))];
+  const cueBlocks = story.project.passages.flatMap((p) => p.content.flatMap((b) => (b.type === 'cue' ? [b] : [])));
+  const cues = [...new Set(cueBlocks.map((b) => cueName(b.name)))];
+  const cueTags = [...new Set(cueBlocks.map((b) => cueTag(b.name, b.value)))];
   const knots = new Set(passages);
   const gated = story.project.passages.flatMap((p) =>
     knots.has(p.id)
@@ -276,6 +280,10 @@ namespace ${id.namespace}
         public static readonly string[] Exits = { ${exits.map(csString).join(', ')} };
         public static readonly string[] PortraitSpeakers = { ${portraits.map(([k]) => csString(k)).join(', ')} };
         public static readonly string[] PortraitFiles = { ${portraits.map(([, f]) => csString(f)).join(', ')} };
+        /// <summary>The cues the writer added (#music:calm → "music"); NarrativeCuePlayer plays them.</summary>
+        public static readonly string[] Cues = { ${cues.map(csString).join(', ')} };
+        /// <summary>Every cue as it appears in the story, with its value (e.g. "music:calm"), to know which clips to add.</summary>
+        public static readonly string[] CueTags = { ${cueTags.map(csString).join(', ')} };
         /// <summary>Choices that need an item or a value (NarrativeController.LockedChoices lists the ones locked right now).</summary>
         public static readonly GatedChoice[] GatedChoices =
         {
@@ -355,6 +363,15 @@ Inspector, even while playing. The view's *Sorting Order* sets where it draws am
 Shortcuts* (1-9 choose, Space or Return continue) can be turned off, and it uses your scene's EventSystem when there
 is one (it works with the Input Manager and the Input System package). Its text is TextMeshPro whenever your game has it
 (built into Unity 6, or the TextMeshPro package on 2022.3): set *TMP Font* on the theme to use your own font asset.
+
+## Cues
+Writers add cues in Narrative Bridge: music, a sound, an ambience, a camera shake, or a name of their own, with an optional
+value (\`#music:calm\`, \`#sound:door_creak\`, \`#shake:0.5\`). They're listed in \`StoryInfo.Cues\` (and with their values in
+\`StoryInfo.CueTags\`). The **NarrativeCuePlayer** plays them without code: *Tools → Narrative Bridge → ${id.menuTitle} → Add Cue
+Player to Selected Story* lists every cue with a likely action (play or stop music, play a sound, loop an ambience, shake the
+camera, or only raise its event); give each one its clips, named after the values (a clip called *calm* for \`music:calm\`).
+Each cue also has a UnityEvent, \`CuePlayed\` reports every cue from code, and \`TagFound\` still sees them all. A music cue
+with no value stops the music. (Stories added to a scene after this export get a Cue Player automatically.)
 
 ## Story Debugger
 *Tools → Narrative Bridge → ${id.menuTitle} → Story Debugger* follows the story while the game plays: the passage the reader
@@ -509,6 +526,265 @@ namespace __NAMESPACE__
         }
 
         static bool IsNumber(object v) => v is int || v is float || v is double || v is long;
+    }
+}
+`;
+
+const CUE_PLAYER_CS = `using System;
+using System.Collections;
+using System.Collections.Generic;
+using System.Globalization;
+using UnityEngine;
+using UnityEngine.Events;
+
+namespace __NAMESPACE__
+{
+    /// <summary>
+    /// Plays the story's cues without code. A writer adds cues in Narrative Bridge (#music:calm, #sound:door_creak,
+    /// #shake:0.5, or any name of their own; StoryInfo.Cues lists them), and this does what each one is set to: play
+    /// or stop music (fading between tracks), play a sound, loop an ambience, shake the camera, or only raise its
+    /// event. A cue's value picks the clip with that name. Add it with Tools → Narrative Bridge → __MENU_TITLE__ →
+    /// Add Cue Player, which lists every cue in the story.
+    /// </summary>
+    [AddComponentMenu("Narrative Bridge/__MENU_TITLE__/Narrative Cue Player")]
+    public class NarrativeCuePlayer : MonoBehaviour
+    {
+        public enum CueAction { EventOnly, PlayMusic, StopMusic, PlaySound, PlayAmbience, StopAmbience, ShakeCamera }
+
+        [Serializable] public class CueEvent : UnityEvent<string> { }
+        [Serializable] public class AnyCueEvent : UnityEvent<string, string> { }
+
+        [Serializable]
+        public class Cue
+        {
+            [Tooltip("The cue's name as the writer gave it (one of StoryInfo.Cues), e.g. music, sound or shake.")]
+            public string name;
+            public CueAction action = CueAction.EventOnly;
+            [Tooltip("Clips to choose from: the cue's value picks the one with that name (#music:calm plays \\"calm\\"), else the first.")]
+            public List<AudioClip> clips = new List<AudioClip>();
+            [Range(0f, 1f)] public float volume = 1f;
+            [Tooltip("Raised with the cue's value, for anything else your game does.")]
+            public CueEvent onCue = new CueEvent();
+        }
+
+        public NarrativeController controller;
+        public List<Cue> cues = new List<Cue>();
+
+        [Header("Sound")]
+        [Tooltip("Optional AudioSources, e.g. routed through your game's mixer. Made when empty.")]
+        public AudioSource musicSource;
+        public AudioSource soundSource;
+        public AudioSource ambienceSource;
+        [Tooltip("Seconds to fade out one music track and in the next.")]
+        [Min(0f)] public float musicFade = 1f;
+
+        [Header("Camera shake")]
+        [Tooltip("What shakes. Empty: the main camera.")]
+        public Transform shakeTarget;
+        [Min(0f)] public float shakeSeconds = 0.4f;
+        [Tooltip("How far it moves at strength 1 (a shake cue's value, 0 to 1; 0.5 when it has none).")]
+        [Min(0f)] public float shakeDistance = 0.3f;
+
+        [Tooltip("Every cue, listed or not: its name and value.")]
+        public AnyCueEvent onAnyCue = new AnyCueEvent();
+
+        /// <summary>Every cue the story reaches, listed or not: its name and value.</summary>
+        public event Action<string, string> CuePlayed;
+
+        /// <summary>The music track playing now, or null.</summary>
+        public AudioClip CurrentMusic => musicSource != null && musicSource.isPlaying ? musicSource.clip : pendingMusic;
+
+        AudioClip pendingMusic;
+        Coroutine musicFader, shaker;
+        Vector3 shakeHome;
+        Transform shaking;
+
+        void Awake()
+        {
+            if (controller == null) controller = GetComponent<NarrativeController>();
+        }
+
+        void OnEnable()
+        {
+            if (controller == null) controller = GetComponent<NarrativeController>();
+            if (controller != null) controller.TagFound += OnTag;
+        }
+
+        void OnDisable()
+        {
+            if (controller != null) controller.TagFound -= OnTag;
+            StopShake();
+        }
+
+        void OnTag(string tag)
+        {
+            var colon = tag.IndexOf(':');
+            Play(colon < 0 ? tag.Trim() : tag.Substring(0, colon).Trim(), colon < 0 ? "" : tag.Substring(colon + 1).Trim());
+        }
+
+        /// <summary>Plays a cue by name and value, as if the story had reached it.</summary>
+        public void Play(string name, string value)
+        {
+            value = value ?? "";
+            CuePlayed?.Invoke(name, value);
+            onAnyCue.Invoke(name, value);
+            foreach (var cue in cues)
+            {
+                if (cue == null || !string.Equals(cue.name, name, StringComparison.OrdinalIgnoreCase)) continue;
+                Run(cue, value);
+                cue.onCue.Invoke(value);
+            }
+        }
+
+        void Run(Cue cue, string value)
+        {
+            switch (cue.action)
+            {
+                case CueAction.PlayMusic:
+                    // A music cue with no value stops the music.
+                    if (string.IsNullOrEmpty(value)) StopMusic();
+                    else PlayMusic(Pick(cue, value), cue.volume);
+                    break;
+                case CueAction.StopMusic:
+                    StopMusic();
+                    break;
+                case CueAction.PlaySound:
+                    var sound = Pick(cue, value);
+                    if (sound != null) Source(ref soundSource, "Cue Sounds", false).PlayOneShot(sound, cue.volume);
+                    break;
+                case CueAction.PlayAmbience:
+                    var loop = Pick(cue, value);
+                    var ambience = Source(ref ambienceSource, "Cue Ambience", true);
+                    if (loop == null || string.IsNullOrEmpty(value) && cue.clips.Count == 0) { ambience.Stop(); break; }
+                    if (ambience.clip == loop && ambience.isPlaying) break;
+                    ambience.clip = loop;
+                    ambience.volume = cue.volume;
+                    ambience.Play();
+                    break;
+                case CueAction.StopAmbience:
+                    if (ambienceSource != null) ambienceSource.Stop();
+                    break;
+                case CueAction.ShakeCamera:
+                    Shake(float.TryParse(value, NumberStyles.Float, CultureInfo.InvariantCulture, out var strength) ? Mathf.Clamp01(strength) : 0.5f);
+                    break;
+            }
+        }
+
+        /// <summary>The clip named by the value, else the cue's first clip; null when it has none.</summary>
+        static AudioClip Pick(Cue cue, string value)
+        {
+            if (!string.IsNullOrEmpty(value))
+            {
+                foreach (var c in cue.clips) if (c != null && string.Equals(c.name, value, StringComparison.OrdinalIgnoreCase)) return c;
+                if (cue.clips.Count > 0) Debug.LogWarning("[NarrativeBridge] No clip called " + value + " for the " + cue.name + " cue; playing its first clip.");
+            }
+            foreach (var c in cue.clips) if (c != null) return c;
+            return null;
+        }
+
+        AudioSource Source(ref AudioSource source, string name, bool loop)
+        {
+            if (source == null)
+            {
+                var go = new GameObject(name);
+                go.transform.SetParent(transform, false);
+                source = go.AddComponent<AudioSource>();
+                source.playOnAwake = false;
+            }
+            source.loop = loop;
+            return source;
+        }
+
+        // ---- Music: one track at a time, faded -------------------------------------------------
+
+        public void PlayMusic(AudioClip clip, float volume = 1f)
+        {
+            var music = Source(ref musicSource, "Cue Music", true);
+            if (clip == null || (music.clip == clip && music.isPlaying)) return;
+            pendingMusic = clip;
+            if (musicFader != null) StopCoroutine(musicFader);
+            if (!Application.isPlaying || musicFade <= 0f || !isActiveAndEnabled)
+            {
+                music.clip = clip;
+                music.volume = volume;
+                if (Application.isPlaying) music.Play();
+                return;
+            }
+            musicFader = StartCoroutine(FadeMusic(clip, volume));
+        }
+
+        public void StopMusic()
+        {
+            pendingMusic = null;
+            if (musicSource == null) return;
+            if (musicFader != null) StopCoroutine(musicFader);
+            if (!Application.isPlaying || musicFade <= 0f || !isActiveAndEnabled) { musicSource.Stop(); return; }
+            musicFader = StartCoroutine(FadeMusic(null, 0f));
+        }
+
+        IEnumerator FadeMusic(AudioClip next, float volume)
+        {
+            var music = musicSource;
+            var half = musicFade * 0.5f;
+            if (music.isPlaying)
+            {
+                var from = music.volume;
+                for (float t = 0f; t < half; t += Time.unscaledDeltaTime) { music.volume = Mathf.Lerp(from, 0f, t / half); yield return null; }
+                music.Stop();
+            }
+            if (next != null)
+            {
+                music.clip = next;
+                music.volume = 0f;
+                music.Play();
+                for (float t = 0f; t < half; t += Time.unscaledDeltaTime) { music.volume = Mathf.Lerp(0f, volume, t / half); yield return null; }
+                music.volume = volume;
+            }
+            musicFader = null;
+        }
+
+        // ---- Camera shake -------------------------------------------------------------------
+
+        public void Shake(float strength)
+        {
+            var target = shakeTarget != null ? shakeTarget : (Camera.main != null ? Camera.main.transform : null);
+            if (target == null || !Application.isPlaying || !isActiveAndEnabled) return;
+            StopShake();
+            shaking = target;
+            shakeHome = target.localPosition;
+            shaker = StartCoroutine(ShakeFor(strength));
+        }
+
+        IEnumerator ShakeFor(float strength)
+        {
+            for (float t = 0f; t < shakeSeconds && shaking != null; t += Time.unscaledDeltaTime)
+            {
+                shaking.localPosition = shakeHome + UnityEngine.Random.insideUnitSphere * shakeDistance * strength * (1f - t / shakeSeconds);
+                yield return null;
+            }
+            StopShake();
+        }
+
+        void StopShake()
+        {
+            if (shaker != null) StopCoroutine(shaker);
+            shaker = null;
+            if (shaking != null) shaking.localPosition = shakeHome;
+            shaking = null;
+        }
+
+        /// <summary>A sensible action for a cue's name (music, sound, ambience, shake…), as Add Cue Player sets them.</summary>
+        public static CueAction Guess(string name)
+        {
+            var n = (name ?? "").ToLowerInvariant();
+            if (n.Contains("stop_music") || n == "silence") return CueAction.StopMusic;
+            if (n.Contains("stop_ambience")) return CueAction.StopAmbience;
+            if (n.Contains("music") || n == "song" || n == "track") return CueAction.PlayMusic;
+            if (n.Contains("ambien") || n == "weather") return CueAction.PlayAmbience;
+            if (n.Contains("sound") || n == "sfx") return CueAction.PlaySound;
+            if (n.Contains("shake") || n == "rumble") return CueAction.ShakeCamera;
+            return CueAction.EventOnly;
+        }
     }
 }
 `;
@@ -1384,7 +1660,31 @@ namespace __NAMESPACE__.EditorTools
             var view = go.AddComponent<NarrativeView>();
             view.controller = controller;
             view.theme = LoadOrCreateTheme();
+            if (StoryInfo.Cues.Length > 0) AddCuePlayer(go);
             return go;
+        }
+
+        /// <summary>Adds (or fills in) a NarrativeCuePlayer listing every cue in the story, with a likely action for each.</summary>
+        public static NarrativeCuePlayer AddCuePlayer(GameObject go)
+        {
+            var player = go.GetComponent<NarrativeCuePlayer>();
+            if (player == null) player = Undo.AddComponent<NarrativeCuePlayer>(go);
+            else Undo.RecordObject(player, "Fill in cues");
+            player.controller = go.GetComponent<NarrativeController>();
+            foreach (var name in StoryInfo.Cues)
+                if (!player.cues.Exists(c => c != null && c.name == name))
+                    player.cues.Add(new NarrativeCuePlayer.Cue { name = name, action = NarrativeCuePlayer.Guess(name) });
+            EditorUtility.SetDirty(player);
+            return player;
+        }
+
+        [MenuItem(Menu + "Add Cue Player to Selected Story")]
+        static void AddCuePlayerMenu()
+        {
+            var controller = Selection.activeGameObject != null ? Selection.activeGameObject.GetComponentInParent<NarrativeController>() : UnityEngine.Object.FindAnyObjectByType<NarrativeController>();
+            if (controller == null) { Debug.LogWarning("[NarrativeBridge] Select the story's GameObject (the one with the NarrativeController) first."); return; }
+            Selection.activeObject = AddCuePlayer(controller.gameObject);
+            Debug.Log("[NarrativeBridge] Cue Player added with the story's cues: " + (StoryInfo.Cues.Length > 0 ? string.Join(", ", StoryInfo.CueTags) : "none yet") + ". Give each one its clips.");
         }
 
         [MenuItem(Menu + "Create Demo Scene")]
@@ -1546,9 +1846,51 @@ namespace __NAMESPACE__.EditorTools
             var exit = ExitCheck(errors);
             var ui = StoryViewCheck(errors);
             var gates = LockedChoiceCheck(json, errors);
-            log = "[NarrativeBridge] Smoke test (" + source + "): " + clipsHeard.Count + " voice clip(s), " + picturesSeen.Count + " picture(s) and " + StoryInfo.PortraitSpeakers.Length + " portrait(s) checked, " + completed + "/" + runs + " playthroughs reached an ending, "  + carry + ", " + startAt + ", " + exit + ", " + ui + ", " + gates + ", " + errors.Count + " runtime errors." +
+            var cueResult = CueCheck(errors);
+            log = "[NarrativeBridge] Smoke test (" + source + "): " + clipsHeard.Count + " voice clip(s), " + picturesSeen.Count + " picture(s) and " + StoryInfo.PortraitSpeakers.Length + " portrait(s) checked, " + completed + "/" + runs + " playthroughs reached an ending, "  + carry + ", " + startAt + ", " + exit + ", " + ui + ", " + gates + ", " + cueResult + ", " + errors.Count + " runtime errors." +
                   (errors.Count > 0 ? "\\n" + string.Join("\\n", errors) : "");
             return errors.Count == 0 && completed > 0;
+        }
+
+        /// Plays the story with a Cue Player set up as Add Cue Player does (with no clips yet): every cue the story
+        /// reaches is one of StoryInfo.Cues, and none of them fails.
+        static string CueCheck(List<string> errors)
+        {
+            if (StoryInfo.Cues.Length == 0) return "no cues";
+            var go = new GameObject("NarrativeBridge cue check");
+            try
+            {
+                var c = go.AddComponent<NarrativeController>();
+                c.startOnAwake = false;
+                var player = AddCuePlayer(go);
+                var heard = new HashSet<string>();
+                player.CuePlayed += (name, value) =>
+                {
+                    heard.Add(name);
+                    if (System.Array.IndexOf(StoryInfo.Cues, name) < 0) errors.Add("Cue: the story reached a cue that isn't in StoryInfo.Cues: " + name);
+                };
+                player.enabled = false; player.enabled = true; // subscribe now (OnEnable)
+                var rng = new System.Random(7);
+                for (int run = 0; run < 20; run++)
+                {
+                    c.StartStory();
+                    for (int i = 0; i < 300 && c.Story != null && !c.HasEnded; i++)
+                    {
+                        if (c.IsAtExit) c.Resume();
+                        else if (c.IsWaitingForContinue) c.Continue();
+                        else if (c.Story.currentChoices.Count > 0) c.Choose(rng.Next(c.Story.currentChoices.Count));
+                        else break;
+                    }
+                }
+                foreach (var tag in StoryInfo.CueTags)
+                {
+                    var colon = tag.IndexOf(':');
+                    player.Play(colon < 0 ? tag : tag.Substring(0, colon), colon < 0 ? "" : tag.Substring(colon + 1));
+                }
+                return "cues passed (" + heard.Count + " of " + StoryInfo.Cues.Length + " reached)";
+            }
+            catch (System.Exception e) { errors.Add("Cue: " + e.Message); return "cues failed"; }
+            finally { UnityEngine.Object.DestroyImmediate(go); }
         }
 
         /// Every locked-choice condition names a real passage and real story variables.
