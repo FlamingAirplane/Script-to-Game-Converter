@@ -671,17 +671,15 @@ export function App() {
         </button>
         <ThemeToggle />
         <button
-          className="btn tiny ghost"
-          aria-pressed={soundOn}
-          aria-label="Book sounds"
-          title={soundOn ? 'Book sounds on (page turns, choices, endings). Click to mute.' : 'Book sounds off. Click to turn on.'}
+          className={`btn tiny ghost sound-toggle ${soundOn ? 'on' : 'off'}`}
+          title={soundOn ? 'Book sounds are on (page turns, choices, endings). Click to mute.' : 'Book sounds are off (the default). Click to turn on.'}
           onClick={() => {
             sfx.setEnabled(!soundOn);
             setSoundOn(!soundOn);
             if (!soundOn) sfx.choice();
           }}
         >
-          <span aria-hidden>{soundOn ? '♪' : '♪̸'}</span> <span className="tb-word">sounds</span>
+          <span aria-hidden className="sound-icon">♪</span> sounds: {soundOn ? 'on' : 'off'}
         </button>
         <button className="btn tiny ghost" onClick={() => void chooseProject()}>
           Open project

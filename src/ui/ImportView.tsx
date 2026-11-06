@@ -262,6 +262,39 @@ export function ImportView({
         </figure>
       </section>
 
+      {/* Exactly what comes out, so the promise matches the tool (the Export tab has the full details). */}
+      <section className="exports-overview" aria-labelledby="exports-title">
+        <h2 id="exports-title">What you can export</h2>
+        <ul className="exports-list">
+          <li>
+            <strong>A web page to share</strong>
+            <span className="small">One .html file anyone can play in a browser, even offline. Nothing to install.</span>
+          </li>
+          <li>
+            <strong>For Unity (a .zip)</strong>
+            <span className="small">
+              Your story in Ink, compiled; a Unity package with ready-made C# that plays it and a styled story panel; your recordings and pictures. For Unity 6
+              or 2022.3 and later, with Ink Unity Integration 2.0.0.
+            </span>
+          </li>
+          <li>
+            <strong>For Unreal (a .zip)</strong>
+            <span className="small">
+              Your story in Ink, plus a C++ project for Unreal Engine 5.7 or later, set up for the free Inkpot plugin (a pinned release), with a script that
+              fetches it.
+            </span>
+          </li>
+          <li>
+            <strong>Text and data</strong>
+            <span className="small">The Ink script on its own (.ink, or compiled .json), a Twine story to keep editing, and a recording script for voice actors: a spreadsheet (CSV) of every line.</span>
+          </li>
+        </ul>
+        <p className="muted small">
+          It’s not a finished game: a developer adds the package to a game, places the story and connects it to the gameplay. The Export tab lists exactly what
+          they still do.
+        </p>
+      </section>
+
       <GettingStarted />
 
       <div className="import-grid">
