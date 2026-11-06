@@ -20,7 +20,7 @@ export interface UnityPackageId {
 }
 
 /** Names Narrative Bridge's C# uses unqualified; a namespace part with one of these names would hide it. */
-const RESERVED = new Set(['Ink', 'UnityEngine', 'UnityEditor', 'System', 'Object', 'String', 'Editor', 'EditorTools', 'Setup', 'StoryInfo', 'NarrativeController', 'NarrativeView', 'NarrativeTheme', 'IInventoryAuthority', 'Story', 'Debug', 'Resources', 'Application', 'Color', 'Font', 'Line', 'Choice', 'Mathf', 'Path', 'File', 'Directory', 'Samples']);
+const RESERVED = new Set(['Ink', 'UnityEngine', 'UnityEditor', 'System', 'Object', 'String', 'Editor', 'EditorTools', 'Setup', 'StoryInfo', 'NarrativeController', 'NarrativeView', 'NarrativeTheme', 'IInventoryAuthority', 'GatedChoice', 'NarrativeSettings', 'Story', 'Debug', 'Resources', 'Application', 'Color', 'Font', 'Line', 'Choice', 'Mathf', 'Path', 'File', 'Directory', 'Samples']);
 
 export const SEMVER = /^\d+\.\d+\.\d+(-[0-9A-Za-z.-]+)?$/;
 
@@ -115,6 +115,8 @@ export function packageJson(id: UnityPackageId, o: { version: string; title: str
     dependencies: {
       'com.unity.ugui': '1.0.0',
       'com.unity.modules.audio': '1.0.0',
+      // Scene pictures and portraits are decoded with Texture2D.LoadImage.
+      'com.unity.modules.imageconversion': '1.0.0',
       'com.unity.modules.imgui': '1.0.0',
       'com.unity.modules.jsonserialize': '1.0.0',
     },

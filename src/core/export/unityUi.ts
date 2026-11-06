@@ -106,6 +106,10 @@ namespace __NAMESPACE__
         public string continueLabel = "Continue";
         public bool continueArrow = true;
         public string endLabel = "The End";
+        [Tooltip("Choices that need an item or a value the player doesn't have yet, shown greyed out with what they need.")]
+        public bool showLockedChoices = true;
+        [Tooltip("Before what a locked choice needs, e.g. Needs → Needs Brass Key.")]
+        public string lockedLabel = "Needs";
 
         [Header("Toolbar")]
         [Tooltip("Restart, Save and Load buttons under the story.")]
@@ -118,6 +122,9 @@ namespace __NAMESPACE__
         public string restartLabel = "Restart";
         public string saveLabel = "Save";
         public string loadLabel = "Load";
+        [Tooltip("A Settings button for the player: text size, typing speed, auto-advance, high contrast and voice volume (see NarrativeSettings).")]
+        public bool showSettings = true;
+        public string settingsLabel = "Settings";
 
         [Header("Scene pictures")]
         [Tooltip("Show scene pictures (#image) behind the panel.")]
@@ -161,9 +168,9 @@ namespace __NAMESPACE__
             public float lineSpacing, paragraphSpacing, speakerScale, sceneScale, charactersPerSecond, punctuationPause, lineFade, autoAdvanceDelay;
             public float choiceScale, choiceHeight, choiceSpacing, buttonOpacity, buttonHoverOpacity, pictureDim, pictureFade, portraitFade, matchWidthOrHeight, voiceVolume;
             public string textAlign, transcript, speakerStyle, choiceAlign, pictureFit, portraitPlacement, portraitSide;
-            public string continueLabel, endLabel, restartLabel, saveLabel, loadLabel;
+            public string continueLabel, endLabel, restartLabel, saveLabel, loadLabel, lockedLabel, settingsLabel;
             public bool showChoiceHistory, showSpeakers, speakerUppercase, showParentheticals, showSceneHeadings, sceneUppercase, clickToSkip, autoAdvance;
-            public bool showChoiceNumbers, continueArrow, showToolbar, showRestart, showSave, showLoad, showStatus, showPictures, showPortraits, portraitMirrorRight, keepPortraitForNarration;
+            public bool showChoiceNumbers, continueArrow, showToolbar, showRestart, showSave, showLoad, showStatus, showPictures, showPortraits, portraitMirrorRight, keepPortraitForNarration, showLockedChoices, showSettings;
         }
 
         /// <summary>Applies a theme exported from Narrative Bridge (the package's Theme.json).</summary>
@@ -226,6 +233,10 @@ namespace __NAMESPACE__
             if (!string.IsNullOrEmpty(e.restartLabel)) restartLabel = e.restartLabel;
             if (!string.IsNullOrEmpty(e.saveLabel)) saveLabel = e.saveLabel;
             if (!string.IsNullOrEmpty(e.loadLabel)) loadLabel = e.loadLabel;
+            showLockedChoices = e.showLockedChoices;
+            if (!string.IsNullOrEmpty(e.lockedLabel)) lockedLabel = e.lockedLabel;
+            showSettings = e.showSettings;
+            if (!string.IsNullOrEmpty(e.settingsLabel)) settingsLabel = e.settingsLabel;
             showPictures = e.showPictures;
             pictureFit = ParseEnum(e.pictureFit, pictureFit);
             pictureDim = Mathf.Clamp(e.pictureDim, 0f, 0.9f);
@@ -326,6 +337,24 @@ namespace __NAMESPACE__
 
         public Canvas Canvas { get; private set; }
         public IReadOnlyList<Button> Buttons => buttons;
+        // The theme as the player has adjusted it (NarrativeSettings: text size, typing speed, contrast).
+        int FontSize => Mathf.Max(8, Mathf.RoundToInt(theme.fontSize * NarrativeSettings.TextScale));
+        float CharactersPerSecond => theme.charactersPerSecond * NarrativeSettings.SpeedMultiplier;
+        bool AutoAdvance => NarrativeSettings.AutoAdvance == NarrativeSettings.AutoAdvanceMode.AsDesigned ? theme.autoAdvance : NarrativeSettings.AutoAdvance == NarrativeSettings.AutoAdvanceMode.On;
+        static bool Contrast => NarrativeSettings.HighContrast;
+        Color TextColour => Contrast ? Color.white : theme.text;
+        Color Muted => Contrast ? new Color(0.86f, 0.86f, 0.86f, 1f) : theme.muted;
+        Color Accent => Contrast ? new Color(1f, 0.85f, 0.35f, 1f) : theme.accent;
+        Color SpeakerColour => Contrast ? Accent : theme.speakerColour;
+        Color SceneColour => Contrast ? Muted : theme.sceneColour;
+        Color ButtonColour => Contrast ? Color.white : theme.buttonColour;
+        Color ChoiceTextColour => Contrast ? Color.white : theme.choiceTextColour;
+        Color PanelColour => Contrast ? new Color(0.04f, 0.04f, 0.04f, 1f) : WithAlpha(theme.background, theme.panelOpacity);
+        float ButtonOpacity => Contrast ? 0.16f : theme.buttonOpacity;
+        float ButtonHoverOpacity => Contrast ? 0.34f : theme.buttonHoverOpacity;
+
+        /// <summary>The greyed-out buttons of locked choices (not in Buttons; they can't be clicked).</summary>
+        public IReadOnlyList<Button> LockedButtons => lockedButtons;
 
         /// <summary>A line on screen: its own object, so a scene or Line mode can clear the earlier ones.</summary>
         class Entry
@@ -338,6 +367,7 @@ namespace __NAMESPACE__
         }
 
         readonly List<Button> buttons = new List<Button>();
+        readonly List<Button> lockedButtons = new List<Button>();
         readonly List<Entry> entries = new List<Entry>();
         readonly Queue<Entry> typing = new Queue<Entry>();
         Font font;
@@ -382,6 +412,7 @@ namespace __NAMESPACE__
             controller.StatusChanged += OnStatus;
             controller.ExitReached += OnExit;
             controller.Resumed += OnResumed;
+            NarrativeSettings.Changed += OnThemeChanged;
             subscribed = true;
         }
 
@@ -396,6 +427,7 @@ namespace __NAMESPACE__
             controller.StatusChanged -= OnStatus;
             controller.ExitReached -= OnExit;
             controller.Resumed -= OnResumed;
+            NarrativeSettings.Changed -= OnThemeChanged;
             if (theme != null) theme.Changed -= OnThemeChanged;
             subscribed = false;
         }
@@ -424,7 +456,7 @@ namespace __NAMESPACE__
 #if NARRATIVE_BRIDGE_TMP
             fontAsset = theme.ResolveFontAsset();
 #endif
-            if (controller != null) controller.voiceVolume = theme.voiceVolume;
+            if (controller != null) controller.voiceVolume = theme.voiceVolume * NarrativeSettings.VoiceVolume;
 
             var canvasObject = new GameObject("Story UI", typeof(RectTransform), typeof(Canvas), typeof(CanvasScaler), typeof(GraphicRaycaster));
             canvasObject.transform.SetParent(transform, false);
@@ -456,7 +488,7 @@ namespace __NAMESPACE__
             panel.anchorMax = theme.panelMax;
             panel.offsetMin = panel.offsetMax = Vector2.zero;
             var background = panel.gameObject.AddComponent<Image>();
-            background.color = WithAlpha(theme.background, theme.panelOpacity);
+            background.color = PanelColour;
             if (theme.borderWidth > 0)
             {
                 var border = panel.gameObject.AddComponent<Outline>();
@@ -465,7 +497,7 @@ namespace __NAMESPACE__
             }
             column = panel.gameObject.AddComponent<VerticalLayoutGroup>();
             column.padding = new RectOffset(theme.padding, theme.padding, theme.padding, theme.padding);
-            column.spacing = theme.fontSize * 0.5f;
+            column.spacing = FontSize * 0.5f;
             column.childControlWidth = column.childControlHeight = true;
             column.childForceExpandWidth = true;
             column.childForceExpandHeight = false;
@@ -498,7 +530,7 @@ namespace __NAMESPACE__
             lines.pivot = new Vector2(0.5f, 1);
             lines.offsetMin = lines.offsetMax = Vector2.zero;
             var stack = lines.gameObject.AddComponent<VerticalLayoutGroup>();
-            stack.spacing = theme.fontSize * theme.paragraphSpacing;
+            stack.spacing = FontSize * theme.paragraphSpacing;
             stack.childControlWidth = stack.childControlHeight = true;
             stack.childForceExpandWidth = true;
             stack.childForceExpandHeight = false;
@@ -509,13 +541,13 @@ namespace __NAMESPACE__
             // Choices, the Continue button and the ending.
             choiceArea = Child("Choices", panel);
             var list = choiceArea.gameObject.AddComponent<VerticalLayoutGroup>();
-            list.spacing = theme.fontSize * theme.choiceSpacing;
+            list.spacing = FontSize * theme.choiceSpacing;
             list.childControlWidth = list.childControlHeight = true;
             list.childForceExpandWidth = true;
             list.childForceExpandHeight = false;
 
             status = null;
-            if (theme.showToolbar && controller != null && (theme.showRestart || theme.showSave || theme.showLoad || theme.showStatus))
+            if (theme.showToolbar && controller != null && (theme.showRestart || theme.showSave || theme.showLoad || theme.showStatus || theme.showSettings))
             {
                 var bar = Child("Toolbar", panel);
                 var row = bar.gameObject.AddComponent<HorizontalLayoutGroup>();
@@ -526,13 +558,136 @@ namespace __NAMESPACE__
                 if (theme.showRestart) ToolButton(bar, theme.restartLabel, controller.StartStory);
                 if (theme.showSave) ToolButton(bar, theme.saveLabel, controller.SaveToPrefs);
                 if (theme.showLoad) ToolButton(bar, theme.loadLabel, controller.LoadFromPrefs);
+                if (theme.showSettings) ToolButton(bar, theme.settingsLabel, ToggleSettings);
                 if (theme.showStatus)
                 {
-                    status = AddText(bar, controller.Status, Mathf.RoundToInt(theme.fontSize * 0.6f), theme.muted, FontStyle.Italic, TextAnchor.MiddleLeft);
+                    status = AddText(bar, controller.Status, Mathf.RoundToInt(FontSize * 0.6f), Muted, FontStyle.Italic, TextAnchor.MiddleLeft);
                     status.gameObject.AddComponent<LayoutElement>().flexibleWidth = 1;
                 }
             }
+            BuildSettings();
         }
+
+        // ---- The player's Settings menu (NarrativeSettings) ----------------------------------
+
+        /// <summary>The words of the Settings menu, to change or translate them.</summary>
+        [System.Serializable]
+        public class SettingsWords
+        {
+            public string title = "Settings", textSize = "Text size", typingSpeed = "Typing speed", autoAdvance = "Go on by itself", highContrast = "High contrast", voiceVolume = "Voice volume";
+            public string slow = "Slow", normal = "Normal", fast = "Fast", instant = "Instant", asDesigned = "As designed", on = "On", off = "Off", reset = "Reset", close = "Close";
+        }
+
+        [Tooltip("The words of the Settings menu (the toolbar's Settings button), e.g. to translate them.")]
+        public SettingsWords settingsWords = new SettingsWords();
+
+        /// <summary>Whether the Settings menu is open.</summary>
+        public bool SettingsOpen => settingsOpen;
+        /// <summary>The Settings menu's buttons while it's open (text size, typing speed, auto-advance, contrast, volume, reset, close).</summary>
+        public IReadOnlyList<Button> SettingsButtons => settingsButtons;
+
+        bool settingsOpen;
+        int settingsFocus;
+        RectTransform settingsPanel;
+        readonly List<Button> settingsButtons = new List<Button>();
+
+        public void ToggleSettings()
+        {
+            if (settingsOpen) CloseSettings();
+            else OpenSettings();
+        }
+
+        public void OpenSettings()
+        {
+            settingsOpen = true;
+            settingsFocus = 0;
+            BuildSettings();
+        }
+
+        public void CloseSettings()
+        {
+            settingsOpen = false;
+            settingsButtons.Clear();
+            if (settingsPanel != null) Discard(settingsPanel.gameObject);
+            settingsPanel = null;
+        }
+
+        void BuildSettings()
+        {
+            settingsButtons.Clear();
+            if (settingsPanel != null) Discard(settingsPanel.gameObject);
+            settingsPanel = null;
+            if (!settingsOpen || Canvas == null) return;
+            var w = settingsWords ?? new SettingsWords();
+            // A shade over everything (it also keeps clicks from reaching the story), and the menu on it.
+            settingsPanel = Child("Settings", Canvas.transform);
+            Stretch(settingsPanel);
+            settingsPanel.gameObject.AddComponent<Image>().color = new Color(0f, 0f, 0f, 0.55f);
+            var box = Child("Menu", settingsPanel);
+            box.anchorMin = new Vector2(0.2f, 0.08f);
+            box.anchorMax = new Vector2(0.8f, 0.92f);
+            box.offsetMin = box.offsetMax = Vector2.zero;
+            var back = PanelColour;
+            box.gameObject.AddComponent<Image>().color = new Color(back.r, back.g, back.b, 1f);
+            var list = box.gameObject.AddComponent<VerticalLayoutGroup>();
+            list.padding = new RectOffset(theme.padding, theme.padding, theme.padding, theme.padding);
+            list.spacing = FontSize * 0.35f;
+            list.childControlWidth = list.childControlHeight = true;
+            list.childForceExpandWidth = true;
+            list.childForceExpandHeight = false;
+            list.childAlignment = TextAnchor.UpperCenter;
+            AddText(box, w.title, FontSize, Accent, FontStyle.Bold, TextAnchor.MiddleCenter);
+            SettingButton(box, w.textSize + ":  " + Mathf.RoundToInt(NarrativeSettings.TextScale * 100f) + "%", () => NarrativeSettings.TextScale = NarrativeSettings.Next(NarrativeSettings.TextScales, NarrativeSettings.TextScale));
+            SettingButton(box, w.typingSpeed + ":  " + SpeedWord(w), () => NarrativeSettings.TypingSpeed = (NarrativeSettings.Speed)(((int)NarrativeSettings.TypingSpeed + 1) % 4));
+            SettingButton(box, w.autoAdvance + ":  " + AutoWord(w), () => NarrativeSettings.AutoAdvance = (NarrativeSettings.AutoAdvanceMode)(((int)NarrativeSettings.AutoAdvance + 1) % 3));
+            SettingButton(box, w.highContrast + ":  " + (NarrativeSettings.HighContrast ? w.on : w.off), () => NarrativeSettings.HighContrast = !NarrativeSettings.HighContrast);
+            SettingButton(box, w.voiceVolume + ":  " + Mathf.RoundToInt(NarrativeSettings.VoiceVolume * 100f) + "%", () => NarrativeSettings.VoiceVolume = NarrativeSettings.Next(NarrativeSettings.VoiceVolumes, NarrativeSettings.VoiceVolume));
+            SettingButton(box, w.reset, NarrativeSettings.Reset);
+            SettingButton(box, w.close, CloseSettings);
+            // Keyboard and gamepad: keep the focus on the row that was just changed.
+            var es = EventSystem.current;
+            if (es != null && settingsButtons.Count > 0) es.SetSelectedGameObject(settingsButtons[Mathf.Clamp(settingsFocus, 0, settingsButtons.Count - 1)].gameObject);
+        }
+
+        void SettingButton(Transform parent, string label, System.Action onClick)
+        {
+            var row = settingsButtons.Count;
+            var rect = Child(label, parent);
+            var image = rect.gameObject.AddComponent<Image>();
+            var button = rect.gameObject.AddComponent<Button>();
+            button.targetGraphic = image;
+            var tint = button.colors;
+            tint.normalColor = WithAlpha(ButtonColour, ButtonOpacity);
+            tint.highlightedColor = tint.selectedColor = WithAlpha(ButtonColour, ButtonHoverOpacity);
+            tint.pressedColor = WithAlpha(ButtonColour, Mathf.Min(1f, ButtonHoverOpacity + 0.15f));
+            button.colors = tint;
+            rect.gameObject.AddComponent<LayoutElement>().minHeight = FontSize * 1.7f;
+            var text = AddText(rect, label, Mathf.RoundToInt(FontSize * 0.8f), ChoiceTextColour, FontStyle.Normal, TextAnchor.MiddleCenter);
+            text.rectTransform.anchorMin = Vector2.zero;
+            text.rectTransform.anchorMax = Vector2.one;
+            text.rectTransform.offsetMin = new Vector2(12, 4);
+            text.rectTransform.offsetMax = new Vector2(-12, -4);
+            button.onClick.AddListener(() =>
+            {
+                settingsFocus = row;
+                onClick();
+            });
+            settingsButtons.Add(button);
+        }
+
+        static string SpeedWord(SettingsWords w)
+        {
+            switch (NarrativeSettings.TypingSpeed)
+            {
+                case NarrativeSettings.Speed.Slow: return w.slow;
+                case NarrativeSettings.Speed.Fast: return w.fast;
+                case NarrativeSettings.Speed.Instant: return w.instant;
+                default: return w.normal;
+            }
+        }
+
+        static string AutoWord(SettingsWords w) =>
+            NarrativeSettings.AutoAdvance == NarrativeSettings.AutoAdvanceMode.On ? w.on : NarrativeSettings.AutoAdvance == NarrativeSettings.AutoAdvanceMode.Off ? w.off : w.asDesigned;
 
         /// <summary>Draws everything the controller has shown so far, without the typewriter.</summary>
         public void Redraw()
@@ -578,7 +733,7 @@ namespace __NAMESPACE__
         {
             choicesWaiting = false;
             ClearChoices();
-            if (choiceArea != null) AddText(choiceArea, theme.endLabel, theme.fontSize, theme.accent, FontStyle.Italic, TextAnchor.MiddleCenter);
+            if (choiceArea != null) AddText(choiceArea, theme.endLabel, FontSize, Accent, FontStyle.Italic, TextAnchor.MiddleCenter);
         }
 
         // ---- Scene pictures and portraits ------------------------------------------------------
@@ -675,7 +830,7 @@ namespace __NAMESPACE__
             if (line.IsChoice && !theme.showChoiceHistory) return;
             var entry = MakeEntry(line);
             // Line mode always goes through the queue, so lines arriving together are shown one at a time.
-            if (animate && (theme.charactersPerSecond > 0f || theme.transcript == NarrativeTheme.TranscriptMode.Line || theme.lineFade > 0f))
+            if (animate && (CharactersPerSecond > 0f || theme.transcript == NarrativeTheme.TranscriptMode.Line || theme.lineFade > 0f))
             {
                 entry.Root.SetActive(false);
                 typing.Enqueue(entry);
@@ -695,7 +850,7 @@ namespace __NAMESPACE__
             var root = Child("Line", lines);
             e.Root = root.gameObject;
             var group = root.gameObject.AddComponent<VerticalLayoutGroup>();
-            group.spacing = theme.fontSize * 0.1f;
+            group.spacing = FontSize * 0.1f;
             group.childControlWidth = group.childControlHeight = true;
             group.childForceExpandWidth = true;
             group.childForceExpandHeight = false;
@@ -703,19 +858,19 @@ namespace __NAMESPACE__
             var anchor = Anchor(theme.textAlign);
             if (line.IsChoice)
             {
-                e.Body = AddText(root, "", Mathf.RoundToInt(theme.fontSize * 0.8f), theme.muted, FontStyle.Italic, TextAnchor.UpperCenter);
+                e.Body = AddText(root, "", Mathf.RoundToInt(FontSize * 0.8f), Muted, FontStyle.Italic, TextAnchor.UpperCenter);
                 e.Text = line.Text;
                 return e;
             }
             if (theme.showSceneHeadings && !string.IsNullOrEmpty(line.Scene))
-                AddText(root, theme.sceneUppercase ? line.Scene.ToUpperInvariant() : line.Scene, Mathf.RoundToInt(theme.fontSize * theme.sceneScale), theme.sceneColour, FontStyle.Bold, TextAnchor.UpperCenter);
+                AddText(root, theme.sceneUppercase ? line.Scene.ToUpperInvariant() : line.Scene, Mathf.RoundToInt(FontSize * theme.sceneScale), SceneColour, FontStyle.Bold, TextAnchor.UpperCenter);
             var paren = theme.showParentheticals && !string.IsNullOrEmpty(line.Paren) ? "(" + line.Paren + ")" : null;
             var name = line.Speaker != null && theme.showSpeakers ? (theme.speakerUppercase ? line.Speaker.ToUpperInvariant() : line.Speaker) : null;
             var inline = theme.speakerStyle == NarrativeTheme.SpeakerStyle.Inline;
             if (!inline && (name != null || paren != null))
-                AddText(root, name != null ? name + (paren != null ? "  " + paren : "") : paren, Mathf.RoundToInt(theme.fontSize * theme.speakerScale), theme.speakerColour, FontStyle.Bold, anchor);
-            var colour = line.IsTransition ? theme.muted : theme.text;
-            e.Body = AddText(root, "", theme.fontSize, colour, line.IsTransition ? FontStyle.Italic : FontStyle.Normal, line.IsTransition ? TextAnchor.UpperRight : anchor);
+                AddText(root, name != null ? name + (paren != null ? "  " + paren : "") : paren, Mathf.RoundToInt(FontSize * theme.speakerScale), SpeakerColour, FontStyle.Bold, anchor);
+            var colour = line.IsTransition ? Muted : TextColour;
+            e.Body = AddText(root, "", FontSize, colour, line.IsTransition ? FontStyle.Italic : FontStyle.Normal, line.IsTransition ? TextAnchor.UpperRight : anchor);
             e.Text = line.Text;
             if (inline && (name != null || paren != null))
             {
@@ -725,7 +880,7 @@ namespace __NAMESPACE__
                 if (line.Text.IndexOf('<') < 0 && label.IndexOf('<') < 0)
                 {
                     SetRichText(e.Body, true);
-                    e.Prefix = "<color=#" + ColorUtility.ToHtmlStringRGBA(theme.speakerColour) + "><b>" + label + "</b></color>";
+                    e.Prefix = "<color=#" + ColorUtility.ToHtmlStringRGBA(SpeakerColour) + "><b>" + label + "</b></color>";
                 }
                 else e.Prefix = label;
             }
@@ -770,7 +925,7 @@ namespace __NAMESPACE__
                 var next = typing.Peek();
                 Begin(next);
                 var text = next.Text;
-                if (theme.charactersPerSecond > 0f)
+                if (CharactersPerSecond > 0f)
                 {
                     var shown = 0f;
                     var pause = 0f;
@@ -778,7 +933,7 @@ namespace __NAMESPACE__
                     while (!skipTyping && count < text.Length)
                     {
                         if (pause > 0f) { pause -= Time.unscaledDeltaTime; yield return null; continue; }
-                        shown += theme.charactersPerSecond * Time.unscaledDeltaTime;
+                        shown += CharactersPerSecond * Time.unscaledDeltaTime;
                         var now = Mathf.Min(text.Length, (int)shown);
                         // A pause at the end of a sentence (. ! ? or …), before the next word.
                         if (theme.punctuationPause > 0f)
@@ -804,7 +959,7 @@ namespace __NAMESPACE__
                     while (waitingForNextLine)
                     {
                         waited += Time.unscaledDeltaTime;
-                        if (theme.autoAdvance && waited >= theme.autoAdvanceDelay) waitingForNextLine = false;
+                        if (AutoAdvance && waited >= theme.autoAdvanceDelay) waitingForNextLine = false;
                         yield return null;
                     }
                     ClearChoices();
@@ -863,7 +1018,7 @@ namespace __NAMESPACE__
             if (controller.IsWaitingForContinue)
             {
                 AddButton(ContinueText(), controller.Continue, TextAnchor.MiddleCenter);
-                if (theme.autoAdvance && Application.isPlaying) autoNext = StartCoroutine(ContinueAfter(theme.autoAdvanceDelay, controller.Story.state.currentTurnIndex));
+                if (AutoAdvance && Application.isPlaying) autoNext = StartCoroutine(ContinueAfter(theme.autoAdvanceDelay, controller.Story.state.currentTurnIndex));
                 return;
             }
             var anchor = theme.choiceAlign == NarrativeTheme.ChoiceAlign.Center ? TextAnchor.MiddleCenter : TextAnchor.MiddleLeft;
@@ -873,6 +1028,10 @@ namespace __NAMESPACE__
                 var index = i;
                 AddButton((theme.showChoiceNumbers ? (i + 1) + ".  " : "") + choices[i].text, () => controller.Choose(index), anchor);
             }
+            // Choices that need something the reader doesn't have yet: greyed out, saying what they need.
+            if (theme.showLockedChoices)
+                foreach (var l in controller.LockedChoices)
+                    AddButton(l.Text + "   ·   " + (string.IsNullOrEmpty(theme.lockedLabel) ? "" : theme.lockedLabel + " ") + l.Needs, null, anchor, true);
         }
 
         IEnumerator ContinueAfter(float seconds, int turn)
@@ -885,12 +1044,18 @@ namespace __NAMESPACE__
         void ClearChoices()
         {
             buttons.Clear();
+            lockedButtons.Clear();
             if (choiceArea == null) return;
             for (int i = choiceArea.childCount - 1; i >= 0; i--) Discard(choiceArea.GetChild(i).gameObject);
         }
 
         void Update()
         {
+            if (settingsOpen)
+            {
+                if (keyboardShortcuts && EscapePressed()) CloseSettings();
+                return; // the menu has the keys while it's open
+            }
             if (!keyboardShortcuts || controller == null || controller.Story == null) return;
             if (ContinuePressed())
             {
@@ -909,6 +1074,7 @@ namespace __NAMESPACE__
         static bool ContinuePressed() => Input.GetKeyDown(KeyCode.Space) || Input.GetKeyDown(KeyCode.Return);
         static bool ClickPressed() => Input.GetMouseButtonDown(0);
         static bool NumberPressed(int n) => Input.GetKeyDown(KeyCode.Alpha0 + n);
+        static bool EscapePressed() => Input.GetKeyDown(KeyCode.Escape);
 #elif NARRATIVE_BRIDGE_INPUT_SYSTEM && ENABLE_INPUT_SYSTEM
         static bool ContinuePressed()
         {
@@ -925,10 +1091,16 @@ namespace __NAMESPACE__
             var k = UnityEngine.InputSystem.Keyboard.current;
             return k != null && k[UnityEngine.InputSystem.Key.Digit1 + (n - 1)].wasPressedThisFrame;
         }
+        static bool EscapePressed()
+        {
+            var k = UnityEngine.InputSystem.Keyboard.current;
+            return k != null && k.escapeKey.wasPressedThisFrame;
+        }
 #else
         static bool ContinuePressed() => false;
         static bool ClickPressed() => false;
         static bool NumberPressed(int n) => false;
+        static bool EscapePressed() => false;
 #endif
 
         // ---- Building blocks -------------------------------------------------------------
@@ -1002,25 +1174,32 @@ namespace __NAMESPACE__
         }
 #endif
 
-        Button AddButton(string label, UnityEngine.Events.UnityAction onClick, TextAnchor anchor)
+        Button AddButton(string label, UnityEngine.Events.UnityAction onClick, TextAnchor anchor, bool locked = false)
         {
             var rect = Child("Choice", choiceArea);
             var image = rect.gameObject.AddComponent<Image>();
             var button = rect.gameObject.AddComponent<Button>();
             button.targetGraphic = image;
             var tint = button.colors;
-            tint.normalColor = WithAlpha(theme.buttonColour, theme.buttonOpacity);
-            tint.highlightedColor = WithAlpha(theme.buttonColour, theme.buttonHoverOpacity);
+            tint.normalColor = WithAlpha(ButtonColour, ButtonOpacity);
+            tint.highlightedColor = WithAlpha(ButtonColour, ButtonHoverOpacity);
             tint.selectedColor = tint.highlightedColor;
-            tint.pressedColor = WithAlpha(theme.buttonColour, Mathf.Min(1f, theme.buttonHoverOpacity + 0.15f));
+            tint.pressedColor = WithAlpha(ButtonColour, Mathf.Min(1f, ButtonHoverOpacity + 0.15f));
+            tint.disabledColor = WithAlpha(ButtonColour, ButtonOpacity * 0.4f);
             button.colors = tint;
-            rect.gameObject.AddComponent<LayoutElement>().minHeight = theme.fontSize * theme.choiceHeight;
-            var text = AddText(rect, label, Mathf.RoundToInt(theme.fontSize * theme.choiceScale), theme.choiceTextColour, FontStyle.Normal, anchor);
+            rect.gameObject.AddComponent<LayoutElement>().minHeight = FontSize * theme.choiceHeight;
+            var text = AddText(rect, label, Mathf.RoundToInt(FontSize * theme.choiceScale), locked ? Muted : ChoiceTextColour, locked ? FontStyle.Italic : FontStyle.Normal, anchor);
             var tr = text.rectTransform;
             tr.anchorMin = Vector2.zero;
             tr.anchorMax = Vector2.one;
             tr.offsetMin = new Vector2(18, 6);
             tr.offsetMax = new Vector2(-18, -6);
+            if (locked)
+            {
+                button.interactable = false;
+                lockedButtons.Add(button);
+                return button;
+            }
             button.onClick.AddListener(onClick);
             buttons.Add(button);
             return button;
@@ -1030,14 +1209,14 @@ namespace __NAMESPACE__
         {
             var rect = Child(label, parent);
             var image = rect.gameObject.AddComponent<Image>();
-            image.color = WithAlpha(theme.buttonColour, Mathf.Max(0.12f, theme.buttonOpacity));
+            image.color = WithAlpha(ButtonColour, Mathf.Max(0.12f, ButtonOpacity));
             var button = rect.gameObject.AddComponent<Button>();
             button.targetGraphic = image;
             button.onClick.AddListener(onClick);
             var size = rect.gameObject.AddComponent<LayoutElement>();
-            size.minWidth = theme.fontSize * 3.2f;
-            size.minHeight = theme.fontSize * 1.3f;
-            var text = AddText(rect, label, Mathf.RoundToInt(theme.fontSize * 0.6f), theme.choiceTextColour, FontStyle.Normal, TextAnchor.MiddleCenter);
+            size.minWidth = FontSize * 3.2f;
+            size.minHeight = FontSize * 1.3f;
+            var text = AddText(rect, label, Mathf.RoundToInt(FontSize * 0.6f), ChoiceTextColour, FontStyle.Normal, TextAnchor.MiddleCenter);
             text.rectTransform.anchorMin = Vector2.zero;
             text.rectTransform.anchorMax = Vector2.one;
             text.rectTransform.offsetMin = text.rectTransform.offsetMax = Vector2.zero;
@@ -1070,6 +1249,104 @@ namespace __NAMESPACE__
         {
             if (Application.isPlaying) UnityEngine.Object.Destroy(o);
             else UnityEngine.Object.DestroyImmediate(o);
+        }
+    }
+}
+`;
+
+export const SETTINGS_CS = `using System;
+using UnityEngine;
+
+namespace __NAMESPACE__
+{
+    /// <summary>
+    /// The player's own reading settings: text size, typing speed, auto-advance, high contrast and voice volume.
+    /// The story panel's Settings button changes them; your game's own options menu can too. They are kept in
+    /// PlayerPrefs and shared by every Narrative Bridge story in the game. Changed is raised after each change.
+    /// </summary>
+    public static class NarrativeSettings
+    {
+        public enum Speed { Slow, Normal, Fast, Instant }
+        public enum AutoAdvanceMode { AsDesigned, Off, On }
+
+        const string Prefix = "NarrativeBridge.Settings.";
+        static bool loaded;
+        static float textScale = 1f, voiceVolume = 1f;
+        static Speed typingSpeed = Speed.Normal;
+        static AutoAdvanceMode autoAdvance = AutoAdvanceMode.AsDesigned;
+        static bool highContrast;
+
+        /// <summary>Raised after any setting changes, so story panels redraw.</summary>
+        public static event Action Changed;
+
+        /// <summary>The text sizes the Settings menu steps through.</summary>
+        public static readonly float[] TextScales = { 0.85f, 1f, 1.15f, 1.3f, 1.5f };
+        /// <summary>The voice volumes the Settings menu steps through.</summary>
+        public static readonly float[] VoiceVolumes = { 1f, 0.75f, 0.5f, 0.25f, 0f };
+
+        /// <summary>Text size, as a multiple of the theme's (0.5 to 2).</summary>
+        public static float TextScale { get { Load(); return textScale; } set { Load(); textScale = Mathf.Clamp(value, 0.5f, 2f); Save(); } }
+        public static Speed TypingSpeed { get { Load(); return typingSpeed; } set { Load(); typingSpeed = value; Save(); } }
+        /// <summary>AsDesigned follows the theme's Auto Advance; Off and On override it.</summary>
+        public static AutoAdvanceMode AutoAdvance { get { Load(); return autoAdvance; } set { Load(); autoAdvance = value; Save(); } }
+        /// <summary>Light text on a solid dark panel, whatever the theme's colours.</summary>
+        public static bool HighContrast { get { Load(); return highContrast; } set { Load(); highContrast = value; Save(); } }
+        /// <summary>Voice clip volume, as a multiple of the theme's (0 to 1).</summary>
+        public static float VoiceVolume { get { Load(); return voiceVolume; } set { Load(); voiceVolume = Mathf.Clamp01(value); Save(); } }
+
+        /// <summary>How fast text types, as a multiple of the theme's speed; 0 shows each line at once.</summary>
+        public static float SpeedMultiplier
+        {
+            get
+            {
+                switch (TypingSpeed)
+                {
+                    case Speed.Slow: return 0.5f;
+                    case Speed.Fast: return 2f;
+                    case Speed.Instant: return 0f;
+                    default: return 1f;
+                }
+            }
+        }
+
+        /// <summary>Back to the theme's own look and pacing.</summary>
+        public static void Reset()
+        {
+            Load();
+            textScale = 1f;
+            voiceVolume = 1f;
+            typingSpeed = Speed.Normal;
+            autoAdvance = AutoAdvanceMode.AsDesigned;
+            highContrast = false;
+            Save();
+        }
+
+        /// <summary>The next value in a list (for menus that step through choices).</summary>
+        public static float Next(float[] values, float current)
+        {
+            for (int i = 0; i < values.Length; i++) if (Mathf.Abs(values[i] - current) < 0.01f) return values[(i + 1) % values.Length];
+            return values[0];
+        }
+
+        static void Load()
+        {
+            if (loaded) return;
+            loaded = true;
+            textScale = Mathf.Clamp(PlayerPrefs.GetFloat(Prefix + "TextScale", 1f), 0.5f, 2f);
+            voiceVolume = Mathf.Clamp01(PlayerPrefs.GetFloat(Prefix + "VoiceVolume", 1f));
+            typingSpeed = (Speed)Mathf.Clamp(PlayerPrefs.GetInt(Prefix + "TypingSpeed", (int)Speed.Normal), 0, 3);
+            autoAdvance = (AutoAdvanceMode)Mathf.Clamp(PlayerPrefs.GetInt(Prefix + "AutoAdvance", 0), 0, 2);
+            highContrast = PlayerPrefs.GetInt(Prefix + "HighContrast", 0) == 1;
+        }
+
+        static void Save()
+        {
+            PlayerPrefs.SetFloat(Prefix + "TextScale", textScale);
+            PlayerPrefs.SetFloat(Prefix + "VoiceVolume", voiceVolume);
+            PlayerPrefs.SetInt(Prefix + "TypingSpeed", (int)typingSpeed);
+            PlayerPrefs.SetInt(Prefix + "AutoAdvance", (int)autoAdvance);
+            PlayerPrefs.SetInt(Prefix + "HighContrast", highContrast ? 1 : 0);
+            Changed?.Invoke();
         }
     }
 }

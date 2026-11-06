@@ -245,6 +245,10 @@ export interface UnityTheme {
   continueLabel: string;
   continueArrow: boolean;
   endLabel: string;
+  /** Choices that need an item or a value the reader doesn't have yet, shown greyed out with what they need. */
+  showLockedChoices: boolean;
+  /** Before what a locked choice needs, e.g. "Needs" → "Needs Brass Key". */
+  lockedLabel: string;
   // Toolbar
   /** Restart, Save and Load buttons under the story. */
   showToolbar: boolean;
@@ -255,6 +259,9 @@ export interface UnityTheme {
   restartLabel: string;
   saveLabel: string;
   loadLabel: string;
+  /** A Settings button: text size, typing speed, auto-advance, high contrast and voice volume, for the player. */
+  showSettings: boolean;
+  settingsLabel: string;
   // Scene pictures
   /** Scene pictures fill the screen behind the panel. */
   showPictures: boolean;
