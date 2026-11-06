@@ -193,6 +193,22 @@ export function testsAsmdef(id: UnityPackageId) {
   };
 }
 
+/** The package's Play Mode tests: the story running in the game (the panel, autosave, settings, cue music, language). */
+export function playTestsAsmdef(id: UnityPackageId) {
+  return {
+    ...runtimeAsmdef(id),
+    name: `${id.namespace}.PlayTests`,
+    rootNamespace: `${id.namespace}.PlayTests`,
+    references: [id.namespace, 'UnityEngine.TestRunner', 'UnityEngine.UI'],
+    includePlatforms: [],
+    overrideReferences: true,
+    precompiledReferences: ['nunit.framework.dll'],
+    autoReferenced: false,
+    defineConstraints: ['UNITY_INCLUDE_TESTS', 'NARRATIVE_BRIDGE_INK'],
+    versionDefines: [INK_DEFINES[0]],
+  };
+}
+
 /** The setup assembly has no Ink references or constraints, so it can offer to install Ink. */
 export function setupAsmdef(id: UnityPackageId) {
   return { ...runtimeAsmdef(id), name: `${id.namespace}.Setup`, rootNamespace: `${id.namespace}.Setup`, references: [], includePlatforms: ['Editor'], defineConstraints: [], versionDefines: [INK_DEFINES[0], INK_DEFINES.find((d) => d.define === 'NARRATIVE_BRIDGE_ADDRESSABLES')!] };

@@ -17,7 +17,8 @@
     "test:admin": "node tests/e2e/admin.mjs",
     "icons": "node scripts/icons.mjs",
     "guide:screenshots": "npm run build:single && node scripts/guide-screenshots.mjs",
-    "design:publish": "tsx scripts/design-publish.ts"
+    "design:publish": "tsx scripts/design-publish.ts",
+    "test:unity": "tsx scripts/unity-check.ts"
   },
   "repository": {
     "type": "git",
