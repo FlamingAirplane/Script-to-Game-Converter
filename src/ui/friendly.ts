@@ -25,6 +25,7 @@ const TITLES: Record<string, string> = {
   NO_REACHABLE_ENDING: 'The story never reaches an ending.',
   ITEM_UNDECLARED: 'Something uses an item that hasn’t been created.',
   VAR_UNDECLARED: 'Something uses a variable that hasn’t been created.',
+  ITEM_GIVEN_ONLY_BY_SUGGESTION: 'An item comes only from a suggestion you haven’t approved yet.',
   ITEM_NEVER_ACQUIRED: 'A choice needs an item the reader can never get.',
   CONDITION_TYPE_MISMATCH: 'A condition compares two things that don’t match.',
   CONDITION_BAD_OPERATOR: 'A condition uses a comparison that doesn’t work for this kind of value.',

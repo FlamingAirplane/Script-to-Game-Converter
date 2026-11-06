@@ -16,6 +16,7 @@ export function DiagnosticsPanel({
   onClose,
   view,
   onView,
+  onApproveAll,
 }: {
   diagnostics: Diagnostic[];
   project: StoryProject | null;
@@ -23,11 +24,48 @@ export function DiagnosticsPanel({
   onClose: () => void;
   view: PanelView;
   onView: (v: PanelView) => void;
+  /** Approves every waiting suggestion (undoable). */
+  onApproveAll?: () => void;
 }) {
   const [hidden, setHidden] = useState<Set<Severity>>(new Set(['info']));
   const [technical, setTechnical] = useState(false);
   const counts = Object.fromEntries(SEVERITIES.map((s) => [s, diagnostics.filter((d) => d.severity === s).length])) as Record<Severity, number>;
   const shown = sortDiagnostics(diagnostics).filter((d) => !hidden.has(d.severity));
+  // Suggestions waiting for approval are listed once as a group, not one identical note each.
+  const suggestions = shown.filter((d) => d.code === 'UNAPPROVED_GENERATED');
+  const grouped = suggestions.length > 1;
+  const firstSuggestion = grouped ? shown.indexOf(suggestions[0]) : -1;
+  const rows = grouped ? shown.filter((d, i) => d.code !== 'UNAPPROVED_GENERATED' || i === firstSuggestion) : shown;
+
+  const item = (d: Diagnostic, i: number | string) => {
+    const f = friendly(d, project ?? undefined);
+    return (
+      <li key={i}>
+        <button className="diag" onClick={() => onJump(d)}>
+          <span className="diag-head">
+            <SeverityIcon severity={d.severity} />
+            <span className={`sev-word sev-${d.severity}`}>{SEVERITY_LABEL[d.severity]}</span>
+            {f.where && <span className="muted small diag-where">in {f.where}</span>}
+            {d.exportBlocked && <span className="blocker small">blocks export</span>}
+          </span>
+          <span className="diag-msg">{f.title}</span>
+          {f.detail && <span className="muted small">{f.detail}</span>}
+          {d.remediation && (
+            <span className="small diag-fix">
+              {d.remediation} <span className="diag-go">Go there →</span>
+            </span>
+          )}
+          {technical && (
+            <span className="mono muted small">
+              {d.code} · {d.stage.replace(/_/g, ' ')}
+              {d.entityId ? ` · ${d.entityId}` : ''}
+              {d.source ? ` · line ${d.source.line}` : ''}
+            </span>
+          )}
+        </button>
+      </li>
+    );
+  };
 
   return (
     <aside className="diagnostics">
@@ -78,31 +116,36 @@ export function DiagnosticsPanel({
         </p>
       )}
       <ul className="diag-list">
-        {shown.map((d, i) => {
-          const f = friendly(d, project ?? undefined);
-          return (
-            <li key={i}>
-              <button className="diag" onClick={() => onJump(d)}>
+        {rows.map((d, i) =>
+          grouped && d.code === 'UNAPPROVED_GENERATED' ? (
+            <li key="suggestions" className="diag-group">
+              <div className="diag-group-head">
                 <span className="diag-head">
-                  <SeverityIcon severity={d.severity} />
-                  <span className={`sev-word sev-${d.severity}`}>{SEVERITY_LABEL[d.severity]}</span>
-                  {f.where && <span className="muted small diag-where">in {f.where}</span>}
-                  {d.exportBlocked && <span className="blocker small">blocks export</span>}
+                  <SeverityIcon severity="review" />
+                  <span className="sev-word sev-review">{SEVERITY_LABEL.review}</span>
                 </span>
-                <span className="diag-msg">{f.title}</span>
-                {f.detail && <span className="muted small">{f.detail}</span>}
-                {d.remediation && <span className="small diag-fix">→ {d.remediation}</span>}
-                {technical && (
-                  <span className="mono muted small">
-                    {d.code} · {d.stage.replace(/_/g, ' ')}
-                    {d.entityId ? ` · ${d.entityId}` : ''}
-                    {d.source ? ` · line ${d.source.line}` : ''}
-                  </span>
-                )}
-              </button>
+                <span className="diag-msg">{suggestions.length} suggestions are waiting for your OK.</span>
+                <span className="small muted">Until you approve them they’re left out of Playtest and the export.</span>
+                <span className="row">
+                  {onApproveAll && (
+                    <button className="btn tiny ok" onClick={onApproveAll} title="Approves every suggestion (you can undo this)">
+                      Approve all
+                    </button>
+                  )}
+                  <button className="btn tiny" onClick={() => onJump(suggestions[0])}>
+                    Review the first
+                  </button>
+                </span>
+              </div>
+              <details>
+                <summary className="small">Show each one</summary>
+                <ul className="diag-list">{suggestions.map((x, j) => item(x, `s${j}`))}</ul>
+              </details>
             </li>
-          );
-        })}
+          ) : (
+            item(d, i)
+          ),
+        )}
       </ul>
         </>
       )}

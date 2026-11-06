@@ -46,7 +46,7 @@ for (const width of WIDTHS) {
   };
   await check('Import');
   await page.getByText('The Lighthouse Keeper').first().click();
-  await page.locator('.passage-item').first().waitFor();
+  await page.locator('.passage-item').first().waitFor({ state: 'attached' }); // on phones the contents list is a closed drawer
   await page.waitForTimeout(400);
   for (const tab of TABS.slice(1)) {
     await page.getByRole('button', { name: new RegExp(tab) }).first().click();
@@ -63,6 +63,21 @@ for (const width of WIDTHS) {
     await check(tab);
   }
   await page.getByRole('button', { name: /Review/ }).first().click();
+  // Phones: the contents drawer and the header menu open without widening the page.
+  if (await page.locator('.contents-open').isVisible()) {
+    await page.locator('.contents-open').click();
+    await page.locator('.passage-list.open .passage-item').first().waitFor();
+    await check('Review + Contents drawer');
+    await page.locator('.passage-list.open .passage-item').nth(1).click();
+    if (await page.locator('.passage-list.open').count()) throw new Error(`${width}px: picking a passage did not close the contents drawer`);
+  }
+  if (await page.locator('.tb-menu').isVisible()) {
+    await page.locator('.tb-menu').click();
+    await page.locator('.tb-actions.open').waitFor();
+    await check('Header menu');
+    await page.keyboard.press('Escape');
+    if (await page.locator('.tb-actions.open').count()) throw new Error(`${width}px: Escape did not close the header menu`);
+  }
   await page.keyboard.press('ControlOrMeta+l');
   await page.waitForTimeout(300);
   await check('Review + Logbook');

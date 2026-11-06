@@ -89,6 +89,7 @@ export function useProcessedStory(project: StoryProject | null, parseDiagnostics
     };
   }, [project, parseDiagnostics, sentId]);
 
-  const current = result && project ? result.processed : null;
+  // Another story's result (a new script was just converted) is not shown while this one builds.
+  const current = result && project && result.processed.project.project.id === project.project.id ? result.processed : null;
   return { processed: current, stale: !!result && result.id !== nextId.current };
 }

@@ -273,10 +273,10 @@ export function SessionLinker({ project, update, onClose }: { project: StoryProj
           }}
         />
         {!session && (
-          <div className="dropzone session-drop" onClick={() => file.current?.click()} onDragOver={(e) => e.preventDefault()} onDrop={(e) => (e.preventDefault(), e.dataTransfer.files[0] && void loadSession(e.dataTransfer.files[0]))}>
+          <button type="button" className="dropzone session-drop" onClick={() => file.current?.click()} onDragOver={(e) => e.preventDefault()} onDrop={(e) => (e.preventDefault(), e.dataTransfer.files[0] && void loadSession(e.dataTransfer.files[0]))}>
             <strong>Load one long recording of a voice session</strong>
             <span className="muted small">Then mark where each line is in it, or let it find the takes and give them to the lines in order. Each marked stretch becomes that line’s clip.</span>
-          </div>
+          </button>
         )}
         {busy && <p className="muted small">{busy}</p>}
         {error && <p className="error-text small">{error}</p>}
@@ -409,7 +409,9 @@ function LineRow({ line: l, seg, changed, active, otherClip, onActivate, onSet, 
   }, [active]);
   return (
     <div ref={ref} role="listitem" className={`session-line${active ? ' active' : ''}${changed ? ' changed' : ''}`} onClick={onActivate}>
-      <span className="mono small num">{l.number}</span>
+      <button type="button" className="mono small num link" aria-pressed={active} aria-label={`Line ${l.number}, ${l.speaker}: work on this line`} onClick={(e) => (e.stopPropagation(), onActivate())}>
+        {l.number}
+      </button>
       <span className="who small">{l.speaker}</span>
       <span className="what small" title={l.text}>
         {l.parenthetical ? <em className="muted">({l.parenthetical}) </em> : null}

@@ -1,4 +1,5 @@
 import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { reviewAll } from '../core/adapt';
 import { buildStory, type SourceInput } from '../core/builder';
 import type { Diagnostic } from '../core/diagnostics';
 import type { ConversionMode, StoryProject } from '../core/isr';
@@ -24,7 +25,7 @@ const appLog = log('app');
 const ExportView = lazy(() => import('./ExportView').then((m) => ({ default: m.ExportView })));
 const PlaytestView = lazy(() => import('./PlaytestView').then((m) => ({ default: m.PlaytestView })));
 import { sfx } from './sfx';
-import { isTyping, modKey, plainKey, ShortcutSheet } from './Shortcuts';
+import { IS_MAC, isTyping, MOD, modKey, plainKey, ShortcutSheet } from './Shortcuts';
 import { ThemeToggle } from './ThemeToggle';
 import { useProcessedStory } from './useProcessedStory';
 
@@ -46,6 +47,25 @@ const STAGES: { state: ConversionState; label: string }[] = [
   { state: 'Validating', label: 'Validate' },
   { state: 'Exporting', label: 'Export' },
 ];
+
+const STATE_TIPS: Partial<Record<ConversionState, string>> = {
+  ReviewRequired: 'Some suggestions are waiting for your OK in Review. The story still plays and exports without them.',
+  Succeeded: 'The story builds cleanly and is ready to play and export.',
+  Failed: 'Something stops the story from building. The Diagnostics panel lists what to fix.',
+};
+
+/** The conversion state in plain words, for the header badge. */
+const STATE_WORDS: Record<ConversionState, string> = {
+  Queued: 'Waiting',
+  Parsing: 'Reading',
+  ReviewRequired: 'Needs review',
+  Generating: 'Building',
+  Validating: 'Checking',
+  Exporting: 'Exporting',
+  Succeeded: 'Ready',
+  Failed: 'Needs fixes',
+  Cancelled: 'Stopped',
+};
 
 const STORAGE_KEY = 'narrative-bridge.project.v1';
 
@@ -399,11 +419,31 @@ export function App() {
   };
 
   const [justImported, setJustImported] = useState(false);
+  const [menuOpen, setMenuOpen] = useState(false);
+  // On narrower screens the Diagnostics panel opens over the page instead of beside it.
+  const [diagOverlay, setDiagOverlay] = useState(false);
+  const narrow = () => typeof matchMedia !== 'undefined' && matchMedia('(max-width: 1100px)').matches;
+  useEffect(() => {
+    if (!menuOpen) return;
+    const close = (e: PointerEvent) => !(e.target as HTMLElement).closest('.tb-actions, .tb-menu') && setMenuOpen(false);
+    const esc = (e: KeyboardEvent) => e.key === 'Escape' && setMenuOpen(false);
+    document.addEventListener('pointerdown', close);
+    document.addEventListener('keydown', esc);
+    return () => {
+      document.removeEventListener('pointerdown', close);
+      document.removeEventListener('keydown', esc);
+    };
+  }, [menuOpen]);
+  // The story a conversion just replaced, so it can be brought straight back.
+  const [replaced, setReplaced] = useState<{ project: StoryProject; parseDiagnostics: Diagnostic[]; file: FileHandle | null } | null>(null);
+  const [newNote, setNewNote] = useState(false);
   const convert = async (inputs: SourceInput[], mode: ConversionMode, title?: string) => {
     setBusy(true);
     try {
       const { project: p, diagnostics } = await buildStory(inputs, { mode, title });
       await keepBeforeReplacing('Before converting a new script');
+      setReplaced(project?.passages.length ? { project, parseDiagnostics, file: projectFile } : null);
+      setNewNote(false);
       undoStack.current = [];
       redoStack.current = [];
       setParseDiagnostics(diagnostics);
@@ -418,6 +458,22 @@ export function App() {
     } finally {
       setBusy(false);
     }
+  };
+
+  const bringBack = async () => {
+    if (!replaced) return;
+    await keepBeforeReplacing('Before bringing back the previous story');
+    undoStack.current = [];
+    redoStack.current = [];
+    setParseDiagnostics(replaced.parseDiagnostics);
+    setProject(replaced.project);
+    setProjectFile(replaced.file);
+    setSavedToFile(null);
+    setSelected(replaced.project.project.startPassage);
+    setExportState(null);
+    setJustImported(false);
+    setReplaced(null);
+    setTab('review');
   };
 
   const open = (id: string) => {
@@ -544,7 +600,8 @@ export function App() {
     : null;
 
   return (
-    <div className={`app ${showDiag && ((processed && tab !== 'import') || panelView === 'log') ? 'with-diag' : ''}`}>
+    <div className={`app ${showDiag && ((processed && tab !== 'import') || panelView === 'log') ? 'with-diag' : ''} ${diagOverlay ? 'diag-overlay' : ''}`}>
+      {diagOverlay && <div className="diag-backdrop" aria-hidden onClick={() => setDiagOverlay(false)} />}
       <header className="topbar">
         <div className="brand">
           <Logo size={26} />
@@ -555,14 +612,16 @@ export function App() {
             <span className="project-name" title={project.project.title}>
               {project.project.title}
             </span>
-            <ol className="stages" aria-label={`Conversion state: ${state}`}>
+            <ol className="stages" aria-label={`Conversion state: ${STATE_WORDS[state]}`}>
               {STAGES.map((s, i) => (
                 <li key={s.state} className={i < stageIndex ? 'done' : i === stageIndex ? (processed?.exportBlocked || exportState === 'Failed' ? 'failed' : 'current') : ''}>
                   {s.label}
                 </li>
               ))}
             </ol>
-            <span className={`state-pill state-${state}`}>{state}</span>
+            <span className={`state-pill state-${state}`} title={STATE_TIPS[state] ?? undefined}>
+              {STATE_WORDS[state]}
+            </span>
             {projectFile ? (
               <span className="autosave" title={`Save (⌘S) writes to ${projectFile.name}. Every change is also kept in this browser.`}>
                 {savedToFile === project ? `✓ saved to ${projectFile.name}` : `edited · ⌘S saves to ${projectFile.name}`}
@@ -593,6 +652,20 @@ export function App() {
         <button className="btn tiny ghost" onClick={redo} disabled={!redoStack.current.length} title="Redo (⇧⌘Z)" aria-label="Redo">
           ↷ <span className="tb-word">redo</span>
         </button>
+        {project && (
+          <button className="btn tiny ghost" onClick={() => void saveProject()} title={projectFile ? `Save to ${projectFile.name} (⌘S)` : 'Save the project as a file (⌘S)'}>
+            Save project
+          </button>
+        )}
+        <button className="btn tiny ghost tb-menu" aria-expanded={menuOpen} aria-controls="tb-actions" onClick={() => setMenuOpen(!menuOpen)}>
+          ☰ Menu
+        </button>
+        <div
+          className={`tb-actions ${menuOpen ? 'open' : ''}`}
+          id="tb-actions"
+          onClick={(e) => (e.target as HTMLElement).closest('button') && setMenuOpen(false)}
+          onKeyDown={(e) => e.key === 'Escape' && setMenuOpen(false)}
+        >
         <button className="btn tiny ghost" onClick={() => setShowKeys(true)} title="Keyboard shortcuts (?)" aria-label="Keyboard shortcuts">
           ⌨ <span className="tb-word">shortcuts</span>
         </button>
@@ -617,11 +690,6 @@ export function App() {
         <button className="btn tiny ghost" onClick={() => setShowProjects(true)} title="Carry on in another browser or computer: as a file, or through the cloud">
           ⇅ Move to another browser
         </button>
-        {project && (
-          <button className="btn tiny ghost" onClick={() => void saveProject()} title={projectFile ? `Save to ${projectFile.name} (⌘S)` : 'Save the project as a file (⌘S)'}>
-            Save project
-          </button>
-        )}
         {project && canUseFiles() && (
           <button className="btn tiny ghost" onClick={() => void saveProject(true)} title="Save the project to a new file (⇧⌘S)">
             Save as…
@@ -631,13 +699,16 @@ export function App() {
           <button
             className="btn tiny ghost"
             onClick={() => {
-              if (!confirm('Start a new conversion? The current project stays in your browser until you convert something else.')) return;
+              setNewNote(true);
               setTab('import');
+              requestAnimationFrame(() => document.querySelector('.content')?.scrollTo({ top: 0 }));
             }}
+            title="Start a new story from a script or a sample. The open one is kept in Drafts." 
           >
             New
           </button>
         )}
+        </div>
       </header>
 
       {unsaved && Date.now() - unsavedSince.current > 5 * 60_000 && Date.now() > remindLater && (!copy || Date.now() - copy.at > 15 * 60_000) && (
@@ -657,15 +728,24 @@ export function App() {
 
       <nav className="tabs" aria-label="Chapters">
         {TABS.map((t) => (
-          <button key={t.id} className={`tab ${tab === t.id ? 'active' : ''}`} aria-current={tab === t.id ? 'page' : undefined} disabled={t.id !== 'import' && !processed} onClick={() => setTab(t.id)} title={t.id !== 'import' && !processed ? `${t.about}. Import a script (or try a sample) first.` : `${t.about} (⌘${t.key})`}>
-            <span className="tab-num">{t.numeral}</span>
+          <button key={t.id} className={`tab ${tab === t.id ? 'active' : ''}`} aria-current={tab === t.id ? 'page' : undefined} disabled={t.id !== 'import' && !processed} onClick={() => setTab(t.id)} aria-keyshortcuts={`Meta+${t.key} Control+${t.key}`} title={t.id !== 'import' && !processed ? `${t.about}. Import a script (or try a sample) first.` : `${t.about}. Shortcut: ${MOD}${IS_MAC ? "" : "+"}${t.key}`}>
+            <span className="tab-num" aria-hidden>{t.numeral}</span>
             {t.label}
             {t.id === 'review' && counts && counts.review > 0 && <span className="tab-count review">{counts.review}</span>}
           </button>
         ))}
         <span className="spacer" />
         {processed && tab !== 'import' && (
-          <button className={`diag-toggle ${showDiag ? 'on' : ''}`} onClick={() => setShowDiag(!showDiag)}>
+          <button
+            className={`diag-toggle ${showDiag ? 'on' : ''}`}
+            aria-expanded={narrow() ? diagOverlay : showDiag}
+            onClick={() => {
+              if (narrow()) {
+                setShowDiag(true);
+                setDiagOverlay(!diagOverlay);
+              } else setShowDiag(!showDiag);
+            }}
+          >
             {counts!.error > 0 && <span className="sev sev-error">● {counts!.error}</span>}
             {counts!.warning > 0 && <span className="sev sev-warning">▲ {counts!.warning}</span>}
             {counts!.error + counts!.warning === 0 && <span className="sev sev-ok">✓</span>}
@@ -681,7 +761,39 @@ export function App() {
         </div>
         <div className="content" key={`page-${tab}`}>
           <Suspense fallback={<p className="muted pad">Turning the page…</p>}>
+          {tab === 'import' && newNote && project && (
+            <div className="new-note card" role="status">
+              <span>
+                <strong>Ready for a new story.</strong> Add a script or pick a sample below. “{project.project.title}” stays open in the other chapters until you
+                convert something, and is kept in Drafts after that.
+              </span>
+              <button className="btn tiny ghost" onClick={() => setNewNote(false)}>
+                OK
+              </button>
+            </div>
+          )}
           {tab === 'import' && <ImportView onConvert={convert} busy={busy} onRestoreDraft={(id) => void restoreDraft(id)} onOpenProject={(f, h) => void openProject(f, h)} incoming={incoming} />}
+          {tab === 'review' && replaced && (
+            <div className="new-note card" role="status">
+              <span>
+                “{replaced.project.project.title}” was replaced by “{project?.project.title}”. It’s kept in Drafts on the Import page.
+              </span>
+              <span className="row">
+                <button className="btn tiny" onClick={() => void bringBack()}>
+                  Bring “{replaced.project.project.title}” back
+                </button>
+                <button className="btn tiny ghost" onClick={() => setReplaced(null)}>
+                  Dismiss
+                </button>
+              </span>
+            </div>
+          )}
+          {project && !processed && tab !== 'import' && (
+            <div className="building" role="status" aria-live="polite">
+              <span className="spinner" aria-hidden />
+              {busy ? 'Reading your script…' : 'Building your story…'}
+            </div>
+          )}
           {processed && tab === 'review' && justImported && (
             <ImportSummary
               passages={processed.project.passages.length}
@@ -693,7 +805,10 @@ export function App() {
                 warning: processed.diagnostics.filter((d) => d.severity === 'warning').length,
                 review: processed.diagnostics.filter((d) => d.severity === 'review').length,
               }}
-              onDiagnostics={() => setShowDiag(true)}
+              onDiagnostics={() => {
+                setShowDiag(true);
+                setDiagOverlay(narrow());
+              }}
               onClose={() => setJustImported(false)}
             />
           )}
@@ -717,8 +832,8 @@ export function App() {
             />
           )}
           {processed && tab === 'ink' && <InkView processed={processed} onOpen={open} />}
-          {processed && tab === 'play' && <PlaytestView processed={processed} onOpen={open} dialogueOnly={dialogueOnly} onDialogueOnly={setDialogueOnly} showGated={showGated} onShowGated={setShowGated} />}
-          {processed && tab === 'export' && <ExportView processed={processed} stale={stale} onState={setExportState} project={project!} update={update} />}
+          {processed && tab === 'play' && <PlaytestView processed={processed} onOpen={open} dialogueOnly={dialogueOnly} onDialogueOnly={setDialogueOnly} showGated={showGated} onShowGated={setShowGated} onReview={() => setTab('review')} onApproveAll={() => update((d) => reviewAll(d, 'approved'))} />}
+          {processed && tab === 'export' && <ExportView processed={processed} stale={stale} onState={setExportState} project={project!} update={update} onReview={() => setTab('review')} />}
           </Suspense>
           {(tab === 'import' || tab === 'export') && <footer className="folio">— {TABS.find((t) => t.id === tab)!.numeral.toLowerCase()} —</footer>}
         </div>
@@ -726,10 +841,17 @@ export function App() {
           <DiagnosticsPanel
             diagnostics={processed?.diagnostics ?? []}
             project={project}
-            onJump={jump}
-            onClose={() => setShowDiag(false)}
+            onJump={(d) => {
+              setDiagOverlay(false);
+              jump(d);
+            }}
+            onClose={() => {
+              if (diagOverlay) setDiagOverlay(false);
+              else setShowDiag(false);
+            }}
             view={panelView}
             onView={setPanelView}
+            onApproveAll={() => update((d) => reviewAll(d, 'approved'))}
           />
         )}
       </div>

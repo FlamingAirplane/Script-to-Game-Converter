@@ -53,6 +53,8 @@ export function analyze(project: StoryProject): Analysis {
   const readVars = new Set<string>();
   const usedItems = new Set<string>();
   const givenItems = new Set<string>();
+  // Items only a suggestion still awaiting approval would give: what to approve, and where.
+  const pendingGivers = new Map<string, { label: string; entityId: string; passageId: string }>();
 
   const checkCondition = (c: Condition, entityId: string) => {
     for (const id of conditionItemIds(c)) {
@@ -93,6 +95,8 @@ export function analyze(project: StoryProject): Analysis {
       if (b.type !== 'effect') continue;
       const active = !b.review || isActive(b.review);
       checkEffect(b.effect, p.id, active);
+      if (b.review === 'pending' && b.effect.type === 'give_item' && !pendingGivers.has(b.effect.itemId))
+        pendingGivers.set(b.effect.itemId, { label: `the suggested effect in "${p.title}"`, entityId: p.id, passageId: p.id });
       if (b.review === 'pending')
         ds.push(diag('UNAPPROVED_GENERATED', 'review', 'story_validation', `A generated effect in "${p.title}" needs approval.`, { entityId: p.id, exportBlocked: false }));
     }
@@ -108,6 +112,9 @@ export function analyze(project: StoryProject): Analysis {
         ds.push(diag('INK_TARGET_MISSING', 'error', VSTAGE, `Choice destination "${c.target}" does not exist.`, { entityId: c.id, details: { target: c.target, passageId: p.id }, source: c.source, remediation: 'Point the choice at an existing passage or create the passage.' }));
       c.conditions.forEach((x) => checkCondition(x, c.id));
       c.effects.forEach((e) => checkEffect(e, c.id, !pending));
+      if (pending)
+        for (const e of c.effects)
+          if (e.type === 'give_item' && !pendingGivers.has(e.itemId)) pendingGivers.set(e.itemId, { label: `the suggested choice "${c.text}" in "${p.title}"`, entityId: c.id, passageId: p.id });
       if (c.target) edges.push({ id: c.id, from: p.id, to: c.target, label: c.text, kind: 'choice', conditional: c.conditions.length > 0, pending });
     }
     if (p.divert) {
@@ -189,7 +196,13 @@ export function analyze(project: StoryProject): Analysis {
 
   for (const id of usedItems)
     if (items.has(id) && !givenItems.has(id) && passages.some((p) => p.choices.some((c) => isActive(c.review) && c.conditions.some((x) => conditionItemIds(x).has(id)))))
-      ds.push(diag('ITEM_NEVER_ACQUIRED', 'warning', STAGE, `Item "${id}" gates a choice but nothing ever gives it — that choice can never be taken.`, { entityId: id, remediation: `Add "@give ${id}" somewhere reachable.`, exportBlocked: false }));
+    {
+      const giver = pendingGivers.get(id);
+      if (giver)
+        ds.push(diag('ITEM_GIVEN_ONLY_BY_SUGGESTION', 'review', STAGE, `Only ${giver.label} gives "${id}", and it's still waiting for approval. Until you approve it, the choice that needs "${id}" can't be taken.`, { entityId: giver.entityId, details: { passageId: giver.passageId, itemId: id }, remediation: 'Approve it in the Review tab.', exportBlocked: false }));
+      else
+        ds.push(diag('ITEM_NEVER_ACQUIRED', 'warning', STAGE, `Item "${id}" gates a choice but nothing ever gives it — that choice can never be taken.`, { entityId: id, remediation: `Give the player "${id}" somewhere reachable: use "+ Effect" in Review to give it (or write "@give ${id}" in the script).`, exportBlocked: false }));
+    }
   for (const v of project.variables)
     if (!readVars.has(v.id) && !project.inkPassthrough)
       ds.push(diag('UNUSED_VARIABLE', 'info', STAGE, `Variable "${v.id}" is declared but never read.`, { entityId: v.id, exportBlocked: false }));

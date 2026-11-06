@@ -190,7 +190,7 @@ function MapKey({ hiddenGated }: { hiddenGated: number }) {
       <li>{line('edge')} a choice</li>
       <li>
         {line('cond', 'cond')} a choice that needs an item or value
-        {hiddenGated > 0 && <span className="muted"> ({hiddenGated} hidden; Locked to show)</span>}
+        {hiddenGated > 0 && <span className="muted"> ({hiddenGated} locked route{hiddenGated === 1 ? '' : 's'} hidden; press “Locked routes” to see them)</span>}
       </li>
       <li>{line('fallback')} continues on its own</li>
       <li>{line('pending', 'pending')} suggested, waiting for your OK</li>
@@ -299,12 +299,16 @@ export function GraphView({
   // Whether the reader has panned or zoomed since the last fit; if not, the map refits on resize.
   const moved = useRef(false);
   const fit = () => {
-    const r = svg.current?.getBoundingClientRect();
-    if (!r) return;
+    const el = svg.current;
+    if (!el) return;
+    // The frame's own size: unlike getBoundingClientRect, not shrunk while the page-turn animation runs.
+    const box = el.getBoundingClientRect();
+    const r = { width: el.clientWidth || box.width, height: el.clientHeight || box.height };
+    if (!r.width || !r.height) return;
     moved.current = false;
     setSize({ w: r.width, h: r.height });
     const pad = Math.min(60, Math.max(14, r.width * 0.05)); // smaller margins on small screens
-    const k = Math.min(1.2, Math.max(0.25, Math.min((r.width - 2 * pad) / bounds.width, (r.height - 2 * pad) / bounds.height)));
+    const k = Math.min(1.2, Math.max(0.45, Math.min((r.width - 2 * pad) / bounds.width, (r.height - 2 * pad) / bounds.height)));
     setView({ x: (r.width - bounds.width * k) / 2 - bounds.minX * k, y: (r.height - bounds.height * k) / 2 - bounds.minY * k, k });
   };
   const centerOn = (id: string) => {
@@ -321,6 +325,11 @@ export function GraphView({
   // minimap's view box stay right. Deferred a frame to avoid resize-observer loops in WebKit.
   const fitRef = useRef(fit);
   fitRef.current = fit;
+  // Fit again once the chapter has finished opening, so the whole map shows without pressing Fit.
+  useEffect(() => {
+    const t = [80, 450].map((ms) => setTimeout(() => !moved.current && fitRef.current(), ms));
+    return () => t.forEach(clearTimeout);
+  }, []);
   useEffect(() => {
     const el = svg.current;
     if (!el || typeof ResizeObserver === 'undefined') return;
@@ -462,9 +471,9 @@ export function GraphView({
           className={`btn tiny ${showGated ? 'ok' : ''}`}
           aria-pressed={showGated}
           onClick={() => onShowGated(!showGated)}
-          title="Show or hide the routes that need an item or value (G)"
+          title="Locked routes are choices that need an item or a value first (like a key). Show or hide them (G)"
         >
-          🔒 Locked
+          🔒 Locked routes
         </button>
         <button className="btn tiny" aria-pressed={showKey} onClick={toggleKey} title="Show or hide what the marks on the map mean">
           Key

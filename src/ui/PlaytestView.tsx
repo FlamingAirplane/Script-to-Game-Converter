@@ -1,4 +1,5 @@
 // Engine-only runtime: the compiler isn't needed to play an already compiled story.
+import { pendingSuggestions } from '../core/adapt';
 import { Story } from 'inkjs';
 import { Fragment, useCallback, useEffect, useRef, useState } from 'react';
 import { fnv1a } from '../core/hash';
@@ -99,6 +100,8 @@ export function PlaytestView({
   onDialogueOnly,
   showGated,
   onShowGated,
+  onReview,
+  onApproveAll,
 }: {
   processed: ProcessedStory;
   onOpen: (id: string) => void;
@@ -106,6 +109,8 @@ export function PlaytestView({
   onDialogueOnly: (on: boolean) => void;
   showGated: boolean;
   onShowGated: (on: boolean) => void;
+  onReview?: () => void;
+  onApproveAll?: () => void;
 }) {
   const json = processed.compile.json;
   const version = fnv1a(processed.generated.ink);
@@ -330,10 +335,31 @@ export function PlaytestView({
   // The drop cap opens the first real paragraph of prose, not a short line like "FADE IN:".
   const dropCapAt = lines.findIndex((l) => l.kind === 'text' && !l.speaker && !l.tags.includes('transition') && l.text.length >= 40);
   const smoke = processed.smoke;
+  const pending = pendingSuggestions(processed.project);
 
   return (
     <div className="view playtest-view">
       <main className="stage">
+        {pending > 0 && (
+          <div className="pending-banner" role="status">
+            <span>
+              <strong>{pending}</strong> suggestion{pending > 1 ? 's are' : ' is'} waiting for your OK and {pending > 1 ? 'aren’t' : 'isn’t'} in this playthrough, so
+              some choices may be missing.
+            </span>
+            <span className="row">
+              {onReview && (
+                <button className="btn tiny" onClick={onReview}>
+                  Review them
+                </button>
+              )}
+              {onApproveAll && (
+                <button className="btn tiny ok" onClick={onApproveAll} title="Approves every suggestion (you can undo this)">
+                  Approve all and play
+                </button>
+              )}
+            </span>
+          </div>
+        )}
         <div className="stage-head">
           <h2>{processed.project.project.title}</h2>
           <div className="row">

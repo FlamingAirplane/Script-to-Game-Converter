@@ -332,17 +332,17 @@ export function ImportView({
               <label className="muted small">…or paste text as</label>
               <input className="input mono small" value={pasteName} onChange={(e) => setPasteName(e.target.value)} aria-label="File name for pasted text" />
             </div>
-            <textarea className="textarea mono" rows={9} aria-label="Script text" placeholder={'INT. ARCHIVE - NIGHT\n\nMIRA\nThe archive is locked.'} value={paste} onChange={(e) => setPaste(e.target.value)} />
+            <textarea className="textarea mono" rows={9} aria-label="Script text" placeholder={'For example:\n\nINT. ARCHIVE - NIGHT\n\nMIRA\nThe archive is locked.'} value={paste} onChange={(e) => setPaste(e.target.value)} />
           </div>
         </section>
 
         <section className="card">
-          <h2>2 · Conversion mode</h2>
-          <div className="modes">
+          <h2 id="mode-heading">2 · Conversion mode</h2>
+          <div className="modes" role="radiogroup" aria-labelledby="mode-heading">
             {MODES.map((m) => (
               <label key={m.id} className={`mode ${mode === m.id ? 'selected' : ''}`}>
-                <input type="radio" name="mode" checked={mode === m.id} onChange={() => setMode(m.id)} />
-                <span>
+                <input type="radio" name="mode" value={m.id} aria-label={m.recommended ? `${m.name} (recommended)` : m.name} aria-describedby={`mode-desc-${m.id}`} checked={mode === m.id} onChange={() => setMode(m.id)} />
+                <span id={`mode-desc-${m.id}`}>
                   <strong>
                     {m.name} {m.recommended && <span className="badge badge-ok">recommended</span>}
                   </strong>
@@ -354,11 +354,16 @@ export function ImportView({
           </div>
           <label className="field">
             <span className="muted small">Story title (optional — read from the title page if present)</span>
-            <input className="input" value={title} onChange={(e) => setTitle(e.target.value)} placeholder="The Locked Archive" />
+            <input className="input" value={title} onChange={(e) => setTitle(e.target.value)} placeholder="e.g. The Locked Archive" />
           </label>
-          <button className="btn primary big" disabled={!inputs.length || busy} onClick={() => onConvert(inputs, mode, title || undefined)}>
+          <button className="btn primary big" disabled={!inputs.length || busy} aria-describedby={!inputs.length ? 'convert-hint' : undefined} onClick={() => onConvert(inputs, mode, title || undefined)}>
             {busy ? 'Converting…' : `Convert ${inputs.length ? `${inputs.length} file${inputs.length > 1 ? 's' : ''}` : ''}`}
           </button>
+          {!inputs.length && !busy && (
+            <p className="muted small convert-hint" id="convert-hint">
+              Add a file or paste a script in step 1 to convert it, or try a sample above.
+            </p>
+          )}
         </section>
       </div>
 

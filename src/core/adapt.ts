@@ -81,6 +81,16 @@ export function proposeAdaptations(project: StoryProject): void {
 }
 
 /** Approve or reject every pending generated element at once. */
+/** How many suggestions (choices and effects) are still waiting for approval. */
+export function pendingSuggestions(project: StoryProject): number {
+  let n = 0;
+  for (const p of project.passages) {
+    n += p.choices.filter((c) => c.review === 'pending').length;
+    n += p.content.filter((b) => b.type === 'effect' && b.review === 'pending').length;
+  }
+  return n;
+}
+
 export function reviewAll(project: StoryProject, status: 'approved' | 'rejected'): void {
   for (const p of project.passages) {
     for (const c of p.choices) if (c.review === 'pending') c.review = status;
