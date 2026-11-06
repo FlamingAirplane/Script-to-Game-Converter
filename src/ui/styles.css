@@ -1210,3 +1210,12 @@ section.drafts > h2 { margin-top: 26px; }
   .app.diag-overlay .diagnostics { display: flex; position: fixed; z-index: 65; top: 0; right: 0; bottom: 0; width: min(92vw, 420px); border-left: 1px solid var(--rule); box-shadow: -8px 0 24px color-mix(in srgb, var(--shadow) 35%, transparent); }
   .app.diag-overlay .diag-backdrop { display: block; position: fixed; inset: 0; z-index: 64; background: color-mix(in srgb, var(--shadow) 40%, transparent); }
 }
+
+/* Landing page: what comes out of an export. */
+.exports-overview { margin: 0 0 26px; }
+.exports-overview h2 { font-variant: small-caps; text-transform: lowercase; letter-spacing: 0.08em; color: var(--rubric); font-size: var(--card-heading-size); margin-bottom: 8px; }
+.exports-list { list-style: none; padding: 0; margin: 0 0 8px; display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); gap: 12px; }
+.exports-list li { display: flex; flex-direction: column; gap: 4px; padding: 12px 14px; border: 1px solid var(--rule); border-radius: var(--radius-card); background: var(--paper-hi); }
+
+/* Sounds: the state is spelled out in words; the note is struck through when off. */
+.sound-toggle.off .sound-icon { text-decoration: line-through; opacity: 0.7; }
