@@ -1,5 +1,6 @@
 import { describeCondition } from '../gating';
 import { isActive, type StoryProject, type UnityTheme } from '../isr';
+import { normaliseUnityTheme } from './unityTheme';
 
 // Translations for the Unity package: every piece of text a player can see (lines, choices, speaker names,
 // scene headings, stage directions, what a locked choice needs, and the story panel's own words), each with
@@ -56,8 +57,8 @@ export function interfaceWords(theme?: UnityTheme): string[] {
   ];
 }
 
-/** Every piece of text a player can see, once each, in story order. */
-export function translationEntries(project: StoryProject, theme?: UnityTheme): TranslationEntry[] {
+/** Every piece of text a player can see, once each, in story order. The panel's words come from the story's Unity look. */
+export function translationEntries(project: StoryProject, theme: UnityTheme = normaliseUnityTheme(project.presentation?.unity)): TranslationEntry[] {
   const out: TranslationEntry[] = [];
   const seen = new Set<string>();
   const add = (kind: TranslationKind, passage: string, text: string | undefined) => {
@@ -163,7 +164,7 @@ export function importTranslations(project: StoryProject, csv: string): Translat
   if (keyCol < 0 || sourceCol < 0) throw new Error('This isn’t a translation sheet: its first row needs “key” and “source” columns.');
   const langCols = header.map((h, i) => ({ code: h, i })).filter((c) => c.i > sourceCol && /^[A-Za-z]{2,3}(-[A-Za-z0-9]{2,8})*$/.test(c.code));
   if (!langCols.length) throw new Error('The sheet has no language columns after “source” (for example “fr” or “de”).');
-  const known = new Set(translationEntries(project, project.presentation?.unity).map((e) => e.key));
+  const known = new Set(translationEntries(project).map((e) => e.key));
   const t = (project.translations ??= { languages: [], strings: {} });
   for (const c of langCols) if (!t.languages.includes(c.code)) t.languages.push(c.code);
   let stale = 0;
@@ -184,7 +185,7 @@ export function importTranslations(project: StoryProject, csv: string): Translat
 
 /** How much of the story each language translates. */
 export function translationCoverage(project: StoryProject): { languages: { code: string; translated: number }[]; total: number } {
-  const keys = translationEntries(project, project.presentation?.unity).map((e) => e.key);
+  const keys = translationEntries(project).map((e) => e.key);
   const t = project.translations;
   return { total: keys.length, languages: (t?.languages ?? []).map((code) => ({ code, translated: keys.filter((k) => t!.strings[k]?.[code]).length })) };
 }

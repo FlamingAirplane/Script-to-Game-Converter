@@ -53,7 +53,7 @@ export function buildPlayableHtml(story: ProcessedStory, inkRuntimeJs: string, a
   const cueFiles = Object.fromEntries([...cueSounds(story.project)].map(([tag, ref]) => [tag, audioFileName(ref)]).filter(([, f]) => clips[f]));
   // Translations brought in on the Export page, only for text the story has: language → key → text.
   const t = story.project.translations;
-  const keys = new Set(translationEntries(story.project, story.project.presentation?.unity).map((e) => e.key));
+  const keys = new Set(translationEntries(story.project).map((e) => e.key));
   const translations = t
     ? { languages: t.languages, strings: Object.fromEntries(Object.entries(t.strings).filter(([k]) => keys.has(k))) }
     : { languages: [] as string[], strings: {} };
