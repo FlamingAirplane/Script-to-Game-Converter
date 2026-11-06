@@ -2907,7 +2907,8 @@ namespace __NAMESPACE__.EditorTools
                 var shown = 0;
                 for (int step = 0; step < 300 && c.Story != null; step++)
                 {
-                    foreach (var choice in c.Story.currentChoices)
+                    // (At an exit to the game the panel steps aside: its lone choice is never shown.)
+                    if (!c.IsAtExit) foreach (var choice in c.Story.currentChoices)
                     {
                         var t = NarrativeController.ChoiceText(choice);
                         if (!t.StartsWith("[xx] ")) missing.Add("choice \\"" + choice.text + "\\"");

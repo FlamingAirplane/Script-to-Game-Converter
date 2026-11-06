@@ -45,6 +45,16 @@ export function storyRoutes(json: string, project: StoryProject, opts: RouteOpti
   const ids = project.passages.map((p) => p.id);
   const known = new Set(ids);
   const title = new Map(project.passages.map((p) => [p.id, p.title || p.id]));
+  // Which ending a run reached: the ending passage visited in its last step (as the automated playthroughs decide).
+  const endingIds = project.passages.filter((p) => p.isEnding || p.divert === 'END' || p.choices.some((c) => c.target === 'END')).map((p) => p.id);
+  const visits = (s: Story) =>
+    endingIds.map((id) => {
+      try {
+        return s.state.VisitCountAtPathString(id) ?? 0;
+      } catch {
+        return 0;
+      }
+    });
   const story = new Story(json);
   const taken = new Map<string, number>();
   const endings = new Set<string>();
@@ -57,10 +67,12 @@ export function storyRoutes(json: string, project: StoryProject, opts: RouteOpti
     const choices: string[] = [];
     let lastLine = '';
     let lastKnot = '';
+    let endedIn = '';
     let finished = false;
     let realChoices = 0;
     try {
       for (let steps = 0; steps < maxSteps; steps++) {
+        const before = visits(story);
         while (story.canContinue) {
           const knot = (story.state.currentPathString ?? '').split('.')[0];
           if (known.has(knot)) lastKnot = knot;
@@ -69,6 +81,9 @@ export function storyRoutes(json: string, project: StoryProject, opts: RouteOpti
         }
         const offered = story.currentChoices;
         if (offered.length === 0) {
+          const after = visits(story);
+          const reached = endingIds.filter((_, i) => after[i] > before[i]);
+          endedIn = reached[reached.length - 1] ?? '';
           finished = true;
           break;
         }
@@ -104,7 +119,7 @@ export function storyRoutes(json: string, project: StoryProject, opts: RouteOpti
       continue;
     }
     seen.add(signature);
-    const ending = lastKnot || null;
+    const ending = endedIn || lastKnot || null;
     const newEnding = !!ending && !endings.has(ending);
     const newPassages = passages.filter((p) => !covered.has(p)).length;
     if (newEnding || newPassages > 0) {
