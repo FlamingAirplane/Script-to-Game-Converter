@@ -298,19 +298,27 @@ function ThemePreview({ theme: t, project }: { theme: UnityTheme; project: Story
             <span className="unity-btn" style={button}>
               {t.showChoiceNumbers ? '1.  ' : ''}Climb the stairs
             </span>
+            {t.showLockedChoices && (
+              <span className="unity-btn locked" style={{ ...button, background: alpha(t.buttonColour, t.buttonOpacity * 0.4), color: t.muted, fontStyle: 'italic' }}>
+                Use the brass key{'   ·   '}
+                {t.lockedLabel ? `${t.lockedLabel} ` : ''}Brass Key
+              </span>
+            )}
           </div>
-          {t.showToolbar && (t.showRestart || t.showSave || t.showLoad || t.showStatus) && (
+          {t.showToolbar && (t.showRestart || t.showSave || t.showLoad || t.showStatus || t.showSettings) && (
             <div className="unity-toolbar" style={{ color: t.choiceTextColour }}>
               {t.showRestart && <span style={{ background: alpha(t.buttonColour, Math.max(0.12, t.buttonOpacity)) }}>{t.restartLabel}</span>}
               {t.showSave && <span style={{ background: alpha(t.buttonColour, Math.max(0.12, t.buttonOpacity)) }}>{t.saveLabel}</span>}
               {t.showLoad && <span style={{ background: alpha(t.buttonColour, Math.max(0.12, t.buttonOpacity)) }}>{t.loadLabel}</span>}
+              {t.showSettings && <span style={{ background: alpha(t.buttonColour, Math.max(0.12, t.buttonOpacity)) }}>{t.settingsLabel}</span>}
               {t.showStatus && <em style={{ color: t.muted }}>Saved.</em>}
             </div>
           )}
         </div>
       </div>
       <figcaption className="muted small">
-        A sketch, not a render: both buttons are shown together here; in the game the Continue button appears on its own at each break.
+        A sketch, not a render: the buttons are shown together here; in the game the Continue button appears on its own at each break, and a locked
+        choice only while the player lacks what it needs.
         {portraitOn && !portraitUrl && ' The figure stands in for a portrait: add one in Review → Story settings → Characters.'}
       </figcaption>
     </figure>

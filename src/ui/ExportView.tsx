@@ -177,13 +177,15 @@ export function ExportView({ processed, stale, onState, project, update, onRevie
             <input className="input mono" value={opts.integrationRef} onChange={(e) => setOpts({ ...opts, integrationRef: e.target.value.trim() })} />
           </label>
           {engine === 'unity' && (
-            <label className="check">
-              <input type="checkbox" checked={opts.unityAddressables} onChange={(e) => setOpts({ ...opts, unityAddressables: e.target.checked })} />
-              <span>
+            <div className="field">
+              <label className="check">
+                <input type="checkbox" checked={opts.unityAddressables} onChange={(e) => setOpts({ ...opts, unityAddressables: e.target.checked })} aria-describedby="addressables-help" />
                 Load voice clips and pictures on demand (Addressables)
-                <span className="muted small"> · for long or heavily voiced stories: they aren’t all built into the game. The package sets up the Addressables group itself.</span>
+              </label>
+              <span className="muted small" id="addressables-help">
+                For long or heavily voiced stories: they aren’t all built into the game. The package sets up the Addressables group itself.
               </span>
-            </label>
+            </div>
           )}
           {engine === 'unity' && (
             <label className="field">

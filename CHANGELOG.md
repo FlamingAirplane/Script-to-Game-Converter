@@ -16,6 +16,15 @@
 - **Word and PDF originals** are kept with the story.
 - **Unity 6.3 and TextMeshPro** support in the Unity package.
 - **Exits to gameplay:** a story can hand control to the game and resume afterwards.
+- **Cues:** add music, sounds, ambience or a camera shake in Review (+ Cue); the Unity package plays them without code.
+- **Unity package additions:**
+  - **Locked choices:** shown greyed out with what they need.
+  - **A Settings menu for players:** text size, typing speed, auto-advance, high contrast, voice volume and language.
+  - **Saves:** save slots with an autosave.
+  - **Story Debugger:** an editor window.
+  - **Playthrough tests:** for the Test Runner, or run headless.
+  - **Loading on demand:** voice clips and pictures can load with Addressables.
+  - **Translations:** a translation sheet (also from the Export page), with Unity Localization tables built from it.
 
 ## 0.3.0 — 2026-11-03
 
