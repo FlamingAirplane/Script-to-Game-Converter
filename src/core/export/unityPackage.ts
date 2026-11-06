@@ -173,6 +173,22 @@ export function samplesAsmdef(id: UnityPackageId) {
   };
 }
 
+/** The package's tests (the story's playthrough routes), for the Test Runner. */
+export function testsAsmdef(id: UnityPackageId) {
+  return {
+    ...runtimeAsmdef(id),
+    name: `${id.namespace}.Tests`,
+    rootNamespace: `${id.namespace}.Tests`,
+    references: [id.namespace, `${id.namespace}.Editor`, 'UnityEngine.TestRunner', 'UnityEditor.TestRunner'],
+    includePlatforms: ['Editor'],
+    overrideReferences: true,
+    precompiledReferences: ['nunit.framework.dll'],
+    autoReferenced: false,
+    defineConstraints: ['UNITY_INCLUDE_TESTS', 'NARRATIVE_BRIDGE_INK'],
+    versionDefines: [INK_DEFINES[0]],
+  };
+}
+
 /** The setup assembly has no Ink references or constraints, so it can offer to install Ink. */
 export function setupAsmdef(id: UnityPackageId) {
   return { ...runtimeAsmdef(id), name: `${id.namespace}.Setup`, rootNamespace: `${id.namespace}.Setup`, references: [], includePlatforms: ['Editor'], defineConstraints: [], versionDefines: [INK_DEFINES[0]] };
