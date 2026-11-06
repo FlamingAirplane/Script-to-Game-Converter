@@ -2,7 +2,8 @@ import type { ProcessedStory } from '../pipeline';
 import { audioFileName, bytesToBase64, referencedAudio, type AudioAssets } from '../audio';
 import { imageFileName, portraitFiles, referencedImages } from '../images';
 import { log } from '../log';
-import { EXIT_PREFIX } from '../isr';
+import { EXIT_PREFIX, RESERVED_TAGS } from '../isr';
+import { cueSounds } from '../cues';
 import { assertExportable, storyVersion } from './common';
 
 // "Playable story" export: one self-contained HTML file (Ink runtime + compiled story + a small
@@ -45,14 +46,26 @@ export function buildPlayableHtml(story: ProcessedStory, inkRuntimeJs: string, a
     if (a) pictures[imageFileName(ref)] = { src: `data:${a.mime};base64,${bytesToBase64(a.bytes)}`, alt: ref.alt ?? '' };
   }
   const voices = Object.fromEntries(story.project.characters.filter((c) => c.voice).map((c) => [c.id, c.voice]));
+  // The sounds writers attached to cues: cue tag (music:calm) → clip file, for the clips that made it in.
+  const cueFiles = Object.fromEntries([...cueSounds(story.project)].map(([tag, ref]) => [tag, audioFileName(ref)]).filter(([, f]) => clips[f]));
+  const hasVoiceClips = story.project.passages.some((p) => p.content.some((b) => b.type === 'dialogue' && b.audio && clips[audioFileName(b.audio)]));
   const meta = jsonSafe(
-    JSON.stringify({ title, author: author ?? '', saveKey: `narrative-bridge.play.${id}`, version: storyVersion(story), voices, hasClips: Object.keys(clips).length > 0 }),
+    JSON.stringify({
+      title,
+      author: author ?? '',
+      saveKey: `narrative-bridge.play.${id}`,
+      version: storyVersion(story),
+      voices,
+      hasClips: hasVoiceClips,
+      cueSounds: cueFiles,
+      storyTags: [...RESERVED_TAGS],
+    }),
   );
   const clipJson = jsonSafe(JSON.stringify(clips));
   const pictureJson = jsonSafe(JSON.stringify(pictures));
   // Character portraits: speaker id (the #speaker tag) → picture file, for characters that have one.
   const portraitJson = jsonSafe(JSON.stringify(Object.fromEntries(Object.entries(portraitFiles(story.project)).filter(([, f]) => pictures[f]))));
-  log('export').info('Built playable story', { clips: Object.keys(clips).length, pictures: Object.keys(pictures).length, voices: Object.keys(voices).length, storyBytes: story.compile.json!.length });
+  log('export').info('Built playable story', { cueSounds: Object.keys(cueFiles).length, clips: Object.keys(clips).length, pictures: Object.keys(pictures).length, voices: Object.keys(voices).length, storyBytes: story.compile.json!.length });
   return `<!doctype html>
 <html lang="en">
 <head>
@@ -223,6 +236,71 @@ const PLAYER_JS = `
     if (!playing) nextVoice();
   }
 
+  // ---- Cue sounds: music and ambience loop (one track each, faded), any other cue with a sound plays once ----
+  function cueKind(name) {
+    var n = name.toLowerCase();
+    if (n.indexOf('stop_music') >= 0 || n === 'silence') return 'stop_music';
+    if (n.indexOf('stop_ambience') >= 0) return 'stop_ambience';
+    if (n.indexOf('music') >= 0 || n === 'song' || n === 'track') return 'music';
+    if (n.indexOf('ambien') >= 0 || n === 'weather') return 'ambience';
+    if (n.indexOf('shake') >= 0 || n === 'rumble') return 'shake';
+    return 'sound';
+  }
+  function cuesIn(tags) {
+    var out = [];
+    tags.forEach(function (raw) {
+      var t = raw.trim(), colon = t.indexOf(':'), name = (colon < 0 ? t : t.slice(0, colon)).trim();
+      if (name && meta.storyTags.indexOf(name) < 0) out.push({ name: name, value: colon < 0 ? '' : t.slice(colon + 1).trim(), tag: t });
+    });
+    return out;
+  }
+  var tracks = { music: null, ambience: null };
+  function fadeTo(a, to, done) {
+    var from = a.volume, start = Date.now();
+    var timer = setInterval(function () {
+      var t = Math.min(1, (Date.now() - start) / 700);
+      a.volume = Math.max(0, Math.min(1, from + (to - from) * t));
+      if (t >= 1) { clearInterval(timer); if (done) done(); }
+    }, 30);
+  }
+  function setTrack(which, tag) {
+    var cur = tracks[which];
+    if (cur && cur.tag === tag) { if (cur.audio.paused) cur.audio.play().catch(function () {}); return; }
+    if (cur) { var old = cur.audio; fadeTo(old, 0, function () { old.pause(); }); }
+    tracks[which] = null;
+    if (!tag || !meta.cueSounds[tag]) return;
+    var a = new Audio(clips[meta.cueSounds[tag]]);
+    a.loop = true;
+    a.volume = 0;
+    tracks[which] = { tag: tag, audio: a };
+    a.play().then(function () { fadeTo(a, 0.7); }).catch(function () {}); // tried again at the next click
+  }
+  // The music and ambience follow the story: where they stand after every cue read so far (after an undo too).
+  function syncBackground() {
+    var music = null, ambience = null;
+    if (soundsOn) lines.forEach(function (l) {
+      if (!l.cue) return;
+      cuesIn([l.cue]).forEach(function (c) {
+        var k = cueKind(c.name);
+        if (k === 'stop_music' || (k === 'music' && !c.value)) music = null;
+        else if (k === 'stop_ambience' || (k === 'ambience' && !c.value)) ambience = null;
+        else if (k === 'music' && meta.cueSounds[c.tag]) music = c.tag;
+        else if (k === 'ambience' && meta.cueSounds[c.tag]) ambience = c.tag;
+      });
+    });
+    setTrack('music', music);
+    setTrack('ambience', ambience);
+  }
+  function playSounds(newLines) {
+    if (!soundsOn) return;
+    newLines.forEach(function (l) {
+      if (!l.cue) return;
+      cuesIn([l.cue]).forEach(function (c) {
+        if (cueKind(c.name) === 'sound' && meta.cueSounds[c.tag]) new Audio(clips[meta.cueSounds[c.tag]]).play().catch(function () {});
+      });
+    });
+  }
+
   // ---- Book sounds (synthesised; no audio files): page turn on a choice, a bell at the end ----
   var soundsOn = true, actx = null;
   try { soundsOn = localStorage.getItem('narrative-bridge.play.sounds') !== 'off'; } catch (e) {}
@@ -253,8 +331,10 @@ const PLAYER_JS = `
     var from = lines.length;
     while (story.canContinue) {
       var raw = (story.Continue() || '').trim();
-      if (!raw) continue;
       var tags = story.currentTags || [];
+      // Cues for the game (#music:calm) come before the line they're on, or alone at the end of a passage.
+      cuesIn(tags).forEach(function (c) { lines.push({ cue: c.tag }); });
+      if (!raw) continue;
       var line = { text: raw, scene: tag(tags, 'scene'), transition: tags.indexOf('transition') >= 0, audio: tag(tags, 'audio'), image: tag(tags, 'image'), who: tag(tags, 'speaker') };
       if (tag(tags, 'speaker') !== null) {
         var i = raw.indexOf(': ');
@@ -264,6 +344,7 @@ const PLAYER_JS = `
       lines.push(line);
     }
     speak(lines.slice(from));
+    if (!replaying) playSounds(lines.slice(from));
   }
 
   function el(tagName, cls, text) {
@@ -276,8 +357,9 @@ const PLAYER_JS = `
   function render() {
     var box = $('text');
     box.textContent = '';
+    syncBackground();
     lines.forEach(function (l) {
-      if (l.pause) return; // a Continue break: the page simply goes on
+      if (l.pause || l.cue) return; // a Continue break: the page simply goes on; a cue plays, it isn't read
       if (l.chosen && l.chosen.indexOf('${EXIT_PREFIX}') === 0) { box.appendChild(el('p', 'chosen game-played', '⇥ the game played here ⇤')); return; }
       if (l.chosen) { box.appendChild(el('p', 'chosen', l.chosen)); return; }
       if (l.scene) box.appendChild(el('span', 'scene', l.scene));
@@ -453,6 +535,7 @@ const PLAYER_JS = `
     soundsOn = !soundsOn;
     try { localStorage.setItem('narrative-bridge.play.sounds', soundsOn ? 'on' : 'off'); } catch (e) {}
     soundsLabel();
+    syncBackground();
   };
   $('voice').onclick = function () {
     voiceOn = !voiceOn;

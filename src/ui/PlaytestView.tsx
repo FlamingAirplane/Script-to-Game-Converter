@@ -1,7 +1,7 @@
 // Engine-only runtime: the compiler isn't needed to play an already compiled story.
 import { pendingSuggestions } from '../core/adapt';
 import { Story } from 'inkjs';
-import { Fragment, useCallback, useEffect, useRef, useState } from 'react';
+import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { fnv1a } from '../core/hash';
 import { lockedChoices } from '../core/gating';
 import { portraitFiles, referencedImages } from '../core/images';
@@ -13,14 +13,18 @@ import { Badge, Empty } from './common';
 import { sfx } from './sfx';
 import { plainKey } from './Shortcuts';
 import { VoiceQueue, type VoiceItem } from './voice';
+import { cueSounds, cuesIn, cueWantsSound, type ParsedCue } from '../core/cues';
+import { CuePlayer } from './cueAudio';
 
 const VOICES_KEY = 'narrative-bridge.voices';
+const CUE_SOUNDS_KEY = 'narrative-bridge.cue-sounds';
 
 interface Line {
   text: string;
   speaker?: string;
   tags: string[];
-  kind: 'text' | 'choice' | 'system';
+  /** cue: a cue for the game (#music:calm), shown as a small marker; its text is the tag. */
+  kind: 'text' | 'choice' | 'system' | 'cue';
   /** A Continue break was taken here (a choice line that isn't shown). */
   pause?: boolean;
 }
@@ -43,13 +47,18 @@ interface Snapshot {
   segment: Segment | null;
 }
 
+/** The cues among these lines, in order. */
+const cuesOf = (lines: Line[]): ParsedCue[] => lines.filter((l) => l.kind === 'cue').flatMap((l) => cuesIn(l.tags));
+
 /** Reads on until the next choice (or the end), appending the new lines to `prefix`. */
 function readOn(s: Story, prefix: Line[]): Line[] {
   const out = [...prefix];
   while (s.canContinue) {
     const raw = (s.Continue() ?? '').trim();
-    if (!raw) continue;
     const tags = s.currentTags ?? [];
+    // Cues come before the line they're on (or alone, at the end of a passage).
+    for (const c of cuesIn(tags)) out.push({ text: c.tag, tags: [c.tag], kind: 'cue' });
+    if (!raw) continue;
     const speakerTag = tags.find((t) => t.startsWith('speaker:'));
     if (speakerTag) {
       const i = raw.indexOf(': ');
@@ -170,6 +179,31 @@ export function PlaytestView({
     voiceQueue.current.enqueue(items);
   };
   useEffect(() => () => voiceQueue.current.stop(), []);
+
+  // The sounds writers attached to cues: music and ambience follow the story (after an undo too), sounds play once.
+  const sounds = useMemo(() => cueSounds(processed.project), [processed.project]);
+  const soundsRef = useRef(sounds);
+  soundsRef.current = sounds;
+  const cuePlayer = useRef(new CuePlayer(() => soundsRef.current));
+  const [cueSoundsOn, setCueSoundsOn] = useState(() => {
+    try {
+      return localStorage.getItem(CUE_SOUNDS_KEY) !== 'off';
+    } catch {
+      return true;
+    }
+  });
+  const cueSoundsRef = useRef(cueSoundsOn);
+  cueSoundsRef.current = cueSoundsOn;
+  const toggleCueSounds = () => {
+    const on = !cueSoundsOn;
+    setCueSoundsOn(on);
+    try {
+      localStorage.setItem(CUE_SOUNDS_KEY, on ? 'on' : 'off');
+    } catch {
+      /* preference not saved */
+    }
+  };
+  useEffect(() => () => cuePlayer.current.stop(), []);
   const segment = useRef<Segment | null>(null);
 
   const varNames = [...processed.project.items.map((i) => itemVar(i.id)), ...processed.project.variables.map((v) => v.id)].filter((n) =>
@@ -193,6 +227,7 @@ export function PlaytestView({
       const out = readOn(s, prefix);
       setLines(out);
       speakRef.current(out.slice(prefix.length));
+      if (cueSoundsRef.current) cuePlayer.current.play(cuesOf(out.slice(prefix.length)));
       setChoices(s.currentChoices.map((c) => ({ text: c.text, index: c.index })));
       setWhere(knotOf(s));
       readVars();
@@ -229,6 +264,10 @@ export function PlaytestView({
   useEffect(() => {
     bottom.current?.scrollIntoView({ behavior: 'smooth', block: 'end' });
   }, [lines.length]);
+  useEffect(() => {
+    if (cueSoundsOn && sounds.size) cuePlayer.current.sync(cuesOf(lines));
+    else cuePlayer.current.stop();
+  }, [lines, cueSoundsOn, sounds]);
   // A small bell when the story reaches an ending.
   const isEnd = choices.length === 0 && lines.length > 0;
   useEffect(() => {
@@ -371,6 +410,16 @@ export function PlaytestView({
             >
               {voicesOn ? '🔊 Voices on' : '🔈 Voices off'}
             </button>
+            {sounds.size > 0 && (
+              <button
+                className={`btn tiny ${cueSoundsOn ? 'ok' : ''}`}
+                aria-pressed={cueSoundsOn}
+                title="Play the music and sounds attached to the story's cues"
+                onClick={toggleCueSounds}
+              >
+                {cueSoundsOn ? '♪ Music & sounds on' : '♪ Music & sounds off'}
+              </button>
+            )}
             <button className={`btn tiny ${dialogueOnly ? 'ok' : ''}`} aria-pressed={dialogueOnly} title="Show only dialogue (D)" onClick={() => onDialogueOnly(!dialogueOnly)}>
               {dialogueOnly ? 'dialogue only' : 'all text'}
             </button>
@@ -392,8 +441,14 @@ export function PlaytestView({
         </div>
         <div className="transcript" tabIndex={0} aria-label="Story text">
           {lines.map((l, i) =>
-            dialogueOnly && l.kind === 'text' && !l.speaker ? null :
+            dialogueOnly && ((l.kind === 'text' && !l.speaker) || l.kind === 'cue') ? null :
             l.pause ? null :
+            l.kind === 'cue' ? (
+              <p key={i} className="t-cue" title="A cue for the game (Review → + Cue)">
+                ♪ {l.text.replace(':', ': ')}
+                {cuesIn(l.tags).some((c) => cueWantsSound(c.name, c.value) && !sounds.has(c.tag)) ? ' · no sound attached' : ''}
+              </p>
+            ) :
             l.kind === 'choice' && exitOf(l.text) ? (
               <p key={i} className="t-exit">
                 ⇥ the game played here ({exitOf(l.text)}) ⇤

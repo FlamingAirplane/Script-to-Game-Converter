@@ -8,8 +8,8 @@ import { download } from './common';
 // Story settings → Files: everything put into this story, to download again. Scripts as text,
 // recordings, scene pictures and portraits as the files themselves; or all of them as one zip.
 
-const KIND_LABEL: Record<StoryFileKind, string> = { script: 'Scripts', recording: 'Voice recordings', picture: 'Scene pictures', portrait: 'Character portraits' };
-const KINDS: StoryFileKind[] = ['script', 'recording', 'picture', 'portrait'];
+const KIND_LABEL: Record<StoryFileKind, string> = { script: 'Scripts', recording: 'Voice recordings', picture: 'Scene pictures', portrait: 'Character portraits', 'cue sound': 'Cue sounds' };
+const KINDS: StoryFileKind[] = ['script', 'recording', 'picture', 'portrait', 'cue sound'];
 
 function size(n: number): string {
   return n < 1024 ? `${n} B` : n < 1024 * 1024 ? `${(n / 1024).toFixed(1)} KB` : `${(n / 1024 / 1024).toFixed(1)} MB`;

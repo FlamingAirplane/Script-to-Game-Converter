@@ -123,9 +123,9 @@ export function base64ToBytes(b64: string): Uint8Array {
   return out;
 }
 
-/** Every audio clip the project's dialogue refers to. */
+/** Every audio clip the project refers to: dialogue clips, and the sounds attached to cues. */
 export function referencedAudio(project: { passages: { content: { type: string; audio?: AudioRef }[] }[] }): AudioRef[] {
   const out = new Map<string, AudioRef>();
-  for (const p of project.passages) for (const b of p.content) if (b.type === 'dialogue' && b.audio) out.set(b.audio.id, b.audio);
+  for (const p of project.passages) for (const b of p.content) if ((b.type === 'dialogue' || b.type === 'cue') && b.audio) out.set(b.audio.id, b.audio);
   return [...out.values()];
 }

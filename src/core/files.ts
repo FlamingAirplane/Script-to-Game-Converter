@@ -3,11 +3,11 @@ import { imageFileName } from './images';
 import type { SourceDocument, StoryProject } from './isr';
 
 // Every file a story holds, for downloading them again: the scripts it was made from, the voice
-// recordings on its lines, its scene pictures and its character portraits. Scripts are kept as text
+// recordings on its lines, its scene pictures, its character portraits and the sounds on its cues. Scripts are kept as text
 // (a Word, PDF, Final Draft or Twine file as the text taken from it); media bytes live in the browser
 // (see src/ui/audioStore.ts) and are fetched by `id`.
 
-export type StoryFileKind = 'script' | 'recording' | 'picture' | 'portrait';
+export type StoryFileKind = 'script' | 'recording' | 'picture' | 'portrait' | 'cue sound';
 
 export interface StoryFile {
   kind: StoryFileKind;
@@ -72,6 +72,11 @@ export function storyFiles(project: StoryProject): StoryFile[] {
       files.push({ kind: 'picture', fileName: safeFileName(p.image.name, imageFileName(p.image)), context: p.title || p.id, id: p.image.id, mime: p.image.mime });
     }
     for (const b of p.content) {
+      if (b.type === 'cue' && b.audio && !seen.has(b.audio.id)) {
+        seen.add(b.audio.id);
+        files.push({ kind: 'cue sound', fileName: safeFileName(b.audio.name, audioFileName(b.audio)), context: `${p.title || p.id} · cue ${b.name}${b.value ? `: ${b.value}` : ''}`, id: b.audio.id, mime: b.audio.mime });
+        continue;
+      }
       if (b.type !== 'dialogue' || !b.audio || seen.has(b.audio.id)) continue;
       seen.add(b.audio.id);
       const ext = isRendered(b.audio) ? 'wav' : audioExtension(b.audio.mime);
@@ -87,7 +92,7 @@ export function storyFiles(project: StoryProject): StoryFile[] {
   return files;
 }
 
-const FOLDER: Record<StoryFileKind, string> = { script: 'Scripts', recording: 'Recordings', picture: 'Scene pictures', portrait: 'Portraits' };
+const FOLDER: Record<StoryFileKind, string> = { script: 'Scripts', recording: 'Recordings', picture: 'Scene pictures', portrait: 'Portraits', 'cue sound': 'Cue sounds' };
 
 /** Where each file goes in a "download all" zip: a folder per kind, names made unique. */
 export function zipPaths(files: StoryFile[]): string[] {

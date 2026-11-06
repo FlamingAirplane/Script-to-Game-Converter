@@ -1219,3 +1219,7 @@ section.drafts > h2 { margin-top: 26px; }
 
 /* Sounds: the state is spelled out in words; the note is struck through when off. */
 .sound-toggle.off .sound-icon { text-decoration: line-through; opacity: 0.7; }
+
+/* Cues: a small marker in Playtest where the game reacts (music, a sound, a shake), and the sound on a cue in Review. */
+.t-cue { text-indent: 0 !important; font-size: 12.5px; font-variant: small-caps; letter-spacing: 0.08em; color: var(--faded); margin: 2px 0; }
+.cue-sound { margin-top: 6px; gap: 8px; align-items: center; }

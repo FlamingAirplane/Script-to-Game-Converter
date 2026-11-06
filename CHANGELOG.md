@@ -17,6 +17,8 @@
 - **Unity 6.3 and TextMeshPro** support in the Unity package.
 - **Exits to gameplay:** a story can hand control to the game and resume afterwards.
 - **Cues:** add music, sounds, ambience or a camera shake in Review (+ Cue); the Unity package plays them without code.
+- **Cue sounds:** attach a sound file to a cue in Review. Every cue with the same name and value plays it: in Playtest
+  (which also marks where each cue fires), in the playable web page, and in the Unity package with nothing to set up.
 - **Unity package additions:**
   - **Locked choices:** shown greyed out with what they need.
   - **A Settings menu for players:** text size, typing speed, auto-advance, high contrast, voice volume and language.

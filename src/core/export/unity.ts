@@ -6,6 +6,8 @@ import { describeCondition } from '../gating';
 import { assertExportable, audioFiles, buildManifest, imageFiles, commonFiles, itemVarNames, json, sourceFiles, storyVersion, verifyExport } from './common';
 import type { EngineAdapter, ExportFile, ExportOptions, ExportResult } from './types';
 import { storyRoutes, type StoryRoute } from './routes';
+import { cueSounds } from '../cues';
+import { audioFileName } from '../audio';
 import { translationSheet } from './translations';
 import { normaliseUnityTheme, unityThemeJson } from './unityTheme';
 import { SETTINGS_CS, THEME_CS, VIEW_CS } from './unityUi';
@@ -308,6 +310,7 @@ function storyInfoCs(story: ProcessedStory, id: UnityPackageId, addressables = f
   const cueBlocks = story.project.passages.flatMap((p) => p.content.flatMap((b) => (b.type === 'cue' ? [b] : [])));
   const cues = [...new Set(cueBlocks.map((b) => cueName(b.name)))];
   const cueTags = [...new Set(cueBlocks.map((b) => cueTag(b.name, b.value)))];
+  const soundTags = [...cueSounds(story.project)].map(([t, ref]) => [t, audioFileName(ref)] as const);
   const knots = new Set(passages);
   const gated = story.project.passages.flatMap((p) =>
     knots.has(p.id)
@@ -363,6 +366,9 @@ namespace ${id.namespace}
         public static readonly string[] Cues = { ${cues.map(csString).join(', ')} };
         /// <summary>Every cue as it appears in the story, with its value (e.g. "music:calm"), to know which clips to add.</summary>
         public static readonly string[] CueTags = { ${cueTags.map(csString).join(', ')} };
+        /// <summary>Cues the writer attached a sound to (e.g. "music:calm"), and each one's clip (an #audio-style file name; see NarrativeController.LoadVoiceClip).</summary>
+        public static readonly string[] CueSoundTags = { ${soundTags.map(([t]) => csString(t)).join(', ')} };
+        public static readonly string[] CueSoundFiles = { ${soundTags.map(([, f]) => csString(f)).join(', ')} };
         /// <summary>Choices that need an item or a value (NarrativeController.LockedChoices lists the ones locked right now).</summary>
         public static readonly GatedChoice[] GatedChoices =
         {
@@ -456,9 +462,11 @@ Writers add cues in Narrative Bridge: music, a sound, an ambience, a camera shak
 value (\`#music:calm\`, \`#sound:door_creak\`, \`#shake:0.5\`). They're listed in \`StoryInfo.Cues\` (and with their values in
 \`StoryInfo.CueTags\`). The **NarrativeCuePlayer** plays them without code: *Tools → Narrative Bridge → ${id.menuTitle} → Add Cue
 Player to Selected Story* lists every cue with a likely action (play or stop music, play a sound, loop an ambience, shake the
-camera, or only raise its event); give each one its clips, named after the values (a clip called *calm* for \`music:calm\`).
+camera, or only raise its event). **Sounds the writer attached to cues in Narrative Bridge come with the package and play
+by themselves** (\`StoryInfo.CueSoundTags\`; turn off *Play Story Sounds* to use only your own). To use your own sound for a
+value, add a clip named after it to the cue (a clip called *calm* for \`music:calm\`): it plays instead of the writer's.
 Each cue also has a UnityEvent, \`CuePlayed\` reports every cue from code, and \`TagFound\` still sees them all. A music cue
-with no value stops the music. (Stories added to a scene after this export get a Cue Player automatically.)
+or ambience cue with no value stops it. (Stories added to a scene after this export get a Cue Player automatically.)
 
 ## Story Debugger
 *Tools → Narrative Bridge → ${id.menuTitle} → Story Debugger* follows the story while the game plays: the passage the reader
@@ -708,6 +716,9 @@ namespace __NAMESPACE__
         [Tooltip("How far it moves at strength 1 (a shake cue's value, 0 to 1; 0.5 when it has none).")]
         [Min(0f)] public float shakeDistance = 0.3f;
 
+        [Tooltip("Play the sounds the writer attached to cues in Narrative Bridge (StoryInfo.CueSoundTags) when a cue has no clip of its own named by its value.")]
+        public bool playStorySounds = true;
+
         [Tooltip("Every cue, listed or not: its name and value.")]
         public AnyCueEvent onAnyCue = new AnyCueEvent();
 
@@ -754,35 +765,38 @@ namespace __NAMESPACE__
             foreach (var cue in cues)
             {
                 if (cue == null || !string.Equals(cue.name, name, StringComparison.OrdinalIgnoreCase)) continue;
-                Run(cue, value);
+                Run(cue, value, string.IsNullOrEmpty(value) ? name : name + ":" + value);
                 cue.onCue.Invoke(value);
             }
         }
 
-        void Run(Cue cue, string value)
+        void Run(Cue cue, string value, string tag)
         {
             switch (cue.action)
             {
                 case CueAction.PlayMusic:
                     // A music cue with no value stops the music.
                     if (string.IsNullOrEmpty(value)) StopMusic();
-                    else PlayMusic(Pick(cue, value), cue.volume);
+                    else WithClip(cue, value, tag, clip => PlayMusic(clip, cue.volume));
                     break;
                 case CueAction.StopMusic:
                     StopMusic();
                     break;
                 case CueAction.PlaySound:
-                    var sound = Pick(cue, value);
-                    if (sound != null) Source(ref soundSource, "Cue Sounds", false).PlayOneShot(sound, cue.volume);
+                    WithClip(cue, value, tag, sound => { if (sound != null) Source(ref soundSource, "Cue Sounds", false).PlayOneShot(sound, cue.volume); });
                     break;
                 case CueAction.PlayAmbience:
-                    var loop = Pick(cue, value);
-                    var ambience = Source(ref ambienceSource, "Cue Ambience", true);
-                    if (loop == null || string.IsNullOrEmpty(value) && cue.clips.Count == 0) { ambience.Stop(); break; }
-                    if (ambience.clip == loop && ambience.isPlaying) break;
-                    ambience.clip = loop;
-                    ambience.volume = cue.volume;
-                    ambience.Play();
+                    // An ambience cue with no value stops the ambience.
+                    if (string.IsNullOrEmpty(value)) { if (ambienceSource != null) ambienceSource.Stop(); break; }
+                    WithClip(cue, value, tag, loop =>
+                    {
+                        if (loop == null) return;
+                        var ambience = Source(ref ambienceSource, "Cue Ambience", true);
+                        if (ambience.clip == loop && ambience.isPlaying) return;
+                        ambience.clip = loop;
+                        ambience.volume = cue.volume;
+                        if (Application.isPlaying) ambience.Play();
+                    });
                     break;
                 case CueAction.StopAmbience:
                     if (ambienceSource != null) ambienceSource.Stop();
@@ -793,16 +807,42 @@ namespace __NAMESPACE__
             }
         }
 
-        /// <summary>The clip named by the value, else the cue's first clip; null when it has none.</summary>
-        static AudioClip Pick(Cue cue, string value)
+        /// <summary>
+        /// The clip for a cue, then use(clip): the cue's own clip named by the value; else the sound the writer attached to
+        /// this cue in Narrative Bridge (loaded without waiting); else the cue's first clip; null when there's none.
+        /// </summary>
+        void WithClip(Cue cue, string value, string tag, Action<AudioClip> use)
         {
             if (!string.IsNullOrEmpty(value))
+                foreach (var c in cue.clips) if (c != null && string.Equals(c.name, value, StringComparison.OrdinalIgnoreCase)) { use(c); return; }
+            var file = playStorySounds ? StorySound(tag) : null;
+            if (file != null)
             {
-                foreach (var c in cue.clips) if (c != null && string.Equals(c.name, value, StringComparison.OrdinalIgnoreCase)) return c;
-                if (cue.clips.Count > 0) Debug.LogWarning("[NarrativeBridge] No clip called " + value + " for the " + cue.name + " cue; playing its first clip.");
+                NarrativeController.LoadVoiceClipAsync(file, clip => use(clip != null ? clip : FirstClip(cue)));
+                return;
             }
+            if (!string.IsNullOrEmpty(value) && cue.clips.Count > 0) Debug.LogWarning("[NarrativeBridge] No clip called " + value + " for the " + cue.name + " cue; playing its first clip.");
+            use(FirstClip(cue));
+        }
+
+        static AudioClip FirstClip(Cue cue)
+        {
             foreach (var c in cue.clips) if (c != null) return c;
             return null;
+        }
+
+        /// <summary>The clip the writer attached to a cue tag (e.g. "music:calm"), or null.</summary>
+        public static string StorySound(string tag)
+        {
+            var i = Array.IndexOf(StoryInfo.CueSoundTags, tag);
+            return i >= 0 ? StoryInfo.CueSoundFiles[i] : null;
+        }
+
+        /// <summary>Whether the writer attached a sound to any cue with this name.</summary>
+        public static bool HasStorySounds(string name)
+        {
+            foreach (var t in StoryInfo.CueSoundTags) if (t == name || t.StartsWith(name + ":", StringComparison.Ordinal)) return true;
+            return false;
         }
 
         AudioSource Source(ref AudioSource source, string name, bool loop)
@@ -2695,7 +2735,12 @@ namespace __NAMESPACE__.EditorTools
             player.controller = go.GetComponent<NarrativeController>();
             foreach (var name in StoryInfo.Cues)
                 if (!player.cues.Exists(c => c != null && c.name == name))
-                    player.cues.Add(new NarrativeCuePlayer.Cue { name = name, action = NarrativeCuePlayer.Guess(name) });
+                {
+                    var action = NarrativeCuePlayer.Guess(name);
+                    // A cue of the writer's own naming with a sound attached plays it.
+                    if (action == NarrativeCuePlayer.CueAction.EventOnly && NarrativeCuePlayer.HasStorySounds(name)) action = NarrativeCuePlayer.CueAction.PlaySound;
+                    player.cues.Add(new NarrativeCuePlayer.Cue { name = name, action = action });
+                }
             EditorUtility.SetDirty(player);
             return player;
         }
@@ -3031,12 +3076,27 @@ namespace __NAMESPACE__.EditorTools
                         else break;
                     }
                 }
+                foreach (var file in StoryInfo.CueSoundFiles)
+                    if (NarrativeController.LoadVoiceClip(file) == null) errors.Add("Cue sound did not import" + (StoryInfo.UsesAddressables ? " (or isn't in Addressables)" : "") + ": " + file);
                 foreach (var tag in StoryInfo.CueTags)
                 {
                     var colon = tag.IndexOf(':');
                     player.Play(colon < 0 ? tag : tag.Substring(0, colon), colon < 0 ? "" : tag.Substring(colon + 1));
                 }
-                return "cues passed (" + heard.Count + " of " + StoryInfo.Cues.Length + " reached)";
+                // A music cue with the writer's sound plays that sound (no clips of the game's own here).
+                for (int i = 0; i < StoryInfo.CueSoundTags.Length; i++)
+                {
+                    var tag = StoryInfo.CueSoundTags[i];
+                    var colon = tag.IndexOf(':');
+                    var name = colon < 0 ? tag : tag.Substring(0, colon);
+                    if (NarrativeCuePlayer.Guess(name) != NarrativeCuePlayer.CueAction.PlayMusic) continue;
+                    player.Play(name, colon < 0 ? "" : tag.Substring(colon + 1));
+                    var file = StoryInfo.CueSoundFiles[i];
+                    var dot = file.LastIndexOf('.');
+                    if (player.CurrentMusic == null || player.CurrentMusic.name != (dot > 0 ? file.Substring(0, dot) : file))
+                        errors.Add("Cue: " + tag + " didn't play the sound the writer attached (" + file + ").");
+                }
+                return "cues passed (" + heard.Count + " of " + StoryInfo.Cues.Length + " reached" + (StoryInfo.CueSoundFiles.Length > 0 ? ", " + StoryInfo.CueSoundFiles.Length + " sound(s)" : "") + ")";
             }
             catch (System.Exception e) { errors.Add("Cue: " + e.Message); return "cues failed"; }
             finally { UnityEngine.Object.DestroyImmediate(go); }
@@ -3058,6 +3118,7 @@ namespace __NAMESPACE__.EditorTools
             var wanted = new List<string>();
             foreach (var file in clipsHeard) { var dot = file.LastIndexOf('.'); wanted.Add(StoryInfo.AddressPrefix + "Audio/" + (dot > 0 ? file.Substring(0, dot) : file)); }
             foreach (var file in picturesSeen) wanted.Add(StoryInfo.AddressPrefix + "Images/" + file);
+            foreach (var file in StoryInfo.CueSoundFiles) { var dot = file.LastIndexOf('.'); wanted.Add(StoryInfo.AddressPrefix + "Audio/" + (dot > 0 ? file.Substring(0, dot) : file)); }
             foreach (var f in StoryInfo.PortraitFiles) wanted.Add(StoryInfo.AddressPrefix + "Images/" + f);
             foreach (var a in wanted) if (!addresses.Contains(a)) errors.Add("Addressables: nothing has the address " + a + ".");
             return " (with Addressables, " + addresses.Count + " in the group)";
