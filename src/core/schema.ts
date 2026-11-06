@@ -35,6 +35,10 @@ export function validateSchema(p: unknown): Diagnostic[] {
       else if ((b.type === 'dialogue' || b.type === 'action') && !str(b.text)) err(`Content ${j} in "${ps.id}" is missing text.`, ps.id);
     });
   });
+  if (sp.translations !== undefined) {
+    const t = sp.translations as unknown;
+    if (!isObj(t) || !Array.isArray(t.languages) || !isObj(t.strings)) err('The translations must have a list of languages and the strings.');
+  }
   sp.items.forEach((it) => (!isObj(it) || !str(it.id) ? err('An item is missing its id.') : undefined));
   sp.variables.forEach((v) => {
     if (!isObj(v) || !str(v.id)) return err('A variable is missing its id.');

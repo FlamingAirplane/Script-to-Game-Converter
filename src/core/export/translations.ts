@@ -95,11 +95,114 @@ function csvField(v: string): string {
 }
 
 /**
- * The translation sheet: key, kind, passage, source, then one empty column per language (e.g. "fr", "de").
- * Translators fill the columns in; the first row names them.
+ * The translation sheet: key, kind, passage, source, then a column per language (e.g. "fr", "de"): the story's
+ * translations so far, and any other languages asked for, empty. Translators fill the columns in.
  */
 export function translationSheet(project: StoryProject, theme?: UnityTheme, languages: string[] = []): string {
-  const rows = [['key', 'kind', 'passage', 'source', ...languages]];
-  for (const e of translationEntries(project, theme)) rows.push([e.key, e.kind, e.passage, e.source, ...languages.map(() => '')]);
+  const t = project.translations;
+  const langs = [...new Set([...(t?.languages ?? []), ...languages])];
+  const rows = [['key', 'kind', 'passage', 'source', ...langs]];
+  for (const e of translationEntries(project, theme)) rows.push([e.key, e.kind, e.passage, e.source, ...langs.map((l) => t?.strings[e.key]?.[l] ?? '')]);
   return rows.map((r) => r.map(csvField).join(',')).join('\r\n') + '\r\n';
+}
+
+/** Reads CSV: "quoted" fields may hold separators, doubled quotes and line breaks. The separator is a comma, or a
+ * semicolon or tab when the first row uses one (spreadsheets in some languages save that way). */
+export function parseCsv(text: string): string[][] {
+  const t = text.replace(/^\uFEFF/, '');
+  const first = t.split(/\r?\n/, 1)[0];
+  const sep = [',', ';', '\t'].find((c) => first.split(c).length >= 4) ?? ',';
+  const rows: string[][] = [];
+  let row: string[] = [];
+  let field = '';
+  let quoted = false;
+  for (let i = 0; i < t.length; i++) {
+    const c = t[i];
+    if (quoted) {
+      if (c === '"' && t[i + 1] === '"') {
+        field += '"';
+        i++;
+      } else if (c === '"') quoted = false;
+      else field += c;
+    } else if (c === '"' && field === '') quoted = true;
+    else if (c === sep) {
+      row.push(field);
+      field = '';
+    } else if (c === '\n' || c === '\r') {
+      if (c === '\r' && t[i + 1] === '\n') i++;
+      row.push(field);
+      field = '';
+      if (row.length > 1 || row[0] !== '') rows.push(row);
+      row = [];
+    } else field += c;
+  }
+  if (field !== '' || row.length) {
+    row.push(field);
+    rows.push(row);
+  }
+  return rows;
+}
+
+export interface TranslationImport {
+  /** The languages in the sheet, with how many texts each translates now (of `total`). */
+  languages: { code: string; translated: number }[];
+  total: number;
+  /** Rows whose key isn't in the story any more (its text changed or went), so they were left out. */
+  stale: number;
+}
+
+/**
+ * Brings a filled-in translation sheet into the story: every language column, every non-empty cell for a key the
+ * story still has. Cells left empty keep the translation the story already had. Returns what it found.
+ */
+export function importTranslations(project: StoryProject, csv: string): TranslationImport {
+  const rows = parseCsv(csv);
+  const header = (rows[0] ?? []).map((h) => h.trim());
+  const keyCol = header.indexOf('key');
+  const sourceCol = header.indexOf('source');
+  if (keyCol < 0 || sourceCol < 0) throw new Error('This isn’t a translation sheet: its first row needs “key” and “source” columns.');
+  const langCols = header.map((h, i) => ({ code: h, i })).filter((c) => c.i > sourceCol && /^[A-Za-z]{2,3}(-[A-Za-z0-9]{2,8})*$/.test(c.code));
+  if (!langCols.length) throw new Error('The sheet has no language columns after “source” (for example “fr” or “de”).');
+  const known = new Set(translationEntries(project, project.presentation?.unity).map((e) => e.key));
+  const t = (project.translations ??= { languages: [], strings: {} });
+  for (const c of langCols) if (!t.languages.includes(c.code)) t.languages.push(c.code);
+  let stale = 0;
+  for (const row of rows.slice(1)) {
+    const key = (row[keyCol] ?? '').trim();
+    if (!key) continue;
+    if (!known.has(key)) {
+      if (langCols.some((c) => (row[c.i] ?? '').trim())) stale++;
+      continue;
+    }
+    for (const c of langCols) {
+      const v = (row[c.i] ?? '').trim();
+      if (v) (t.strings[key] ??= {})[c.code] = v;
+    }
+  }
+  return { ...translationCoverage(project), stale };
+}
+
+/** How much of the story each language translates. */
+export function translationCoverage(project: StoryProject): { languages: { code: string; translated: number }[]; total: number } {
+  const keys = translationEntries(project, project.presentation?.unity).map((e) => e.key);
+  const t = project.translations;
+  return { total: keys.length, languages: (t?.languages ?? []).map((code) => ({ code, translated: keys.filter((k) => t!.strings[k]?.[code]).length })) };
+}
+
+/** A text in a language from the story's translations, or the text itself. */
+export function translate(project: Pick<StoryProject, 'translations'>, language: string, text: string): string {
+  if (!language || !text) return text;
+  return project.translations?.strings[translationKey(text)]?.[language] ?? text;
+}
+
+/** Takes a language out of the story's translations. */
+export function removeLanguage(project: StoryProject, code: string): void {
+  const t = project.translations;
+  if (!t) return;
+  t.languages = t.languages.filter((l) => l !== code);
+  for (const k of Object.keys(t.strings)) {
+    delete t.strings[k][code];
+    if (!Object.keys(t.strings[k]).length) delete t.strings[k];
+  }
+  if (!t.languages.length) delete project.translations;
 }

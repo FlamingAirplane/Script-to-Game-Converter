@@ -15,9 +15,12 @@ import { plainKey } from './Shortcuts';
 import { VoiceQueue, type VoiceItem } from './voice';
 import { cueSounds, cuesIn, cueWantsSound, type ParsedCue } from '../core/cues';
 import { CuePlayer } from './cueAudio';
+import { translate } from '../core/export/translations';
+import { languageName } from './language';
 
 const VOICES_KEY = 'narrative-bridge.voices';
 const CUE_SOUNDS_KEY = 'narrative-bridge.cue-sounds';
+const LANGUAGE_KEY = 'narrative-bridge.playtest-language';
 
 interface Line {
   text: string;
@@ -204,6 +207,26 @@ export function PlaytestView({
     }
   };
   useEffect(() => () => cuePlayer.current.stop(), []);
+
+  // Translations brought in on the Export page: Playtest can show the story in one of them.
+  const languages = processed.project.translations?.languages ?? [];
+  const [language, setLanguageState] = useState(() => {
+    try {
+      return localStorage.getItem(LANGUAGE_KEY) ?? '';
+    } catch {
+      return '';
+    }
+  });
+  const lang = languages.includes(language) ? language : '';
+  const setLanguage = (code: string) => {
+    setLanguageState(code);
+    try {
+      localStorage.setItem(LANGUAGE_KEY, code);
+    } catch {
+      /* preference not saved */
+    }
+  };
+  const T = (text: string) => translate(processed.project, lang, text);
   const segment = useRef<Segment | null>(null);
 
   const varNames = [...processed.project.items.map((i) => itemVar(i.id)), ...processed.project.variables.map((v) => v.id)].filter((n) =>
@@ -420,6 +443,16 @@ export function PlaytestView({
                 {cueSoundsOn ? '♪ Music & sounds on' : '♪ Music & sounds off'}
               </button>
             )}
+            {languages.length > 0 && (
+              <select className="input small language-pick" value={lang} onChange={(e) => setLanguage(e.target.value)} aria-label="Language" title="Show the story in a translation brought in on the Export page">
+                <option value="">As written</option>
+                {languages.map((l) => (
+                  <option key={l} value={l}>
+                    {languageName(l)}
+                  </option>
+                ))}
+              </select>
+            )}
             <button className={`btn tiny ${dialogueOnly ? 'ok' : ''}`} aria-pressed={dialogueOnly} title="Show only dialogue (D)" onClick={() => onDialogueOnly(!dialogueOnly)}>
               {dialogueOnly ? 'dialogue only' : 'all text'}
             </button>
@@ -455,24 +488,24 @@ export function PlaytestView({
               </p>
             ) : l.kind === 'choice' ? (
               <p key={i} className="t-choice">
-                › {l.text}
+                › {T(l.text)}
               </p>
             ) : l.speaker ? (
               <p key={i} className={`t-dialogue${portraitOf(l) ? ' with-portrait' : ''}`}>
                 {portraitOf(l) && <img className="t-portrait" src={portraitOf(l)!.url} alt="" />}
-                <span className="t-speaker">{l.speaker}</span>
-                {l.tags.find((t) => t.startsWith('paren:')) && <span className="t-paren">({l.tags.find((t) => t.startsWith('paren:'))!.slice(6)})</span>}
-                <span className="t-text">{l.text}</span>
+                <span className="t-speaker">{T(l.speaker)}</span>
+                {l.tags.find((t) => t.startsWith('paren:')) && <span className="t-paren">({T(l.tags.find((t) => t.startsWith('paren:'))!.slice(6))})</span>}
+                <span className="t-text">{T(l.text)}</span>
               </p>
             ) : (
               <Fragment key={i}>
-                {l.tags.find((t) => t.startsWith('scene:')) && <span className="t-scene">{l.tags.find((t) => t.startsWith('scene:'))!.slice(6)}</span>}
+                {l.tags.find((t) => t.startsWith('scene:')) && <span className="t-scene">{T(l.tags.find((t) => t.startsWith('scene:'))!.slice(6))}</span>}
                 {pictureFor(l) && (
                   <figure className="t-picture">
                     <img src={pictureFor(l)!.url} alt={pictureFor(l)!.alt} />
                   </figure>
                 )}
-                <p className={l.tags.includes('transition') ? 't-transition' : `t-action${i === dropCapAt ? ' drop' : ''}`}>{l.text}</p>
+                <p className={l.tags.includes('transition') ? 't-transition' : `t-action${i === dropCapAt ? ' drop' : ''}`}>{T(l.text)}</p>
               </Fragment>
             ),
           )}
@@ -495,14 +528,14 @@ export function PlaytestView({
           ) : (
             choices.map((c) => (
               <button key={c.index} className={`choice-btn${choices.length === 1 && c.text === CONTINUE_TEXT ? ' continue' : ''}`} onClick={() => choose(c.index, c.text)}>
-                {c.text}
+                {T(c.text)}
               </button>
             ))
           )}
           {locked.map((l) => (
             <p key={l.choice.id} className="choice-btn locked" aria-disabled="true">
-              <span className="locked-text">{l.choice.text}</span>
-              <span className="locked-needs">needs {l.needs.join(', ')}</span>
+              <span className="locked-text">{T(l.choice.text)}</span>
+              <span className="locked-needs">needs {l.needs.map(T).join(', ')}</span>
             </p>
           ))}
           {ended && (

@@ -4,6 +4,9 @@ import { imageFileName, portraitFiles, referencedImages } from '../images';
 import { log } from '../log';
 import { EXIT_PREFIX, RESERVED_TAGS } from '../isr';
 import { cueSounds } from '../cues';
+import { describeCondition } from '../gating';
+import { isActive } from '../isr';
+import { translationEntries } from './translations';
 import { assertExportable, storyVersion } from './common';
 
 // "Playable story" export: one self-contained HTML file (Ink runtime + compiled story + a small
@@ -48,6 +51,16 @@ export function buildPlayableHtml(story: ProcessedStory, inkRuntimeJs: string, a
   const voices = Object.fromEntries(story.project.characters.filter((c) => c.voice).map((c) => [c.id, c.voice]));
   // The sounds writers attached to cues: cue tag (music:calm) → clip file, for the clips that made it in.
   const cueFiles = Object.fromEntries([...cueSounds(story.project)].map(([tag, ref]) => [tag, audioFileName(ref)]).filter(([, f]) => clips[f]));
+  // Translations brought in on the Export page, only for text the story has: language → key → text.
+  const t = story.project.translations;
+  const keys = new Set(translationEntries(story.project, story.project.presentation?.unity).map((e) => e.key));
+  const translations = t
+    ? { languages: t.languages, strings: Object.fromEntries(Object.entries(t.strings).filter(([k]) => keys.has(k))) }
+    : { languages: [] as string[], strings: {} };
+  // Choices that need something, to show greyed out with what they need while the reader lacks it.
+  const gated = story.project.passages.flatMap((p) =>
+    p.choices.filter((c) => isActive(c.review) && c.conditions.length).map((c) => ({ p: p.id, t: c.text.trim(), needs: c.conditions.map((x) => ({ w: describeCondition(x, story.project), c: x })) })),
+  );
   const hasVoiceClips = story.project.passages.some((p) => p.content.some((b) => b.type === 'dialogue' && b.audio && clips[audioFileName(b.audio)]));
   const meta = jsonSafe(
     JSON.stringify({
@@ -59,6 +72,8 @@ export function buildPlayableHtml(story: ProcessedStory, inkRuntimeJs: string, a
       hasClips: hasVoiceClips,
       cueSounds: cueFiles,
       storyTags: [...RESERVED_TAGS],
+      translations,
+      gated,
     }),
   );
   const clipJson = jsonSafe(JSON.stringify(clips));
@@ -90,7 +105,7 @@ export function buildPlayableHtml(story: ProcessedStory, inkRuntimeJs: string, a
     <p class="colophon">An interactive story. Your progress is saved in this browser.</p>
   </section>
   <section id="reader" class="reader" hidden>
-    <header class="running-head"><span id="rh-title"></span><span class="tools"><button id="sounds" class="link" aria-pressed="true">Sounds on</button><button id="voice" class="link" aria-pressed="false">Voices off</button><button id="undo" class="link" disabled>Undo</button><button id="restart" class="link">Start over</button></span></header>
+    <header class="running-head"><span id="rh-title"></span><span class="tools"><select id="language" aria-label="Language" hidden></select><button id="sounds" class="link" aria-pressed="true">Sounds on</button><button id="voice" class="link" aria-pressed="false">Voices off</button><button id="undo" class="link" disabled>Undo</button><button id="restart" class="link">Start over</button></span></header>
     <p id="notice" class="notice" role="status" hidden></p>
     <div id="text" class="text" aria-live="polite"></div>
     <nav id="choices" class="choices"></nav>
@@ -144,6 +159,9 @@ padding:10px 8px 10px 30px;cursor:pointer}.choice:before{content:'❧';position:
 .choice:hover,.choice:focus-visible{color:var(--pen);background:rgba(96,108,56,.1);outline:none}
 .choice.continue{align-self:center;text-align:center;border:0;padding:8px 20px;font-style:normal;font-variant:small-caps;text-transform:lowercase;letter-spacing:.14em;color:var(--pen)}
 .choice.continue:before{content:none}.choice.continue:after{content:' ›'}
+.choice.locked{cursor:default;color:var(--faded,#8a8a6a);opacity:.75}.choice.locked:hover{background:none;color:var(--faded,#8a8a6a)}.choice.locked:before{content:'🔒';font-size:13px;top:12px}
+.choice .needs{display:block;font-size:13px;font-style:normal;letter-spacing:.03em}
+#language{font:inherit;font-size:inherit;background:none;border:0;color:inherit;letter-spacing:inherit;cursor:pointer}
 .end{text-align:center;color:var(--rubric);font-style:italic;font-size:22px;margin:30px 0 10px;letter-spacing:.1em}
 .end-actions{text-align:center}
 .notice{font-size:15px;font-style:italic;color:var(--ink2);background:rgba(221,161,94,.16);border-left:2px solid var(--rubric);padding:8px 12px;margin:0 0 18px}
@@ -194,6 +212,47 @@ const PLAYER_JS = `
   function tag(tags, name) {
     for (var i = 0; i < tags.length; i++) if (tags[i].indexOf(name + ':') === 0) return tags[i].slice(name.length + 1).trim();
     return null;
+  }
+
+  // ---- Translations: a text's key is its words with spaces tidied, hashed (as in the translation sheet) ----
+  var language = '';
+  try { language = localStorage.getItem('narrative-bridge.play.language') || ''; } catch (e) {}
+  if (meta.translations.languages.indexOf(language) < 0) language = '';
+  function textKey(text) {
+    var t = String(text).trim().replace(/\\s+/g, ' '), h = 0x811c9dc5;
+    for (var i = 0; i < t.length; i++) { h ^= t.charCodeAt(i); h = Math.imul(h, 0x01000193) >>> 0; }
+    return 'nb_' + ('0000000' + h.toString(16)).slice(-8);
+  }
+  function tr(text) {
+    if (!language || !text) return text;
+    var row = meta.translations.strings[textKey(text)];
+    return (row && row[language]) || text;
+  }
+  function languageLabel(code) {
+    try { var n = new Intl.DisplayNames([code], { type: 'language' }).of(code); return n.charAt(0).toUpperCase() + n.slice(1); } catch (e) { return code; }
+  }
+
+  // ---- Locked choices: shown greyed out, with what they need, while the reader lacks it ----
+  function holds(c) {
+    switch (c.type) {
+      case 'has_item': return story.variablesState.$('has_' + c.itemId) === true;
+      case 'not': return !holds(c.condition);
+      case 'and': return c.conditions.every(holds);
+      case 'or': return c.conditions.some(holds);
+      case 'compare':
+        var v = story.variablesState.$(c.variableId), w = c.value;
+        switch (c.op) { case '==': return v === w; case '!=': return v !== w; case '<': return v < w; case '<=': return v <= w; case '>': return v > w; case '>=': return v >= w; }
+    }
+    return false;
+  }
+  function lockedNow() {
+    var c = story.currentChoices;
+    if (!c.length || isPause() || exitName()) return [];
+    var knot = (c[0].sourcePath || '').split('.')[0];
+    var offered = c.map(function (x) { return x.text; });
+    return meta.gated.filter(function (g) { return g.p === knot && offered.indexOf(g.t) < 0; }).map(function (g) {
+      return { text: g.t, needs: g.needs.filter(function (n) { try { return !holds(n.c); } catch (e) { return false; } }).map(function (n) { return n.w; }) };
+    }).filter(function (g) { return g.needs.length; });
   }
 
   // ---- Voices: recorded clips, else the browser's speech voice set for the character ----
@@ -361,8 +420,8 @@ const PLAYER_JS = `
     lines.forEach(function (l) {
       if (l.pause || l.cue) return; // a Continue break: the page simply goes on; a cue plays, it isn't read
       if (l.chosen && l.chosen.indexOf('${EXIT_PREFIX}') === 0) { box.appendChild(el('p', 'chosen game-played', '⇥ the game played here ⇤')); return; }
-      if (l.chosen) { box.appendChild(el('p', 'chosen', l.chosen)); return; }
-      if (l.scene) box.appendChild(el('span', 'scene', l.scene));
+      if (l.chosen) { box.appendChild(el('p', 'chosen', tr(l.chosen))); return; }
+      if (l.scene) box.appendChild(el('span', 'scene', tr(l.scene)));
       var pic = l.image && pictures[l.image];
       if (pic) {
         var fig = el('figure', 'picture'), img = el('img');
@@ -380,11 +439,11 @@ const PLAYER_JS = `
           img.alt = '';
           p.appendChild(img);
         }
-        p.appendChild(el('span', 'speaker', l.speaker));
-        if (l.paren) p.appendChild(el('span', 'paren', '(' + l.paren + ')'));
-        p.appendChild(document.createTextNode(l.text));
+        p.appendChild(el('span', 'speaker', tr(l.speaker)));
+        if (l.paren) p.appendChild(el('span', 'paren', '(' + tr(l.paren) + ')'));
+        p.appendChild(document.createTextNode(tr(l.text)));
         box.appendChild(p);
-      } else box.appendChild(el('p', l.transition ? 'transition' : '', l.text));
+      } else box.appendChild(el('p', l.transition ? 'transition' : '', tr(l.text)));
     });
     var nav = $('choices');
     nav.textContent = '';
@@ -412,8 +471,14 @@ const PLAYER_JS = `
       return;
     }
     choices.forEach(function (c) {
-      var b = el('button', pause ? 'choice continue' : 'choice', c.text);
+      var b = el('button', pause ? 'choice continue' : 'choice', tr(c.text));
       b.onclick = function () { choose(c.index, c.text); };
+      nav.appendChild(b);
+    });
+    lockedNow().forEach(function (g) {
+      var b = el('button', 'choice locked', tr(g.text));
+      b.disabled = true;
+      b.appendChild(el('span', 'needs', 'needs ' + g.needs.map(tr).join(', ')));
       nav.appendChild(b);
     });
     $('undo').disabled = !history.length;
@@ -537,6 +602,21 @@ const PLAYER_JS = `
     soundsLabel();
     syncBackground();
   };
+  if (meta.translations.languages.length) {
+    var pick = $('language');
+    [''].concat(meta.translations.languages).forEach(function (code) {
+      var o = el('option', '', code ? languageLabel(code) : 'As written');
+      o.value = code;
+      pick.appendChild(o);
+    });
+    pick.value = language;
+    pick.hidden = false;
+    pick.onchange = function () {
+      language = pick.value;
+      try { localStorage.setItem('narrative-bridge.play.language', language); } catch (e) {}
+      if (story) render();
+    };
+  }
   $('voice').onclick = function () {
     voiceOn = !voiceOn;
     try { localStorage.setItem('narrative-bridge.play.voices', voiceOn ? 'on' : 'off'); } catch (e) {}

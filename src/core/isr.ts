@@ -193,6 +193,11 @@ export interface StoryProject {
   layout?: Record<string, { x: number; y: number }>;
   /** How the story looks when played in a game engine (absent = defaults). */
   presentation?: { unity?: UnityTheme };
+  /**
+   * Translations brought in from a filled-in translation sheet (see export/translations.ts): language codes in
+   * the order they were added, and each text's translations by its key (translationKey of the source text).
+   */
+  translations?: { languages: string[]; strings: Record<string, Record<string, string>> };
   /** Long voice-session recordings that lines' clips were cut from (see src/core/session.ts). */
   sessions?: SessionRef[];
 }
