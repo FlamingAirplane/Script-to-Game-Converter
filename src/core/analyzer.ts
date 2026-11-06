@@ -1,5 +1,7 @@
 import { diag, type Diagnostic } from './diagnostics';
+import { cueWantsSound } from './cues';
 import {
+  cueTag,
   conditionItemIds,
   isActive,
   type Condition,
@@ -175,6 +177,51 @@ export function analyze(project: StoryProject): Analysis {
         }),
       );
 
+  // Cues: one that would play a sound but has none attached plays nothing in Playtest or the web page (only a game
+  // that supplies its own clip), and a name that's one or two letters off another is most likely a typo.
+  const cueUses = new Map<string, { count: number; passageId: string; hasSound: boolean; wants: boolean }>();
+  for (const p of passages)
+    for (const b of p.content) {
+      if (b.type !== 'cue') continue;
+      const tag = cueTag(b.name, b.value);
+      const u = cueUses.get(tag) ?? { count: 0, passageId: p.id, hasSound: false, wants: cueWantsSound(b.name, b.value) };
+      u.count++;
+      u.hasSound ||= !!b.audio;
+      cueUses.set(tag, u);
+    }
+  for (const [tag, u] of cueUses)
+    if (u.wants && !u.hasSound)
+      ds.push(
+        diag('CUE_WITHOUT_SOUND', 'info', STAGE, `The cue "${tag.replace(':', ': ')}" has no sound attached${u.count > 1 ? ` (it's used ${u.count} times)` : ''}, so it's silent in Playtest and the playable story.`, {
+          entityId: u.passageId,
+          details: { passageId: u.passageId },
+          remediation: 'Attach a sound to it in Review, or leave it for the game to supply.',
+          exportBlocked: false,
+        }),
+      );
+  const nameCounts = new Map<string, { count: number; passageId: string }>();
+  for (const p of passages) for (const b of p.content) if (b.type === 'cue') {
+    const n = nameCounts.get(b.name) ?? { count: 0, passageId: p.id };
+    n.count++;
+    nameCounts.set(b.name, n);
+  }
+  const KNOWN_CUES = ['music', 'sound', 'ambience', 'shake', 'stop_music', 'stop_ambience'];
+  for (const [name, n] of nameCounts) {
+    if (KNOWN_CUES.includes(name)) continue;
+    // The likeliest meant name: a known one, or another cue used more often.
+    const others = [...KNOWN_CUES, ...[...nameCounts].filter(([m, o]) => m !== name && o.count > n.count).map(([m]) => m)];
+    const near = others.find((o) => o !== name && Math.abs(o.length - name.length) <= 2 && editDistance(o, name) <= (name.length > 5 ? 2 : 1));
+    if (near)
+      ds.push(
+        diag('CUE_NAME_TYPO', 'warning', STAGE, `The cue "${name}" looks like a typo for "${near}", so the game would treat it as a different cue.`, {
+          entityId: n.passageId,
+          details: { passageId: n.passageId },
+          remediation: `Rename it to "${near}" in Review, unless it really is a different cue.`,
+          exportBlocked: false,
+        }),
+      );
+  }
+
   // Reachability over approved edges.
   const reachable = new Set<string>();
   const adj = new Map<string, string[]>();
@@ -221,4 +268,15 @@ function walkCompare(c: Condition, f: (c: Extract<Condition, { type: 'compare' }
   if (c.type === 'compare') f(c);
   else if (c.type === 'not') walkCompare(c.condition, f);
   else if (c.type === 'and' || c.type === 'or') c.conditions.forEach((x) => walkCompare(x, f));
+}
+
+/** How many single-letter edits turn one word into another (Levenshtein distance). */
+function editDistance(a: string, b: string): number {
+  let prev = Array.from({ length: b.length + 1 }, (_, i) => i);
+  for (let i = 1; i <= a.length; i++) {
+    const row = [i];
+    for (let j = 1; j <= b.length; j++) row[j] = Math.min(prev[j] + 1, row[j - 1] + 1, prev[j - 1] + (a[i - 1] === b[j - 1] ? 0 : 1));
+    prev = row;
+  }
+  return prev[b.length];
 }
