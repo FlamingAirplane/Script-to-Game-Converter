@@ -35,6 +35,8 @@ export interface ExportOptions {
    * every one is built into the game). The package sets up an Addressables group for them.
    */
   unityAddressables?: boolean;
+  /** Unity: language columns to start the translation sheet with (e.g. ["fr", "de"]); translators fill them in. */
+  translationLanguages?: string[];
 }
 
 export interface ExportFile {

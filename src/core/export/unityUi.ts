@@ -413,6 +413,7 @@ namespace __NAMESPACE__
             controller.ExitReached += OnExit;
             controller.Resumed += OnResumed;
             NarrativeSettings.Changed += OnThemeChanged;
+            NarrativeLocalization.Changed += OnLanguageChanged;
             subscribed = true;
         }
 
@@ -428,8 +429,16 @@ namespace __NAMESPACE__
             controller.ExitReached -= OnExit;
             controller.Resumed -= OnResumed;
             NarrativeSettings.Changed -= OnThemeChanged;
+            NarrativeLocalization.Changed -= OnLanguageChanged;
             if (theme != null) theme.Changed -= OnThemeChanged;
             subscribed = false;
+        }
+
+        // Another language: the story's lines (the controller's transcript) and the panel's own words change.
+        void OnLanguageChanged()
+        {
+            if (controller != null) controller.Relocalize();
+            OnThemeChanged();
         }
 
         void OnThemeChanged()
@@ -555,11 +564,11 @@ namespace __NAMESPACE__
                 row.childAlignment = TextAnchor.MiddleLeft;
                 row.childControlWidth = row.childControlHeight = true;
                 row.childForceExpandWidth = row.childForceExpandHeight = false;
-                if (theme.showRestart) ToolButton(bar, theme.restartLabel, controller.StartStory);
+                if (theme.showRestart) ToolButton(bar, T(theme.restartLabel), controller.StartStory);
                 // With save slots, Save and Load open the slot menu; without, they use the one quick save.
-                if (theme.showSave) ToolButton(bar, theme.saveLabel, () => { if (controller.saveSlots > 0) OpenSaveSlots(true); else controller.SaveToPrefs(); });
-                if (theme.showLoad) ToolButton(bar, theme.loadLabel, () => { if (controller.saveSlots > 0) OpenSaveSlots(false); else controller.LoadFromPrefs(); });
-                if (theme.showSettings) ToolButton(bar, theme.settingsLabel, ToggleSettings);
+                if (theme.showSave) ToolButton(bar, T(theme.saveLabel), () => { if (controller.saveSlots > 0) OpenSaveSlots(true); else controller.SaveToPrefs(); });
+                if (theme.showLoad) ToolButton(bar, T(theme.loadLabel), () => { if (controller.saveSlots > 0) OpenSaveSlots(false); else controller.LoadFromPrefs(); });
+                if (theme.showSettings) ToolButton(bar, T(theme.settingsLabel), ToggleSettings);
                 if (theme.showStatus)
                 {
                     status = AddText(bar, controller.Status, Mathf.RoundToInt(FontSize * 0.6f), Muted, FontStyle.Italic, TextAnchor.MiddleLeft);
@@ -577,6 +586,7 @@ namespace __NAMESPACE__
         {
             public string title = "Settings", textSize = "Text size", typingSpeed = "Typing speed", autoAdvance = "Go on by itself", highContrast = "High contrast", voiceVolume = "Voice volume";
             public string slow = "Slow", normal = "Normal", fast = "Fast", instant = "Instant", asDesigned = "As designed", on = "On", off = "Off", reset = "Reset", close = "Close";
+            public string language = "Language";
             public string saveTitle = "Save to a slot", loadTitle = "Load a save", slot = "Slot", autosave = "Autosave", empty = "empty", olderVersion = "earlier version";
         }
 
@@ -659,14 +669,16 @@ namespace __NAMESPACE__
                 FocusMenu();
                 return;
             }
-            AddText(box, w.title, FontSize, Accent, FontStyle.Bold, TextAnchor.MiddleCenter);
-            SettingButton(box, w.textSize + ":  " + Mathf.RoundToInt(NarrativeSettings.TextScale * 100f) + "%", () => NarrativeSettings.TextScale = NarrativeSettings.Next(NarrativeSettings.TextScales, NarrativeSettings.TextScale));
-            SettingButton(box, w.typingSpeed + ":  " + SpeedWord(w), () => NarrativeSettings.TypingSpeed = (NarrativeSettings.Speed)(((int)NarrativeSettings.TypingSpeed + 1) % 4));
-            SettingButton(box, w.autoAdvance + ":  " + AutoWord(w), () => NarrativeSettings.AutoAdvance = (NarrativeSettings.AutoAdvanceMode)(((int)NarrativeSettings.AutoAdvance + 1) % 3));
-            SettingButton(box, w.highContrast + ":  " + (NarrativeSettings.HighContrast ? w.on : w.off), () => NarrativeSettings.HighContrast = !NarrativeSettings.HighContrast);
-            SettingButton(box, w.voiceVolume + ":  " + Mathf.RoundToInt(NarrativeSettings.VoiceVolume * 100f) + "%", () => NarrativeSettings.VoiceVolume = NarrativeSettings.Next(NarrativeSettings.VoiceVolumes, NarrativeSettings.VoiceVolume));
-            SettingButton(box, w.reset, NarrativeSettings.Reset);
-            SettingButton(box, w.close, CloseSettings);
+            AddText(box, T(w.title), FontSize, Accent, FontStyle.Bold, TextAnchor.MiddleCenter);
+            SettingButton(box, T(w.textSize) + ":  " + Mathf.RoundToInt(NarrativeSettings.TextScale * 100f) + "%", () => NarrativeSettings.TextScale = NarrativeSettings.Next(NarrativeSettings.TextScales, NarrativeSettings.TextScale));
+            SettingButton(box, T(w.typingSpeed) + ":  " + SpeedWord(w), () => NarrativeSettings.TypingSpeed = (NarrativeSettings.Speed)(((int)NarrativeSettings.TypingSpeed + 1) % 4));
+            SettingButton(box, T(w.autoAdvance) + ":  " + AutoWord(w), () => NarrativeSettings.AutoAdvance = (NarrativeSettings.AutoAdvanceMode)(((int)NarrativeSettings.AutoAdvance + 1) % 3));
+            SettingButton(box, T(w.highContrast) + ":  " + (NarrativeSettings.HighContrast ? T(w.on) : T(w.off)), () => NarrativeSettings.HighContrast = !NarrativeSettings.HighContrast);
+            SettingButton(box, T(w.voiceVolume) + ":  " + Mathf.RoundToInt(NarrativeSettings.VoiceVolume * 100f) + "%", () => NarrativeSettings.VoiceVolume = NarrativeSettings.Next(NarrativeSettings.VoiceVolumes, NarrativeSettings.VoiceVolume));
+            if (NarrativeLocalization.Languages.Count > 0)
+                SettingButton(box, T(w.language) + ":  " + NarrativeLocalization.DisplayName(NarrativeLocalization.Language), NextLanguage);
+            SettingButton(box, T(w.reset), NarrativeSettings.Reset);
+            SettingButton(box, T(w.close), CloseSettings);
             FocusMenu();
         }
 
@@ -679,13 +691,13 @@ namespace __NAMESPACE__
 
         void BuildSlots(Transform box, SettingsWords w, bool saving)
         {
-            AddText(box, saving ? w.saveTitle : w.loadTitle, FontSize, Accent, FontStyle.Bold, TextAnchor.MiddleCenter);
+            AddText(box, saving ? T(w.saveTitle) : T(w.loadTitle), FontSize, Accent, FontStyle.Bold, TextAnchor.MiddleCenter);
             foreach (var slot in controller.GetSlots())
             {
                 // The autosave can be loaded, not saved over.
                 if (saving && slot.Slot == NarrativeController.AutosaveSlot) continue;
-                var name = slot.Slot == NarrativeController.AutosaveSlot ? w.autosave : w.slot + " " + slot.Slot;
-                var label = !slot.Exists ? name + "  ·  " + w.empty : name + "  ·  " + slot.PassageTitle + "  ·  " + slot.SavedAt.ToLocalTime().ToString("g") + (slot.OtherVersion ? "  (" + w.olderVersion + ")" : "");
+                var name = slot.Slot == NarrativeController.AutosaveSlot ? T(w.autosave) : T(w.slot) + " " + slot.Slot;
+                var label = !slot.Exists ? name + "  ·  " + T(w.empty) : name + "  ·  " + slot.PassageTitle + "  ·  " + slot.SavedAt.ToLocalTime().ToString("g") + (slot.OtherVersion ? "  (" + T(w.olderVersion) + ")" : "");
                 var n = slot.Slot;
                 var button = SettingButton(box, label, () =>
                 {
@@ -695,7 +707,7 @@ namespace __NAMESPACE__
                 });
                 if (!saving && !slot.Exists) button.interactable = false;
             }
-            SettingButton(box, w.close, CloseSettings);
+            SettingButton(box, T(w.close), CloseSettings);
         }
 
         Button SettingButton(Transform parent, string label, System.Action onClick)
@@ -725,19 +737,27 @@ namespace __NAMESPACE__
             return button;
         }
 
+        // The story's own language, then each language in the translation sheet.
+        static void NextLanguage()
+        {
+            var all = new List<string> { "" };
+            foreach (var l in NarrativeLocalization.Languages) all.Add(l);
+            NarrativeLocalization.Language = all[(all.IndexOf(NarrativeLocalization.Language) + 1) % all.Count];
+        }
+
         static string SpeedWord(SettingsWords w)
         {
             switch (NarrativeSettings.TypingSpeed)
             {
-                case NarrativeSettings.Speed.Slow: return w.slow;
-                case NarrativeSettings.Speed.Fast: return w.fast;
-                case NarrativeSettings.Speed.Instant: return w.instant;
-                default: return w.normal;
+                case NarrativeSettings.Speed.Slow: return T(w.slow);
+                case NarrativeSettings.Speed.Fast: return T(w.fast);
+                case NarrativeSettings.Speed.Instant: return T(w.instant);
+                default: return T(w.normal);
             }
         }
 
         static string AutoWord(SettingsWords w) =>
-            NarrativeSettings.AutoAdvance == NarrativeSettings.AutoAdvanceMode.On ? w.on : NarrativeSettings.AutoAdvance == NarrativeSettings.AutoAdvanceMode.Off ? w.off : w.asDesigned;
+            NarrativeSettings.AutoAdvance == NarrativeSettings.AutoAdvanceMode.On ? T(w.on) : NarrativeSettings.AutoAdvance == NarrativeSettings.AutoAdvanceMode.Off ? T(w.off) : T(w.asDesigned);
 
         /// <summary>Draws everything the controller has shown so far, without the typewriter.</summary>
         public void Redraw()
@@ -783,7 +803,7 @@ namespace __NAMESPACE__
         {
             choicesWaiting = false;
             ClearChoices();
-            if (choiceArea != null) AddText(choiceArea, theme.endLabel, FontSize, Accent, FontStyle.Italic, TextAnchor.MiddleCenter);
+            if (choiceArea != null) AddText(choiceArea, T(theme.endLabel), FontSize, Accent, FontStyle.Italic, TextAnchor.MiddleCenter);
         }
 
         // ---- Scene pictures and portraits ------------------------------------------------------
@@ -1067,7 +1087,10 @@ namespace __NAMESPACE__
             if (typer == null) ShowChoices();
         }
 
-        string ContinueText() => theme.continueLabel + (theme.continueArrow ? "  ›" : "");
+        string ContinueText() => T(theme.continueLabel) + (theme.continueArrow ? "  ›" : "");
+
+        /// <summary>Words in the current language (NarrativeLocalization), or as written.</summary>
+        static string T(string words) => NarrativeLocalization.Translate(words);
 
         void ShowChoices()
         {
@@ -1092,12 +1115,12 @@ namespace __NAMESPACE__
             for (int i = 0; i < choices.Count; i++)
             {
                 var index = i;
-                AddButton((theme.showChoiceNumbers ? (i + 1) + ".  " : "") + choices[i].text, () => controller.Choose(index), anchor);
+                AddButton((theme.showChoiceNumbers ? (i + 1) + ".  " : "") + NarrativeController.ChoiceText(choices[i]), () => controller.Choose(index), anchor);
             }
             // Choices that need something the reader doesn't have yet: greyed out, saying what they need.
             if (theme.showLockedChoices)
                 foreach (var l in controller.LockedChoices)
-                    AddButton(l.Text + "   ·   " + (string.IsNullOrEmpty(theme.lockedLabel) ? "" : theme.lockedLabel + " ") + l.Needs, null, anchor, true);
+                    AddButton(l.Text + "   ·   " + (string.IsNullOrEmpty(theme.lockedLabel) ? "" : T(theme.lockedLabel) + " ") + l.Needs, null, anchor, true);
         }
 
         IEnumerator ContinueAfter(float seconds, int turn)

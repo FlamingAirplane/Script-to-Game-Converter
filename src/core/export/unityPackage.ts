@@ -20,7 +20,7 @@ export interface UnityPackageId {
 }
 
 /** Names Narrative Bridge's C# uses unqualified; a namespace part with one of these names would hide it. */
-const RESERVED = new Set(['Ink', 'UnityEngine', 'UnityEditor', 'System', 'Object', 'String', 'Editor', 'EditorTools', 'Setup', 'StoryInfo', 'NarrativeController', 'NarrativeView', 'NarrativeTheme', 'IInventoryAuthority', 'GatedChoice', 'NarrativeSettings', 'NarrativeCuePlayer', 'ISaveStorage', 'FileSaveStorage', 'Story', 'Debug', 'Resources', 'Application', 'Color', 'Font', 'Line', 'Choice', 'Mathf', 'Path', 'File', 'Directory', 'Samples']);
+const RESERVED = new Set(['Ink', 'UnityEngine', 'UnityEditor', 'System', 'Object', 'String', 'Editor', 'EditorTools', 'Setup', 'StoryInfo', 'NarrativeController', 'NarrativeView', 'NarrativeTheme', 'IInventoryAuthority', 'NarrativeLocalization', 'GatedChoice', 'NarrativeSettings', 'NarrativeCuePlayer', 'ISaveStorage', 'FileSaveStorage', 'Story', 'Debug', 'Resources', 'Application', 'Color', 'Font', 'Line', 'Choice', 'Mathf', 'Path', 'File', 'Directory', 'Samples']);
 
 export const SEMVER = /^\d+\.\d+\.\d+(-[0-9A-Za-z.-]+)?$/;
 
@@ -136,6 +136,8 @@ const INK_DEFINES = [
   { name: 'com.unity.textmeshpro', expression: '3.0.0', define: 'NARRATIVE_BRIDGE_TMP' },
   // Voice clips and pictures loaded on demand, when the story was exported that way.
   { name: 'com.unity.addressables', expression: '1.19.0', define: 'NARRATIVE_BRIDGE_ADDRESSABLES' },
+  // Translations from Unity's Localization package's string tables.
+  { name: 'com.unity.localization', expression: '1.0.0', define: 'NARRATIVE_BRIDGE_LOCALIZATION' },
 ];
 
 export function runtimeAsmdef(id: UnityPackageId) {
@@ -143,7 +145,7 @@ export function runtimeAsmdef(id: UnityPackageId) {
     name: id.namespace,
     rootNamespace: id.namespace,
     // Optional references (like Unity.InputSystem) are skipped when the game doesn't have them.
-    references: ['Ink-Libraries', 'Ink', 'UnityEngine.UI', 'Unity.InputSystem', 'Unity.TextMeshPro', 'Unity.Addressables', 'Unity.ResourceManager'],
+    references: ['Ink-Libraries', 'Ink', 'UnityEngine.UI', 'Unity.InputSystem', 'Unity.TextMeshPro', 'Unity.Addressables', 'Unity.ResourceManager', 'Unity.Localization'],
     includePlatforms: [],
     excludePlatforms: [],
     allowUnsafeCode: false,
@@ -157,7 +159,7 @@ export function runtimeAsmdef(id: UnityPackageId) {
 }
 
 export function editorAsmdef(id: UnityPackageId) {
-  return { ...runtimeAsmdef(id), name: `${id.namespace}.Editor`, rootNamespace: `${id.namespace}.EditorTools`, references: [id.namespace, 'Ink-Libraries', 'Ink', 'UnityEngine.UI', 'Unity.InputSystem', 'Unity.TextMeshPro', 'Unity.Addressables', 'Unity.ResourceManager', 'Unity.Addressables.Editor'], includePlatforms: ['Editor'] };
+  return { ...runtimeAsmdef(id), name: `${id.namespace}.Editor`, rootNamespace: `${id.namespace}.EditorTools`, references: [id.namespace, 'Ink-Libraries', 'Ink', 'UnityEngine.UI', 'Unity.InputSystem', 'Unity.TextMeshPro', 'Unity.Addressables', 'Unity.ResourceManager', 'Unity.Addressables.Editor', 'Unity.Localization', 'Unity.Localization.Editor'], includePlatforms: ['Editor'] };
 }
 
 /** The samples' assembly, once imported into a game's Assets from Package Manager. */

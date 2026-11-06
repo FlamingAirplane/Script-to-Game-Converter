@@ -3,6 +3,8 @@ import { pendingSuggestions } from '../core/adapt';
 import { isPinnedRef } from '../core/export/common';
 import { ADAPTERS, buildPlayableHtml, buildRecordingScript, recordingScriptFileName, buildTwee, ExportBlockedError, playableFileName, twineFileName, unityTarball, unityTarballName, zipExport, type EngineTarget, type ExportResult, type TwineKind } from '../core/export';
 import { SEMVER, unityPackageId } from '../core/export/unityPackage';
+import { translationSheet } from '../core/export/translations';
+import { normaliseUnityTheme } from '../core/export/unityTheme';
 // The engine-only Ink runtime (~125 KB), embedded in playable-story exports.
 import inkRuntime from '../../node_modules/inkjs/dist/ink.js?raw';
 import { referencedAudio } from '../core/audio';
@@ -27,6 +29,7 @@ export function ExportView({ processed, stale, onState, project, update, onRevie
   const adapter = ADAPTERS[engine];
   const defaultName = processed.project.project.title.replace(/[^\w]+/g, '') || 'NarrativeProject';
   const [opts, setOpts] = useState({ projectName: defaultName, engineVersion: adapter.defaultEngineVersion, integrationRef: adapter.integration.defaultRef, includeDemo: true, unityLayout: 'package' as 'package' | 'project', packageVersion: '1.0.0', unityAddressables: false });
+  const [sheetLanguages, setSheetLanguages] = useState('');
   const [result, setResult] = useState<ExportResult | null>(null);
   const [zip, setZip] = useState<Uint8Array | null>(null);
   const [tgz, setTgz] = useState<Uint8Array | null>(null);
@@ -63,7 +66,7 @@ export function ExportView({ processed, stale, onState, project, update, onRevie
       const audio = await renderClips(referencedAudio(processed.project));
       const images = await collectClips(referencedImages(processed.project));
       const originals = await collectClips(referencedOriginals(processed.project));
-      const r = await adapter.export(processed, { engine, ...opts, audio, images, originals });
+      const r = await adapter.export(processed, { engine, ...opts, audio, images, originals, translationLanguages: languageList(sheetLanguages) });
       setResult(r);
       setZip(await zipExport(r));
       setTgz(engine === 'unity' && opts.unityLayout === 'package' ? await unityTarball(r) : null);
@@ -180,6 +183,12 @@ export function ExportView({ processed, stale, onState, project, update, onRevie
                 Load voice clips and pictures on demand (Addressables)
                 <span className="muted small"> · for long or heavily voiced stories: they aren’t all built into the game. The package sets up the Addressables group itself.</span>
               </span>
+            </label>
+          )}
+          {engine === 'unity' && (
+            <label className="field">
+              <span className="muted small">Translation sheet: language columns to add (e.g. fr, de). Every package has the sheet; translators fill the columns in.</span>
+              <input className="input mono" value={sheetLanguages} placeholder="e.g. fr, de" onChange={(e) => setSheetLanguages(e.target.value)} />
             </label>
           )}
           </details>
@@ -300,6 +309,11 @@ export function ExportView({ processed, stale, onState, project, update, onRevie
   );
 }
 
+/** "fr, de" → ["fr", "de"]: language codes for the translation sheet's columns. */
+function languageList(text: string): string[] {
+  return [...new Set(text.split(/[\s,;]+/).map((x) => x.trim()).filter((x) => /^[A-Za-z]{2,3}(-[A-Za-z0-9]{2,8})*$/.test(x)))];
+}
+
 function Pass({ ok }: { ok: boolean }) {
   return <span className={`sev ${ok ? 'sev-ok' : 'sev-error'}`}>{ok ? '✓' : '●'}</span>;
 }
@@ -308,6 +322,7 @@ function Pass({ ok }: { ok: boolean }) {
 function ShareSection({ processed, stale, project, update }: { processed: ProcessedStory; stale: boolean; project: StoryProject; update: Update }) {
   const [error, setError] = useState('');
   const [twineKind, setTwineKind] = useState<TwineKind>('sugarcube');
+  const [languages, setLanguages] = useState('');
   const blocked = processed.diagnostics.some((d) => d.exportBlocked) || stale;
   const run = async (fn: () => void | Promise<void>) => {
     setError('');
@@ -351,6 +366,26 @@ function ShareSection({ processed, stale, project, update }: { processed: Proces
             Download recording script (.csv)
           </button>
           <RecordingsImport project={project} update={update} />
+        </div>
+        <div className="card share-card">
+          <h2>Translation sheet</h2>
+          <p className="muted small">
+            Every line, choice, name and button the player sees, one per row, for translators: add a column per language (for example <code>fr</code> or{' '}
+            <code>de</code>) and fill it in. The Unity package shows the story in any language the sheet has.
+          </p>
+          <label className="field">
+            <span className="muted small">Language columns to start with (optional)</span>
+            <input className="input mono" value={languages} placeholder="e.g. fr, de" onChange={(e) => setLanguages(e.target.value)} aria-label="Language columns to start with" />
+          </label>
+          <button
+            className="btn"
+            disabled={stale}
+            onClick={() =>
+              run(() => download(`${processed.project.project.id || 'story'}-translations.csv`, translationSheet(processed.project, normaliseUnityTheme(processed.project.presentation?.unity), languageList(languages)), 'text/csv'))
+            }
+          >
+            Download translation sheet (.csv)
+          </button>
         </div>
         <div className="card share-card">
           <h2>Twine</h2>
