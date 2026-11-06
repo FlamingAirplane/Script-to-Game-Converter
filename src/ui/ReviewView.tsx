@@ -5,7 +5,9 @@ import { cueName, uniqueId, type Choice, type CompareOp, type Condition, type Co
 import type { ProcessedStory } from '../core/pipeline';
 import { Badge, ProvenanceBadge, SeverityIcon } from './common';
 import { friendly } from './friendly';
-import { VoiceClip, VoicePicker } from './VoiceControls';
+import { CueSound, VoiceClip, VoicePicker } from './VoiceControls';
+import { setCueSound } from '../core/cues';
+import type { AudioRef } from '../core/audio';
 import { ScenePicture } from './ScenePicture';
 import { CharacterPortrait } from './CharacterPortrait';
 import { StoryFiles } from './StoryFiles';
@@ -18,9 +20,10 @@ import { type Update, addChoice, addPassage, deletePassage, findText, mergeChara
 const CUE_SUGGESTIONS: [string, string][] = [
   ['music', 'Which track (e.g. calm); empty stops the music'],
   ['sound', 'Which sound (e.g. door_creak)'],
+  ['ambience', 'Which background sound (e.g. rain); empty stops it'],
   ['shake', 'How strong, 0–1 (e.g. 0.5)'],
   ['stop_music', 'Nothing needed'],
-  ['ambience', 'Which background sound (e.g. rain)'],
+  ['stop_ambience', 'Nothing needed'],
 ];
 
 
@@ -368,6 +371,7 @@ function PassageEditor({
             block={b}
             project={project}
             onFocusLine={onFocusLine}
+            onCueSound={(tag, audio) => update((d) => setCueSound(d, tag, audio))}
             onChange={(nb) => edit((p) => (p.content[i] = nb), `block:${pid}:${i}`)}
             onDelete={() => edit((p) => p.content.splice(i, 1))}
             onMove={(dir) =>
@@ -501,6 +505,7 @@ function BlockRow({
   onDelete,
   onMove,
   onFocusLine,
+  onCueSound,
 }: {
   block: ContentBlock;
   project: StoryProject;
@@ -508,6 +513,8 @@ function BlockRow({
   onDelete: () => void;
   onMove: (dir: -1 | 1) => void;
   onFocusLine: (line: number) => void;
+  /** Attaches a sound to every cue with this tag (or takes it away). */
+  onCueSound: (tag: string, audio: AudioRef | undefined) => void;
 }) {
   const touched = (b: ContentBlock): ContentBlock => ({ ...b, origin: b.origin === 'generated' ? 'generated' : 'user_authored' }) as ContentBlock;
   return (
@@ -591,6 +598,7 @@ function BlockRow({
                 <input className="input small" value={block.value ?? ''} placeholder="e.g. calm" onChange={(e) => onChange(touched({ ...block, value: e.target.value || undefined }))} aria-label="Cue value" />
               </label>
             </div>
+            <CueSound block={block} project={project} onSet={onCueSound} />
           </div>
         )}
         {block.type === 'unsupported' && (

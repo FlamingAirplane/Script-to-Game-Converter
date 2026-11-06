@@ -1650,3 +1650,54 @@ describe('Unity export features', () => {
     expect(file(r, 'Translations.csv').split('\r\n')[0]).toBe('key,kind,passage,source,fr');
   });
 });
+
+describe('cue sounds', () => {
+  const withSounds = async () => {
+    const { project } = await build('@passage hall Hall\n@cue music calm\nThe hall is dark.\n@cue sound door\n@cue shake\n@passage yard Yard\n@cue music calm\nRain.\n@cue music\n@end\n', 'c.md', 'structured');
+    return project;
+  };
+
+  it('knows what each cue does and where the music stands', async () => {
+    const { cueKind, cuesIn, backgroundAfter, cueWantsSound } = await import('../src/core/cues');
+    expect(['music', 'stop_music', 'ambience', 'stop_ambience', 'shake', 'door_slam', 'song'].map(cueKind)).toEqual(['music', 'stop_music', 'ambience', 'stop_ambience', 'shake', 'sound', 'music']);
+    expect(cuesIn(['speaker:mira', 'audio:x.wav', 'music:calm', 'transition', 'shake', 'image:a.png'])).toEqual([
+      { name: 'music', value: 'calm', tag: 'music:calm' },
+      { name: 'shake', value: '', tag: 'shake' },
+    ]);
+    const has = (t: string) => ['music:calm', 'music:storm', 'ambience:rain'].includes(t);
+    const cues = cuesIn(['music:calm', 'ambience:rain', 'music:unknown', 'sound:door']);
+    expect(backgroundAfter(cues, has)).toEqual({ music: 'music:calm', ambience: 'ambience:rain' }); // a track with no sound changes nothing
+    expect(backgroundAfter([...cues, ...cuesIn(['music', 'stop_ambience'])], has)).toEqual({ music: null, ambience: null });
+    expect([cueWantsSound('music', ''), cueWantsSound('music', 'calm'), cueWantsSound('shake', '1'), cueWantsSound('door', '')]).toEqual([false, true, false, true]);
+  });
+
+  it('shares a sound among cues with the same tag, and ships it everywhere', async () => {
+    const { setCueSound, cueSounds, cuesWithTag } = await import('../src/core/cues');
+    const { referencedAudio } = await import('../src/core/audio');
+    const { storyFiles } = await import('../src/core/files');
+    const { buildPlayableHtml } = await import('../src/core/export');
+    const project = await withSounds();
+    const calm = { id: 'cue_calm', name: 'calm.mp3', mime: 'audio/mpeg' };
+    expect(cuesWithTag(project, 'music:calm')).toBe(2);
+    setCueSound(project, 'music:calm', calm);
+    setCueSound(project, 'sound:door', { id: 'cue_door', name: 'door.wav', mime: 'audio/wav' });
+    expect(project.passages.flatMap((p) => p.content).filter((b) => b.type === 'cue' && b.audio?.id === 'cue_calm')).toHaveLength(2);
+    expect([...cueSounds(project).keys()]).toEqual(['music:calm', 'sound:door']);
+    expect(referencedAudio(project).map((a) => a.id)).toEqual(['cue_calm', 'cue_door']);
+    expect(storyFiles(project).filter((f) => f.kind === 'cue sound').map((f) => f.fileName)).toEqual(['calm.mp3', 'door.wav']);
+    const story = processProject(project);
+    const audio = { cue_calm: { mime: 'audio/mpeg', bytes: new Uint8Array([1, 2]) }, cue_door: { mime: 'audio/wav', bytes: new Uint8Array([3]) } };
+    const html = buildPlayableHtml(story, '/* ink */', audio);
+    const meta = JSON.parse(/<script id="story-meta" type="application\/json">([^<]*)<\/script>/.exec(html)?.[1] ?? '{}');
+    expect(meta.cueSounds).toEqual({ 'music:calm': 'cue_calm.mp3', 'sound:door': 'cue_door.wav' });
+    expect(meta.hasClips).toBe(false); // cue sounds alone don't turn voices on
+    expect(html).toContain('"cue_calm.mp3":"data:audio/mpeg;base64,');
+    const r = await ADAPTERS.unity.export(story, { engine: 'unity', projectName: 'Hall', engineVersion: '6000.3.23f1', integrationRef: '2.0.0', includeDemo: true, audio });
+    const info = r.files.find((f) => f.path.endsWith('Runtime/StoryInfo.cs'))!.content as string;
+    expect(info).toContain('CueSoundTags = { "music:calm", "sound:door" }');
+    expect(info).toContain('CueSoundFiles = { "cue_calm.mp3", "cue_door.wav" }');
+    expect(r.files.some((f) => f.path.endsWith('Resources/NarrativeBridge/hall/Audio/cue_calm.mp3'))).toBe(true);
+    setCueSound(project, 'music:calm', undefined);
+    expect(cueSounds(project).has('music:calm')).toBe(false);
+  });
+});

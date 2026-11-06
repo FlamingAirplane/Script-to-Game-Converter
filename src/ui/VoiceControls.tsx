@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { hasEdit, type AudioRef, type ClipEdit, type VoiceSettings } from '../core/audio';
-import type { ContentBlock } from '../core/isr';
+import { cueKind, cueSounds, cuesWithTag, cueTakesSound } from '../core/cues';
+import { cueTag, type ContentBlock, type StoryProject } from '../core/isr';
 import { startRecording, storeClip, type Recorder } from './audioStore';
 import { useSystemVoices, VoiceQueue } from './voice';
 
@@ -213,5 +214,73 @@ export function VoicePicker({ voice, name, onChange }: { voice?: VoiceSettings; 
         ▷
       </button>
     </span>
+  );
+}
+
+type Cue = Extract<ContentBlock, { type: 'cue' }>;
+
+/**
+ * The sound a cue plays: attach a file (WAV, MP3, OGG…), play it, or take it away. A sound belongs to the cue's
+ * name and value, so every "music: calm" cue in the story plays the same one; Playtest, the playable web page and
+ * the Unity package all play it. Stops and shakes have no sound.
+ */
+export function CueSound({ block, project, onSet }: { block: Cue; project: StoryProject; onSet: (tag: string, audio: AudioRef | undefined) => void }) {
+  const [error, setError] = useState('');
+  const file = useRef<HTMLInputElement>(null);
+  const tag = cueTag(block.name, block.value);
+  const kind = cueKind(block.name);
+  if (!cueTakesSound(block.name))
+    return <p className="muted small cue-sound">{kind === 'shake' ? 'Shakes the screen in the game; no sound needed.' : kind === 'stop_music' ? 'Stops the music.' : 'Stops the ambience.'}</p>;
+  if ((kind === 'music' || kind === 'ambience') && !block.value)
+    return <p className="muted small cue-sound">With no {kind === 'music' ? 'track' : 'sound'} named, this stops the {kind}. Name one (e.g. calm) to give it a sound.</p>;
+  const audio = block.audio ?? cueSounds(project).get(tag);
+  const shared = cuesWithTag(project, tag);
+  const attach = async (f: File) => {
+    try {
+      onSet(tag, await storeClip(f, f.name, `cue_${block.name}`));
+      setError('');
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    }
+  };
+  return (
+    <div className="row wrap cue-sound">
+      <span className="muted small">Sound</span>
+      {audio ? (
+        <>
+          <button className="icon" title={`Play ${audio.name}`} aria-label="Play cue sound" onClick={() => (preview.stop(), preview.enqueue([{ text: '', audio }]))}>
+            ▶
+          </button>
+          <span className="clip-name small" title={audio.name}>
+            <span className="clip-file">{clipLabel(audio.name)}</span>
+            {audio.durationMs ? ` · ${(audio.durationMs / 1000).toFixed(1)}s` : ''}
+          </span>
+          <button className="icon" title="Remove the sound" aria-label="Remove cue sound" onClick={() => (preview.stop(), onSet(tag, undefined))}>
+            ×
+          </button>
+        </>
+      ) : (
+        <button className="btn tiny" onClick={() => file.current?.click()}>
+          Attach a sound…
+        </button>
+      )}
+      <span className="muted small">
+        {kind === 'music' ? 'Loops until the next music cue. ' : kind === 'ambience' ? 'Loops until the next ambience cue. ' : 'Plays once. '}
+        {shared > 1 ? `Every “${tag.replace(':', ': ')}” cue (${shared}) plays it.` : ''}
+      </span>
+      <input
+        ref={file}
+        type="file"
+        accept="audio/*"
+        hidden
+        aria-label="Cue sound file"
+        onChange={(e) => {
+          const f = e.target.files?.[0];
+          if (f) void attach(f);
+          e.target.value = '';
+        }}
+      />
+      {error && <span className="error-text small">{error}</span>}
+    </div>
   );
 }

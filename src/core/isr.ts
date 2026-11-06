@@ -102,9 +102,11 @@ export type ContentBlock =
   | { type: 'exit'; name: string; note?: string; origin: Provenance; source?: SourceRef }
   /**
    * A cue for the game at this point: music, a sound, a camera shake, anything the game reacts to. In Ink it's a tag
-   * (#music:calm, #shake) on the next line; Unity's NarrativeCuePlayer plays it without code. Readers ignore it.
+   * (#music:calm, #shake) on the next line; Unity's NarrativeCuePlayer plays it without code. `audio` is the sound
+   * the writer attached (the same for every cue with the same name and value; see cues.ts), which Playtest, the
+   * playable web page and the Unity package play.
    */
-  | { type: 'cue'; name: string; value?: string; origin: Provenance; source?: SourceRef };
+  | { type: 'cue'; name: string; value?: string; audio?: AudioRef; origin: Provenance; source?: SourceRef };
 
 /** The choice text of a Continue break, in Ink and every reader. */
 export const CONTINUE_TEXT = 'Continue';
