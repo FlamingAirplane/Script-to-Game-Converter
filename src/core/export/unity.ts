@@ -1,11 +1,14 @@
 import { log } from '../log';
 import type { ProcessedStory } from '../pipeline';
 import { portraitFiles } from '../images';
-import { exitName } from '../isr';
+import { cueName, cueTag, exitName, isActive, itemVar, type Condition } from '../isr';
+import { describeCondition } from '../gating';
 import { assertExportable, audioFiles, buildManifest, imageFiles, commonFiles, itemVarNames, json, sourceFiles, storyVersion, verifyExport } from './common';
 import type { EngineAdapter, ExportFile, ExportOptions, ExportResult } from './types';
+import { storyRoutes, type StoryRoute } from './routes';
+import { translationSheet } from './translations';
 import { normaliseUnityTheme, unityThemeJson } from './unityTheme';
-import { THEME_CS, VIEW_CS } from './unityUi';
+import { SETTINGS_CS, THEME_CS, VIEW_CS } from './unityUi';
 import {
   editorAsmdef,
   fillTemplate,
@@ -21,6 +24,7 @@ import {
   SEMVER,
   SETUP_CS,
   setupAsmdef,
+  testsAsmdef,
   unityPackageId,
   withMetas,
   type UnityPackageId,
@@ -57,12 +61,17 @@ export const unityAdapter: EngineAdapter = {
     const pkg = layout === 'package' ? `${id.name}/` : `${projectRoot}Packages/${id.name}/`;
     const res = `${pkg}Runtime/Resources/NarrativeBridge/${id.slug}/`;
     const manifest = await buildManifest(story, options, this);
-    const voice = audioFiles(story, options.audio, `${res}Audio/`);
+    // Voice clips and pictures sit in Resources, or (Addressables) in Runtime/StoryAssets, which isn't built into the
+    // game by itself: the package's editor code puts them in an Addressables group.
+    const media = options.unityAddressables ? `${pkg}Runtime/StoryAssets/` : res;
+    const voice = audioFiles(story, options.audio, `${media}Audio/`);
     // Scene pictures ship as their PNG/JPEG bytes (Images/<file>.bytes) and are decoded at run time: no
     // texture import settings to depend on, the same in every Unity version, and kept at full size.
-    const pictures = imageFiles(story, options.images, `${res}Images/`, '.bytes');
-    const cs = (template: string) => fillTemplate(template, id, { __INK_URL__: unityPackageUrl(options.integrationRef), __ASSET_FOLDER__: `Assets/NarrativeBridge/${id.namespace.split('.').pop()}` });
+    const pictures = imageFiles(story, options.images, `${media}Images/`, '.bytes');
+    const cs = (template: string) => fillTemplate(template, id, { __INK_URL__: unityPackageUrl(options.integrationRef), __ASSET_FOLDER__: `Assets/NarrativeBridge/${id.namespace.split('.').pop()}`, __USES_ADDRESSABLES__: options.unityAddressables ? 'true' : 'false' });
     const sample = `${pkg}Samples~/Hooking into your game/`;
+    // Playthrough routes for the package's tests; not for Ink with randomness, which needn't replay the same way.
+    const routes = /RANDOM\(|\{~/.test(story.generated.ink) ? [] : storyRoutes(story.compile.json!, story.project);
     const packageFiles: ExportFile[] = [
       { path: `${pkg}package.json`, content: json(packageJson(id, { version, title: story.project.project.title, description: packageDescription(story), unity: '2022.3' })) },
       { path: `${pkg}README.md`, content: packageReadme(story, options, id) },
@@ -70,18 +79,32 @@ export const unityAdapter: EngineAdapter = {
       // The canonical, validated Ink. Folders ending in ~ aren't imported by Unity: the smoke test compiles it.
       { path: `${pkg}Ink~/MainStory.ink`, content: story.generated.ink },
       { path: `${pkg}Runtime/${id.namespace}.asmdef`, content: json(runtimeAsmdef(id)) },
-      { path: `${pkg}Runtime/StoryInfo.cs`, content: storyInfoCs(story, id) },
+      { path: `${pkg}Runtime/StoryInfo.cs`, content: storyInfoCs(story, id, !!options.unityAddressables) },
       { path: `${pkg}Runtime/IInventoryAuthority.cs`, content: cs(INVENTORY_CS) },
+      { path: `${pkg}Runtime/GatedChoice.cs`, content: cs(GATED_CHOICE_CS) },
+      { path: `${pkg}Runtime/SaveStorage.cs`, content: cs(SAVE_STORAGE_CS) },
+      { path: `${pkg}Runtime/NarrativeLocalization.cs`, content: cs(LOCALIZATION_CS) },
+      { path: `${pkg}Runtime/NarrativeCuePlayer.cs`, content: cs(CUE_PLAYER_CS) },
       { path: `${pkg}Runtime/NarrativeController.cs`, content: cs(CONTROLLER_CS) },
       { path: `${pkg}Runtime/NarrativeTheme.cs`, content: cs(THEME_CS) },
       { path: `${pkg}Runtime/NarrativeView.cs`, content: cs(VIEW_CS) },
+      { path: `${pkg}Runtime/NarrativeSettings.cs`, content: cs(SETTINGS_CS) },
       { path: `${res}MainStory.compiled.json`, content: story.compile.json! },
       // The look chosen on the Export page; NarrativeTheme reads it (see unityTheme.ts).
       { path: `${res}Theme.json`, content: json(unityThemeJson(normaliseUnityTheme(options.unityTheme ?? story.project.presentation?.unity))) },
+      // Every piece of text the player sees, keyed, for translators (NarrativeLocalization reads it).
+      { path: `${res}Translations.csv`, content: translationSheet(story.project, normaliseUnityTheme(options.unityTheme ?? story.project.presentation?.unity), options.translationLanguages ?? []) },
       ...voice.files,
       ...pictures.files,
       { path: `${pkg}Editor/${id.namespace}.Editor.asmdef`, content: json(editorAsmdef(id)) },
       { path: `${pkg}Editor/NarrativeBridgeEditor.cs`, content: cs(EDITOR_CS) },
+      { path: `${pkg}Editor/StoryDebuggerWindow.cs`, content: cs(DEBUGGER_CS) },
+      { path: `${pkg}Editor/StoryRoutes.cs`, content: storyRoutesCs(routes, id) },
+      { path: `${pkg}Editor/PlaythroughRunner.cs`, content: cs(ROUTES_RUNNER_CS) },
+      { path: `${pkg}Editor/AddressablesSetup.cs`, content: cs(ADDRESSABLES_SETUP_CS) },
+      { path: `${pkg}Editor/LocalizationTables.cs`, content: cs(LOCALIZATION_TABLES_CS) },
+      { path: `${pkg}Tests/Editor/${id.namespace}.Tests.asmdef`, content: json(testsAsmdef(id)) },
+      { path: `${pkg}Tests/Editor/PlaythroughTests.cs`, content: cs(ROUTE_TESTS_CS) },
       { path: `${pkg}Editor/Setup/${id.namespace}.Setup.asmdef`, content: json(setupAsmdef(id)) },
       { path: `${pkg}Editor/Setup/InkSetup.cs`, content: cs(SETUP_CS) },
       { path: `${sample}${id.namespace}.Samples.asmdef`, content: json(samplesAsmdef(id)) },
@@ -95,7 +118,7 @@ export const unityAdapter: EngineAdapter = {
     const files = await withMetas(packageFiles, pkg, id.name);
     if (layout === 'project') {
       files.push(
-        { path: `${projectRoot}Packages/manifest.json`, content: json(projectManifest(options)) },
+        { path: `${projectRoot}Packages/manifest.json`, content: json(projectManifest(options, id.name)) },
         { path: `${projectRoot}ProjectSettings/ProjectVersion.txt`, content: `m_EditorVersion: ${options.engineVersion}\n` },
         { path: `${projectRoot}README.md`, content: projectReadme(story, options, id) },
         ...(options.includeDemo ? [{ path: `${projectRoot}Assets/Editor/OpenDemoOnFirstOpen.cs`, content: cs(FIRST_OPEN_CS) }] : []),
@@ -156,17 +179,24 @@ export function unityPackageUrl(ref: string): string {
   return `${unityAdapter.integration.repository}${path}#${ref}`;
 }
 
-function projectManifest(o: ExportOptions) {
+function projectManifest(o: ExportOptions, id: string) {
   return {
     // The story's package sits in Packages/ (an embedded package), so it needs no entry here.
     dependencies: {
       [INK_PACKAGE]: unityPackageUrl(o.integrationRef),
       'com.unity.modules.audio': '1.0.0',
+      'com.unity.modules.imageconversion': '1.0.0',
       'com.unity.modules.imgui': '1.0.0',
       'com.unity.modules.jsonserialize': '1.0.0',
       // uGUI for the story panel (NarrativeView). 2022.3 ships 1.0.0; Unity 6 raises it to its own 2.0.0.
       'com.unity.ugui': '1.0.0',
+      // The Test Runner, for the story's playthrough tests.
+      'com.unity.test-framework': '1.4.6',
+      // Voice clips and pictures loaded on demand (2.x is for Unity 6; 1.x for 2022.3).
+      ...(o.unityAddressables ? { 'com.unity.addressables': /^6\d{3}\./.test(o.engineVersion) ? '2.11.2' : '1.29.0' } : {}),
     },
+    // Shows the story package's tests in the Test Runner.
+    testables: [id],
   };
 }
 
@@ -209,12 +239,83 @@ function csString(s: string): string {
   return JSON.stringify(s);
 }
 
-function storyInfoCs(story: ProcessedStory, id: UnityPackageId): string {
+function storyRoutesCs(routes: StoryRoute[], id: UnityPackageId): string {
+  const route = (r: StoryRoute) =>
+    `            new Route(${csString(r.name)}, new string[] { ${r.choices.map(csString).join(', ')} }, ${r.ending ? csString(r.ending) : 'null'}, ${csString(r.lastLine)}),`;
+  return `// <auto-generated> by Narrative Bridge. Regenerated on every export. </auto-generated>
+namespace ${id.namespace}.EditorTools
+{
+    /// <summary>
+    /// Playthrough routes found when the story was exported: between them they reach every ending the automated
+    /// playthroughs reached. PlaythroughRunner (and the package's tests) replay them to check the story still plays
+    /// as written.
+    /// </summary>
+    public static class StoryRoutes
+    {
+        public sealed class Route
+        {
+            public readonly string Name;
+            /// <summary>The text of each choice to take (Continue breaks and exits to the game included).</summary>
+            public readonly string[] Choices;
+            /// <summary>The passage it ends in, or null.</summary>
+            public readonly string Ending;
+            /// <summary>The last line read, as ink prints it ("MIRA: Hello." for dialogue).</summary>
+            public readonly string LastLine;
+
+            public Route(string name, string[] choices, string ending, string lastLine)
+            {
+                Name = name;
+                Choices = choices;
+                Ending = ending;
+                LastLine = lastLine;
+            }
+        }
+
+        public static readonly Route[] All =
+        {
+${routes.map(route).join('\n')}
+        };
+    }
+}
+`;
+}
+
+/** A choice's condition as C#, reading Ink variables through r (see GatedChoice). */
+export function conditionCs(c: Condition): string {
+  switch (c.type) {
+    case 'has_item':
+      return `GatedChoice.Has(r(${csString(itemVar(c.itemId))}))`;
+    case 'not':
+      return `!(${conditionCs(c.condition)})`;
+    case 'and':
+      return `(${c.conditions.map(conditionCs).join(' && ') || 'true'})`;
+    case 'or':
+      return `(${c.conditions.map(conditionCs).join(' || ') || 'false'})`;
+    case 'compare': {
+      const v = c.value;
+      const lit = typeof v === 'string' ? csString(v) : typeof v === 'boolean' ? String(v) : Number.isInteger(v) ? String(v) : `${v}d`;
+      return `GatedChoice.Compare(r(${csString(c.variableId)}), ${csString(c.op)}, ${lit})`;
+    }
+  }
+}
+
+function storyInfoCs(story: ProcessedStory, id: UnityPackageId, addressables = false): string {
   const items = itemVarNames(story);
   const vars = story.project.variables.map((v) => v.id);
   const passages = [...story.generated.ink.matchAll(/^=== (\w+) ===$/gm)].map((m) => m[1]);
   const portraits = Object.entries(portraitFiles(story.project));
   const exits = [...new Set(story.project.passages.flatMap((p) => p.content.flatMap((b) => (b.type === 'exit' ? [exitName(b.name)] : []))))];
+  const cueBlocks = story.project.passages.flatMap((p) => p.content.flatMap((b) => (b.type === 'cue' ? [b] : [])));
+  const cues = [...new Set(cueBlocks.map((b) => cueName(b.name)))];
+  const cueTags = [...new Set(cueBlocks.map((b) => cueTag(b.name, b.value)))];
+  const knots = new Set(passages);
+  const gated = story.project.passages.flatMap((p) =>
+    knots.has(p.id)
+      ? p.choices
+          .filter((c) => isActive(c.review) && c.conditions.length)
+          .map((c) => `new GatedChoice(${csString(p.id)}, ${csString(c.text.trim())}, ${c.conditions.map((x) => `new GatedChoice.Requirement(${csString(describeCondition(x, story.project))}, r => ${conditionCs(x)})`).join(', ')})`)
+      : [],
+  );
   return `// <auto-generated> by Narrative Bridge. Regenerated on every export. </auto-generated>
 namespace ${id.namespace}
 {
@@ -232,9 +333,23 @@ namespace ${id.namespace}
         public const string ThemeResource = ResourceFolder + "Theme";
         public const string AudioFolder = ResourceFolder + "Audio/";
         public const string ImageFolder = ResourceFolder + "Images/";
+        /// <summary>The translation sheet (a CSV; see NarrativeLocalization).</summary>
+        public const string TranslationsResource = ResourceFolder + "Translations";
+        /// <summary>The language the story is written in (the sheet's "source" column).</summary>
+        public const string SourceLanguage = "en";
+        /// <summary>The String Table Collection Create Localization Tables makes (Unity's Localization package).</summary>
+        public const string StringTableName = ${csString(`${id.slug}-story`)};
+        /// <summary>Voice clips and pictures load on demand with Addressables (see AddressPrefix), not from Resources.</summary>
+        public static readonly bool UsesAddressables = ${addressables};
+        /// <summary>Their Addressables addresses: AddressPrefix + "Audio/&lt;clip&gt;" and AddressPrefix + "Images/&lt;file&gt;".</summary>
+        public const string AddressPrefix = ${csString(`NarrativeBridge/${id.slug}/`)};
+        /// <summary>Where those files are in the package (with Addressables).</summary>
+        public const string StoryAssetsFolder = ${csString(`Packages/${id.name}/Runtime/StoryAssets/`)};
 
         /// <summary>Every passage (ink knot) the story can start at: NarrativeController.StartAt(name).</summary>
         public static readonly string[] Passages = { ${passages.map(csString).join(', ')} };
+        /// <summary>Each passage's title, in the same order as Passages (for save slots and menus).</summary>
+        public static readonly string[] PassageTitles = { ${passages.map((k) => csString(story.project.passages.find((p) => p.id === k)?.title || k)).join(', ')} };
         /// <summary>Ink variables that mirror inventory items (has_&lt;item&gt;).</summary>
         public static readonly string[] ItemVariables = { ${items.map(csString).join(', ')} };
         /// <summary>Story variables the game is allowed to read and write.</summary>
@@ -244,6 +359,15 @@ namespace ${id.namespace}
         public static readonly string[] Exits = { ${exits.map(csString).join(', ')} };
         public static readonly string[] PortraitSpeakers = { ${portraits.map(([k]) => csString(k)).join(', ')} };
         public static readonly string[] PortraitFiles = { ${portraits.map(([, f]) => csString(f)).join(', ')} };
+        /// <summary>The cues the writer added (#music:calm → "music"); NarrativeCuePlayer plays them.</summary>
+        public static readonly string[] Cues = { ${cues.map(csString).join(', ')} };
+        /// <summary>Every cue as it appears in the story, with its value (e.g. "music:calm"), to know which clips to add.</summary>
+        public static readonly string[] CueTags = { ${cueTags.map(csString).join(', ')} };
+        /// <summary>Choices that need an item or a value (NarrativeController.LockedChoices lists the ones locked right now).</summary>
+        public static readonly GatedChoice[] GatedChoices =
+        {
+${gated.map((g) => `            ${g},`).join('\n')}
+        };
     }
 }
 `;
@@ -292,6 +416,9 @@ stories) without clashing, and it never changes your scenes, build settings or p
 - **Inventory:** items are Ink Booleans named \`has_<item>\` (\`StoryInfo.ItemVariables\`). Give the controller a component
   implementing \`IInventoryAuthority\` and your inventory becomes the one source of truth: the story asks it before every
   step and sends it the gains and losses instead of keeping its own copy.
+- **Locked choices:** a choice that needs an item or a value the player doesn't have is left out by ink. The story panel
+  shows it greyed out with what it needs (\`Use the brass key · Needs Brass Key\`; *Show Locked Choices* on the theme), and
+  \`LockedChoices\` lists them for your own UI. \`CurrentPassage\` says which passage the reader is in.
 - **Your own UI:** remove the NarrativeView and draw the story from the events above.
 - **Voice:** recorded lines play through the controller's AudioSource; set *Voice Source* to route them through your mixer.
 - **Portraits:** \`StoryInfo.PortraitSpeakers\` lists the characters with a portrait; \`NarrativeController.LoadPortrait(line.SpeakerId)\`
@@ -300,6 +427,14 @@ stories) without clashing, and it never changes your scenes, build settings or p
   and pauses your game, an inventory bridge, a listener for tags and variables, and *StoryExits*, which hands the story to your gameplay at each exit.
 
 ## Saves
+**Save slots.** The story panel's *Save* and *Load* open a menu of slots (*Save Slots* on the controller, 3 by default), each
+showing the passage and when it was saved, and an **autosave** is kept each time the reader reaches a new passage (*Autosave*).
+From code: \`SaveToSlot(n)\`, \`LoadFromSlot(n)\` (0 is the autosave), \`GetSlots()\` (\`SlotInfo\`: \`Exists\`, \`SavedAt\`,
+\`PassageTitle\`, \`Excerpt\`), \`DeleteSlot(n)\` and the \`Saved\` event. Slots are small JSON files in
+\`Application.persistentDataPath/NarrativeBridge/${id.name}/\`; to keep them in your game's own saves (Steam Cloud, a console's
+save data), give *Save Storage* a component implementing \`ISaveStorage\` (\`Write\`, \`Read\`, \`Delete\`). Set *Save Slots*
+to 0 for the single quick save instead.
+
 \`SaveState()\` returns a string you can keep in your own save system (\`SaveToPrefs()\` / \`LoadFromPrefs()\` use one
 PlayerPrefs slot), and \`TryLoadState(save, out error)\` restores it. A save from an earlier version of the story is carried
 over: the new version is replayed with the same choices, so revising the story doesn't break players' saves.
@@ -316,6 +451,52 @@ Shortcuts* (1-9 choose, Space or Return continue) can be turned off, and it uses
 is one (it works with the Input Manager and the Input System package). Its text is TextMeshPro whenever your game has it
 (built into Unity 6, or the TextMeshPro package on 2022.3): set *TMP Font* on the theme to use your own font asset.
 
+## Cues
+Writers add cues in Narrative Bridge: music, a sound, an ambience, a camera shake, or a name of their own, with an optional
+value (\`#music:calm\`, \`#sound:door_creak\`, \`#shake:0.5\`). They're listed in \`StoryInfo.Cues\` (and with their values in
+\`StoryInfo.CueTags\`). The **NarrativeCuePlayer** plays them without code: *Tools → Narrative Bridge → ${id.menuTitle} → Add Cue
+Player to Selected Story* lists every cue with a likely action (play or stop music, play a sound, loop an ambience, shake the
+camera, or only raise its event); give each one its clips, named after the values (a clip called *calm* for \`music:calm\`).
+Each cue also has a UnityEvent, \`CuePlayed\` reports every cue from code, and \`TagFound\` still sees them all. A music cue
+with no value stops the music. (Stories added to a scene after this export get a Cue Player automatically.)
+
+## Story Debugger
+*Tools → Narrative Bridge → ${id.menuTitle} → Story Debugger* follows the story while the game plays: the passage the reader
+is in, what it's waiting for, the choices (click one to choose it) and the locked ones, every story variable and item (change
+them to try a route), a jump to any passage, and saves copied to or loaded from the clipboard.
+
+## Translations
+\`Resources/NarrativeBridge/${id.slug}/Translations.csv\` lists every piece of text the player sees (lines, choices, speaker
+names, scene headings, stage directions, what locked choices need, and the story panel's own words), one per row, with a key
+made from its text. Translators add a column per language (\`fr\`, \`de\`…) and fill it in; put their sheet in its place, or
+set the controller's *Translations*. \`NarrativeLocalization.Language\` picks the language (\`""\` for the story as written;
+the first time, the player's system language if the sheet has it), and the Settings menu gains a *Language* row. Lines are found
+by their text, so revising the story keeps every translation whose line didn't change. \`Line.SourceText\` (and
+\`SourceSpeaker\`…) keep the original words.
+
+**Unity's Localization package:** *Tools → Narrative Bridge → ${id.menuTitle} → Create Localization Tables* makes a String Table
+Collection, \`${id.slug}-story\`, from the sheet (with a locale per language), and the story then follows the selected locale.
+Run it again to bring in a newer sheet.
+
+## Player settings
+The panel's *Settings* button opens a menu where the player sets the text size, typing speed (slow, normal, fast or
+instant), whether it goes on by itself, high contrast (light text on a solid dark panel) and the voice volume. They're kept
+in PlayerPrefs and shared by every Narrative Bridge story in the game. Your own options menu can set the same things
+through \`NarrativeSettings\` (\`TextScale\`, \`TypingSpeed\`, \`AutoAdvance\`, \`HighContrast\`, \`VoiceVolume\`, \`Reset()\`); the
+menu's words are in the view's *Settings Words*.
+
+## Voice clips and pictures${o.unityAddressables ? ' (Addressables)' : ''}
+${o.unityAddressables ? `This story loads its voice clips and pictures **on demand with Addressables**, so they aren't all built into the game.
+They're in \`Runtime/StoryAssets/\`, and the package puts them in an Addressables group, *${id.menuTitle} Story*, at the
+addresses the controller asks for (\`StoryInfo.AddressPrefix\` + \`Audio/<clip>\` or \`Images/<file>\`). That happens by itself
+the first time; after updating the package, run *Tools → Narrative Bridge → ${id.menuTitle} → Set Up Addressables*. The package
+offers to install Addressables (\`com.unity.addressables\`) if the project doesn't have it. Build the Addressables content with
+your game as usual (*Window → Asset Management → Addressables → Groups → Build*, or on player build). Voice clips and the
+story panel's pictures load without waiting (as WebGL needs); \`LoadPicture\` and \`LoadVoiceClip\` wait, and
+\`LoadPictureAsync\` / \`LoadVoiceClipAsync\` don't. \`NarrativeController.ReleaseLoadedMedia()\` lets go of what has loaded so far.` : `Voice clips and pictures are in the package's Resources, so they're always built into the game. For long or heavily voiced
+stories, export with *Load voice clips and pictures on demand (Addressables)* in Narrative Bridge's advanced settings instead.
+From code: \`LoadVoiceClip\`, \`LoadPicture\` (and their \`Async\` versions) and \`ReleaseLoadedMedia()\`.`}
+
 ## Updating
 Export the story again and replace this folder (or install the new .tgz). Script GUIDs stay the same, so your scenes
 keep their references. Your NarrativeTheme asset is never overwritten.
@@ -323,15 +504,26 @@ keep their references. Your NarrativeTheme asset is never overwritten.
 ## What's inside
 - \`Runtime/\`: the controller, view, theme, \`StoryInfo\`, and the story in \`Resources/NarrativeBridge/${id.slug}/\`
   (the compiled story, its look, voice clips, and scene pictures as their PNG/JPEG bytes).
-- \`Editor/\`: menus, the demo scene and the smoke test; \`Editor/Setup\` installs Ink when needed.
+- \`Editor/\`: menus, the demo scene, the smoke test, the Story Debugger and the playthrough routes; \`Editor/Setup\` installs Ink when needed.
+- \`Tests/Editor/\`: the playthrough routes as Test Runner tests.
 - \`Ink~/MainStory.ink\`: the story's validated ink source (not imported; the smoke test compiles it).
 - \`NarrativeBridge~/\`: the export manifest, validation report, story data and original source documents.
+
+## Playthrough tests
+When the story was exported, Narrative Bridge found playthrough routes that between them reach every ending
+(\`Editor/StoryRoutes.cs\`). Replay them to check your game still plays the story as written, after you wire it in or
+update it: *Tools → Narrative Bridge → ${id.menuTitle} → Run Playthrough Tests*, the Test Runner (*Window → General → Test
+Runner → Edit Mode*; add \`"testables": ["${id.name}"]\` to \`Packages/manifest.json\` to list the package's tests, which a
+complete-project export already does), or headless:
+\`Unity -batchmode -projectPath <your project> -executeMethod ${id.namespace}.EditorTools.PlaythroughRunner.RunBatch\`
+(exit code 0 when every route passes). Each failure says which step went differently and what the story offered instead.
 
 ## Smoke test
 *Tools → Narrative Bridge → ${id.menuTitle} → Run Story Smoke Test*, or headless:
 \`Unity -batchmode -projectPath <your project> -executeMethod ${id.namespace}.EditorTools.NarrativeBridgeEditor.RunSmokeTestBatch\`.
 It compiles the ink with the ink compiler inside Unity, plays the story 50 times, checks every voice clip and picture
-imported, saves and carries a save over, starts at every passage, and clicks through the story panel.
+imported, saves and carries a save over, starts at every passage, clicks through the story panel (with its locked choices,
+Settings and save-slot menus), plays the cues, and replays the playthrough routes.
 `;
 }
 
@@ -367,11 +559,675 @@ const INVENTORY_CS = `namespace __NAMESPACE__
 }
 `;
 
+const GATED_CHOICE_CS = `using System;
+using System.Collections.Generic;
+
+namespace __NAMESPACE__
+{
+    /// <summary>
+    /// A choice that needs an item or a value, as approved in Narrative Bridge (StoryInfo.GatedChoices). Ink hides
+    /// such a choice while its condition fails; NarrativeController.LockedChoices lists the ones locked right now,
+    /// with what they need in plain words, so the story panel (or your UI) can show them greyed out.
+    /// </summary>
+    public sealed class GatedChoice
+    {
+        /// <summary>The passage (ink knot) the choice is in.</summary>
+        public readonly string Passage;
+        /// <summary>The choice's text, as the story shows it.</summary>
+        public readonly string Text;
+        readonly Requirement[] requirements;
+
+        public GatedChoice(string passage, string text, params Requirement[] requirements)
+        {
+            Passage = passage;
+            Text = text;
+            this.requirements = requirements ?? new Requirement[0];
+        }
+
+        /// <summary>What the choice needs that the reader doesn't have, in plain words (empty when it's open).</summary>
+        public string[] Missing(Func<string, object> read)
+        {
+            var list = new List<string>();
+            foreach (var r in requirements) if (!r.Test(read)) list.Add(r.Words);
+            return list.ToArray();
+        }
+
+        /// <summary>One condition: in plain words ("Brass Key", "trust at least 2") and as a test of the story's variables.</summary>
+        public sealed class Requirement
+        {
+            public readonly string Words;
+            public readonly Func<Func<string, object>, bool> Test;
+            public Requirement(string words, Func<Func<string, object>, bool> test)
+            {
+                Words = words;
+                Test = test;
+            }
+        }
+
+        /// <summary>Whether an ink value is true (items are ink Booleans named has_&lt;item&gt;).</summary>
+        public static bool Has(object v)
+        {
+            if (v is bool b) return b;
+            if (v is int i) return i != 0;
+            if (v is float f) return f != 0f;
+            return false;
+        }
+
+        /// <summary>Compares an ink value the way ink does: numbers as numbers, text and true/false as they are.</summary>
+        public static bool Compare(object a, string op, object b)
+        {
+            if (IsNumber(a) && IsNumber(b))
+            {
+                var x = Convert.ToDouble(a);
+                var y = Convert.ToDouble(b);
+                switch (op)
+                {
+                    case "==": return x == y;
+                    case "!=": return x != y;
+                    case "<": return x < y;
+                    case "<=": return x <= y;
+                    case ">": return x > y;
+                    case ">=": return x >= y;
+                }
+                return false;
+            }
+            var same = Equals(a, b) || (a is bool ab && IsNumber(b) && ab == (Convert.ToDouble(b) != 0));
+            if (op == "==") return same;
+            if (op == "!=") return !same;
+            if (a is string sa && b is string sb)
+            {
+                var c = string.CompareOrdinal(sa, sb);
+                switch (op)
+                {
+                    case "<": return c < 0;
+                    case "<=": return c <= 0;
+                    case ">": return c > 0;
+                    case ">=": return c >= 0;
+                }
+            }
+            return false;
+        }
+
+        static bool IsNumber(object v) => v is int || v is float || v is double || v is long;
+    }
+}
+`;
+
+const CUE_PLAYER_CS = `using System;
+using System.Collections;
+using System.Collections.Generic;
+using System.Globalization;
+using UnityEngine;
+using UnityEngine.Events;
+
+namespace __NAMESPACE__
+{
+    /// <summary>
+    /// Plays the story's cues without code. A writer adds cues in Narrative Bridge (#music:calm, #sound:door_creak,
+    /// #shake:0.5, or any name of their own; StoryInfo.Cues lists them), and this does what each one is set to: play
+    /// or stop music (fading between tracks), play a sound, loop an ambience, shake the camera, or only raise its
+    /// event. A cue's value picks the clip with that name. Add it with Tools → Narrative Bridge → __MENU_TITLE__ →
+    /// Add Cue Player, which lists every cue in the story.
+    /// </summary>
+    [AddComponentMenu("Narrative Bridge/__MENU_TITLE__/Narrative Cue Player")]
+    public class NarrativeCuePlayer : MonoBehaviour
+    {
+        public enum CueAction { EventOnly, PlayMusic, StopMusic, PlaySound, PlayAmbience, StopAmbience, ShakeCamera }
+
+        [Serializable] public class CueEvent : UnityEvent<string> { }
+        [Serializable] public class AnyCueEvent : UnityEvent<string, string> { }
+
+        [Serializable]
+        public class Cue
+        {
+            [Tooltip("The cue's name as the writer gave it (one of StoryInfo.Cues), e.g. music, sound or shake.")]
+            public string name;
+            public CueAction action = CueAction.EventOnly;
+            [Tooltip("Clips to choose from: the cue's value picks the one with that name (#music:calm plays \\"calm\\"), else the first.")]
+            public List<AudioClip> clips = new List<AudioClip>();
+            [Range(0f, 1f)] public float volume = 1f;
+            [Tooltip("Raised with the cue's value, for anything else your game does.")]
+            public CueEvent onCue = new CueEvent();
+        }
+
+        public NarrativeController controller;
+        public List<Cue> cues = new List<Cue>();
+
+        [Header("Sound")]
+        [Tooltip("Optional AudioSources, e.g. routed through your game's mixer. Made when empty.")]
+        public AudioSource musicSource;
+        public AudioSource soundSource;
+        public AudioSource ambienceSource;
+        [Tooltip("Seconds to fade out one music track and in the next.")]
+        [Min(0f)] public float musicFade = 1f;
+
+        [Header("Camera shake")]
+        [Tooltip("What shakes. Empty: the main camera.")]
+        public Transform shakeTarget;
+        [Min(0f)] public float shakeSeconds = 0.4f;
+        [Tooltip("How far it moves at strength 1 (a shake cue's value, 0 to 1; 0.5 when it has none).")]
+        [Min(0f)] public float shakeDistance = 0.3f;
+
+        [Tooltip("Every cue, listed or not: its name and value.")]
+        public AnyCueEvent onAnyCue = new AnyCueEvent();
+
+        /// <summary>Every cue the story reaches, listed or not: its name and value.</summary>
+        public event Action<string, string> CuePlayed;
+
+        /// <summary>The music track playing now, or null.</summary>
+        public AudioClip CurrentMusic => musicSource != null && musicSource.isPlaying ? musicSource.clip : pendingMusic;
+
+        AudioClip pendingMusic;
+        Coroutine musicFader, shaker;
+        Vector3 shakeHome;
+        Transform shaking;
+
+        void Awake()
+        {
+            if (controller == null) controller = GetComponent<NarrativeController>();
+        }
+
+        void OnEnable()
+        {
+            if (controller == null) controller = GetComponent<NarrativeController>();
+            if (controller != null) controller.TagFound += OnTag;
+        }
+
+        void OnDisable()
+        {
+            if (controller != null) controller.TagFound -= OnTag;
+            StopShake();
+        }
+
+        void OnTag(string tag)
+        {
+            var colon = tag.IndexOf(':');
+            Play(colon < 0 ? tag.Trim() : tag.Substring(0, colon).Trim(), colon < 0 ? "" : tag.Substring(colon + 1).Trim());
+        }
+
+        /// <summary>Plays a cue by name and value, as if the story had reached it.</summary>
+        public void Play(string name, string value)
+        {
+            value = value ?? "";
+            CuePlayed?.Invoke(name, value);
+            onAnyCue.Invoke(name, value);
+            foreach (var cue in cues)
+            {
+                if (cue == null || !string.Equals(cue.name, name, StringComparison.OrdinalIgnoreCase)) continue;
+                Run(cue, value);
+                cue.onCue.Invoke(value);
+            }
+        }
+
+        void Run(Cue cue, string value)
+        {
+            switch (cue.action)
+            {
+                case CueAction.PlayMusic:
+                    // A music cue with no value stops the music.
+                    if (string.IsNullOrEmpty(value)) StopMusic();
+                    else PlayMusic(Pick(cue, value), cue.volume);
+                    break;
+                case CueAction.StopMusic:
+                    StopMusic();
+                    break;
+                case CueAction.PlaySound:
+                    var sound = Pick(cue, value);
+                    if (sound != null) Source(ref soundSource, "Cue Sounds", false).PlayOneShot(sound, cue.volume);
+                    break;
+                case CueAction.PlayAmbience:
+                    var loop = Pick(cue, value);
+                    var ambience = Source(ref ambienceSource, "Cue Ambience", true);
+                    if (loop == null || string.IsNullOrEmpty(value) && cue.clips.Count == 0) { ambience.Stop(); break; }
+                    if (ambience.clip == loop && ambience.isPlaying) break;
+                    ambience.clip = loop;
+                    ambience.volume = cue.volume;
+                    ambience.Play();
+                    break;
+                case CueAction.StopAmbience:
+                    if (ambienceSource != null) ambienceSource.Stop();
+                    break;
+                case CueAction.ShakeCamera:
+                    Shake(float.TryParse(value, NumberStyles.Float, CultureInfo.InvariantCulture, out var strength) ? Mathf.Clamp01(strength) : 0.5f);
+                    break;
+            }
+        }
+
+        /// <summary>The clip named by the value, else the cue's first clip; null when it has none.</summary>
+        static AudioClip Pick(Cue cue, string value)
+        {
+            if (!string.IsNullOrEmpty(value))
+            {
+                foreach (var c in cue.clips) if (c != null && string.Equals(c.name, value, StringComparison.OrdinalIgnoreCase)) return c;
+                if (cue.clips.Count > 0) Debug.LogWarning("[NarrativeBridge] No clip called " + value + " for the " + cue.name + " cue; playing its first clip.");
+            }
+            foreach (var c in cue.clips) if (c != null) return c;
+            return null;
+        }
+
+        AudioSource Source(ref AudioSource source, string name, bool loop)
+        {
+            if (source == null)
+            {
+                var go = new GameObject(name);
+                go.transform.SetParent(transform, false);
+                source = go.AddComponent<AudioSource>();
+                source.playOnAwake = false;
+            }
+            source.loop = loop;
+            return source;
+        }
+
+        // ---- Music: one track at a time, faded -------------------------------------------------
+
+        public void PlayMusic(AudioClip clip, float volume = 1f)
+        {
+            var music = Source(ref musicSource, "Cue Music", true);
+            if (clip == null || (music.clip == clip && music.isPlaying)) return;
+            pendingMusic = clip;
+            if (musicFader != null) StopCoroutine(musicFader);
+            if (!Application.isPlaying || musicFade <= 0f || !isActiveAndEnabled)
+            {
+                music.clip = clip;
+                music.volume = volume;
+                if (Application.isPlaying) music.Play();
+                return;
+            }
+            musicFader = StartCoroutine(FadeMusic(clip, volume));
+        }
+
+        public void StopMusic()
+        {
+            pendingMusic = null;
+            if (musicSource == null) return;
+            if (musicFader != null) StopCoroutine(musicFader);
+            if (!Application.isPlaying || musicFade <= 0f || !isActiveAndEnabled) { musicSource.Stop(); return; }
+            musicFader = StartCoroutine(FadeMusic(null, 0f));
+        }
+
+        IEnumerator FadeMusic(AudioClip next, float volume)
+        {
+            var music = musicSource;
+            var half = musicFade * 0.5f;
+            if (music.isPlaying)
+            {
+                var from = music.volume;
+                for (float t = 0f; t < half; t += Time.unscaledDeltaTime) { music.volume = Mathf.Lerp(from, 0f, t / half); yield return null; }
+                music.Stop();
+            }
+            if (next != null)
+            {
+                music.clip = next;
+                music.volume = 0f;
+                music.Play();
+                for (float t = 0f; t < half; t += Time.unscaledDeltaTime) { music.volume = Mathf.Lerp(0f, volume, t / half); yield return null; }
+                music.volume = volume;
+            }
+            musicFader = null;
+        }
+
+        // ---- Camera shake -------------------------------------------------------------------
+
+        public void Shake(float strength)
+        {
+            var target = shakeTarget != null ? shakeTarget : (Camera.main != null ? Camera.main.transform : null);
+            if (target == null || !Application.isPlaying || !isActiveAndEnabled) return;
+            StopShake();
+            shaking = target;
+            shakeHome = target.localPosition;
+            shaker = StartCoroutine(ShakeFor(strength));
+        }
+
+        IEnumerator ShakeFor(float strength)
+        {
+            for (float t = 0f; t < shakeSeconds && shaking != null; t += Time.unscaledDeltaTime)
+            {
+                shaking.localPosition = shakeHome + UnityEngine.Random.insideUnitSphere * shakeDistance * strength * (1f - t / shakeSeconds);
+                yield return null;
+            }
+            StopShake();
+        }
+
+        void StopShake()
+        {
+            if (shaker != null) StopCoroutine(shaker);
+            shaker = null;
+            if (shaking != null) shaking.localPosition = shakeHome;
+            shaking = null;
+        }
+
+        /// <summary>A sensible action for a cue's name (music, sound, ambience, shake…), as Add Cue Player sets them.</summary>
+        public static CueAction Guess(string name)
+        {
+            var n = (name ?? "").ToLowerInvariant();
+            if (n.Contains("stop_music") || n == "silence") return CueAction.StopMusic;
+            if (n.Contains("stop_ambience")) return CueAction.StopAmbience;
+            if (n.Contains("music") || n == "song" || n == "track") return CueAction.PlayMusic;
+            if (n.Contains("ambien") || n == "weather") return CueAction.PlayAmbience;
+            if (n.Contains("sound") || n == "sfx") return CueAction.PlaySound;
+            if (n.Contains("shake") || n == "rumble") return CueAction.ShakeCamera;
+            return CueAction.EventOnly;
+        }
+    }
+}
+`;
+
+const SAVE_STORAGE_CS = `using System;
+using System.IO;
+using UnityEngine;
+
+namespace __NAMESPACE__
+{
+    /// <summary>
+    /// Where save slots are kept. Implement it on a MonoBehaviour and set the controller's Save Storage to use your
+    /// game's own saves (Steam Cloud, a console's save data, your save file); keys are short names like "slot-1".
+    /// </summary>
+    public interface ISaveStorage
+    {
+        void Write(string key, string data);
+        /// <summary>The data saved under key, or null.</summary>
+        string Read(string key);
+        void Delete(string key);
+    }
+
+    /// <summary>The default: one small JSON file per slot in Application.persistentDataPath/NarrativeBridge/&lt;story&gt;/.</summary>
+    public class FileSaveStorage : ISaveStorage
+    {
+        public readonly string Folder;
+
+        public FileSaveStorage(string folder = null)
+        {
+            Folder = folder ?? System.IO.Path.Combine(Application.persistentDataPath, "NarrativeBridge", StoryInfo.PackageName);
+        }
+
+        string FileFor(string key) => System.IO.Path.Combine(Folder, key + ".json");
+
+        public void Write(string key, string data)
+        {
+            Directory.CreateDirectory(Folder);
+            // Write a new file and swap it in, so a crash mid-save never leaves half a save.
+            var file = FileFor(key);
+            var temp = file + ".tmp";
+            File.WriteAllText(temp, data);
+            if (File.Exists(file)) File.Delete(file);
+            File.Move(temp, file);
+        }
+
+        public string Read(string key)
+        {
+            var file = FileFor(key);
+            return File.Exists(file) ? File.ReadAllText(file) : null;
+        }
+
+        public void Delete(string key)
+        {
+            var file = FileFor(key);
+            if (File.Exists(file)) File.Delete(file);
+        }
+    }
+}
+`;
+
+const LOCALIZATION_CS = `using System;
+using System.Collections.Generic;
+using System.Globalization;
+using System.Text;
+using UnityEngine;
+#if NARRATIVE_BRIDGE_LOCALIZATION
+using UnityEngine.Localization.Settings;
+#endif
+
+namespace __NAMESPACE__
+{
+    /// <summary>
+    /// Shows the story in another language. The package's translation sheet (Resources: StoryInfo.TranslationsResource,
+    /// a CSV) lists every piece of text the player can see with a key made from its text; translators add a column per
+    /// language ("fr", "de"…). Language picks one (or "" for the story as written); the story panel's Settings menu has
+    /// it too. With Unity's Localization package, Tools → Narrative Bridge → __MENU_TITLE__ → Create Localization Tables
+    /// makes a String Table Collection from the sheet, and the story then follows the selected locale.
+    /// </summary>
+    public static class NarrativeLocalization
+    {
+        const string LanguageKey = "NarrativeBridge.Language";
+        static Dictionary<string, string[]> table;
+        static string[] languages = new string[0];
+        static TextAsset sheet;
+        static bool loaded, languageLoaded;
+        static string language = "";
+
+        /// <summary>Raised when the language (or the sheet) changes: the story and its panel show the new words.</summary>
+        public static event Action Changed;
+
+        /// <summary>The languages the sheet has (its column names after "source"), not counting the story's own.</summary>
+        public static IReadOnlyList<string> Languages
+        {
+            get
+            {
+                EnsureLoaded();
+                return languages;
+            }
+        }
+
+        /// <summary>The language shown: one of Languages, or "" for the story as written. Kept in PlayerPrefs; the first time, the player's system language if the sheet has it.</summary>
+        public static string Language
+        {
+            get
+            {
+                LoadLanguage();
+                return language;
+            }
+            set
+            {
+                LoadLanguage();
+                value = value ?? "";
+                if (value == language) return;
+                language = value;
+                PlayerPrefs.SetString(LanguageKey, value);
+                Changed?.Invoke();
+            }
+        }
+
+        /// <summary>Uses another sheet (a CSV TextAsset like Translations.csv, e.g. your translators' newest); null goes back to the package's.</summary>
+        public static void UseSheet(TextAsset csv)
+        {
+            sheet = csv;
+            loaded = false;
+            Changed?.Invoke();
+        }
+
+        /// <summary>The text in the current language, or as written when there's no translation for it.</summary>
+        public static string Translate(string text)
+        {
+            if (string.IsNullOrEmpty(text)) return text;
+#if NARRATIVE_BRIDGE_LOCALIZATION
+            if (UseUnityLocalization)
+            {
+                var fromTables = FromUnity(Key(text));
+                if (!string.IsNullOrEmpty(fromTables)) return fromTables;
+            }
+#endif
+            var lang = Language;
+            if (string.IsNullOrEmpty(lang)) return text;
+            EnsureLoaded();
+            var column = Array.IndexOf(languages, lang);
+            if (column < 0) return text;
+            return table.TryGetValue(Key(text), out var row) && column < row.Length && !string.IsNullOrEmpty(row[column]) ? row[column] : text;
+        }
+
+        /// <summary>The sheet's key for a text: its words with spaces tidied, hashed (FNV-1a), e.g. "nb_1c3f9a2e". The same as Narrative Bridge's.</summary>
+        public static string Key(string text)
+        {
+            var t = Normalise(text);
+            uint h = 0x811c9dc5;
+            for (int i = 0; i < t.Length; i++)
+            {
+                h ^= t[i];
+                h = unchecked(h * 0x01000193);
+            }
+            return "nb_" + h.ToString("x8");
+        }
+
+        static string Normalise(string text)
+        {
+            var sb = new StringBuilder(text.Length);
+            var space = false;
+            foreach (var ch in text)
+            {
+                if (char.IsWhiteSpace(ch)) { space = sb.Length > 0; continue; }
+                if (space) sb.Append(' ');
+                space = false;
+                sb.Append(ch);
+            }
+            return sb.ToString();
+        }
+
+        /// <summary>A language's own name for itself (fr → Français), or the code; "" is the story's own language.</summary>
+        public static string DisplayName(string code)
+        {
+            if (string.IsNullOrEmpty(code)) code = StoryInfo.SourceLanguage;
+            try
+            {
+                var name = CultureInfo.GetCultureInfo(code).NativeName;
+                if (!string.IsNullOrEmpty(name) && name.IndexOf("Unknown", StringComparison.OrdinalIgnoreCase) < 0) return char.ToUpper(name[0]) + name.Substring(1);
+            }
+            catch (Exception) { }
+            return code;
+        }
+
+        /// <summary>The sheet's rows: the header (key, kind, passage, source, languages…) first. For tools such as Create Localization Tables.</summary>
+        public static List<string[]> ReadSheet(TextAsset csv = null)
+        {
+            var asset = csv != null ? csv : (sheet != null ? sheet : Resources.Load<TextAsset>(StoryInfo.TranslationsResource));
+            return asset != null ? ParseCsv(asset.text) : new List<string[]>();
+        }
+
+        static void EnsureLoaded()
+        {
+            if (loaded) return;
+            loaded = true;
+            table = new Dictionary<string, string[]>();
+            languages = new string[0];
+            var rows = ReadSheet();
+            if (rows.Count == 0) return;
+            var header = rows[0];
+            var first = Array.IndexOf(header, "source") + 1;
+            if (first <= 0) return;
+            languages = new string[Math.Max(0, header.Length - first)];
+            for (int i = 0; i < languages.Length; i++) languages[i] = header[first + i].Trim();
+            for (int r = 1; r < rows.Count; r++)
+            {
+                var row = rows[r];
+                if (row.Length == 0 || string.IsNullOrEmpty(row[0])) continue;
+                var values = new string[languages.Length];
+                for (int i = 0; i < values.Length; i++) values[i] = first + i < row.Length ? row[first + i] : "";
+                table[row[0]] = values;
+            }
+        }
+
+        static void LoadLanguage()
+        {
+            if (languageLoaded) return;
+            languageLoaded = true;
+            if (PlayerPrefs.HasKey(LanguageKey)) { language = PlayerPrefs.GetString(LanguageKey, ""); return; }
+            // Nobody has chosen yet: the player's system language, if there's a translation into it.
+            var system = SystemLanguageCode();
+            EnsureLoaded();
+            language = system != null && system != StoryInfo.SourceLanguage && Array.IndexOf(languages, system) >= 0 ? system : "";
+        }
+
+        static string SystemLanguageCode()
+        {
+            switch (Application.systemLanguage)
+            {
+                case SystemLanguage.English: return "en";
+                case SystemLanguage.French: return "fr";
+                case SystemLanguage.German: return "de";
+                case SystemLanguage.Spanish: return "es";
+                case SystemLanguage.Italian: return "it";
+                case SystemLanguage.Portuguese: return "pt";
+                case SystemLanguage.Dutch: return "nl";
+                case SystemLanguage.Polish: return "pl";
+                case SystemLanguage.Russian: return "ru";
+                case SystemLanguage.Japanese: return "ja";
+                case SystemLanguage.Korean: return "ko";
+                case SystemLanguage.ChineseSimplified: return "zh-Hans";
+                case SystemLanguage.ChineseTraditional: return "zh-Hant";
+                case SystemLanguage.Turkish: return "tr";
+                case SystemLanguage.Swedish: return "sv";
+                default: return null;
+            }
+        }
+
+        /// <summary>Reads CSV: commas between fields, "quoted" fields may hold commas, quotes ("") and line breaks.</summary>
+        public static List<string[]> ParseCsv(string text)
+        {
+            var rows = new List<string[]>();
+            var row = new List<string>();
+            var field = new StringBuilder();
+            var quoted = false;
+            for (int i = 0; i < text.Length; i++)
+            {
+                var c = text[i];
+                if (quoted)
+                {
+                    if (c == '"' && i + 1 < text.Length && text[i + 1] == '"') { field.Append('"'); i++; }
+                    else if (c == '"') quoted = false;
+                    else field.Append(c);
+                    continue;
+                }
+                if (c == '"' && field.Length == 0) quoted = true;
+                else if (c == ',') { row.Add(field.ToString()); field.Clear(); }
+                else if (c == '\\n' || c == '\\r')
+                {
+                    if (c == '\\r' && i + 1 < text.Length && text[i + 1] == '\\n') i++;
+                    row.Add(field.ToString());
+                    field.Clear();
+                    if (row.Count > 1 || row[0].Length > 0) rows.Add(row.ToArray());
+                    row = new List<string>();
+                }
+                else if (c != '\\uFEFF') field.Append(c);
+            }
+            if (field.Length > 0 || row.Count > 0)
+            {
+                row.Add(field.ToString());
+                rows.Add(row.ToArray());
+            }
+            return rows;
+        }
+
+#if NARRATIVE_BRIDGE_LOCALIZATION
+        /// <summary>Read translations from Unity's Localization package (the tables Create Localization Tables makes), following its selected locale.</summary>
+        public static bool UseUnityLocalization = true;
+        static bool hooked;
+
+        static string FromUnity(string key)
+        {
+            if (!Application.isPlaying || !LocalizationSettings.HasSettings) return null;
+            if (!hooked)
+            {
+                hooked = true;
+                LocalizationSettings.SelectedLocaleChanged += _ => Changed?.Invoke();
+            }
+            var locale = LocalizationSettings.SelectedLocale;
+            if (locale == null || locale.Identifier.Code == StoryInfo.SourceLanguage) return null;
+            var strings = LocalizationSettings.StringDatabase.GetTable(StoryInfo.StringTableName, locale);
+            var entry = strings != null ? strings.GetEntry(key) : null;
+            return entry != null ? entry.GetLocalizedString() : null;
+        }
+#endif
+    }
+}
+`;
+
 const CONTROLLER_CS = `using System;
 using System.Collections.Generic;
 using Ink.Runtime;
 using UnityEngine;
 using UnityEngine.Events;
+#if NARRATIVE_BRIDGE_ADDRESSABLES
+using UnityEngine.AddressableAssets;
+using UnityEngine.ResourceManagement.AsyncOperations;
+#endif
 
 namespace __NAMESPACE__
 {
@@ -411,6 +1267,17 @@ namespace __NAMESPACE__
         [Tooltip("Volume of the voice clips (the story panel sets it from its theme).")]
         [Range(0f, 1f)] public float voiceVolume = 1f;
 
+        [Tooltip("Optional translation sheet (a CSV like the package's Translations.csv, with a column per language). Empty: the package's. See NarrativeLocalization.")]
+        public TextAsset translations;
+
+        [Header("Saves")]
+        [Tooltip("Save slots the story panel's Save and Load offer. 0 keeps the single quick save (SaveToPrefs).")]
+        [Range(0, 9)] public int saveSlots = 3;
+        [Tooltip("Keep an autosave (slot 0) each time the reader reaches a new passage, while the game plays.")]
+        public bool autosave = true;
+        [Tooltip("Optional component implementing ISaveStorage, for your game's own saves. Files in Application.persistentDataPath when empty.")]
+        public MonoBehaviour saveStorage;
+
         [Serializable] public class LineEvent : UnityEvent<string, string> { }
         [Serializable] public class TextEvent : UnityEvent<string> { }
         [Serializable] public class VariableEvent : UnityEvent<string, string> { }
@@ -449,6 +1316,8 @@ namespace __NAMESPACE__
             /// <summary>A choice the player made (shown in the transcript), not story text.</summary>
             public bool IsChoice;
             public bool IsTransition;
+            /// <summary>The text, speaker, scene and stage direction as written (Text and the rest are in NarrativeLocalization.Language).</summary>
+            public string SourceText, SourceSpeaker, SourceScene, SourceParen;
         }
 
         /// <summary>The text of a Continue break's only choice (see the Ink conventions).</summary>
@@ -496,11 +1365,86 @@ namespace __NAMESPACE__
         /// <summary>The dialogue has handed over to the game and waits for Resume() or ResumeAt(passage).</summary>
         public bool IsAtExit => CurrentExit != null;
 
+        /// <summary>The passage (ink knot, one of StoryInfo.Passages) the reader is in, or null before the story starts.</summary>
+        public string CurrentPassage
+        {
+            get
+            {
+                if (Story != null && Story.currentChoices.Count > 0)
+                {
+                    var knot = KnotOf(Story.currentChoices[0].sourcePath);
+                    if (knot != null) return knot;
+                }
+                return lastPassage;
+            }
+        }
+
+        /// <summary>A choice the reader can't take yet: its text, and what it needs in plain words.</summary>
+        public struct LockedChoice
+        {
+            public string Text;
+            public string Needs;
+        }
+
+        /// <summary>
+        /// The choices of the current passage that need an item or a value the reader doesn't have (see
+        /// StoryInfo.GatedChoices). Ink leaves them out of Story.currentChoices; show them greyed out if you like.
+        /// Empty at a Continue break, an exit or the ending.
+        /// </summary>
+        public IReadOnlyList<LockedChoice> LockedChoices
+        {
+            get
+            {
+                locked.Clear();
+                if (Story == null || HasEnded || IsAtExit || IsWaitingForContinue || Story.currentChoices.Count == 0) return locked;
+                var passage = CurrentPassage;
+                foreach (var g in StoryInfo.GatedChoices)
+                {
+                    if (g.Passage != passage || Story.currentChoices.Exists(c => c.text == g.Text)) continue;
+                    var missing = g.Missing(ReadVariable);
+                    if (missing.Length == 0) continue;
+                    for (int i = 0; i < missing.Length; i++) missing[i] = NarrativeLocalization.Translate(missing[i]);
+                    locked.Add(new LockedChoice { Text = NarrativeLocalization.Translate(g.Text), Needs = string.Join(", ", missing) });
+                }
+                return locked;
+            }
+        }
+
+        readonly List<LockedChoice> locked = new List<LockedChoice>();
+        string lastPassage;
+
+        /// <summary>A story variable's value by name, or null (for conditions; GetVariable checks the name).</summary>
+        object ReadVariable(string name)
+        {
+            if (Story == null || !Story.variablesState.GlobalVariableExistsWithName(name)) return null;
+            return Story.variablesState[name];
+        }
+
+        static string KnotOf(string path)
+        {
+            if (string.IsNullOrEmpty(path)) return null;
+            var dot = path.IndexOf('.');
+            var knot = dot < 0 ? path : path.Substring(0, dot);
+            return Array.IndexOf(StoryInfo.Passages, knot) >= 0 ? knot : null;
+        }
+
+        void NotePassage()
+        {
+            var knot = KnotOf(Story.state.currentPathString);
+            if (knot != null) lastPassage = knot;
+        }
+
         const string SaveKey = "NarrativeBridge.Save." + StoryInfo.ProjectId;
         readonly List<Line> transcript = new List<Line>();
         IInventoryAuthority authority;
         AudioSource voice;
-        readonly Queue<AudioClip> voiceQueue = new Queue<AudioClip>();
+        // Voice clips to play in order; one may still be loading (Addressables).
+        class VoiceItem
+        {
+            public AudioClip Clip;
+            public bool Loading;
+        }
+        readonly Queue<VoiceItem> voiceQueue = new Queue<VoiceItem>();
         bool syncing, silent;
         string status = "";
         Vector2 scroll;
@@ -518,6 +1462,10 @@ namespace __NAMESPACE__
             public string inkState;
             public List<string> choicePath;
             public string startPassage;
+            // For save slots: when, where, and the last line read.
+            public string savedAt;
+            public string passage;
+            public string excerpt;
         }
 
         void Awake()
@@ -528,8 +1476,30 @@ namespace __NAMESPACE__
             voice = voiceSource != null ? voiceSource : GetComponent<AudioSource>();
             if (voice == null) voice = gameObject.AddComponent<AudioSource>();
             voice.playOnAwake = false;
+            if (translations != null) NarrativeLocalization.UseSheet(translations);
             if (startOnAwake) StartStory();
         }
+
+        void OnEnable() => NarrativeLocalization.Changed += Relocalize;
+        void OnDisable() => NarrativeLocalization.Changed -= Relocalize;
+
+        /// <summary>Puts the transcript into the current language again (after NarrativeLocalization.Language changes).</summary>
+        public void Relocalize()
+        {
+            for (int i = 0; i < transcript.Count; i++) transcript[i] = Localize(transcript[i]);
+        }
+
+        static Line Localize(Line l)
+        {
+            l.Text = NarrativeLocalization.Translate(l.SourceText ?? l.Text);
+            if (l.SourceSpeaker != null) l.Speaker = NarrativeLocalization.Translate(l.SourceSpeaker);
+            if (l.SourceScene != null) l.Scene = NarrativeLocalization.Translate(l.SourceScene);
+            if (l.SourceParen != null) l.Paren = NarrativeLocalization.Translate(l.SourceParen);
+            return l;
+        }
+
+        /// <summary>A choice's text in the current language (choose it by index with Choose).</summary>
+        public static string ChoiceText(Choice choice) => NarrativeLocalization.Translate(choice.text);
 
         /// <summary>Starts (or restarts) the story from the beginning.</summary>
         public void StartStory() => Begin(null);
@@ -570,6 +1540,7 @@ namespace __NAMESPACE__
             transcript.Clear();
             HasEnded = false;
             StartPassage = passage;
+            lastPassage = passage;
             SetStatus("");
             StopVoice();
             if (passage != null) Story.ChoosePathString(passage);
@@ -617,7 +1588,7 @@ namespace __NAMESPACE__
             if (Story == null || index < 0 || index >= Story.currentChoices.Count) return;
             // A Continue break or an exit leaves no trace in the transcript: the page simply goes on.
             if (!IsWaitingForContinue && !IsAtExit)
-                transcript.Add(new Line { Speaker = null, Text = Story.currentChoices[index].text, Tags = new List<string> { "choice" }, IsChoice = true });
+                transcript.Add(Localize(new Line { Speaker = null, Text = Story.currentChoices[index].text, SourceText = Story.currentChoices[index].text, Tags = new List<string> { "choice" }, IsChoice = true }));
             choicePath.Add(Story.currentChoices[index].text);
             Story.ChooseChoiceIndex(index);
             StopVoice();
@@ -629,8 +1600,15 @@ namespace __NAMESPACE__
             SyncFromAuthority();
             while (Story.canContinue)
             {
+                NotePassage();
                 var raw = Story.Continue().Trim();
-                if (raw.Length == 0) continue;
+                if (raw.Length == 0)
+                {
+                    // A tag with no text after it (a cue at the end of a passage) still reaches the game.
+                    foreach (var t in Story.currentTags)
+                        if (!IsStoryTag(t)) { TagFound?.Invoke(t); onTag.Invoke(t); }
+                    continue;
+                }
                 var line = ParseLine(raw, new List<string>(Story.currentTags));
                 transcript.Add(line);
                 QueueVoice(line);
@@ -639,6 +1617,7 @@ namespace __NAMESPACE__
                 foreach (var t in line.Tags)
                     if (!IsStoryTag(t)) { TagFound?.Invoke(t); onTag.Invoke(t); }
             }
+            AutosaveIfNewPassage();
             if (IsAtExit) { ExitReached?.Invoke(CurrentExit); onExit.Invoke(CurrentExit); }
             else if (IsWaitingForContinue) { ContinueShown?.Invoke(); onContinue.Invoke(); }
             else if (Story.currentChoices.Count > 0) { ChoicesShown?.Invoke(Story.currentChoices); onChoices.Invoke(); }
@@ -648,6 +1627,16 @@ namespace __NAMESPACE__
                 StoryEnded?.Invoke();
                 onEnded.Invoke();
             }
+        }
+
+        // An autosave each time the reader reaches a new passage (only while the game plays).
+        void AutosaveIfNewPassage()
+        {
+            if (!autosave || !Application.isPlaying || silent || Story == null) return;
+            var passage = CurrentPassage;
+            if (passage == null || passage == autosavedPassage) return;
+            autosavedPassage = passage;
+            SaveToSlot(AutosaveSlot);
         }
 
         static bool IsStoryTag(string t) =>
@@ -661,11 +1650,9 @@ namespace __NAMESPACE__
             foreach (var t in line.Tags)
             {
                 if (!t.StartsWith("audio:")) continue;
-                var file = t.Substring(6).Trim();
-                var dot = file.LastIndexOf('.');
-                var clip = Resources.Load<AudioClip>(StoryInfo.AudioFolder + (dot > 0 ? file.Substring(0, dot) : file));
-                if (clip != null) voiceQueue.Enqueue(clip);
-                else Debug.LogWarning("[NarrativeBridge] Voice clip not found: " + file);
+                var item = new VoiceItem { Loading = true };
+                voiceQueue.Enqueue(item);
+                LoadVoiceClipAsync(t.Substring(6).Trim(), clip => { item.Clip = clip; item.Loading = false; });
             }
         }
 
@@ -677,9 +1664,12 @@ namespace __NAMESPACE__
 
         void Update()
         {
-            if (voice != null && !voice.isPlaying && voiceQueue.Count > 0)
+            // The next clip plays when the last has finished (and once it has loaded).
+            while (voice != null && !voice.isPlaying && voiceQueue.Count > 0 && !voiceQueue.Peek().Loading)
             {
-                voice.clip = voiceQueue.Dequeue();
+                var next = voiceQueue.Dequeue();
+                if (next.Clip == null) continue;
+                voice.clip = next.Clip;
                 voice.volume = voiceVolume;
                 voice.Play();
             }
@@ -703,31 +1693,168 @@ namespace __NAMESPACE__
                 var colon = raw.IndexOf(": ", StringComparison.Ordinal);
                 if (colon > 0) { speaker = raw.Substring(0, colon); text = raw.Substring(colon + 2); }
             }
-            return new Line { Speaker = speaker, SpeakerId = speakerId, Text = text, Tags = tags, Scene = scene, Paren = paren, Image = image, IsTransition = transition };
+            return Localize(new Line { Speaker = speaker, SpeakerId = speakerId, Text = text, Tags = tags, Scene = scene, Paren = paren, Image = image, IsTransition = transition, SourceText = text, SourceSpeaker = speaker, SourceScene = scene, SourceParen = paren });
         }
 
         // ---- Scene pictures: the first line of a scene may carry #image:<file> ----------------
 
         static readonly Dictionary<string, Texture2D> pictures = new Dictionary<string, Texture2D>();
+        static readonly Dictionary<string, AudioClip> clips = new Dictionary<string, AudioClip>();
+
+        // ---- Loading voice clips and pictures: from Resources, or on demand with Addressables ------
 
         /// <summary>
-        /// The picture for an #image file name, or null. Pictures ship as their PNG or JPEG bytes in the package's
-        /// Resources (StoryInfo.ImageFolder + file + ".bytes") and are decoded once, then kept.
+        /// The picture for an #image file name, or null. Pictures ship as their PNG or JPEG bytes (StoryInfo.ImageFolder +
+        /// file + ".bytes" in Resources, or AddressPrefix + "Images/" + file with Addressables) and are decoded once, then
+        /// kept. With Addressables this waits for the load; LoadPictureAsync doesn't (needed on WebGL).
         /// </summary>
         public static Texture2D LoadPicture(string file)
         {
             if (string.IsNullOrEmpty(file)) return null;
             if (pictures.TryGetValue(file, out var cached) && cached != null) return cached;
-            var data = Resources.Load<TextAsset>(StoryInfo.ImageFolder + file);
+            if (!StoryInfo.UsesAddressables) return Decode(file, Resources.Load<TextAsset>(StoryInfo.ImageFolder + file), true);
+#if UNITY_EDITOR
+            // Outside Play mode Addressables has no content to load from: read the package's file itself.
+            if (!Application.isPlaying) return Decode(file, UnityEditor.AssetDatabase.LoadAssetAtPath<TextAsset>(StoryInfo.StoryAssetsFolder + "Images/" + file + ".bytes"), false);
+#endif
+#if NARRATIVE_BRIDGE_ADDRESSABLES
+            var handle = Addressables.LoadAssetAsync<TextAsset>(StoryInfo.AddressPrefix + "Images/" + file);
+            var data = handle.WaitForCompletion();
+            var texture = Decode(file, handle.Status == AsyncOperationStatus.Succeeded ? data : null, false);
+            Addressables.Release(handle);
+            return texture;
+#else
+            NoAddressables();
+            return null;
+#endif
+        }
+
+        /// <summary>Loads a picture without waiting, then calls done with it (or null). At once when it's already loaded.</summary>
+        public static void LoadPictureAsync(string file, Action<Texture2D> done)
+        {
+            if (string.IsNullOrEmpty(file)) { done(null); return; }
+            if ((pictures.TryGetValue(file, out var cached) && cached != null) || !StoryInfo.UsesAddressables || !Application.isPlaying) { done(LoadPicture(file)); return; }
+#if NARRATIVE_BRIDGE_ADDRESSABLES
+            var handle = Addressables.LoadAssetAsync<TextAsset>(StoryInfo.AddressPrefix + "Images/" + file);
+            handle.Completed += op =>
+            {
+                var texture = pictures.TryGetValue(file, out var c) && c != null ? c : Decode(file, op.Status == AsyncOperationStatus.Succeeded ? op.Result : null, false);
+                Addressables.Release(op);
+                done(texture);
+            };
+#else
+            NoAddressables();
+            done(null);
+#endif
+        }
+
+        static Texture2D Decode(string file, TextAsset data, bool fromResources)
+        {
             if (data == null) return null;
             var texture = new Texture2D(2, 2, TextureFormat.RGBA32, false) { name = file, wrapMode = TextureWrapMode.Clamp };
             // Keep no CPU copy once it's on the GPU (there is no GPU when the editor runs headless).
             var ok = texture.LoadImage(data.bytes, SystemInfo.graphicsDeviceType != UnityEngine.Rendering.GraphicsDeviceType.Null);
-            Resources.UnloadAsset(data);
+            if (fromResources) Resources.UnloadAsset(data);
             if (!ok) return null;
             pictures[file] = texture;
             return texture;
         }
+
+        static string ClipName(string file)
+        {
+            var dot = file.LastIndexOf('.');
+            return dot > 0 ? file.Substring(0, dot) : file;
+        }
+
+        /// <summary>A voice clip by its #audio file name, or null. With Addressables this waits for the load.</summary>
+        public static AudioClip LoadVoiceClip(string file)
+        {
+            var name = ClipName(file);
+            if (clips.TryGetValue(name, out var cached) && cached != null) return cached;
+            AudioClip clip = null;
+            if (!StoryInfo.UsesAddressables) clip = Resources.Load<AudioClip>(StoryInfo.AudioFolder + name);
+#if UNITY_EDITOR
+            else if (!Application.isPlaying)
+            {
+                // Outside Play mode Addressables has no content to load from: find the package's clip itself.
+                foreach (var guid in UnityEditor.AssetDatabase.FindAssets(name + " t:AudioClip", new[] { StoryInfo.StoryAssetsFolder + "Audio" }))
+                {
+                    var path = UnityEditor.AssetDatabase.GUIDToAssetPath(guid);
+                    if (System.IO.Path.GetFileNameWithoutExtension(path) == name) { clip = UnityEditor.AssetDatabase.LoadAssetAtPath<AudioClip>(path); break; }
+                }
+            }
+#endif
+            else
+            {
+#if NARRATIVE_BRIDGE_ADDRESSABLES
+                var handle = Addressables.LoadAssetAsync<AudioClip>(StoryInfo.AddressPrefix + "Audio/" + name);
+                clip = handle.WaitForCompletion();
+                if (handle.Status != AsyncOperationStatus.Succeeded) clip = null;
+                else loadedClips.Add(handle);
+#else
+                NoAddressables();
+#endif
+            }
+            if (clip != null) clips[name] = clip;
+            return clip;
+        }
+
+        /// <summary>Loads a voice clip without waiting, then calls done with it (or null). At once when it's already loaded.</summary>
+        public static void LoadVoiceClipAsync(string file, Action<AudioClip> done)
+        {
+            var name = ClipName(file);
+            if ((clips.TryGetValue(name, out var cached) && cached != null) || !StoryInfo.UsesAddressables || !Application.isPlaying)
+            {
+                var clip = LoadVoiceClip(file);
+                if (clip == null) Debug.LogWarning("[NarrativeBridge] Voice clip not found: " + file);
+                done(clip);
+                return;
+            }
+#if NARRATIVE_BRIDGE_ADDRESSABLES
+            var handle = Addressables.LoadAssetAsync<AudioClip>(StoryInfo.AddressPrefix + "Audio/" + name);
+            handle.Completed += op =>
+            {
+                AudioClip clip = null;
+                if (op.Status == AsyncOperationStatus.Succeeded) { clip = op.Result; clips[name] = clip; loadedClips.Add(op); }
+                else Debug.LogWarning("[NarrativeBridge] Voice clip not found in Addressables: " + StoryInfo.AddressPrefix + "Audio/" + name);
+                done(clip);
+            };
+#else
+            NoAddressables();
+            done(null);
+#endif
+        }
+
+#if NARRATIVE_BRIDGE_ADDRESSABLES
+        static readonly List<AsyncOperationHandle<AudioClip>> loadedClips = new List<AsyncOperationHandle<AudioClip>>();
+#endif
+
+        /// <summary>Lets go of every voice clip and picture loaded so far (they load again when needed), e.g. between chapters.</summary>
+        public static void ReleaseLoadedMedia()
+        {
+            foreach (var t in pictures.Values)
+            {
+                if (t == null) continue;
+                if (Application.isPlaying) UnityEngine.Object.Destroy(t);
+                else UnityEngine.Object.DestroyImmediate(t);
+            }
+            pictures.Clear();
+            clips.Clear();
+#if NARRATIVE_BRIDGE_ADDRESSABLES
+            foreach (var h in loadedClips) if (h.IsValid()) Addressables.Release(h);
+            loadedClips.Clear();
+#endif
+        }
+
+#if !NARRATIVE_BRIDGE_ADDRESSABLES
+        static bool warnedAddressables;
+        static void NoAddressables()
+        {
+            if (warnedAddressables) return;
+            warnedAddressables = true;
+            Debug.LogError("[NarrativeBridge] This story loads its voice clips and pictures with Addressables, but the Addressables package (com.unity.addressables) isn't installed.");
+        }
+#endif
 
         /// <summary>A character's portrait file name (in StoryInfo.ImageFolder), by speaker id, or null.</summary>
         public static string PortraitFile(string speakerId)
@@ -820,10 +1947,123 @@ namespace __NAMESPACE__
             SetStatus(TryLoadState(PlayerPrefs.GetString(SaveKey, ""), out var err) ? LoadNote ?? "Loaded." : err);
         }
 
+        // ---- Save slots: several saves and an autosave, through ISaveStorage --------------------
+
+        /// <summary>The autosave's slot number; the player's slots are 1 to saveSlots.</summary>
+        public const int AutosaveSlot = 0;
+
+        /// <summary>What a save slot holds: when it was saved, where, and the last line read.</summary>
+        public struct SlotInfo
+        {
+            public int Slot;
+            public bool Exists;
+            public DateTime SavedAt;
+            public string Passage;
+            public string PassageTitle;
+            public string Excerpt;
+            /// <summary>The save is from an earlier version of the story (it loads by replaying its choices).</summary>
+            public bool OtherVersion;
+        }
+
+        /// <summary>Where slots are kept: Save Storage when set, else files (see FileSaveStorage). Settable from code.</summary>
+        public ISaveStorage Storage
+        {
+            get
+            {
+                if (storage == null) storage = saveStorage as ISaveStorage ?? new FileSaveStorage();
+                return storage;
+            }
+            set => storage = value;
+        }
+
+        /// <summary>Raised after a slot is saved (its number; AutosaveSlot for the autosave).</summary>
+        public event Action<int> Saved;
+
+        ISaveStorage storage;
+        string autosavedPassage;
+
+        static string SlotKey(int slot) => slot == AutosaveSlot ? "autosave" : "slot-" + slot;
+
+        public SlotInfo GetSlot(int slot)
+        {
+            var info = new SlotInfo { Slot = slot };
+            string json = null;
+            try { json = Storage.Read(SlotKey(slot)); } catch (Exception e) { Debug.LogWarning("[NarrativeBridge] Could not read save slot " + slot + ": " + e.Message); }
+            if (string.IsNullOrEmpty(json)) return info;
+            SaveData data = null;
+            try { data = JsonUtility.FromJson<SaveData>(json); } catch { }
+            if (data == null || string.IsNullOrEmpty(data.inkState)) return info;
+            info.Exists = true;
+            DateTime.TryParse(data.savedAt, null, System.Globalization.DateTimeStyles.RoundtripKind, out info.SavedAt);
+            info.Passage = data.passage;
+            var i = string.IsNullOrEmpty(data.passage) ? -1 : Array.IndexOf(StoryInfo.Passages, data.passage);
+            info.PassageTitle = i >= 0 ? StoryInfo.PassageTitles[i] : data.passage;
+            info.Excerpt = data.excerpt;
+            info.OtherVersion = data.storyVersion != StoryInfo.StoryVersion;
+            return info;
+        }
+
+        /// <summary>The autosave and every player slot, in order (slot 0 is the autosave).</summary>
+        public List<SlotInfo> GetSlots()
+        {
+            var list = new List<SlotInfo>();
+            for (int i = 0; i <= saveSlots; i++) list.Add(GetSlot(i));
+            return list;
+        }
+
+        public void SaveToSlot(int slot)
+        {
+            if (Story == null) return;
+            try
+            {
+                Storage.Write(SlotKey(slot), SaveState());
+                if (slot != AutosaveSlot) SetStatus("Saved to slot " + slot + ".");
+                Saved?.Invoke(slot);
+            }
+            catch (Exception e) { ReportError("Could not save: " + e.Message); }
+        }
+
+        /// <summary>Loads a slot; false (with the reason in Status) when it's empty or can't be loaded.</summary>
+        public bool LoadFromSlot(int slot)
+        {
+            string json = null;
+            try { json = Storage.Read(SlotKey(slot)); } catch (Exception e) { SetStatus("Could not read the save: " + e.Message); return false; }
+            if (string.IsNullOrEmpty(json)) { SetStatus("That slot is empty."); return false; }
+            var ok = TryLoadState(json, out var err);
+            SetStatus(ok ? LoadNote ?? (slot == AutosaveSlot ? "Loaded the autosave." : "Loaded slot " + slot + ".") : err);
+            autosavedPassage = CurrentPassage;
+            return ok;
+        }
+
+        public void DeleteSlot(int slot)
+        {
+            try { Storage.Delete(SlotKey(slot)); } catch (Exception e) { Debug.LogWarning("[NarrativeBridge] Could not delete save slot " + slot + ": " + e.Message); }
+        }
+
+        string Excerpt()
+        {
+            for (int i = transcript.Count - 1; i >= 0; i--)
+            {
+                if (transcript[i].IsChoice || string.IsNullOrEmpty(transcript[i].Text)) continue;
+                var t = (transcript[i].Speaker != null ? transcript[i].Speaker + ": " : "") + transcript[i].Text;
+                return t.Length > 90 ? t.Substring(0, 87) + "..." : t;
+            }
+            return "";
+        }
+
         /// <summary>The story's state as a string, to keep in your own save system.</summary>
         public string SaveState()
         {
-            return JsonUtility.ToJson(new SaveData { storyVersion = StoryInfo.StoryVersion, inkState = Story.state.ToJson(), choicePath = new List<string>(choicePath), startPassage = StartPassage ?? "" });
+            return JsonUtility.ToJson(new SaveData
+            {
+                storyVersion = StoryInfo.StoryVersion,
+                inkState = Story.state.ToJson(),
+                choicePath = new List<string>(choicePath),
+                startPassage = StartPassage ?? "",
+                savedAt = DateTime.UtcNow.ToString("o"),
+                passage = CurrentPassage ?? "",
+                excerpt = Excerpt(),
+            });
         }
 
         public bool TryLoadState(string saveJson, out string error)
@@ -972,6 +2212,430 @@ namespace __NAMESPACE__
 }
 `;
 
+const DEBUGGER_CS = `using System;
+using System.Collections.Generic;
+using UnityEditor;
+using UnityEngine;
+
+namespace __NAMESPACE__.EditorTools
+{
+    /// <summary>
+    /// Tools → Narrative Bridge → __MENU_TITLE__ → Story Debugger. While the game plays it follows the story: the
+    /// passage the reader is in, the choices (click to choose), the locked ones, every story variable and item (edit
+    /// them), a jump to any passage, and saves to and from the clipboard.
+    /// </summary>
+    public class StoryDebuggerWindow : EditorWindow
+    {
+        NarrativeController target;
+        Vector2 scroll;
+        int jumpIndex;
+        bool showVariables = true, showItems = true, showTranscript = true;
+
+        [MenuItem("Tools/Narrative Bridge/__MENU_TITLE__/Story Debugger")]
+        public static void Open() => GetWindow<StoryDebuggerWindow>(false, "Story Debugger", true);
+
+        void OnEnable() => EditorApplication.playModeStateChanged += OnPlayModeChanged;
+        void OnDisable() => EditorApplication.playModeStateChanged -= OnPlayModeChanged;
+        void OnPlayModeChanged(PlayModeStateChange change) { target = null; Repaint(); }
+        void OnInspectorUpdate() { if (Application.isPlaying) Repaint(); }
+
+        void OnGUI()
+        {
+            EditorGUILayout.LabelField(StoryInfo.Title, EditorStyles.boldLabel);
+            if (!Application.isPlaying)
+            {
+                EditorGUILayout.HelpBox("Press Play to follow the story here: the passage, the choices (click one to choose it), the locked ones, and the story's variables and items, which you can change.", MessageType.Info);
+                return;
+            }
+            var all = UnityEngine.Object.FindObjectsByType<NarrativeController>(FindObjectsInactive.Include, FindObjectsSortMode.None);
+            if (all.Length == 0)
+            {
+                EditorGUILayout.HelpBox("No NarrativeController for this story is in the open scenes.", MessageType.Warning);
+                return;
+            }
+            if (target == null || Array.IndexOf(all, target) < 0) target = all[0];
+            if (all.Length > 1)
+            {
+                var names = Array.ConvertAll(all, x => x.gameObject.name);
+                target = all[EditorGUILayout.Popup("Controller", Array.IndexOf(all, target), names)];
+            }
+            var c = target;
+            scroll = EditorGUILayout.BeginScrollView(scroll);
+            try { Draw(c); }
+            finally { EditorGUILayout.EndScrollView(); }
+        }
+
+        void Draw(NarrativeController c)
+        {
+            if (c.Story == null)
+            {
+                EditorGUILayout.HelpBox("The story hasn't started.", MessageType.Info);
+                if (GUILayout.Button("Start the story")) c.StartStory();
+                DrawJump(c);
+                return;
+            }
+            EditorGUILayout.LabelField("Passage", c.CurrentPassage ?? "(none yet)");
+            EditorGUILayout.LabelField("Waiting for", c.HasEnded ? "nothing: the story has ended" : c.IsAtExit ? "the game (exit: " + c.CurrentExit + ")" : c.IsWaitingForContinue ? "Continue" : c.Story.currentChoices.Count + " choice(s)");
+            if (!string.IsNullOrEmpty(c.Status)) EditorGUILayout.LabelField("Status", c.Status);
+
+            EditorGUILayout.Space();
+            EditorGUILayout.LabelField("Choices", EditorStyles.boldLabel);
+            if (c.IsAtExit)
+            {
+                if (GUILayout.Button("Resume the story (as the game would)")) c.Resume();
+            }
+            else if (c.IsWaitingForContinue)
+            {
+                if (GUILayout.Button("Continue")) c.Continue();
+            }
+            else
+            {
+                var choices = c.Story.currentChoices;
+                for (int i = 0; i < choices.Count; i++)
+                    if (GUILayout.Button((i + 1) + ". " + choices[i].text, EditorStyles.miniButton)) { c.Choose(i); GUIUtility.ExitGUI(); }
+                using (new EditorGUI.DisabledScope(true))
+                    foreach (var l in c.LockedChoices) GUILayout.Button("Locked: " + l.Text + "  (needs " + l.Needs + ")", EditorStyles.miniButton);
+                if (c.HasEnded) EditorGUILayout.LabelField("The story has ended.");
+            }
+            using (new EditorGUILayout.HorizontalScope())
+            {
+                if (GUILayout.Button("Restart")) c.StartStory();
+                if (GUILayout.Button("Copy save")) { EditorGUIUtility.systemCopyBuffer = c.SaveState(); ShowNotification(new GUIContent("Save copied")); }
+                if (GUILayout.Button("Load save from clipboard"))
+                    ShowNotification(new GUIContent(c.TryLoadState(EditorGUIUtility.systemCopyBuffer, out var err) ? (c.LoadNote ?? "Loaded") : err));
+            }
+            DrawJump(c);
+
+            EditorGUILayout.Space();
+            showVariables = EditorGUILayout.Foldout(showVariables, "Variables (" + StoryInfo.Variables.Length + ")", true);
+            if (showVariables) foreach (var name in StoryInfo.Variables) DrawVariable(c, name, name);
+            showItems = EditorGUILayout.Foldout(showItems, "Items (" + StoryInfo.ItemVariables.Length + ")", true);
+            if (showItems)
+            {
+                if (c.inventoryAuthority != null && StoryInfo.ItemVariables.Length > 0)
+                    EditorGUILayout.HelpBox("Your game's inventory decides the items: changes here are passed to it.", MessageType.None);
+                foreach (var name in StoryInfo.ItemVariables) DrawVariable(c, name, name.Substring(4));
+            }
+
+            EditorGUILayout.Space();
+            showTranscript = EditorGUILayout.Foldout(showTranscript, "Latest lines", true);
+            if (showTranscript)
+            {
+                var t = c.Transcript;
+                for (int i = Mathf.Max(0, t.Count - 12); i < t.Count; i++)
+                    EditorGUILayout.LabelField(t[i].IsChoice ? "> " + t[i].Text : (t[i].Speaker != null ? t[i].Speaker + ": " : "") + t[i].Text, EditorStyles.wordWrappedMiniLabel);
+            }
+        }
+
+        void DrawJump(NarrativeController c)
+        {
+            if (StoryInfo.Passages.Length == 0) return;
+            using (new EditorGUILayout.HorizontalScope())
+            {
+                jumpIndex = EditorGUILayout.Popup("Jump to", Mathf.Clamp(jumpIndex, 0, StoryInfo.Passages.Length - 1), StoryInfo.Passages);
+                if (GUILayout.Button("Go", GUILayout.Width(40)))
+                {
+                    if (c.Story == null) c.StartAt(StoryInfo.Passages[jumpIndex]);
+                    else c.ResumeAt(StoryInfo.Passages[jumpIndex]);
+                }
+            }
+        }
+
+        static void DrawVariable(NarrativeController c, string name, string label)
+        {
+            object value;
+            try { value = c.Story.variablesState[name]; } catch { return; }
+            object changed = value;
+            if (value is bool b) changed = EditorGUILayout.Toggle(label, b);
+            else if (value is int i) changed = EditorGUILayout.IntField(label, i);
+            else if (value is float f) changed = EditorGUILayout.FloatField(label, f);
+            else if (value is string s) changed = EditorGUILayout.TextField(label, s);
+            else EditorGUILayout.LabelField(label, value == null ? "(none)" : value.ToString());
+            if (!Equals(changed, value)) c.Story.variablesState[name] = changed;
+        }
+    }
+}
+`;
+
+const ROUTES_RUNNER_CS = `using System.Collections.Generic;
+using UnityEditor;
+using UnityEngine;
+
+namespace __NAMESPACE__.EditorTools
+{
+    /// <summary>
+    /// Replays the story's playthrough routes (StoryRoutes) on a NarrativeController: each must offer the same
+    /// choices, reach the same ending and finish on the same line as when it was exported. Run them with
+    /// Tools → Narrative Bridge → __MENU_TITLE__ → Run Playthrough Tests, the Test Runner (the package's tests), or
+    /// headless: -executeMethod __NAMESPACE__.EditorTools.PlaythroughRunner.RunBatch
+    /// </summary>
+    public static class PlaythroughRunner
+    {
+        /// <summary>Replays one route; null when it plays as written, else what was different.</summary>
+        public static string Run(StoryRoutes.Route route)
+        {
+            var go = new GameObject("NarrativeBridge playthrough");
+            try
+            {
+                var c = go.AddComponent<NarrativeController>();
+                c.drawDemoUI = false;
+                c.autosave = false;
+                string error = null;
+                c.RuntimeError += m => { if (error == null) error = m; };
+                c.StartStory();
+                if (c.Story == null) return "The story did not start" + (error != null ? ": " + error : ".");
+                for (int i = 0; i < route.Choices.Length; i++)
+                {
+                    var want = route.Choices[i];
+                    var index = c.Story.currentChoices.FindIndex(x => x.text == want);
+                    if (index < 0) return "Step " + (i + 1) + " (in " + (c.CurrentPassage ?? "?") + "): expected the choice \\"" + want + "\\" but the story offers " + Offered(c) + ".";
+                    c.Choose(index);
+                    if (error != null) return "Step " + (i + 1) + ": " + error;
+                }
+                if (!c.HasEnded) return "Expected the story to end after " + route.Choices.Length + " choice(s), but it offers " + Offered(c) + ".";
+                if (!string.IsNullOrEmpty(route.Ending) && c.Story.state.VisitCountAtPathString(route.Ending) <= 0) return "Expected to end in " + route.Ending + ", but the story never got there.";
+                var last = LastLine(c);
+                if (last != route.LastLine) return "Expected the last line \\"" + route.LastLine + "\\" but it was \\"" + last + "\\".";
+                return error;
+            }
+            finally { UnityEngine.Object.DestroyImmediate(go); }
+        }
+
+        static string Offered(NarrativeController c)
+        {
+            if (c.Story.currentChoices.Count == 0) return "no choices";
+            return "[" + string.Join(" | ", c.Story.currentChoices.ConvertAll(x => x.text)) + "]";
+        }
+
+        static string LastLine(NarrativeController c)
+        {
+            for (int i = c.Transcript.Count - 1; i >= 0; i--)
+            {
+                var l = c.Transcript[i];
+                if (!l.IsChoice) return (l.Speaker != null ? l.Speaker + ": " : "") + l.Text;
+            }
+            return "";
+        }
+
+        /// <summary>Replays every route; the log lists each one and what went wrong.</summary>
+        public static bool RunAll(out string log)
+        {
+            var lines = new List<string>();
+            var failed = 0;
+            foreach (var route in StoryRoutes.All)
+            {
+                var problem = Run(route);
+                if (problem != null) failed++;
+                lines.Add((problem == null ? "  passed  " : "  FAILED  ") + route.Name + (problem == null ? "" : ": " + problem));
+            }
+            log = "[NarrativeBridge] Playthrough tests: " + (StoryRoutes.All.Length - failed) + " of " + StoryRoutes.All.Length + " routes play as written." + "\\n" + string.Join("\\n", lines);
+            return failed == 0;
+        }
+
+        [MenuItem("Tools/Narrative Bridge/__MENU_TITLE__/Run Playthrough Tests")]
+        static void RunMenu()
+        {
+            var ok = RunAll(out var log);
+            if (ok) Debug.Log(log); else Debug.LogError(log);
+        }
+
+        /// <summary>Headless: Unity -batchmode -projectPath . -executeMethod __NAMESPACE__.EditorTools.PlaythroughRunner.RunBatch (exit code 0 = all passed).</summary>
+        public static void RunBatch()
+        {
+            var ok = RunAll(out var log);
+            Debug.Log(log);
+            EditorApplication.Exit(ok ? 0 : 1);
+        }
+    }
+}
+`;
+
+const ROUTE_TESTS_CS = `using System.Collections.Generic;
+using NUnit.Framework;
+using __NAMESPACE__.EditorTools;
+
+namespace __NAMESPACE__.Tests
+{
+    /// <summary>
+    /// The story's playthrough routes as Test Runner tests (Window → General → Test Runner → Edit Mode). Each one
+    /// replays a route through NarrativeController and checks the story still plays as it did when exported.
+    /// A package's tests show in the Test Runner when the project lists it under "testables" in Packages/manifest.json.
+    /// </summary>
+    public class PlaythroughTests
+    {
+        static IEnumerable<TestCaseData> Routes()
+        {
+            for (int i = 0; i < StoryRoutes.All.Length; i++)
+                yield return new TestCaseData(i).SetName("Route " + (i + 1).ToString("00") + " - " + StoryRoutes.All[i].Name.Replace("(", "[").Replace(")", "]").Replace(",", " "));
+        }
+
+        [TestCaseSource(nameof(Routes))]
+        public void PlaysAsWritten(int route)
+        {
+            var problem = PlaythroughRunner.Run(StoryRoutes.All[route]);
+            Assert.IsNull(problem, problem);
+        }
+
+        [Test]
+        public void HasRoutes() => Assert.Greater(StoryRoutes.All.Length, 0, "The export found no playthrough routes.");
+    }
+}
+`;
+
+const ADDRESSABLES_SETUP_CS = `#if NARRATIVE_BRIDGE_ADDRESSABLES
+using System.Collections.Generic;
+using UnityEditor;
+using UnityEditor.AddressableAssets;
+using UnityEditor.AddressableAssets.Settings;
+using UnityEditor.AddressableAssets.Settings.GroupSchemas;
+using UnityEngine;
+
+namespace __NAMESPACE__.EditorTools
+{
+    /// <summary>
+    /// When the story loads its voice clips and pictures with Addressables (StoryInfo.UsesAddressables), puts them in an
+    /// Addressables group, "__MENU_TITLE__ Story", with the addresses the controller asks for. It runs by itself when the
+    /// group is missing; Tools → Narrative Bridge → __MENU_TITLE__ → Set Up Addressables runs it again (after an update).
+    /// </summary>
+    [InitializeOnLoad]
+    public static class AddressablesSetup
+    {
+        public const string GroupName = "__MENU_TITLE__ Story";
+        const string Folder = "Packages/__PACKAGE__/Runtime/StoryAssets";
+
+        static AddressablesSetup()
+        {
+            if (!StoryInfo.UsesAddressables) return;
+            EditorApplication.delayCall += () =>
+            {
+                var settings = AddressableAssetSettingsDefaultObject.Settings;
+                if (settings == null || settings.FindGroup(GroupName) == null) SetUp();
+            };
+        }
+
+        [MenuItem("Tools/Narrative Bridge/__MENU_TITLE__/Set Up Addressables")]
+        static void SetUpMenu()
+        {
+            if (!StoryInfo.UsesAddressables) { Debug.Log("[NarrativeBridge] This story keeps its voice clips and pictures in Resources; export it with Addressables to load them on demand."); return; }
+            Debug.Log("[NarrativeBridge] " + SetUp() + " voice clip(s) and picture(s) are in the Addressables group " + GroupName + ".");
+        }
+
+        /// <summary>Adds every voice clip and picture to the group with its address; returns how many.</summary>
+        public static int SetUp()
+        {
+            var settings = AddressableAssetSettingsDefaultObject.GetSettings(true);
+            var group = settings.FindGroup(GroupName);
+            if (group == null) group = settings.CreateGroup(GroupName, false, false, false, null, typeof(BundledAssetGroupSchema), typeof(ContentUpdateGroupSchema));
+            var count = 0;
+            if (!AssetDatabase.IsValidFolder(Folder)) return 0;
+            foreach (var guid in AssetDatabase.FindAssets("", new[] { Folder }))
+            {
+                var path = AssetDatabase.GUIDToAssetPath(guid);
+                if (AssetDatabase.IsValidFolder(path)) continue;
+                var rel = path.Substring(Folder.Length + 1);
+                string address;
+                if (rel.StartsWith("Audio/")) address = "Audio/" + System.IO.Path.GetFileNameWithoutExtension(rel);
+                else if (rel.StartsWith("Images/") && rel.EndsWith(".bytes")) address = rel.Substring(0, rel.Length - ".bytes".Length);
+                else continue;
+                var entry = settings.CreateOrMoveEntry(guid, group, false, false);
+                entry.address = StoryInfo.AddressPrefix + address;
+                count++;
+            }
+            settings.SetDirty(AddressableAssetSettings.ModificationEvent.BatchModification, null, true, true);
+            AssetDatabase.SaveAssets();
+            return count;
+        }
+    }
+}
+#endif
+`;
+
+const LOCALIZATION_TABLES_CS = `#if NARRATIVE_BRIDGE_LOCALIZATION
+using System.Collections.Generic;
+using UnityEditor;
+using UnityEditor.Localization;
+using UnityEngine;
+using UnityEngine.Localization;
+using UnityEngine.Localization.Settings;
+using UnityEngine.Localization.Tables;
+
+namespace __NAMESPACE__.EditorTools
+{
+    /// <summary>
+    /// For games that use Unity's Localization package: makes (or updates) a String Table Collection from the story's
+    /// translation sheet, with a locale for the story's own language and each language in the sheet. The story then
+    /// follows the selected locale (NarrativeLocalization.UseUnityLocalization).
+    /// </summary>
+    public static class LocalizationTables
+    {
+        const string Folder = "__ASSET_FOLDER__/Localization";
+
+        [MenuItem("Tools/Narrative Bridge/__MENU_TITLE__/Create Localization Tables")]
+        static void CreateMenu()
+        {
+            var n = Create();
+            Debug.Log("[NarrativeBridge] The String Table Collection " + StoryInfo.StringTableName + " has " + n + " entries, in " + (NarrativeLocalization.Languages.Count + 1) + " language(s). Translators can keep working in the sheet; run this again to bring their work in.");
+        }
+
+        /// <summary>Makes or updates the tables from the sheet (the package's, or csv); returns the number of entries.</summary>
+        public static int Create(TextAsset csv = null)
+        {
+            EnsureFolder(Folder);
+            if (LocalizationEditorSettings.ActiveLocalizationSettings == null)
+            {
+                var settings = ScriptableObject.CreateInstance<LocalizationSettings>();
+                AssetDatabase.CreateAsset(settings, Folder + "/Localization Settings.asset");
+                LocalizationEditorSettings.ActiveLocalizationSettings = settings;
+            }
+            var rows = NarrativeLocalization.ReadSheet(csv);
+            if (rows.Count < 2) return 0;
+            var header = rows[0];
+            var source = System.Array.IndexOf(header, "source");
+            if (source < 0) { Debug.LogWarning("[NarrativeBridge] The translation sheet has no source column."); return 0; }
+            var columns = new List<KeyValuePair<string, int>> { new KeyValuePair<string, int>(StoryInfo.SourceLanguage, source) };
+            for (int i = source + 1; i < header.Length; i++) if (!string.IsNullOrEmpty(header[i].Trim())) columns.Add(new KeyValuePair<string, int>(header[i].Trim(), i));
+            foreach (var c in columns)
+            {
+                if (LocalizationEditorSettings.GetLocale(c.Key) != null) continue;
+                var locale = Locale.CreateLocale(c.Key);
+                AssetDatabase.CreateAsset(locale, Folder + "/" + c.Key + ".asset");
+                LocalizationEditorSettings.AddLocale(locale);
+            }
+            var collection = LocalizationEditorSettings.GetStringTableCollection(StoryInfo.StringTableName);
+            if (collection == null) collection = LocalizationEditorSettings.CreateStringTableCollection(StoryInfo.StringTableName, Folder);
+            var count = 0;
+            foreach (var c in columns)
+            {
+                var table = collection.GetTable(c.Key) as StringTable;
+                if (table == null) table = collection.AddNewTable(c.Key) as StringTable;
+                if (table == null) continue;
+                for (int r = 1; r < rows.Count; r++)
+                {
+                    var row = rows[r];
+                    if (row.Length <= c.Value || string.IsNullOrEmpty(row[0]) || string.IsNullOrEmpty(row[c.Value])) continue;
+                    table.AddEntry(row[0], row[c.Value]);
+                    if (c.Value == source) count++;
+                }
+                EditorUtility.SetDirty(table);
+            }
+            EditorUtility.SetDirty(collection);
+            EditorUtility.SetDirty(collection.SharedData);
+            AssetDatabase.SaveAssets();
+            return count;
+        }
+
+        static void EnsureFolder(string path)
+        {
+            if (AssetDatabase.IsValidFolder(path)) return;
+            var slash = path.LastIndexOf('/');
+            EnsureFolder(path.Substring(0, slash));
+            AssetDatabase.CreateFolder(path.Substring(0, slash), path.Substring(slash + 1));
+        }
+    }
+}
+#endif
+`;
+
 const EDITOR_CS = `using System.Collections.Generic;
 using System.IO;
 using Ink.Runtime;
@@ -1018,7 +2682,31 @@ namespace __NAMESPACE__.EditorTools
             var view = go.AddComponent<NarrativeView>();
             view.controller = controller;
             view.theme = LoadOrCreateTheme();
+            if (StoryInfo.Cues.Length > 0) AddCuePlayer(go);
             return go;
+        }
+
+        /// <summary>Adds (or fills in) a NarrativeCuePlayer listing every cue in the story, with a likely action for each.</summary>
+        public static NarrativeCuePlayer AddCuePlayer(GameObject go)
+        {
+            var player = go.GetComponent<NarrativeCuePlayer>();
+            if (player == null) player = Undo.AddComponent<NarrativeCuePlayer>(go);
+            else Undo.RecordObject(player, "Fill in cues");
+            player.controller = go.GetComponent<NarrativeController>();
+            foreach (var name in StoryInfo.Cues)
+                if (!player.cues.Exists(c => c != null && c.name == name))
+                    player.cues.Add(new NarrativeCuePlayer.Cue { name = name, action = NarrativeCuePlayer.Guess(name) });
+            EditorUtility.SetDirty(player);
+            return player;
+        }
+
+        [MenuItem(Menu + "Add Cue Player to Selected Story")]
+        static void AddCuePlayerMenu()
+        {
+            var controller = Selection.activeGameObject != null ? Selection.activeGameObject.GetComponentInParent<NarrativeController>() : UnityEngine.Object.FindAnyObjectByType<NarrativeController>();
+            if (controller == null) { Debug.LogWarning("[NarrativeBridge] Select the story's GameObject (the one with the NarrativeController) first."); return; }
+            Selection.activeObject = AddCuePlayer(controller.gameObject);
+            Debug.Log("[NarrativeBridge] Cue Player added with the story's cues: " + (StoryInfo.Cues.Length > 0 ? string.Join(", ", StoryInfo.CueTags) : "none yet") + ". Give each one its clips.");
         }
 
         [MenuItem(Menu + "Create Demo Scene")]
@@ -1166,22 +2854,235 @@ namespace __NAMESPACE__.EditorTools
             // Every voice clip a line refers to must have imported as an AudioClip.
             foreach (var file in clipsHeard)
             {
-                var dot = file.LastIndexOf('.');
-                if (Resources.Load<AudioClip>(StoryInfo.AudioFolder + (dot > 0 ? file.Substring(0, dot) : file)) == null)
-                    errors.Add("Voice clip did not import: " + file);
+                if (NarrativeController.LoadVoiceClip(file) == null)
+                    errors.Add("Voice clip did not import" + (StoryInfo.UsesAddressables ? " (or isn't in Addressables)" : "") + ": " + file);
             }
             // And every scene picture and character portrait must decode.
             foreach (var file in picturesSeen)
                 if (NarrativeController.LoadPicture(file) == null) errors.Add("Scene picture could not be loaded: " + file);
             foreach (var speaker in StoryInfo.PortraitSpeakers)
                 if (NarrativeController.LoadPortrait(speaker) == null) errors.Add("Portrait could not be loaded: " + speaker);
+            var addressables = AddressablesCheck(clipsHeard, picturesSeen, errors);
             var carry = SaveCarryOverCheck(errors);
             var startAt = StartAtCheck(errors);
             var exit = ExitCheck(errors);
             var ui = StoryViewCheck(errors);
-            log = "[NarrativeBridge] Smoke test (" + source + "): " + clipsHeard.Count + " voice clip(s), " + picturesSeen.Count + " picture(s) and " + StoryInfo.PortraitSpeakers.Length + " portrait(s) checked, " + completed + "/" + runs + " playthroughs reached an ending, "  + carry + ", " + startAt + ", " + exit + ", " + ui + ", " + errors.Count + " runtime errors." +
+            var gates = LockedChoiceCheck(json, errors);
+            var cueResult = CueCheck(errors);
+            var slots = SaveSlotCheck(errors);
+            var translation = TranslationCheck(errors);
+            var routeResult = "no playthrough routes";
+            if (StoryRoutes.All.Length > 0)
+            {
+                var routesOk = PlaythroughRunner.RunAll(out var routeLog);
+                if (!routesOk) errors.Add(routeLog);
+                routeResult = routesOk ? "playthrough routes passed (" + StoryRoutes.All.Length + ")" : "playthrough routes failed";
+            }
+            log = "[NarrativeBridge] Smoke test (" + source + "): " + clipsHeard.Count + " voice clip(s), " + picturesSeen.Count + " picture(s) and " + StoryInfo.PortraitSpeakers.Length + " portrait(s) checked" + addressables + ", " + completed + "/" + runs + " playthroughs reached an ending, "  + carry + ", " + startAt + ", " + exit + ", " + ui + ", " + gates + ", " + cueResult + ", " + slots + ", " + translation + ", " + routeResult + ", " + errors.Count + " runtime errors." +
                   (errors.Count > 0 ? "\\n" + string.Join("\\n", errors) : "");
             return errors.Count == 0 && completed > 0;
+        }
+
+        /// Makes up a language from the sheet ("[xx] " before every source text), plays the story in it, and checks every
+        /// line, choice and name the story shows was found in the sheet: the keys Narrative Bridge wrote match the ones
+        /// the controller computes. The player's language and the package's sheet are put back afterwards.
+        static string TranslationCheck(List<string> errors)
+        {
+            var rows = NarrativeLocalization.ReadSheet();
+            if (rows.Count < 2) { errors.Add("Translations: the translation sheet (Resources/" + StoryInfo.TranslationsResource + ".csv) is missing or empty."); return "translations failed"; }
+            var source = System.Array.IndexOf(rows[0], "source");
+            var csv = new System.Text.StringBuilder("key,kind,passage,source,xx\\n");
+            for (int r = 1; r < rows.Count; r++) csv.Append(rows[r][0]).Append(",,,,\\"[xx] ").Append(rows[r][source].Replace("\\"", "\\"\\"")).Append("\\"\\n");
+            var hadLanguage = PlayerPrefs.HasKey("NarrativeBridge.Language");
+            var before = NarrativeLocalization.Language;
+            var go = new GameObject("NarrativeBridge translation check");
+            try
+            {
+                NarrativeLocalization.UseSheet(new TextAsset(csv.ToString()));
+                NarrativeLocalization.Language = "xx";
+                var c = go.AddComponent<NarrativeController>();
+                c.drawDemoUI = false;
+                c.StartStory();
+                var missing = new List<string>();
+                var shown = 0;
+                for (int step = 0; step < 300 && c.Story != null; step++)
+                {
+                    // (At an exit to the game the panel steps aside: its lone choice is never shown.)
+                    if (!c.IsAtExit) foreach (var choice in c.Story.currentChoices)
+                    {
+                        var t = NarrativeController.ChoiceText(choice);
+                        if (!t.StartsWith("[xx] ")) missing.Add("choice \\"" + choice.text + "\\"");
+                    }
+                    if (c.HasEnded || c.Story.currentChoices.Count == 0) break;
+                    c.Choose(0);
+                }
+                foreach (var l in c.Transcript)
+                {
+                    shown++;
+                    if (!l.Text.StartsWith("[xx] ")) missing.Add("line \\"" + l.SourceText + "\\"");
+                    if (l.Speaker != null && !l.Speaker.StartsWith("[xx] ")) missing.Add("speaker " + l.SourceSpeaker);
+                }
+                if (missing.Count > 0) { errors.Add("Translations: not found in the sheet: " + string.Join("; ", missing.GetRange(0, System.Math.Min(5, missing.Count)))); return "translations failed"; }
+                // Back to the story as written: the transcript follows.
+                NarrativeLocalization.Language = "";
+                if (!Application.isPlaying) c.Relocalize(); // a playing controller does this itself (OnEnable subscribes it)
+                foreach (var l in c.Transcript) if (l.Text.StartsWith("[xx] ")) { errors.Add("Translations: switching back to the story's own language left a translated line."); return "translations failed"; }
+                return "translations passed (" + (rows.Count - 1) + " in the sheet, " + shown + " lines checked)";
+            }
+            finally
+            {
+                UnityEngine.Object.DestroyImmediate(go);
+                NarrativeLocalization.UseSheet(null);
+                NarrativeLocalization.Language = before;
+                if (!hadLanguage) PlayerPrefs.DeleteKey("NarrativeBridge.Language");
+            }
+        }
+
+        /// Save slots kept in memory for the check (the game's own files are never touched).
+        class MemoryStorage : ISaveStorage
+        {
+            public readonly Dictionary<string, string> Saves = new Dictionary<string, string>();
+            public void Write(string key, string data) => Saves[key] = data;
+            public string Read(string key) => Saves.TryGetValue(key, out var d) ? d : null;
+            public void Delete(string key) => Saves.Remove(key);
+        }
+
+        /// Saves part-way into a slot, plays on, loads the slot back (same choices as when saved), checks what the
+        /// slot says about itself, then the panel's Load menu lists the slots, and a slot can be deleted.
+        static string SaveSlotCheck(List<string> errors)
+        {
+            var go = new GameObject("NarrativeBridge save slot check");
+            try
+            {
+                var c = go.AddComponent<NarrativeController>();
+                c.drawDemoUI = false;
+                c.saveSlots = 3;
+                c.Storage = new MemoryStorage();
+                c.StartStory();
+                if (c.Story == null) { errors.Add("Save slots: the story did not start."); return "save slots failed"; }
+                for (int i = 0; i < 2 && c.Story.currentChoices.Count > 0; i++) c.Choose(0);
+                var expected = string.Join(" | ", c.Story.currentChoices.ConvertAll(x => x.text));
+                var passage = c.CurrentPassage;
+                c.SaveToSlot(2);
+                for (int i = 0; i < 3 && c.Story.currentChoices.Count > 0; i++) c.Choose(c.Story.currentChoices.Count - 1);
+                if (!c.LoadFromSlot(2)) { errors.Add("Save slots: slot 2 did not load: " + c.Status); return "save slots failed"; }
+                var got = string.Join(" | ", c.Story.currentChoices.ConvertAll(x => x.text));
+                if (got != expected) { errors.Add("Save slots: expected choices [" + expected + "] after loading but got [" + got + "]"); return "save slots failed"; }
+                var info = c.GetSlot(2);
+                if (!info.Exists || info.Passage != passage || string.IsNullOrEmpty(info.PassageTitle) || info.SavedAt == default(System.DateTime)) { errors.Add("Save slots: slot 2 doesn't say where and when it was saved."); return "save slots failed"; }
+                if (c.GetSlot(1).Exists || c.LoadFromSlot(1)) { errors.Add("Save slots: an empty slot loaded."); return "save slots failed"; }
+                var view = go.AddComponent<NarrativeView>();
+                view.controller = c;
+                view.theme = NarrativeTheme.LoadExported();
+                view.Build();
+                view.OpenSaveSlots(false);
+                // Load menu: the autosave and 3 slots, then Close; only slot 2 can be loaded.
+                var loadable = 0;
+                foreach (var b in view.SettingsButtons) if (b.interactable) loadable++;
+                if (!view.SlotsOpen || view.SettingsButtons.Count != 5 || loadable != 2) { errors.Add("Save slots: the Load menu shows " + view.SettingsButtons.Count + " buttons (" + loadable + " usable) instead of 5 (2 usable)."); return "save slots failed"; }
+                view.SettingsButtons[2].onClick.Invoke(); // slot 2
+                if (view.SlotsOpen || string.Join(" | ", c.Story.currentChoices.ConvertAll(x => x.text)) != expected) { errors.Add("Save slots: loading from the menu didn't load slot 2."); return "save slots failed"; }
+                c.DeleteSlot(2);
+                if (c.GetSlot(2).Exists) { errors.Add("Save slots: slot 2 was not deleted."); return "save slots failed"; }
+                // The default storage: files in a folder (a temporary one here).
+                var folder = System.IO.Path.Combine(System.IO.Path.GetTempPath(), "NarrativeBridgeSlotCheck-" + System.Guid.NewGuid().ToString("N"));
+                try
+                {
+                    var files = new FileSaveStorage(folder);
+                    files.Write("slot-1", c.SaveState());
+                    files.Write("slot-1", c.SaveState()); // over an existing save
+                    if (files.Read("slot-1") == null || files.Read("slot-9") != null) { errors.Add("Save slots: file storage did not read back what it wrote."); return "save slots failed"; }
+                    files.Delete("slot-1");
+                    if (files.Read("slot-1") != null) { errors.Add("Save slots: file storage did not delete."); return "save slots failed"; }
+                }
+                finally { if (Directory.Exists(folder)) Directory.Delete(folder, true); }
+                return "save slots passed (files and menu)";
+            }
+            finally { UnityEngine.Object.DestroyImmediate(go); }
+        }
+
+        /// Plays the story with a Cue Player set up as Add Cue Player does (with no clips yet): every cue the story
+        /// reaches is one of StoryInfo.Cues, and none of them fails.
+        static string CueCheck(List<string> errors)
+        {
+            if (StoryInfo.Cues.Length == 0) return "no cues";
+            var go = new GameObject("NarrativeBridge cue check");
+            try
+            {
+                var c = go.AddComponent<NarrativeController>();
+                c.startOnAwake = false;
+                var player = AddCuePlayer(go);
+                var heard = new HashSet<string>();
+                player.CuePlayed += (name, value) =>
+                {
+                    heard.Add(name);
+                    if (System.Array.IndexOf(StoryInfo.Cues, name) < 0) errors.Add("Cue: the story reached a cue that isn't in StoryInfo.Cues: " + name);
+                };
+                player.enabled = false; player.enabled = true; // subscribe now (OnEnable)
+                var rng = new System.Random(7);
+                for (int run = 0; run < 20; run++)
+                {
+                    c.StartStory();
+                    for (int i = 0; i < 300 && c.Story != null && !c.HasEnded; i++)
+                    {
+                        if (c.IsAtExit) c.Resume();
+                        else if (c.IsWaitingForContinue) c.Continue();
+                        else if (c.Story.currentChoices.Count > 0) c.Choose(rng.Next(c.Story.currentChoices.Count));
+                        else break;
+                    }
+                }
+                foreach (var tag in StoryInfo.CueTags)
+                {
+                    var colon = tag.IndexOf(':');
+                    player.Play(colon < 0 ? tag : tag.Substring(0, colon), colon < 0 ? "" : tag.Substring(colon + 1));
+                }
+                return "cues passed (" + heard.Count + " of " + StoryInfo.Cues.Length + " reached)";
+            }
+            catch (System.Exception e) { errors.Add("Cue: " + e.Message); return "cues failed"; }
+            finally { UnityEngine.Object.DestroyImmediate(go); }
+        }
+
+        /// With Addressables: every voice clip, picture and portrait is in the story's group, at the address the
+        /// controller asks for (the group is set up first if it's missing).
+        static string AddressablesCheck(HashSet<string> clipsHeard, HashSet<string> picturesSeen, List<string> errors)
+        {
+            if (!StoryInfo.UsesAddressables) return "";
+#if NARRATIVE_BRIDGE_ADDRESSABLES
+            var settings = UnityEditor.AddressableAssets.AddressableAssetSettingsDefaultObject.Settings;
+            if (settings == null || settings.FindGroup(AddressablesSetup.GroupName) == null) AddressablesSetup.SetUp();
+            settings = UnityEditor.AddressableAssets.AddressableAssetSettingsDefaultObject.Settings;
+            var group = settings != null ? settings.FindGroup(AddressablesSetup.GroupName) : null;
+            if (group == null) { errors.Add("Addressables: the group " + AddressablesSetup.GroupName + " could not be made."); return " (Addressables failed)"; }
+            var addresses = new HashSet<string>();
+            foreach (var e in group.entries) addresses.Add(e.address);
+            var wanted = new List<string>();
+            foreach (var file in clipsHeard) { var dot = file.LastIndexOf('.'); wanted.Add(StoryInfo.AddressPrefix + "Audio/" + (dot > 0 ? file.Substring(0, dot) : file)); }
+            foreach (var file in picturesSeen) wanted.Add(StoryInfo.AddressPrefix + "Images/" + file);
+            foreach (var f in StoryInfo.PortraitFiles) wanted.Add(StoryInfo.AddressPrefix + "Images/" + f);
+            foreach (var a in wanted) if (!addresses.Contains(a)) errors.Add("Addressables: nothing has the address " + a + ".");
+            return " (with Addressables, " + addresses.Count + " in the group)";
+#else
+            errors.Add("This story loads its voice clips and pictures with Addressables, but the Addressables package isn't installed.");
+            return " (Addressables missing)";
+#endif
+        }
+
+        /// Every locked-choice condition names a real passage and real story variables.
+        static string LockedChoiceCheck(string json, List<string> errors)
+        {
+            if (StoryInfo.GatedChoices.Length == 0) return "no locked choices";
+            var story = new Story(json);
+            var before = errors.Count;
+            foreach (var g in StoryInfo.GatedChoices)
+            {
+                if (System.Array.IndexOf(StoryInfo.Passages, g.Passage) < 0) errors.Add("Locked choice \\"" + g.Text + "\\" is in an unknown passage " + g.Passage + ".");
+                g.Missing(name =>
+                {
+                    if (!story.variablesState.GlobalVariableExistsWithName(name)) { errors.Add("Locked choice \\"" + g.Text + "\\" reads an unknown variable " + name + "."); return null; }
+                    return story.variablesState[name];
+                });
+            }
+            return errors.Count == before ? "locked choices passed (" + StoryInfo.GatedChoices.Length + ")" : "locked choices failed";
         }
 
         /// Saves part-way through, then loads that save as if it came from an earlier story version:
@@ -1283,6 +3184,9 @@ namespace __NAMESPACE__.EditorTools
                 var pictures = 0;
                 var portraits = 0;
                 var exits = 0;
+                var locked = 0;
+                var settings = SettingsCheck(view, errors);
+                if (settings == null) return "story UI failed";
                 while (!c.HasEnded && steps++ < 200)
                 {
                     // The scene the reader is in shows its picture (when the theme shows pictures).
@@ -1311,15 +3215,51 @@ namespace __NAMESPACE__.EditorTools
                     }
                     var expected = c.IsWaitingForContinue ? 1 : c.Story.currentChoices.Count;
                     if (view.Buttons.Count != expected) { errors.Add("Story UI: expected " + expected + " button(s) but the panel shows " + view.Buttons.Count + "."); return "story UI failed"; }
+                    // Locked choices show greyed out, and can't be clicked.
+                    var lockedNow = view.theme.showLockedChoices ? c.LockedChoices.Count : 0;
+                    if (view.LockedButtons.Count != lockedNow) { errors.Add("Story UI: expected " + lockedNow + " locked choice(s) but the panel shows " + view.LockedButtons.Count + "."); return "story UI failed"; }
+                    foreach (var b in view.LockedButtons) if (b.interactable) { errors.Add("Story UI: a locked choice can be clicked."); return "story UI failed"; }
+                    locked += lockedNow;
                     var before = c.Transcript.Count + "/" + c.Story.state.currentTurnIndex;
                     view.Buttons[0].onClick.Invoke();
                     if (before == c.Transcript.Count + "/" + c.Story.state.currentTurnIndex) { errors.Add("Story UI: clicking a button did not advance the story."); return "story UI failed"; }
                 }
                 if (!c.HasEnded) return "story UI passed (" + steps + " steps, no ending within the check)";
                 if (view.Buttons.Count != 0) { errors.Add("Story UI: buttons are still shown after the ending."); return "story UI failed"; }
-                return "story UI passed (" + textKind + ")" + (pictures > 0 ? " with pictures" : "") + (portraits > 0 ? (pictures > 0 ? " and portraits" : " with portraits") : "") + (exits > 0 ? ", " + exits + " exit(s) to the game and back" : "");
+                return "story UI passed (" + textKind + ")" + (pictures > 0 ? " with pictures" : "") + (portraits > 0 ? (pictures > 0 ? " and portraits" : " with portraits") : "") + (exits > 0 ? ", " + exits + " exit(s) to the game and back" : "") + (locked > 0 ? ", " + locked + " locked choice(s) shown" : "") + ", " + settings;
             }
             finally { UnityEngine.Object.DestroyImmediate(go); }
+        }
+
+        /// Opens the player's Settings menu, changes the text size, and checks the panel follows; the
+        /// player's own settings are put back afterwards.
+        static string SettingsCheck(NarrativeView view, List<string> errors)
+        {
+            if (!view.theme.showSettings || !view.theme.showToolbar) return "settings menu off";
+            var scale = NarrativeSettings.TextScale;
+            var contrast = NarrativeSettings.HighContrast;
+            try
+            {
+                view.OpenSettings();
+                var rows = NarrativeLocalization.Languages.Count > 0 ? 8 : 7; // a Language row when there are translations
+                if (!view.SettingsOpen || view.SettingsButtons.Count != rows) { errors.Add("Settings: expected " + rows + " buttons in the menu but it has " + view.SettingsButtons.Count + "."); return null; }
+                NarrativeSettings.TextScale = 1f;
+                view.SettingsButtons[0].onClick.Invoke(); // text size, one step up
+                view.SettingsButtons[3].onClick.Invoke(); // high contrast
+                view.Build(); // a playing panel rebuilds itself; in the editor it's done here
+                if (Mathf.Abs(NarrativeSettings.TextScale - 1.15f) > 0.01f || NarrativeSettings.HighContrast == contrast) { errors.Add("Settings: the menu's buttons didn't change the settings."); return null; }
+                if (!view.SettingsOpen || view.SettingsButtons.Count != rows) { errors.Add("Settings: the menu closed when a setting changed."); return null; }
+                view.SettingsButtons[rows - 1].onClick.Invoke(); // close
+                if (view.SettingsOpen) { errors.Add("Settings: Close didn't close the menu."); return null; }
+                return "settings menu passed";
+            }
+            finally
+            {
+                NarrativeSettings.TextScale = scale;
+                NarrativeSettings.HighContrast = contrast;
+                view.Build();
+                view.Redraw();
+            }
         }
     }
 }

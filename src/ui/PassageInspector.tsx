@@ -27,6 +27,8 @@ function preview(b: ContentBlock, project: StoryProject): { kind: string; text: 
       return { kind: 'break', text: '' };
     case 'exit':
       return { kind: 'to the game', text: cut(`⇥ ${b.name}${b.note ? ` — ${b.note}` : ''}`), muted: true };
+    case 'cue':
+      return { kind: 'cue', text: cut(`♪ ${b.name}${b.value ? `: ${b.value}` : ''}`), muted: true };
   }
 }
 

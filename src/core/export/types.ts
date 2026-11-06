@@ -30,6 +30,13 @@ export interface ExportOptions {
   unityLayout?: 'package' | 'project';
   /** Unity: the package's semantic version, e.g. 1.2.0 (defaults to 1.0.0). */
   packageVersion?: string;
+  /**
+   * Unity: load voice clips and pictures on demand with Addressables instead of keeping them in Resources (where
+   * every one is built into the game). The package sets up an Addressables group for them.
+   */
+  unityAddressables?: boolean;
+  /** Unity: language columns to start the translation sheet with (e.g. ["fr", "de"]); translators fill them in. */
+  translationLanguages?: string[];
 }
 
 export interface ExportFile {

@@ -20,7 +20,7 @@ export interface UnityPackageId {
 }
 
 /** Names Narrative Bridge's C# uses unqualified; a namespace part with one of these names would hide it. */
-const RESERVED = new Set(['Ink', 'UnityEngine', 'UnityEditor', 'System', 'Object', 'String', 'Editor', 'EditorTools', 'Setup', 'StoryInfo', 'NarrativeController', 'NarrativeView', 'NarrativeTheme', 'IInventoryAuthority', 'Story', 'Debug', 'Resources', 'Application', 'Color', 'Font', 'Line', 'Choice', 'Mathf', 'Path', 'File', 'Directory', 'Samples']);
+const RESERVED = new Set(['Ink', 'UnityEngine', 'UnityEditor', 'System', 'Object', 'String', 'Editor', 'EditorTools', 'Setup', 'StoryInfo', 'NarrativeController', 'NarrativeView', 'NarrativeTheme', 'IInventoryAuthority', 'NarrativeLocalization', 'GatedChoice', 'NarrativeSettings', 'NarrativeCuePlayer', 'ISaveStorage', 'FileSaveStorage', 'Story', 'Debug', 'Resources', 'Application', 'Color', 'Font', 'Line', 'Choice', 'Mathf', 'Path', 'File', 'Directory', 'Samples']);
 
 export const SEMVER = /^\d+\.\d+\.\d+(-[0-9A-Za-z.-]+)?$/;
 
@@ -115,6 +115,8 @@ export function packageJson(id: UnityPackageId, o: { version: string; title: str
     dependencies: {
       'com.unity.ugui': '1.0.0',
       'com.unity.modules.audio': '1.0.0',
+      // Scene pictures and portraits are decoded with Texture2D.LoadImage.
+      'com.unity.modules.imageconversion': '1.0.0',
       'com.unity.modules.imgui': '1.0.0',
       'com.unity.modules.jsonserialize': '1.0.0',
     },
@@ -132,6 +134,10 @@ const INK_DEFINES = [
   // TextMeshPro, Unity's current text: built into uGUI 2.0 (Unity 6), or the TextMeshPro package (2022.3).
   { name: 'com.unity.ugui', expression: '2.0.0', define: 'NARRATIVE_BRIDGE_TMP' },
   { name: 'com.unity.textmeshpro', expression: '3.0.0', define: 'NARRATIVE_BRIDGE_TMP' },
+  // Voice clips and pictures loaded on demand, when the story was exported that way.
+  { name: 'com.unity.addressables', expression: '1.19.0', define: 'NARRATIVE_BRIDGE_ADDRESSABLES' },
+  // Translations from Unity's Localization package's string tables.
+  { name: 'com.unity.localization', expression: '1.0.0', define: 'NARRATIVE_BRIDGE_LOCALIZATION' },
 ];
 
 export function runtimeAsmdef(id: UnityPackageId) {
@@ -139,7 +145,7 @@ export function runtimeAsmdef(id: UnityPackageId) {
     name: id.namespace,
     rootNamespace: id.namespace,
     // Optional references (like Unity.InputSystem) are skipped when the game doesn't have them.
-    references: ['Ink-Libraries', 'Ink', 'UnityEngine.UI', 'Unity.InputSystem', 'Unity.TextMeshPro'],
+    references: ['Ink-Libraries', 'Ink', 'UnityEngine.UI', 'Unity.InputSystem', 'Unity.TextMeshPro', 'Unity.Addressables', 'Unity.ResourceManager', 'Unity.Localization'],
     includePlatforms: [],
     excludePlatforms: [],
     allowUnsafeCode: false,
@@ -153,7 +159,7 @@ export function runtimeAsmdef(id: UnityPackageId) {
 }
 
 export function editorAsmdef(id: UnityPackageId) {
-  return { ...runtimeAsmdef(id), name: `${id.namespace}.Editor`, rootNamespace: `${id.namespace}.EditorTools`, references: [id.namespace, 'Ink-Libraries', 'Ink', 'UnityEngine.UI', 'Unity.InputSystem', 'Unity.TextMeshPro'], includePlatforms: ['Editor'] };
+  return { ...runtimeAsmdef(id), name: `${id.namespace}.Editor`, rootNamespace: `${id.namespace}.EditorTools`, references: [id.namespace, 'Ink-Libraries', 'Ink', 'UnityEngine.UI', 'Unity.InputSystem', 'Unity.TextMeshPro', 'Unity.Addressables', 'Unity.ResourceManager', 'Unity.Addressables.Editor', 'Unity.Localization', 'Unity.Localization.Editor'], includePlatforms: ['Editor'] };
 }
 
 /** The samples' assembly, once imported into a game's Assets from Package Manager. */
@@ -171,9 +177,25 @@ export function samplesAsmdef(id: UnityPackageId) {
   };
 }
 
+/** The package's tests (the story's playthrough routes), for the Test Runner. */
+export function testsAsmdef(id: UnityPackageId) {
+  return {
+    ...runtimeAsmdef(id),
+    name: `${id.namespace}.Tests`,
+    rootNamespace: `${id.namespace}.Tests`,
+    references: [id.namespace, `${id.namespace}.Editor`, 'UnityEngine.TestRunner', 'UnityEditor.TestRunner'],
+    includePlatforms: ['Editor'],
+    overrideReferences: true,
+    precompiledReferences: ['nunit.framework.dll'],
+    autoReferenced: false,
+    defineConstraints: ['UNITY_INCLUDE_TESTS', 'NARRATIVE_BRIDGE_INK'],
+    versionDefines: [INK_DEFINES[0]],
+  };
+}
+
 /** The setup assembly has no Ink references or constraints, so it can offer to install Ink. */
 export function setupAsmdef(id: UnityPackageId) {
-  return { ...runtimeAsmdef(id), name: `${id.namespace}.Setup`, rootNamespace: `${id.namespace}.Setup`, references: [], includePlatforms: ['Editor'], defineConstraints: [], versionDefines: [INK_DEFINES[0]] };
+  return { ...runtimeAsmdef(id), name: `${id.namespace}.Setup`, rootNamespace: `${id.namespace}.Setup`, references: [], includePlatforms: ['Editor'], defineConstraints: [], versionDefines: [INK_DEFINES[0], INK_DEFINES.find((d) => d.define === 'NARRATIVE_BRIDGE_ADDRESSABLES')!] };
 }
 
 // ---- C#: Ink setup, samples, project first-open hook -------------------------------------
@@ -199,12 +221,38 @@ namespace __NAMESPACE__.Setup
         const string Define = "NARRATIVE_BRIDGE_INK";
         const string Title = "__MENU_TITLE__ (Narrative Bridge)";
 
+#if !NARRATIVE_BRIDGE_ADDRESSABLES
+        /// <summary>The story was exported to load its voice clips and pictures with Addressables.</summary>
+        static readonly bool UsesAddressables = __USES_ADDRESSABLES__;
+#endif
+
         static InkSetup()
         {
 #if !NARRATIVE_BRIDGE_INK
             EditorApplication.delayCall += Check;
 #endif
+#if !NARRATIVE_BRIDGE_ADDRESSABLES
+            if (UsesAddressables) EditorApplication.delayCall += CheckAddressables;
+#endif
         }
+
+#if !NARRATIVE_BRIDGE_ADDRESSABLES
+        static void CheckAddressables()
+        {
+            if (SessionState.GetBool("NarrativeBridge.AddressablesChecked", false)) return;
+            SessionState.SetBool("NarrativeBridge.AddressablesChecked", true);
+            if (Application.isBatchMode) { Debug.LogWarning("[NarrativeBridge] " + Title + " loads its voice clips and pictures with Addressables: add com.unity.addressables to the project."); return; }
+            if (EditorUtility.DisplayDialog(Title, "This story loads its voice clips and pictures on demand with Unity's Addressables package. Install it now?", "Install", "Not now"))
+                InstallAddressables();
+        }
+
+        [MenuItem("Tools/Narrative Bridge/__MENU_TITLE__/Install Addressables")]
+        static void InstallAddressables()
+        {
+            UnityEditor.PackageManager.Client.Add("com.unity.addressables");
+            Debug.Log("[NarrativeBridge] Installing Addressables. The story's voice clips and pictures are added to a group once it has installed.");
+        }
+#endif
 
         static bool InkRuntimeLoaded()
         {

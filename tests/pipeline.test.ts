@@ -1536,3 +1536,117 @@ describe('hands-on review fixes', () => {
     for (const a of Object.values(ADAPTERS)) expect(a.integration.defaultRef, a.label).not.toMatch(/^(main|master|develop|HEAD)$/);
   });
 });
+
+describe('Unity export features', () => {
+  const archive = async () => {
+    const s = SAMPLES.find((x) => x.id === 'archive')!;
+    const { project } = await buildStory([{ fileName: s.fileName, text: s.text }], { mode: s.mode });
+    reviewAll(project, 'approved');
+    return project;
+  };
+  const unity = (story: ReturnType<typeof processProject>, extra: Record<string, unknown> = {}) =>
+    ADAPTERS.unity.export(story, { engine: 'unity', projectName: 'Archive', engineVersion: '6000.3.23f1', integrationRef: '2.0.0', includeDemo: true, ...extra });
+  const file = (r: ExportResult, end: string) => {
+    const f = r.files.find((x) => x.path.endsWith(end));
+    return typeof f?.content === 'string' ? f.content : '';
+  };
+
+  it('exports locked choices as C# conditions, in plain words', async () => {
+    const { conditionCs } = await import('../src/core/export/unity');
+    expect(conditionCs({ type: 'has_item', itemId: 'key' })).toBe('GatedChoice.Has(r("has_key"))');
+    expect(conditionCs({ type: 'not', condition: { type: 'compare', variableId: 'trust', op: '>=', value: 2.5 } })).toBe('!(GatedChoice.Compare(r("trust"), ">=", 2.5d))');
+    expect(conditionCs({ type: 'or', conditions: [{ type: 'compare', variableId: 'mood', op: '==', value: 'calm' }, { type: 'compare', variableId: 'open', op: '!=', value: true }] })).toBe(
+      '(GatedChoice.Compare(r("mood"), "==", "calm") || GatedChoice.Compare(r("open"), "!=", true))',
+    );
+    const r = await unity(processProject(await archive()));
+    const info = file(r, 'Runtime/StoryInfo.cs');
+    expect(info).toContain('new GatedChoice("archive_entry", "Open the archive", new GatedChoice.Requirement("Archive Key", r => GatedChoice.Has(r("has_archive_key"))))');
+    expect(info).toMatch(/PassageTitles = \{ "[^"]+"/);
+    for (const f of ['GatedChoice.cs', 'NarrativeSettings.cs', 'NarrativeCuePlayer.cs', 'SaveStorage.cs', 'NarrativeLocalization.cs', 'Editor/StoryDebuggerWindow.cs', 'Editor/PlaythroughRunner.cs', 'Tests/Editor/PlaythroughTests.cs'])
+      expect(r.files.some((x) => x.path.endsWith(f)), f).toBe(true);
+    // Image conversion decodes scene pictures; a minimal project needs it listed.
+    expect(JSON.parse(file(r, '/package.json')).dependencies['com.unity.modules.imageconversion']).toBe('1.0.0');
+  });
+
+  it('turns cues into Ink tags, reads them back, and lists them for Unity', async () => {
+    const { cueName, cueTag } = await import('../src/core/isr');
+    expect([cueName('Music!'), cueName('speaker'), cueTag('shake', ' 0.5 # x')]).toEqual(['music', 'speaker_cue', 'shake:0.5 x']);
+    const { project } = await build('@passage hall Hall\n@cue music calm\nThe hall is dark.\n@cue shake\n@end\n', 'c.md', 'structured');
+    expect(project.passages[0].content.map((b) => b.type)).toEqual(['cue', 'action', 'cue']);
+    const story = processProject(project);
+    expect(story.generated.ink).toContain('# music:calm\nThe hall is dark.\n# shake\n');
+    expect(story.state).toBe('Succeeded');
+    const back = await buildStory([{ fileName: 'b.ink', text: story.generated.ink }], { mode: 'faithful' });
+    expect(back.project.inkPassthrough).toBeUndefined();
+    expect(back.project.passages[0].content.map((b) => (b.type === 'cue' ? `${b.name}:${b.value ?? ''}` : b.type))).toEqual(['music:calm', 'action', 'shake:']);
+    const r = await unity(story);
+    expect(file(r, 'Runtime/StoryInfo.cs')).toContain('Cues = { "music", "shake" }');
+    expect(file(r, 'Runtime/StoryInfo.cs')).toContain('CueTags = { "music:calm", "shake" }');
+  });
+
+  it('finds playthrough routes to every ending, for the package’s tests', async () => {
+    const { storyRoutes } = await import('../src/core/export/routes');
+    const story = processProject(await archive());
+    const routes = storyRoutes(story.compile.json!, story.project);
+    expect(routes.map((r) => r.ending).sort()).toEqual(Object.keys(story.smoke!.endingsReached).sort());
+    expect(storyRoutes(story.compile.json!, story.project)).toEqual(routes); // the same every export
+    for (const r of routes) expect(r.lastLine.length).toBeGreaterThan(0);
+    const r = await unity(story, { unityLayout: 'project' });
+    expect(file(r, 'Editor/StoryRoutes.cs')).toContain(`new Route(${JSON.stringify(routes[0].name)}`);
+    const manifest = JSON.parse(file(r, 'Packages/manifest.json'));
+    expect(manifest.testables).toEqual([r.unityPackage!.name]);
+    expect(manifest.dependencies['com.unity.test-framework']).toBeTruthy();
+    expect(JSON.parse(file(r, '.Tests.asmdef')).defineConstraints).toEqual(['UNITY_INCLUDE_TESTS', 'NARRATIVE_BRIDGE_INK']);
+  });
+
+  it('keeps voice clips and pictures out of Resources with Addressables', async () => {
+    const project = await archive();
+    const line = project.passages.flatMap((p) => p.content).find((b) => b.type === 'dialogue')!;
+    if (line.type === 'dialogue') line.audio = { id: 'clip_1', name: 'a.wav', mime: 'audio/wav' };
+    project.passages[0].image = { id: 'img_1', name: 'a.png', mime: 'image/png', alt: '' };
+    const media = { audio: { clip_1: { mime: 'audio/wav', bytes: new Uint8Array([1]) } }, images: { img_1: { mime: 'image/png', bytes: new Uint8Array([137, 80, 78, 71]) } } };
+    const story = processProject(project);
+    const plain = await unity(story, media);
+    expect(plain.files.some((f) => /Resources\/NarrativeBridge\/archive\/Audio\/clip_1\.wav$/.test(f.path))).toBe(true);
+    expect(file(plain, 'Runtime/StoryInfo.cs')).toContain('UsesAddressables = false');
+    const r = await unity(story, { ...media, unityAddressables: true, unityLayout: 'project' });
+    expect(r.files.some((f) => f.path.endsWith('Runtime/StoryAssets/Audio/clip_1.wav'))).toBe(true);
+    expect(r.files.some((f) => f.path.endsWith('Runtime/StoryAssets/Images/img_1.png.bytes'))).toBe(true);
+    expect(r.files.some((f) => /Resources\/.*(clip_1|img_1)/.test(f.path))).toBe(false);
+    expect(file(r, 'Runtime/StoryInfo.cs')).toContain('UsesAddressables = true');
+    expect(JSON.parse(file(r, 'Packages/manifest.json')).dependencies['com.unity.addressables']).toBe('2.11.2');
+  });
+
+  it('writes a translation sheet whose keys match every line the story prints', async () => {
+    const { translationKey, translationSheet, translationEntries, normaliseText } = await import('../src/core/export/translations');
+    expect(normaliseText('  Rows of\n shelves  ')).toBe('Rows of shelves');
+    expect(translationKey('Rows of shelves')).toBe(translationKey(' Rows  of\nshelves '));
+    expect(translationKey('Rows of shelves')).toMatch(/^nb_[0-9a-f]{8}$/);
+    const project = await archive();
+    const story = processProject(project);
+    const keys = new Set(translationEntries(project).map((e) => e.key));
+    // Play the story the way the Unity controller reads it, and look every line, name and choice up.
+    const { Story } = await import('inkjs/full');
+    const ink = new Story(story.compile.json!);
+    const missing: string[] = [];
+    for (let step = 0; step < 50; step++) {
+      while (ink.canContinue) {
+        const raw = (ink.Continue() ?? '').trim();
+        if (!raw) continue;
+        const speaker = (ink.currentTags ?? []).some((t) => t.startsWith('speaker:'));
+        const colon = raw.indexOf(': ');
+        const parts = speaker && colon > 0 ? [raw.slice(0, colon), raw.slice(colon + 2)] : [raw];
+        for (const p of parts) if (!keys.has(translationKey(p))) missing.push(p);
+      }
+      if (!ink.currentChoices.length) break;
+      for (const c of ink.currentChoices) if (!keys.has(translationKey(c.text))) missing.push(c.text);
+      ink.ChooseChoiceIndex(ink.currentChoices.length - 1);
+    }
+    expect(missing).toEqual([]);
+    const sheet = translationSheet(project, undefined, ['fr', 'de']);
+    expect(sheet.split('\r\n')[0]).toBe('key,kind,passage,source,fr,de');
+    expect(translationSheet({ ...project, passages: [{ ...project.passages[0], content: [{ type: 'action', text: 'Say "hi", then go', origin: 'source' }], choices: [] }] })).toContain('"Say ""hi"", then go"');
+    const r = await unity(story, { translationLanguages: ['fr'] });
+    expect(file(r, 'Translations.csv').split('\r\n')[0]).toBe('key,kind,passage,source,fr');
+  });
+});

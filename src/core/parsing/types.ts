@@ -11,6 +11,8 @@ export type Marker =
   | { type: 'pause' }
   /** An exit to the game: the dialogue stops until the game resumes it. */
   | { type: 'exit'; name: string; note?: string }
+  /** A cue for the game (an Ink tag such as #music:calm). */
+  | { type: 'cue'; name: string; value?: string }
   /** The passage's scene heading (Ink #scene tags, Twine scene lines). */
   | { type: 'heading'; text: string }
   | { type: 'item'; id: string; displayName?: string; consumable: boolean }

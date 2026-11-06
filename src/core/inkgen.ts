@@ -1,7 +1,7 @@
 import { audioFileName } from './audio';
 import { imageFileName } from './images';
 import { GENERATOR_VERSION } from './version';
-import { CONTINUE_TEXT, EXIT_PREFIX, exitName, isActive, itemVar, type Condition, type Effect, type Passage, type StoryProject } from './isr';
+import { CONTINUE_TEXT, cueTag, EXIT_PREFIX, exitName, isActive, itemVar, type Condition, type Effect, type Passage, type StoryProject } from './isr';
 
 // Deterministic, template-based Ink generation. Same ISR in → byte-identical Ink out.
 //
@@ -155,6 +155,10 @@ export function generateInk(project: StoryProject): GeneratedInk {
           // button and what follows waits for it. (Sticky, so revisiting the passage never runs dry.)
           emit(`+ [${CONTINUE_TEXT}]`, p.id);
           emit('-', p.id);
+          break;
+        case 'cue':
+          // A tag on its own line: Ink attaches it to the next line (or, with no text after it, to an empty line).
+          emit(`# ${cueTag(b.name, b.value)}`, p.id);
           break;
         case 'exit':
           // An exit to the game: a lone choice the game takes when it resumes the story (players

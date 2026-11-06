@@ -15,7 +15,7 @@ import type { Marker } from './types';
 //   + {has key} [Choice text] -> target @take key     sticky, gated choice with effects
 //   - [Choice text](#target)         Markdown link form
 
-const KEYWORDS = new Set(['passage', 'start', 'end', 'pause', 'exit', 'item', 'var', 'give', 'take', 'set', 'add']);
+const KEYWORDS = new Set(['passage', 'start', 'end', 'pause', 'exit', 'cue', 'item', 'var', 'give', 'take', 'set', 'add']);
 
 export function isMarkerLine(line: string): boolean {
   const t = line.trim();
@@ -100,6 +100,11 @@ export function parseMarker(line: string): Marker | null {
       // @exit wolf_fight  The player fights the wolves; anything after the name is a note for the game.
       const p = /^(\S+)\s*(.*)$/.exec(rest.trim());
       return p ? { type: 'exit', name: exitName(p[1]), ...(p[2].trim() ? { note: p[2].trim() } : {}) } : { type: 'exit', name: 'exit' };
+    }
+    case 'cue': {
+      // @cue music calm  A cue for the game: a name, and anything after it is its value.
+      const p = /^(\S+)\s*(.*)$/.exec(rest.trim());
+      return p ? { type: 'cue', name: p[1], ...(p[2].trim() ? { value: p[2].trim() } : {}) } : null;
     }
     case 'item': {
       const p = /^([A-Za-z_]\w*)\s*(?:"([^"]*)")?\s*(consumable)?/.exec(rest);
