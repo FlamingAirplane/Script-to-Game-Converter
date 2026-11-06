@@ -556,8 +556,9 @@ namespace __NAMESPACE__
                 row.childControlWidth = row.childControlHeight = true;
                 row.childForceExpandWidth = row.childForceExpandHeight = false;
                 if (theme.showRestart) ToolButton(bar, theme.restartLabel, controller.StartStory);
-                if (theme.showSave) ToolButton(bar, theme.saveLabel, controller.SaveToPrefs);
-                if (theme.showLoad) ToolButton(bar, theme.loadLabel, controller.LoadFromPrefs);
+                // With save slots, Save and Load open the slot menu; without, they use the one quick save.
+                if (theme.showSave) ToolButton(bar, theme.saveLabel, () => { if (controller.saveSlots > 0) OpenSaveSlots(true); else controller.SaveToPrefs(); });
+                if (theme.showLoad) ToolButton(bar, theme.loadLabel, () => { if (controller.saveSlots > 0) OpenSaveSlots(false); else controller.LoadFromPrefs(); });
                 if (theme.showSettings) ToolButton(bar, theme.settingsLabel, ToggleSettings);
                 if (theme.showStatus)
                 {
@@ -576,37 +577,53 @@ namespace __NAMESPACE__
         {
             public string title = "Settings", textSize = "Text size", typingSpeed = "Typing speed", autoAdvance = "Go on by itself", highContrast = "High contrast", voiceVolume = "Voice volume";
             public string slow = "Slow", normal = "Normal", fast = "Fast", instant = "Instant", asDesigned = "As designed", on = "On", off = "Off", reset = "Reset", close = "Close";
+            public string saveTitle = "Save to a slot", loadTitle = "Load a save", slot = "Slot", autosave = "Autosave", empty = "empty", olderVersion = "earlier version";
         }
 
         [Tooltip("The words of the Settings menu (the toolbar's Settings button), e.g. to translate them.")]
         public SettingsWords settingsWords = new SettingsWords();
 
+        enum Overlay { None, Settings, Save, Load }
+
         /// <summary>Whether the Settings menu is open.</summary>
-        public bool SettingsOpen => settingsOpen;
-        /// <summary>The Settings menu's buttons while it's open (text size, typing speed, auto-advance, contrast, volume, reset, close).</summary>
+        public bool SettingsOpen => overlay == Overlay.Settings;
+        /// <summary>Whether the save-slot menu is open (for saving or loading).</summary>
+        public bool SlotsOpen => overlay == Overlay.Save || overlay == Overlay.Load;
+        /// <summary>The open menu's buttons: Settings (text size, typing speed, auto-advance, contrast, volume, reset, close) or the slots and Close.</summary>
         public IReadOnlyList<Button> SettingsButtons => settingsButtons;
 
-        bool settingsOpen;
+        Overlay overlay;
+        bool settingsOpen => overlay != Overlay.None;
         int settingsFocus;
         RectTransform settingsPanel;
         readonly List<Button> settingsButtons = new List<Button>();
 
         public void ToggleSettings()
         {
-            if (settingsOpen) CloseSettings();
+            if (SettingsOpen) CloseSettings();
             else OpenSettings();
         }
 
         public void OpenSettings()
         {
-            settingsOpen = true;
+            overlay = Overlay.Settings;
             settingsFocus = 0;
             BuildSettings();
         }
 
+        /// <summary>Opens the save-slot menu, to save into a slot or to load one (the autosave first).</summary>
+        public void OpenSaveSlots(bool saving)
+        {
+            if (controller == null || controller.Story == null) return;
+            overlay = saving ? Overlay.Save : Overlay.Load;
+            settingsFocus = 0;
+            BuildSettings();
+        }
+
+        /// <summary>Closes whichever menu is open (Settings or the save slots).</summary>
         public void CloseSettings()
         {
-            settingsOpen = false;
+            overlay = Overlay.None;
             settingsButtons.Clear();
             if (settingsPanel != null) Discard(settingsPanel.gameObject);
             settingsPanel = null;
@@ -636,6 +653,12 @@ namespace __NAMESPACE__
             list.childForceExpandWidth = true;
             list.childForceExpandHeight = false;
             list.childAlignment = TextAnchor.UpperCenter;
+            if (overlay == Overlay.Save || overlay == Overlay.Load)
+            {
+                BuildSlots(box, w, overlay == Overlay.Save);
+                FocusMenu();
+                return;
+            }
             AddText(box, w.title, FontSize, Accent, FontStyle.Bold, TextAnchor.MiddleCenter);
             SettingButton(box, w.textSize + ":  " + Mathf.RoundToInt(NarrativeSettings.TextScale * 100f) + "%", () => NarrativeSettings.TextScale = NarrativeSettings.Next(NarrativeSettings.TextScales, NarrativeSettings.TextScale));
             SettingButton(box, w.typingSpeed + ":  " + SpeedWord(w), () => NarrativeSettings.TypingSpeed = (NarrativeSettings.Speed)(((int)NarrativeSettings.TypingSpeed + 1) % 4));
@@ -644,12 +667,38 @@ namespace __NAMESPACE__
             SettingButton(box, w.voiceVolume + ":  " + Mathf.RoundToInt(NarrativeSettings.VoiceVolume * 100f) + "%", () => NarrativeSettings.VoiceVolume = NarrativeSettings.Next(NarrativeSettings.VoiceVolumes, NarrativeSettings.VoiceVolume));
             SettingButton(box, w.reset, NarrativeSettings.Reset);
             SettingButton(box, w.close, CloseSettings);
-            // Keyboard and gamepad: keep the focus on the row that was just changed.
+            FocusMenu();
+        }
+
+        // Keyboard and gamepad: keep the focus on the row that was just used.
+        void FocusMenu()
+        {
             var es = EventSystem.current;
             if (es != null && settingsButtons.Count > 0) es.SetSelectedGameObject(settingsButtons[Mathf.Clamp(settingsFocus, 0, settingsButtons.Count - 1)].gameObject);
         }
 
-        void SettingButton(Transform parent, string label, System.Action onClick)
+        void BuildSlots(Transform box, SettingsWords w, bool saving)
+        {
+            AddText(box, saving ? w.saveTitle : w.loadTitle, FontSize, Accent, FontStyle.Bold, TextAnchor.MiddleCenter);
+            foreach (var slot in controller.GetSlots())
+            {
+                // The autosave can be loaded, not saved over.
+                if (saving && slot.Slot == NarrativeController.AutosaveSlot) continue;
+                var name = slot.Slot == NarrativeController.AutosaveSlot ? w.autosave : w.slot + " " + slot.Slot;
+                var label = !slot.Exists ? name + "  ·  " + w.empty : name + "  ·  " + slot.PassageTitle + "  ·  " + slot.SavedAt.ToLocalTime().ToString("g") + (slot.OtherVersion ? "  (" + w.olderVersion + ")" : "");
+                var n = slot.Slot;
+                var button = SettingButton(box, label, () =>
+                {
+                    if (saving) controller.SaveToSlot(n);
+                    else controller.LoadFromSlot(n);
+                    CloseSettings();
+                });
+                if (!saving && !slot.Exists) button.interactable = false;
+            }
+            SettingButton(box, w.close, CloseSettings);
+        }
+
+        Button SettingButton(Transform parent, string label, System.Action onClick)
         {
             var row = settingsButtons.Count;
             var rect = Child(label, parent);
@@ -673,6 +722,7 @@ namespace __NAMESPACE__
                 onClick();
             });
             settingsButtons.Add(button);
+            return button;
         }
 
         static string SpeedWord(SettingsWords w)

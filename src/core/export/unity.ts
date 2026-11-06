@@ -74,6 +74,7 @@ export const unityAdapter: EngineAdapter = {
       { path: `${pkg}Runtime/StoryInfo.cs`, content: storyInfoCs(story, id) },
       { path: `${pkg}Runtime/IInventoryAuthority.cs`, content: cs(INVENTORY_CS) },
       { path: `${pkg}Runtime/GatedChoice.cs`, content: cs(GATED_CHOICE_CS) },
+      { path: `${pkg}Runtime/SaveStorage.cs`, content: cs(SAVE_STORAGE_CS) },
       { path: `${pkg}Runtime/NarrativeCuePlayer.cs`, content: cs(CUE_PLAYER_CS) },
       { path: `${pkg}Runtime/NarrativeController.cs`, content: cs(CONTROLLER_CS) },
       { path: `${pkg}Runtime/NarrativeTheme.cs`, content: cs(THEME_CS) },
@@ -271,6 +272,8 @@ namespace ${id.namespace}
 
         /// <summary>Every passage (ink knot) the story can start at: NarrativeController.StartAt(name).</summary>
         public static readonly string[] Passages = { ${passages.map(csString).join(', ')} };
+        /// <summary>Each passage's title, in the same order as Passages (for save slots and menus).</summary>
+        public static readonly string[] PassageTitles = { ${passages.map((k) => csString(story.project.passages.find((p) => p.id === k)?.title || k)).join(', ')} };
         /// <summary>Ink variables that mirror inventory items (has_&lt;item&gt;).</summary>
         public static readonly string[] ItemVariables = { ${items.map(csString).join(', ')} };
         /// <summary>Story variables the game is allowed to read and write.</summary>
@@ -348,6 +351,14 @@ stories) without clashing, and it never changes your scenes, build settings or p
   and pauses your game, an inventory bridge, a listener for tags and variables, and *StoryExits*, which hands the story to your gameplay at each exit.
 
 ## Saves
+**Save slots.** The story panel's *Save* and *Load* open a menu of slots (*Save Slots* on the controller, 3 by default), each
+showing the passage and when it was saved, and an **autosave** is kept each time the reader reaches a new passage (*Autosave*).
+From code: \`SaveToSlot(n)\`, \`LoadFromSlot(n)\` (0 is the autosave), \`GetSlots()\` (\`SlotInfo\`: \`Exists\`, \`SavedAt\`,
+\`PassageTitle\`, \`Excerpt\`), \`DeleteSlot(n)\` and the \`Saved\` event. Slots are small JSON files in
+\`Application.persistentDataPath/NarrativeBridge/${id.name}/\`; to keep them in your game's own saves (Steam Cloud, a console's
+save data), give *Save Storage* a component implementing \`ISaveStorage\` (\`Write\`, \`Read\`, \`Delete\`). Set *Save Slots*
+to 0 for the single quick save instead.
+
 \`SaveState()\` returns a string you can keep in your own save system (\`SaveToPrefs()\` / \`LoadFromPrefs()\` use one
 PlayerPrefs slot), and \`TryLoadState(save, out error)\` restores it. A save from an earlier version of the story is carried
 over: the new version is replayed with the same choices, so revising the story doesn't break players' saves.
@@ -789,6 +800,62 @@ namespace __NAMESPACE__
 }
 `;
 
+const SAVE_STORAGE_CS = `using System;
+using System.IO;
+using UnityEngine;
+
+namespace __NAMESPACE__
+{
+    /// <summary>
+    /// Where save slots are kept. Implement it on a MonoBehaviour and set the controller's Save Storage to use your
+    /// game's own saves (Steam Cloud, a console's save data, your save file); keys are short names like "slot-1".
+    /// </summary>
+    public interface ISaveStorage
+    {
+        void Write(string key, string data);
+        /// <summary>The data saved under key, or null.</summary>
+        string Read(string key);
+        void Delete(string key);
+    }
+
+    /// <summary>The default: one small JSON file per slot in Application.persistentDataPath/NarrativeBridge/&lt;story&gt;/.</summary>
+    public class FileSaveStorage : ISaveStorage
+    {
+        public readonly string Folder;
+
+        public FileSaveStorage(string folder = null)
+        {
+            Folder = folder ?? System.IO.Path.Combine(Application.persistentDataPath, "NarrativeBridge", StoryInfo.PackageName);
+        }
+
+        string FileFor(string key) => System.IO.Path.Combine(Folder, key + ".json");
+
+        public void Write(string key, string data)
+        {
+            Directory.CreateDirectory(Folder);
+            // Write a new file and swap it in, so a crash mid-save never leaves half a save.
+            var file = FileFor(key);
+            var temp = file + ".tmp";
+            File.WriteAllText(temp, data);
+            if (File.Exists(file)) File.Delete(file);
+            File.Move(temp, file);
+        }
+
+        public string Read(string key)
+        {
+            var file = FileFor(key);
+            return File.Exists(file) ? File.ReadAllText(file) : null;
+        }
+
+        public void Delete(string key)
+        {
+            var file = FileFor(key);
+            if (File.Exists(file)) File.Delete(file);
+        }
+    }
+}
+`;
+
 const CONTROLLER_CS = `using System;
 using System.Collections.Generic;
 using Ink.Runtime;
@@ -832,6 +899,14 @@ namespace __NAMESPACE__
 
         [Tooltip("Volume of the voice clips (the story panel sets it from its theme).")]
         [Range(0f, 1f)] public float voiceVolume = 1f;
+
+        [Header("Saves")]
+        [Tooltip("Save slots the story panel's Save and Load offer. 0 keeps the single quick save (SaveToPrefs).")]
+        [Range(0, 9)] public int saveSlots = 3;
+        [Tooltip("Keep an autosave (slot 0) each time the reader reaches a new passage, while the game plays.")]
+        public bool autosave = true;
+        [Tooltip("Optional component implementing ISaveStorage, for your game's own saves. Files in Application.persistentDataPath when empty.")]
+        public MonoBehaviour saveStorage;
 
         [Serializable] public class LineEvent : UnityEvent<string, string> { }
         [Serializable] public class TextEvent : UnityEvent<string> { }
@@ -1007,6 +1082,10 @@ namespace __NAMESPACE__
             public string inkState;
             public List<string> choicePath;
             public string startPassage;
+            // For save slots: when, where, and the last line read.
+            public string savedAt;
+            public string passage;
+            public string excerpt;
         }
 
         void Awake()
@@ -1136,6 +1215,7 @@ namespace __NAMESPACE__
                 foreach (var t in line.Tags)
                     if (!IsStoryTag(t)) { TagFound?.Invoke(t); onTag.Invoke(t); }
             }
+            AutosaveIfNewPassage();
             if (IsAtExit) { ExitReached?.Invoke(CurrentExit); onExit.Invoke(CurrentExit); }
             else if (IsWaitingForContinue) { ContinueShown?.Invoke(); onContinue.Invoke(); }
             else if (Story.currentChoices.Count > 0) { ChoicesShown?.Invoke(Story.currentChoices); onChoices.Invoke(); }
@@ -1145,6 +1225,16 @@ namespace __NAMESPACE__
                 StoryEnded?.Invoke();
                 onEnded.Invoke();
             }
+        }
+
+        // An autosave each time the reader reaches a new passage (only while the game plays).
+        void AutosaveIfNewPassage()
+        {
+            if (!autosave || !Application.isPlaying || silent || Story == null) return;
+            var passage = CurrentPassage;
+            if (passage == null || passage == autosavedPassage) return;
+            autosavedPassage = passage;
+            SaveToSlot(AutosaveSlot);
         }
 
         static bool IsStoryTag(string t) =>
@@ -1317,10 +1407,123 @@ namespace __NAMESPACE__
             SetStatus(TryLoadState(PlayerPrefs.GetString(SaveKey, ""), out var err) ? LoadNote ?? "Loaded." : err);
         }
 
+        // ---- Save slots: several saves and an autosave, through ISaveStorage --------------------
+
+        /// <summary>The autosave's slot number; the player's slots are 1 to saveSlots.</summary>
+        public const int AutosaveSlot = 0;
+
+        /// <summary>What a save slot holds: when it was saved, where, and the last line read.</summary>
+        public struct SlotInfo
+        {
+            public int Slot;
+            public bool Exists;
+            public DateTime SavedAt;
+            public string Passage;
+            public string PassageTitle;
+            public string Excerpt;
+            /// <summary>The save is from an earlier version of the story (it loads by replaying its choices).</summary>
+            public bool OtherVersion;
+        }
+
+        /// <summary>Where slots are kept: Save Storage when set, else files (see FileSaveStorage). Settable from code.</summary>
+        public ISaveStorage Storage
+        {
+            get
+            {
+                if (storage == null) storage = saveStorage as ISaveStorage ?? new FileSaveStorage();
+                return storage;
+            }
+            set => storage = value;
+        }
+
+        /// <summary>Raised after a slot is saved (its number; AutosaveSlot for the autosave).</summary>
+        public event Action<int> Saved;
+
+        ISaveStorage storage;
+        string autosavedPassage;
+
+        static string SlotKey(int slot) => slot == AutosaveSlot ? "autosave" : "slot-" + slot;
+
+        public SlotInfo GetSlot(int slot)
+        {
+            var info = new SlotInfo { Slot = slot };
+            string json = null;
+            try { json = Storage.Read(SlotKey(slot)); } catch (Exception e) { Debug.LogWarning("[NarrativeBridge] Could not read save slot " + slot + ": " + e.Message); }
+            if (string.IsNullOrEmpty(json)) return info;
+            SaveData data = null;
+            try { data = JsonUtility.FromJson<SaveData>(json); } catch { }
+            if (data == null || string.IsNullOrEmpty(data.inkState)) return info;
+            info.Exists = true;
+            DateTime.TryParse(data.savedAt, null, System.Globalization.DateTimeStyles.RoundtripKind, out info.SavedAt);
+            info.Passage = data.passage;
+            var i = string.IsNullOrEmpty(data.passage) ? -1 : Array.IndexOf(StoryInfo.Passages, data.passage);
+            info.PassageTitle = i >= 0 ? StoryInfo.PassageTitles[i] : data.passage;
+            info.Excerpt = data.excerpt;
+            info.OtherVersion = data.storyVersion != StoryInfo.StoryVersion;
+            return info;
+        }
+
+        /// <summary>The autosave and every player slot, in order (slot 0 is the autosave).</summary>
+        public List<SlotInfo> GetSlots()
+        {
+            var list = new List<SlotInfo>();
+            for (int i = 0; i <= saveSlots; i++) list.Add(GetSlot(i));
+            return list;
+        }
+
+        public void SaveToSlot(int slot)
+        {
+            if (Story == null) return;
+            try
+            {
+                Storage.Write(SlotKey(slot), SaveState());
+                if (slot != AutosaveSlot) SetStatus("Saved to slot " + slot + ".");
+                Saved?.Invoke(slot);
+            }
+            catch (Exception e) { ReportError("Could not save: " + e.Message); }
+        }
+
+        /// <summary>Loads a slot; false (with the reason in Status) when it's empty or can't be loaded.</summary>
+        public bool LoadFromSlot(int slot)
+        {
+            string json = null;
+            try { json = Storage.Read(SlotKey(slot)); } catch (Exception e) { SetStatus("Could not read the save: " + e.Message); return false; }
+            if (string.IsNullOrEmpty(json)) { SetStatus("That slot is empty."); return false; }
+            var ok = TryLoadState(json, out var err);
+            SetStatus(ok ? LoadNote ?? (slot == AutosaveSlot ? "Loaded the autosave." : "Loaded slot " + slot + ".") : err);
+            autosavedPassage = CurrentPassage;
+            return ok;
+        }
+
+        public void DeleteSlot(int slot)
+        {
+            try { Storage.Delete(SlotKey(slot)); } catch (Exception e) { Debug.LogWarning("[NarrativeBridge] Could not delete save slot " + slot + ": " + e.Message); }
+        }
+
+        string Excerpt()
+        {
+            for (int i = transcript.Count - 1; i >= 0; i--)
+            {
+                if (transcript[i].IsChoice || string.IsNullOrEmpty(transcript[i].Text)) continue;
+                var t = (transcript[i].Speaker != null ? transcript[i].Speaker + ": " : "") + transcript[i].Text;
+                return t.Length > 90 ? t.Substring(0, 87) + "..." : t;
+            }
+            return "";
+        }
+
         /// <summary>The story's state as a string, to keep in your own save system.</summary>
         public string SaveState()
         {
-            return JsonUtility.ToJson(new SaveData { storyVersion = StoryInfo.StoryVersion, inkState = Story.state.ToJson(), choicePath = new List<string>(choicePath), startPassage = StartPassage ?? "" });
+            return JsonUtility.ToJson(new SaveData
+            {
+                storyVersion = StoryInfo.StoryVersion,
+                inkState = Story.state.ToJson(),
+                choicePath = new List<string>(choicePath),
+                startPassage = StartPassage ?? "",
+                savedAt = DateTime.UtcNow.ToString("o"),
+                passage = CurrentPassage ?? "",
+                excerpt = Excerpt(),
+            });
         }
 
         public bool TryLoadState(string saveJson, out string error)
@@ -1847,9 +2050,73 @@ namespace __NAMESPACE__.EditorTools
             var ui = StoryViewCheck(errors);
             var gates = LockedChoiceCheck(json, errors);
             var cueResult = CueCheck(errors);
-            log = "[NarrativeBridge] Smoke test (" + source + "): " + clipsHeard.Count + " voice clip(s), " + picturesSeen.Count + " picture(s) and " + StoryInfo.PortraitSpeakers.Length + " portrait(s) checked, " + completed + "/" + runs + " playthroughs reached an ending, "  + carry + ", " + startAt + ", " + exit + ", " + ui + ", " + gates + ", " + cueResult + ", " + errors.Count + " runtime errors." +
+            var slots = SaveSlotCheck(errors);
+            log = "[NarrativeBridge] Smoke test (" + source + "): " + clipsHeard.Count + " voice clip(s), " + picturesSeen.Count + " picture(s) and " + StoryInfo.PortraitSpeakers.Length + " portrait(s) checked, " + completed + "/" + runs + " playthroughs reached an ending, "  + carry + ", " + startAt + ", " + exit + ", " + ui + ", " + gates + ", " + cueResult + ", " + slots + ", " + errors.Count + " runtime errors." +
                   (errors.Count > 0 ? "\\n" + string.Join("\\n", errors) : "");
             return errors.Count == 0 && completed > 0;
+        }
+
+        /// Save slots kept in memory for the check (the game's own files are never touched).
+        class MemoryStorage : ISaveStorage
+        {
+            public readonly Dictionary<string, string> Saves = new Dictionary<string, string>();
+            public void Write(string key, string data) => Saves[key] = data;
+            public string Read(string key) => Saves.TryGetValue(key, out var d) ? d : null;
+            public void Delete(string key) => Saves.Remove(key);
+        }
+
+        /// Saves part-way into a slot, plays on, loads the slot back (same choices as when saved), checks what the
+        /// slot says about itself, then the panel's Load menu lists the slots, and a slot can be deleted.
+        static string SaveSlotCheck(List<string> errors)
+        {
+            var go = new GameObject("NarrativeBridge save slot check");
+            try
+            {
+                var c = go.AddComponent<NarrativeController>();
+                c.drawDemoUI = false;
+                c.saveSlots = 3;
+                c.Storage = new MemoryStorage();
+                c.StartStory();
+                if (c.Story == null) { errors.Add("Save slots: the story did not start."); return "save slots failed"; }
+                for (int i = 0; i < 2 && c.Story.currentChoices.Count > 0; i++) c.Choose(0);
+                var expected = string.Join(" | ", c.Story.currentChoices.ConvertAll(x => x.text));
+                var passage = c.CurrentPassage;
+                c.SaveToSlot(2);
+                for (int i = 0; i < 3 && c.Story.currentChoices.Count > 0; i++) c.Choose(c.Story.currentChoices.Count - 1);
+                if (!c.LoadFromSlot(2)) { errors.Add("Save slots: slot 2 did not load: " + c.Status); return "save slots failed"; }
+                var got = string.Join(" | ", c.Story.currentChoices.ConvertAll(x => x.text));
+                if (got != expected) { errors.Add("Save slots: expected choices [" + expected + "] after loading but got [" + got + "]"); return "save slots failed"; }
+                var info = c.GetSlot(2);
+                if (!info.Exists || info.Passage != passage || string.IsNullOrEmpty(info.PassageTitle) || info.SavedAt == default(System.DateTime)) { errors.Add("Save slots: slot 2 doesn't say where and when it was saved."); return "save slots failed"; }
+                if (c.GetSlot(1).Exists || c.LoadFromSlot(1)) { errors.Add("Save slots: an empty slot loaded."); return "save slots failed"; }
+                var view = go.AddComponent<NarrativeView>();
+                view.controller = c;
+                view.theme = NarrativeTheme.LoadExported();
+                view.Build();
+                view.OpenSaveSlots(false);
+                // Load menu: the autosave and 3 slots, then Close; only slot 2 can be loaded.
+                var loadable = 0;
+                foreach (var b in view.SettingsButtons) if (b.interactable) loadable++;
+                if (!view.SlotsOpen || view.SettingsButtons.Count != 5 || loadable != 2) { errors.Add("Save slots: the Load menu shows " + view.SettingsButtons.Count + " buttons (" + loadable + " usable) instead of 5 (2 usable)."); return "save slots failed"; }
+                view.SettingsButtons[2].onClick.Invoke(); // slot 2
+                if (view.SlotsOpen || string.Join(" | ", c.Story.currentChoices.ConvertAll(x => x.text)) != expected) { errors.Add("Save slots: loading from the menu didn't load slot 2."); return "save slots failed"; }
+                c.DeleteSlot(2);
+                if (c.GetSlot(2).Exists) { errors.Add("Save slots: slot 2 was not deleted."); return "save slots failed"; }
+                // The default storage: files in a folder (a temporary one here).
+                var folder = System.IO.Path.Combine(System.IO.Path.GetTempPath(), "NarrativeBridgeSlotCheck-" + System.Guid.NewGuid().ToString("N"));
+                try
+                {
+                    var files = new FileSaveStorage(folder);
+                    files.Write("slot-1", c.SaveState());
+                    files.Write("slot-1", c.SaveState()); // over an existing save
+                    if (files.Read("slot-1") == null || files.Read("slot-9") != null) { errors.Add("Save slots: file storage did not read back what it wrote."); return "save slots failed"; }
+                    files.Delete("slot-1");
+                    if (files.Read("slot-1") != null) { errors.Add("Save slots: file storage did not delete."); return "save slots failed"; }
+                }
+                finally { if (Directory.Exists(folder)) Directory.Delete(folder, true); }
+                return "save slots passed (files and menu)";
+            }
+            finally { UnityEngine.Object.DestroyImmediate(go); }
         }
 
         /// Plays the story with a Cue Player set up as Add Cue Player does (with no clips yet): every cue the story
