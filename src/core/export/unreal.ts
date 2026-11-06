@@ -15,7 +15,7 @@ export const unrealAdapter: EngineAdapter = {
   integration: {
     name: 'Inkpot',
     repository: 'https://github.com/The-Chinese-Room/Inkpot.git',
-    defaultRef: 'main',
+    defaultRef: 'v1.42.21-release',
   },
   requirements: (o) => [
     { id: 'unreal', label: `Unreal Engine ${o.engineVersion}`, detail: 'Inkpot documents UE 5.7 or later. Install via the Epic Games Launcher.', probe: { paths: ['/Users/Shared/Epic Games', 'C:\\Program Files\\Epic Games'] } },

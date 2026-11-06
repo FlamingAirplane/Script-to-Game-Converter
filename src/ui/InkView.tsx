@@ -71,9 +71,13 @@ export function InkView({ processed, onOpen }: { processed: ProcessedStory; onOp
           return (
             <Fragment key={i}>
               <span className={`code-line ${err ? `has-${err.severity}` : ''}`}>
-                <span className="ln" onClick={() => pid && onOpen(pid)} title={pid ? `Open ${pid} in Review` : undefined}>
-                  {n}
-                </span>
+                {pid ? (
+                  <button type="button" className="ln ln-link" onClick={() => onOpen(pid)} title={`Open ${pid} in Review`} aria-label={`Line ${n}: go to passage ${pid}`}>
+                    {n}
+                  </button>
+                ) : (
+                  <span className="ln">{n}</span>
+                )}
                 <span className="lc">{highlight(l)}</span>
                 {err && <span className={`inline-err sev-${err.severity}`}>{err.message}</span>}
               </span>

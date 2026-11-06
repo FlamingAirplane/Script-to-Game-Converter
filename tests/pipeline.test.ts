@@ -1515,3 +1515,24 @@ describe('original files', () => {
     expect((await prepareInput('a.fountain', 'INT. HALL')).original).toBeUndefined();
   });
 });
+
+describe('hands-on review fixes', () => {
+  it('points an item that only a waiting suggestion gives at that suggestion, not at @give', async () => {
+    const { project } = await build('@var lamp = 0\n@passage a A\nA locked door.\n* [Take the brass key] -> a @give brass_key\n+ {has brass_key} [Use the brass key] -> b\n@passage b B\nOpen.\n@end\n', 'k.md', 'structured');
+    const take = project.passages[0].choices.find((c) => c.text === 'Take the brass key')!;
+    take.review = 'pending';
+    const d = analyze(project).diagnostics;
+    expect(d.map((x) => x.code)).not.toContain('ITEM_NEVER_ACQUIRED');
+    const hint = d.find((x) => x.code === 'ITEM_GIVEN_ONLY_BY_SUGGESTION')!;
+    expect(hint.message).toContain('Take the brass key');
+    expect(hint.entityId).toBe(take.id);
+    const { pendingSuggestions } = await import('../src/core/adapt');
+    expect(pendingSuggestions(project)).toBe(1);
+    reviewAll(project, 'approved');
+    expect(analyze(project).diagnostics.map((x) => x.code)).not.toContain('ITEM_GIVEN_ONLY_BY_SUGGESTION');
+  });
+
+  it('pins every engine integration to a tag or commit, not a branch', () => {
+    for (const a of Object.values(ADAPTERS)) expect(a.integration.defaultRef, a.label).not.toMatch(/^(main|master|develop|HEAD)$/);
+  });
+});

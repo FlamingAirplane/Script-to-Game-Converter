@@ -40,6 +40,12 @@ export function ReviewView({
   const [filter, setFilter] = useState('');
   const [showSource, setShowSource] = useState(true);
   const [focusLine, setFocusLine] = useState<number | undefined>();
+  // On a phone the contents list is a drawer, so the editor starts at the top of the screen.
+  const [contentsOpen, setContentsOpen] = useState(false);
+  const select = (id: string) => {
+    setContentsOpen(false);
+    onSelect(id);
+  };
   const passage = project.passages.find((p) => p.id === selected);
   const pendingTotal = project.passages.reduce((n, p) => n + p.choices.filter((c) => c.review === 'pending').length, 0);
 
@@ -60,8 +66,12 @@ export function ReviewView({
 
   return (
     <div className={`view review-view ${showSource && passage?.source ? 'with-source' : ''}`}>
-      <aside className="passage-list">
-        <button className={`story-entry ${selected === STORY_SETTINGS ? 'active' : ''}`} onClick={() => onSelect(STORY_SETTINGS)}>
+      {contentsOpen && <div className="contents-backdrop" onClick={() => setContentsOpen(false)} aria-hidden />}
+      <aside className={`passage-list ${contentsOpen ? 'open' : ''}`} id="contents-drawer" onKeyDown={(e) => e.key === 'Escape' && setContentsOpen(false)}>
+        <button className="btn tiny contents-close" onClick={() => setContentsOpen(false)}>
+          ✕ Close contents
+        </button>
+        <button className={`story-entry ${selected === STORY_SETTINGS ? 'active' : ''}`} onClick={() => select(STORY_SETTINGS)}>
           <strong>Story settings</strong>
           <span className="muted small">
             {project.characters.length} characters · {project.items.length} items · {project.variables.length} variables
@@ -92,17 +102,33 @@ export function ReviewView({
             const node = processed.analysis.graph.nodes.find((n) => n.id === p.id);
             return (
               <li key={p.id}>
-                <button className={`passage-item ${selected === p.id ? 'active' : ''}`} onClick={() => onSelect(p.id)}>
+                <button className={`passage-item ${selected === p.id ? 'active' : ''}`} aria-current={selected === p.id ? 'true' : undefined} onClick={() => select(p.id)}>
                   <span className="toc-line">
                     <span className="passage-title">{p.title}</span>
                     <span className="toc-num">{project.passages.indexOf(p) + 1}</span>
                   </span>
                   <span className="passage-meta">
                     <span className="mono muted small">{p.id}</span>
-                    {project.project.startPassage === p.id && <Badge tone="accent">start</Badge>}
-                    {node?.isEnding && <Badge tone="ok">ending</Badge>}
-                    {node && !node.reachable && <Badge tone="warning">unreachable</Badge>}
-                    {pending > 0 && <Badge tone="review">{pending} to review</Badge>}
+                    {project.project.startPassage === p.id && (
+                      <Badge tone="accent" title="The story starts here">
+                        start
+                      </Badge>
+                    )}
+                    {node?.isEnding && (
+                      <Badge tone="ok" title="The story can end here">
+                        ending
+                      </Badge>
+                    )}
+                    {node && !node.reachable && (
+                      <Badge tone="warning" title="No choice or path leads here from the start yet">
+                        unreachable
+                      </Badge>
+                    )}
+                    {pending > 0 && (
+                      <Badge tone="review" title="Suggested choices here are waiting for you to approve or reject them">
+                        {pending} to review
+                      </Badge>
+                    )}
                     {issues?.error ? <Badge tone="error">{issues.error} error</Badge> : null}
                   </span>
                 </button>
@@ -115,7 +141,7 @@ export function ReviewView({
           onClick={() => {
             let id = '';
             update((d) => (id = addPassage(d, passage?.id).id));
-            setTimeout(() => onSelect(id));
+            setTimeout(() => select(id));
           }}
         >
           + Add passage
@@ -123,6 +149,30 @@ export function ReviewView({
       </aside>
 
       <main className="passage-editor">
+        <button className="btn small contents-open" aria-expanded={contentsOpen} aria-controls="contents-drawer" onClick={() => setContentsOpen(true)}>
+          ☰ Contents · {selected === STORY_SETTINGS ? 'Story settings' : passage ? `${project.passages.indexOf(passage) + 1} of ${project.passages.length}: ${passage.title}` : `${project.passages.length} passages`}
+        </button>
+        <details className="review-key small">
+          <summary>What do the labels mean?</summary>
+          <dl>
+            <dt>source</dt>
+            <dd>Taken word for word from your script.</dd>
+            <dt>transformed</dt>
+            <dd>From your script, reshaped to fit a game (a scene became a passage, a line became a choice).</dd>
+            <dt>generated</dt>
+            <dd>Suggested by Narrative Bridge; not in your script.</dd>
+            <dt>edited</dt>
+            <dd>You added or changed it here.</dd>
+            <dt>pending</dt>
+            <dd>A suggestion waiting for your OK. It’s left out of Playtest and the export until you approve it.</dd>
+            <dt>condition (if …)</dt>
+            <dd>The choice only appears when this is true, e.g. the player has the key.</dd>
+            <dt>effect</dt>
+            <dd>What happens when the choice is picked, e.g. the player gets or loses an item.</dd>
+            <dt>once only</dt>
+            <dd>The choice disappears after it has been picked once.</dd>
+          </dl>
+        </details>
         {selected === STORY_SETTINGS ? (
           <StorySettings project={project} update={update} onKeepDraft={onKeepDraft} onRestoreDraft={onRestoreDraft} />
         ) : passage ? (
@@ -603,9 +653,16 @@ function ChoiceEditor({
       </div>
       <div className="row wrap choice-logic">
         <ProvenanceBadge origin={choice.origin} />
-        {choice.review !== 'approved' && <Badge tone={choice.review === 'pending' ? 'review' : 'muted'}>{choice.review}</Badge>}
+        {choice.review !== 'approved' && (
+          <Badge
+            tone={choice.review === 'pending' ? 'review' : 'muted'}
+            title={choice.review === 'pending' ? 'Pending: a suggestion waiting for your OK. Until then it’s left out of Playtest and the export' : 'Rejected: left out of the story'}
+          >
+            {choice.review}
+          </Badge>
+        )}
         {choice.conditions.map((cond, i) => (
-          <span key={`c${i}`} className="chip cond" title="Condition">
+          <span key={`c${i}`} className="chip cond" title="Condition: the choice only appears when this is true (for example, the player has the key)">
             if <code>{conditionToInk(cond)}</code>
             <button className="chip-x" onClick={() => onChange((c) => c.conditions.splice(i, 1))}>
               ×
@@ -613,7 +670,7 @@ function ChoiceEditor({
           </span>
         ))}
         {choice.effects.map((e, i) => (
-          <span key={`e${i}`} className="chip effect" title="Effect">
+          <span key={`e${i}`} className="chip effect" title="Effect: what happens when the player picks this choice (for example, they get an item)">
             <code>{effectToInk(e).replace(/^~ /, '')}</code>
             <button className="chip-x" onClick={() => onChange((c) => c.effects.splice(i, 1))}>
               ×
@@ -623,7 +680,8 @@ function ChoiceEditor({
         <AddCondition project={project} onAdd={(cond) => onChange((c) => c.conditions.push(cond))} />
         <AddEffect project={project} onAdd={(e) => onChange((c) => c.effects.push(e))} />
         <label className="check small">
-          <input type="checkbox" checked={choice.once} onChange={(e) => onChange((c) => (c.once = e.target.checked))} /> once only
+          <input type="checkbox" checked={choice.once} onChange={(e) => onChange((c) => (c.once = e.target.checked))} />{' '}
+          <span title="Once only: after the player picks this choice, it disappears if they come back here">once only</span>
         </label>
         <span className="spacer" />
         {choice.review === 'pending' && (

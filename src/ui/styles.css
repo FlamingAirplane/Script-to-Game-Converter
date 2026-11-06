@@ -1141,3 +1141,72 @@ section.drafts > h2 { margin-top: 26px; }
 .import-summary p { margin: 0 0 0.5rem; }
 .limits li { margin-bottom: 0.4rem; }
 .install-btn { white-space: nowrap; }
+
+.pending-banner { display: flex; flex-wrap: wrap; gap: 0.5rem 1rem; align-items: center; justify-content: space-between; margin: 0 0 1rem; padding: 0.6rem 0.9rem; border: 1px solid var(--line, currentColor); border-left: 4px solid var(--accent, currentColor); border-radius: 6px; font-size: 0.92rem; }
+
+.diag-go { text-decoration: underline; text-underline-offset: 2px; white-space: nowrap; font-weight: 600; }
+.diag-group { list-style: none; }
+.diag-group-head { display: flex; flex-direction: column; gap: 0.3rem; padding: 0.6rem 0.75rem; }
+.diag-group details { padding: 0 0.75rem 0.5rem; }
+.diag-group details > summary { cursor: pointer; }
+
+.ln-link { all: unset; cursor: pointer; }
+.ln-link:hover, .ln-link:focus-visible { text-decoration: underline; outline: 2px solid currentColor; outline-offset: 1px; }
+.session-drop { width: 100%; font: inherit; color: inherit; text-align: center; }
+
+/* Phone: the contents list is a drawer opened from the top of the editor. */
+.contents-open, .contents-close { display: none; }
+@media (max-width: 760px) {
+  .contents-open { display: block; width: 100%; margin-bottom: 14px; text-align: left; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .contents-close { display: block; align-self: flex-end; }
+  .app .review-view > .passage-list { display: none; }
+  .app .review-view > .passage-list.open { display: flex; position: fixed; z-index: 60; inset: 0 auto 0 0; width: min(86vw, 340px); max-height: none; border-right: 1px solid var(--rule); border-bottom: 0; overflow: auto; box-shadow: 8px 0 24px color-mix(in srgb, var(--shadow) 35%, transparent); }
+  .contents-backdrop { position: fixed; inset: 0; z-index: 59; background: color-mix(in srgb, var(--shadow) 40%, transparent); }
+}
+
+/* Header actions: in a row on wide screens, behind one Menu button on phones. */
+.tb-actions { display: contents; }
+.tb-menu { display: none; }
+@media (max-width: 760px) {
+  .topbar { position: relative; }
+  .topbar .brand > span { display: none; }
+  .tb-menu { display: inline-flex; }
+  .tb-actions { display: none; }
+  .tb-actions.open { display: flex; flex-direction: column; align-items: stretch; gap: 4px; position: absolute; z-index: 70; top: calc(100% - 6px); right: 8px; min-width: 220px; padding: 8px; background: var(--cover-bottom); border: 1px solid var(--cover-edge); border-radius: 8px; box-shadow: 0 10px 24px color-mix(in srgb, var(--shadow) 45%, transparent); }
+  .tb-actions.open .btn { justify-content: flex-start; text-align: left; padding: 8px 10px; }
+  .tb-actions.open .tb-word { display: inline; }
+}
+@media (max-width: 480px) { .topbar .state-pill { display: none; } }
+
+.new-note { display: flex; flex-wrap: wrap; gap: 0.5rem 1rem; align-items: center; justify-content: space-between; margin: 0 0 1rem; padding: 0.7rem 1rem; font-size: 0.95rem; }
+.building { display: flex; align-items: center; gap: 12px; padding: 48px 24px; justify-content: center; font-style: italic; color: var(--ink-2, inherit); }
+.spinner { width: 18px; height: 18px; border-radius: 50%; border: 2px solid currentColor; border-right-color: transparent; animation: nb-spin 0.8s linear infinite; }
+@keyframes nb-spin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) { .spinner { animation-duration: 2.4s; } }
+
+.textarea::placeholder, .input::placeholder { color: var(--faded, #888); font-style: italic; opacity: 0.8; }
+.convert-hint { margin: 6px 0 0; }
+
+.review-key { margin: 0 0 14px; }
+.review-key > summary { cursor: pointer; color: var(--ink-2, inherit); }
+.review-key dl { display: grid; grid-template-columns: max-content minmax(0, 1fr); gap: 4px 14px; margin: 8px 0 0; }
+.review-key dt { font-weight: 600; }
+.review-key dd { margin: 0; }
+@media (max-width: 760px) { .review-key dl { grid-template-columns: minmax(0, 1fr); } .review-key dd { margin-bottom: 6px; } }
+
+.export-summary { margin-bottom: 22px; border-left: 4px solid var(--ok, currentColor); }
+.export-summary.blocked { border-left-color: var(--err, currentColor); }
+.export-summary h2 { margin: 0 0 4px; font-size: 1.1rem; }
+.export-summary p { margin: 0; }
+.advanced { margin: 10px 0; }
+.advanced > summary { cursor: pointer; font-weight: 600; color: var(--ink-2, inherit); padding: 4px 0; }
+.advanced-card { grid-column: 1 / -1; }
+.for-dev { margin: 0; font-variant: small-caps; letter-spacing: 0.12em; color: var(--rubric, inherit); font-weight: 600; }
+
+/* Narrower screens: Diagnostics opens over the page from the tab bar or the import summary. */
+.diag-backdrop { display: none; }
+@media (max-width: 1100px) {
+  .diag-toggle { display: inline-flex; }
+  .app.diag-overlay .diagnostics { display: flex; position: fixed; z-index: 65; top: 0; right: 0; bottom: 0; width: min(92vw, 420px); border-left: 1px solid var(--rule); box-shadow: -8px 0 24px color-mix(in srgb, var(--shadow) 35%, transparent); }
+  .app.diag-overlay .diag-backdrop { display: block; position: fixed; inset: 0; z-index: 64; background: color-mix(in srgb, var(--shadow) 40%, transparent); }
+}

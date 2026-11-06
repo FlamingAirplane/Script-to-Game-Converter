@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
+import { pendingSuggestions } from '../core/adapt';
 import { isPinnedRef } from '../core/export/common';
 import { ADAPTERS, buildPlayableHtml, buildRecordingScript, recordingScriptFileName, buildTwee, ExportBlockedError, playableFileName, twineFileName, unityTarball, unityTarballName, zipExport, type EngineTarget, type ExportResult, type TwineKind } from '../core/export';
 import { SEMVER, unityPackageId } from '../core/export/unityPackage';
@@ -21,7 +22,7 @@ const INKJS_VERSION = INK_COMPILER.version;
 import { RecordingsImport } from './RecordingsImport';
 
 // `stale`: an edit is still being processed, so exports wait for it rather than packaging the previous version.
-export function ExportView({ processed, stale, onState, project, update }: { processed: ProcessedStory; stale: boolean; onState: (s: 'Exporting' | 'Succeeded' | 'Failed' | null) => void; project: StoryProject; update: Update }) {
+export function ExportView({ processed, stale, onState, project, update, onReview }: { processed: ProcessedStory; stale: boolean; onState: (s: 'Exporting' | 'Succeeded' | 'Failed' | null) => void; project: StoryProject; update: Update; onReview?: () => void }) {
   const [engine, setEngine] = useState<EngineTarget>('unity');
   const adapter = ADAPTERS[engine];
   const defaultName = processed.project.project.title.replace(/[^\w]+/g, '') || 'NarrativeProject';
@@ -47,6 +48,7 @@ export function ExportView({ processed, stale, onState, project, update }: { pro
 
   const blocking = processed.diagnostics.filter((d) => d.exportBlocked);
   const pending = processed.diagnostics.filter((d) => d.severity === 'review');
+  const waiting = pendingSuggestions(processed.project);
   const requirements = adapter.requirements({ engine, ...opts });
   const pinned = isPinnedRef(opts.integrationRef);
   const asPackage = engine === 'unity' && opts.unityLayout === 'package';
@@ -88,6 +90,25 @@ export function ExportView({ processed, stale, onState, project, update }: { pro
 
   return (
     <div className="view export-view">
+      <section className={`card export-summary ${blocking.length ? 'blocked' : ''}`} aria-label="Before you export">
+        <h2>Before you export</h2>
+        <p className="small">
+          {blocking.length
+            ? `✗ ${blocking.length} error${blocking.length > 1 ? 's' : ''} must be fixed first (see the Diagnostics panel). Every export below waits for this.`
+            : '✓ No errors: every export below is ready.'}
+          {waiting > 0 && (
+            <>
+              {' '}
+              {waiting} suggestion{waiting > 1 ? 's are' : ' is'} still waiting for your OK and will be left out of every export.{' '}
+              {onReview && (
+                <button className="btn tiny" onClick={onReview}>
+                  Review now
+                </button>
+              )}
+            </>
+          )}
+        </p>
+      </section>
       <ShareSection processed={processed} stale={stale} project={project} update={update} />
 
       <h2 className="section-title">For a game engine</h2>
@@ -140,6 +161,8 @@ export function ExportView({ processed, stale, onState, project, update }: { pro
               <input className={`input mono ${versionOk ? '' : 'invalid'}`} value={opts.packageVersion} onChange={(e) => setOpts({ ...opts, packageVersion: e.target.value.trim() })} />
             </label>
           )}
+          <details className="advanced">
+            <summary>Advanced: versions{asPackage ? ' and package version' : ''}</summary>
           <label className="field">
             <span className="muted small">{asPackage ? 'Unity version you build with (the package works in 2022.3 and later)' : `${adapter.label} version`}</span>
             <input className="input mono" value={opts.engineVersion} onChange={(e) => setOpts({ ...opts, engineVersion: e.target.value })} />
@@ -150,6 +173,7 @@ export function ExportView({ processed, stale, onState, project, update }: { pro
             </span>
             <input className="input mono" value={opts.integrationRef} onChange={(e) => setOpts({ ...opts, integrationRef: e.target.value.trim() })} />
           </label>
+          </details>
           {!asPackage && (
             <label className="check">
               <input type="checkbox" checked={opts.includeDemo} onChange={(e) => setOpts({ ...opts, includeDemo: e.target.checked })} />
@@ -189,11 +213,17 @@ export function ExportView({ processed, stale, onState, project, update }: { pro
           {error && <p className="error-text">{error}</p>}
         </section>
 
-        {engine === 'unity' && <UnityThemeEditor project={project} update={update} />}
+        {engine === 'unity' && (
+          <details className="advanced advanced-card">
+            <summary>Advanced: the look of the story window in Unity (colours, fonts, layout and more)</summary>
+            <UnityThemeEditor project={project} update={update} />
+          </details>
+        )}
 
         <section className="card">
-          <h2>Environment requirements</h2>
-          <p className="muted small">The browser cannot inspect your machine. Run <code>npm run cli -- doctor --engine {engine}</code> to check these automatically.</p>
+          <p className="for-dev small">For your developer</p>
+          <h2>What their computer needs</h2>
+          <p className="muted small">Writers can skip this. The browser can’t check a computer, so your developer can run <code>npm run cli -- doctor --engine {engine}</code> to check these automatically.</p>
           <ul className="checklist">
             {requirements.map((r) => (
               <li key={r.id}>
