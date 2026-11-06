@@ -1701,3 +1701,76 @@ describe('cue sounds', () => {
     expect(cueSounds(project).has('music:calm')).toBe(false);
   });
 });
+
+describe('translations brought back in', () => {
+  const archive = async () => {
+    const s = SAMPLES.find((x) => x.id === 'archive')!;
+    const { project } = await buildStory([{ fileName: s.fileName, text: s.text }], { mode: s.mode });
+    reviewAll(project, 'approved');
+    return project;
+  };
+
+  it('reads a filled-in sheet, keeps what it had, and says what changed', async () => {
+    const { translationSheet, importTranslations, translationCoverage, translate, parseCsv, removeLanguage } = await import('../src/core/export/translations');
+    const project = await archive();
+    const sheet = parseCsv(translationSheet(project, undefined, ['fr']));
+    // A translator fills in French for half the rows, in a spreadsheet that saves with semicolons.
+    const filled = sheet.map((r, i) => (i === 0 ? r : [...r.slice(0, 4), i % 2 ? `FR ${r[3]}` : ''])).concat([['nb_00000000', 'line', 'gone', 'An old line', 'Une vieille ligne']]);
+    const csv = filled.map((r) => r.map((c) => (/[;"\n]/.test(c) ? `"${c.replace(/"/g, '""')}"` : c)).join(';')).join('\n');
+    const r = importTranslations(project, csv);
+    const half = Math.ceil((sheet.length - 1) / 2);
+    expect(r.languages).toEqual([{ code: 'fr', translated: half }]);
+    expect(r.stale).toBe(1);
+    expect(translate(project, 'fr', sheet[1][3])).toBe(`FR ${sheet[1][3]}`);
+    expect(translate(project, '', sheet[1][3])).toBe(sheet[1][3]);
+    // Bringing in a sheet with an empty cell keeps the earlier translation; the next sheet carries them.
+    importTranslations(project, `key,kind,passage,source,fr\n${sheet[1][0]},,,x,\n`);
+    expect(translate(project, 'fr', sheet[1][3])).toBe(`FR ${sheet[1][3]}`);
+    expect(parseCsv(translationSheet(project))[1][4]).toBe(`FR ${sheet[1][3]}`);
+    expect(translationCoverage(project).languages[0].translated).toBe(half);
+    expect(() => importTranslations(project, 'a,b\n1,2\n')).toThrow(/key/);
+    expect(() => importTranslations(project, 'key,kind,passage,source\nx,,,y\n')).toThrow(/language/);
+    removeLanguage(project, 'fr');
+    expect(project.translations).toBeUndefined();
+  });
+
+  it('puts translations and locked choices in the playable story', async () => {
+    const { importTranslations, translationEntries, translationKey } = await import('../src/core/export/translations');
+    const { buildPlayableHtml } = await import('../src/core/export');
+    const project = await archive();
+    const entries = translationEntries(project);
+    importTranslations(project, ['key,kind,passage,source,de', ...entries.map((e) => `${e.key},,,"${e.source.replace(/"/g, '""')}","DE ${e.source.replace(/"/g, '""')}"`)].join('\n'));
+    const html = buildPlayableHtml(processProject(project), '/* ink */');
+    const meta = JSON.parse(/<script id="story-meta" type="application\/json">([^<]*)<\/script>/.exec(html)![1].replace(/\\u003c/g, '<'));
+    expect(meta.translations.languages).toEqual(['de']);
+    expect(meta.translations.strings[translationKey(entries[0].source)].de).toBe(`DE ${entries[0].source}`);
+    expect(meta.gated).toEqual(expect.arrayContaining([expect.objectContaining({ p: 'archive_entry', t: 'Open the archive', needs: [{ w: 'Archive Key', c: { type: 'has_item', itemId: 'archive_key' } }] })]));
+    // The page computes keys like translationKey does (spaces tidied, then FNV-1a).
+    const pageKey = new Function(/function textKey\(text\) \{[\s\S]*?\n  \}/.exec(html)![0] + '; return textKey;')() as (t: string) => string;
+    for (const e of entries) expect(pageKey(`  ${e.source.replace(/ /g, '   ')} `)).toBe(e.key);
+  });
+
+  it('warns about silent cues and cue names that look like typos', async () => {
+    const { project } = await build('@passage hall Hall\n@cue music calm\nA.\n@cue musci calm\n@cue shake\n@cue lights_flicker\n@cue lights_flicker\n@cue light_flicker\n@end\n', 'c.md', 'structured');
+    const codes = analyze(project).diagnostics.filter((d) => d.code.startsWith('CUE_'));
+    expect(codes.filter((d) => d.code === 'CUE_WITHOUT_SOUND').map((d) => d.message)).toEqual([
+      'The cue "music: calm" has no sound attached, so it\'s silent in Playtest and the playable story.',
+      'The cue "musci: calm" has no sound attached, so it\'s silent in Playtest and the playable story.',
+      'The cue "lights_flicker" has no sound attached (it\'s used 2 times), so it\'s silent in Playtest and the playable story.',
+      'The cue "light_flicker" has no sound attached, so it\'s silent in Playtest and the playable story.',
+    ]);
+    expect(codes.filter((d) => d.code === 'CUE_NAME_TYPO').map((d) => d.message)).toEqual([
+      'The cue "musci" looks like a typo for "music", so the game would treat it as a different cue.',
+      'The cue "light_flicker" looks like a typo for "lights_flicker", so the game would treat it as a different cue.',
+    ]);
+  });
+
+  it('ships the translation sheet and playthrough routes with Unreal', async () => {
+    const r = await ADAPTERS.unreal.export(processProject(await archive()), { engine: 'unreal', projectName: 'Archive', engineVersion: '5.7', integrationRef: 'v1.42.21-release', includeDemo: true });
+    const sheet = r.files.find((f) => f.path.endsWith('StorySource/Translations.csv'))!.content as string;
+    expect(sheet.split('\r\n')[0]).toBe('key,kind,passage,source');
+    const routes = JSON.parse(r.files.find((f) => f.path.endsWith('StorySource/PlaythroughRoutes.json'))!.content as string).routes;
+    expect(routes.length).toBeGreaterThan(0);
+    expect(routes[0]).toHaveProperty('choices');
+  });
+});

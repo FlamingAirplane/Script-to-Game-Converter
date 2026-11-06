@@ -3,7 +3,8 @@ import { pendingSuggestions } from '../core/adapt';
 import { isPinnedRef } from '../core/export/common';
 import { ADAPTERS, buildPlayableHtml, buildRecordingScript, recordingScriptFileName, buildTwee, ExportBlockedError, playableFileName, twineFileName, unityTarball, unityTarballName, zipExport, type EngineTarget, type ExportResult, type TwineKind } from '../core/export';
 import { SEMVER, unityPackageId } from '../core/export/unityPackage';
-import { translationSheet } from '../core/export/translations';
+import { languageName } from './language';
+import { importTranslations, removeLanguage, translationCoverage, translationSheet } from '../core/export/translations';
 import { normaliseUnityTheme } from '../core/export/unityTheme';
 // The engine-only Ink runtime (~125 KB), embedded in playable-story exports.
 import inkRuntime from '../../node_modules/inkjs/dist/ink.js?raw';
@@ -311,6 +312,56 @@ export function ExportView({ processed, stale, onState, project, update, onRevie
   );
 }
 
+/** Bring a filled-in translation sheet back into the story, and see how much of each language is done. */
+function TranslationsIn({ project, update }: { project: StoryProject; update: Update }) {
+  const [message, setMessage] = useState('');
+  const [error, setError] = useState('');
+  const coverage = translationCoverage(project);
+  const read = async (file: File) => {
+    setError('');
+    setMessage('');
+    try {
+      const text = await file.text();
+      // Read it into a copy first: a wrong file changes nothing, and this says what it brings.
+      const f = importTranslations(structuredClone(project), text);
+      update((d) => void importTranslations(d, text));
+      setMessage(
+        `Brought in ${f.languages.map((l) => `${languageName(l.code)} (${l.translated} of ${f.total})`).join(', ')}.` +
+          (f.stale ? ` ${f.stale} row(s) were for text that has changed since the sheet was made, so they were left out.` : ''),
+      );
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    }
+  };
+  return (
+    <div className="translations-in">
+      <label className="btn small file-btn">
+        Bring in a translated sheet…
+        <input type="file" accept=".csv,text/csv,text/plain" hidden onChange={(e) => (e.target.files?.[0] && void read(e.target.files[0]), (e.target.value = ''))} />
+      </label>
+      {coverage.languages.length > 0 && (
+        <ul className="small translation-coverage" aria-label="Translations in this story">
+          {coverage.languages.map((l) => (
+            <li key={l.code}>
+              <strong>{languageName(l.code)}</strong> <span className="muted">({l.code})</span>: {l.translated} of {coverage.total} translated
+              {l.translated < coverage.total && <span className="muted"> · download the sheet to see what’s missing</span>}{' '}
+              <button className="link small" onClick={() => update((d) => removeLanguage(d, l.code))} aria-label={`Remove ${languageName(l.code)}`}>
+                Remove
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+      {message && (
+        <p className="small" role="status">
+          {message} Playtest and the playable story can now show it; the Unity package includes it.
+        </p>
+      )}
+      {error && <p className="error-text small">{error}</p>}
+    </div>
+  );
+}
+
 /** "fr, de" → ["fr", "de"]: language codes for the translation sheet's columns. */
 function languageList(text: string): string[] {
   return [...new Set(text.split(/[\s,;]+/).map((x) => x.trim()).filter((x) => /^[A-Za-z]{2,3}(-[A-Za-z0-9]{2,8})*$/.test(x)))];
@@ -388,6 +439,7 @@ function ShareSection({ processed, stale, project, update }: { processed: Proces
           >
             Download translation sheet (.csv)
           </button>
+          <TranslationsIn project={project} update={update} />
         </div>
         <div className="card share-card">
           <h2>Twine</h2>

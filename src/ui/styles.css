@@ -1223,3 +1223,7 @@ section.drafts > h2 { margin-top: 26px; }
 /* Cues: a small marker in Playtest where the game reacts (music, a sound, a shake), and the sound on a cue in Review. */
 .t-cue { text-indent: 0 !important; font-size: 12.5px; font-variant: small-caps; letter-spacing: 0.08em; color: var(--faded); margin: 2px 0; }
 .cue-sound { margin-top: 6px; gap: 8px; align-items: center; }
+
+/* Translations brought back in (Export → Translation sheet). */
+.translations-in { margin-top: 12px; display: grid; gap: 8px; justify-items: start; }
+.translation-coverage { margin: 0; padding-left: 1.1em; }

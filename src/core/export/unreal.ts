@@ -1,4 +1,6 @@
 import type { ProcessedStory } from '../pipeline';
+import { storyRoutes } from './routes';
+import { translationSheet } from './translations';
 import { assertExportable, audioFiles, buildManifest, imageFiles, commonFiles, isPinnedRef, itemVarNames, json, pascalCase, sourceFiles, storyVersion } from './common';
 import type { EngineAdapter, ExportFile, ExportOptions, ExportResult } from './types';
 import { finalize } from './unity';
@@ -36,6 +38,10 @@ export const unrealAdapter: EngineAdapter = {
       { path: `${root}${name}.uproject`, content: json(uproject(name, options)) },
       { path: `${root}StorySource/MainStory.ink`, content: story.generated.ink },
       { path: `${root}StorySource/MainStory.compiled.json`, content: story.compile.json! },
+      // Every piece of text the player sees, keyed by its text, with any translations brought in (see translations.ts).
+      { path: `${root}StorySource/Translations.csv`, content: translationSheet(story.project) },
+      // Choice routes that reach every ending, for the game's own tests (see routes.ts).
+      ...(/RANDOM\(|\{~/.test(story.generated.ink) ? [] : [{ path: `${root}StorySource/PlaythroughRoutes.json`, content: json({ about: 'Choices (by their text) that play from the start to each ending. Replay them through the story component and check each ending passage is reached and the last line matches.', routes: storyRoutes(story.compile.json!, story.project) }) }]),
       ...voice.files,
       ...pictures.files,
       { path: `${root}Config/DefaultGame.ini`, content: `[/Script/EngineSettings.GeneralProjectSettings]\nProjectName=${story.project.project.title.replace(/\n/g, ' ')}\n` },
@@ -331,6 +337,11 @@ ${setupSteps(o, name).map((s, i) => `${i + 1}. ${s}`).join('\n')}
 ## Layout
 - \`StorySource/MainStory.ink\` — canonical validated Ink (a Narrative Bridge convention, not a required Inkpot folder).
 - \`StorySource/MainStory.compiled.json\` — preflight output, for reference/testing only; Inkpot owns native asset generation.
+- \`StorySource/Translations.csv\` — every line, choice and name the player sees, keyed by its text, with a column per language
+  translators fill in (and any translations already brought in). Look a line up by its key (FNV-1a of its words; see the sheet's
+  source column) to show it in another language.
+- \`StorySource/PlaythroughRoutes.json\` — choices (by their text) that play from the start to every ending, with the ending
+  passage and last line, to replay in your own automation tests after wiring the story in.
 - \`Source/${name}/NarrativeBridgeComponent.*\` — Blueprint-friendly wrapper (OnLine, OnChoices, OnEnded, Choose).
 - \`NarrativeBridge/\` — manifest, validation report, ISR, source map and original sources.
 
