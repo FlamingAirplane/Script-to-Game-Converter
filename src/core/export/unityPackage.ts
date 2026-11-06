@@ -199,7 +199,7 @@ export function playTestsAsmdef(id: UnityPackageId) {
     ...runtimeAsmdef(id),
     name: `${id.namespace}.PlayTests`,
     rootNamespace: `${id.namespace}.PlayTests`,
-    references: [id.namespace, 'UnityEngine.TestRunner', 'UnityEngine.UI'],
+    references: [id.namespace, 'Ink-Libraries', 'UnityEngine.TestRunner', 'UnityEngine.UI'],
     includePlatforms: [],
     overrideReferences: true,
     precompiledReferences: ['nunit.framework.dll'],

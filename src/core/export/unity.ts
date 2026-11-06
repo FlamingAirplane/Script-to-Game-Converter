@@ -2769,7 +2769,8 @@ namespace __NAMESPACE__.PlayTests
                 yield return null;
                 Assert.AreEqual(1.15f, NarrativeSettings.TextScale, 0.01f);
                 Assert.IsTrue(view.SettingsOpen, "The menu closed when the panel redrew.");
-                Assert.Greater(view.Buttons.Count, 0, "The story's buttons are gone after the redraw.");
+                var expected = c.HasEnded || c.IsAtExit ? 0 : c.IsWaitingForContinue ? 1 : c.Story.currentChoices.Count;
+                Assert.AreEqual(expected, view.Buttons.Count, "The story's buttons didn't come back after the redraw.");
             }
             finally { NarrativeSettings.TextScale = scale; }
         }
@@ -2812,7 +2813,7 @@ namespace __NAMESPACE__.PlayTests
                 yield return null;
                 foreach (var l in c.Transcript)
                     Assert.AreEqual(NarrativeLocalization.Translate(l.SourceText), l.Text, "A line wasn't put into " + NarrativeLocalization.Language + ".");
-                Assert.Greater(view.Buttons.Count, 0);
+                Assert.AreEqual(c.HasEnded || c.IsAtExit ? 0 : c.IsWaitingForContinue ? 1 : c.Story.currentChoices.Count, view.Buttons.Count, "The panel's buttons didn't come back after switching language.");
             }
             finally { NarrativeLocalization.Language = before; }
         }

@@ -1,7 +1,14 @@
 # What's new in Narrative Bridge
 
-## Unreleased
+## 0.4.0 — 2026-11-06
 
+- **Translations back in:** bring a filled-in translation sheet back on the Export page and see how much of each
+  language is done. Playtest and the playable story then have a language picker, and the Unity and Unreal exports include
+  the translations.
+- **Locked choices in the playable story:** greyed out, with what they need, as in Playtest and Unity.
+- **Cue warnings:** cues with no sound attached, and cue names that look like a typo of another.
+- **Unreal export:** the translation sheet and playthrough routes for the game's own tests.
+- **Unity Play Mode tests** in the package, and `npm run test:unity` to check the Unity export in a local Unity.
 - **Easier first visit:** try a sample story first, a picture of a finished game, shorter getting-started steps,
   and advice on which conversion mode to pick.
 - **What was understood:** after converting, a summary of passages, characters, choices and endings, plus what to check.
