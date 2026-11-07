@@ -3,7 +3,9 @@ import { download } from './common';
 import { plainKey } from './Shortcuts';
 import type { StoryGraph } from '../core/analyzer';
 import { errorData, log } from '../core/log';
-import { CARD, storyLayout, type Position } from '../core/layout';
+import { CARD, loopRoutes, storyLayout, type Position } from '../core/layout';
+import { foldGraph, isGroupNode, sceneGroups, traceRoutes } from '../core/scenes';
+import { StoryOutline } from './StoryOutline';
 import { routeEdges } from '../core/edgeRouting';
 import { fileBase, type StoryProject } from '../core/isr';
 import { PassageInspector } from './PassageInspector';
@@ -193,6 +195,13 @@ function MapKey({ hiddenGated }: { hiddenGated: number }) {
         {hiddenGated > 0 && <span className="muted"> ({hiddenGated} locked route{hiddenGated === 1 ? '' : 's'} hidden; press “Locked routes” to see them)</span>}
       </li>
       <li>{line('fallback')} continues on its own</li>
+      <li>
+        <svg width="58" height="20" aria-hidden>
+          <path d="M2 10 H22" className="edge loop" markerEnd="url(#arrow-fallback)" />
+          <text x={26} y={14} className="edge-end loop">↩</text>
+        </svg>{' '}
+        loops back to an earlier passage (click it to go there)
+      </li>
       <li>{line('pending', 'pending')} suggested, waiting for your OK</li>
       <li>
         <svg width="40" height="20" aria-hidden>
@@ -210,9 +219,31 @@ function MapKey({ hiddenGated }: { hiddenGated: number }) {
   );
 }
 
+/** A map setting remembered in this browser. */
+function useRemembered<T extends string>(key: string, initial: T): [T, (v: T) => void] {
+  const [v, setV] = useState<T>(() => {
+    try {
+      return (localStorage.getItem(key) as T | null) ?? initial;
+    } catch {
+      return initial;
+    }
+  });
+  return [
+    v,
+    (next: T) => {
+      setV(next);
+      try {
+        localStorage.setItem(key, next);
+      } catch {
+        /* this visit only */
+      }
+    },
+  ];
+}
+
 export function GraphView({
-  graph,
-  start,
+  graph: fullGraph,
+  start: fullStart,
   selected,
   onOpen,
   onSelect,
@@ -244,7 +275,37 @@ export function GraphView({
   showGated: boolean;
   onShowGated: (on: boolean) => void;
 }) {
+  // Outline or map, focus on the selected passage, and how strongly straight-on routes are drawn: remembered here.
+  const [mode, setMode] = useRemembered<'map' | 'outline'>('narrative-bridge.map-mode', 'map');
+  const [focusMode, setFocusMode] = useRemembered<'on' | 'off'>('narrative-bridge.map-focus', 'on');
+  const [straight, setStraight] = useRemembered<'full' | 'faint'>('narrative-bridge.map-straight', 'full');
+  // Scenes (passages under one scene heading) can be folded into one card; which are folded is kept per story.
+  const groups = useMemo(() => sceneGroups(project), [project]);
+  const foldKey = `narrative-bridge.map-folded.${project.project.id}`;
+  const [folded, setFoldedState] = useState<Set<string>>(() => {
+    try {
+      return new Set(JSON.parse(localStorage.getItem(foldKey) ?? '[]') as string[]);
+    } catch {
+      return new Set();
+    }
+  });
+  const setFolded = (next: Set<string>) => {
+    setFoldedState(next);
+    try {
+      localStorage.setItem(foldKey, JSON.stringify([...next]));
+    } catch {
+      /* this visit only */
+    }
+  };
+  const [showScenes, setShowScenes] = useState(false);
+  const { graph, of } = useMemo(() => foldGraph(fullGraph, groups, folded), [fullGraph, groups, folded]);
+  const start = of.get(fullStart) ?? fullStart;
+  const sceneOf = useMemo(() => new Map(groups.flatMap((g, i) => g.members.map((m) => [m, i] as const))), [groups]);
+  // Trace: every route from the start to one passage.
+  const [trace, setTrace] = useState('');
   const edges = useMemo(() => (showGated ? graph.edges : graph.edges.filter((e) => !e.conditional)), [graph.edges, showGated]);
+  const loops = useMemo(() => loopRoutes(graph, start), [graph, start]);
+  const isLoop = (e: { from: string; to: string }) => loops.has(`${e.from}>${e.to}`);
   // The passage panel: open after a passage is clicked (or chosen with Space), closed with Esc or ×.
   const [inspecting, setInspecting] = useState(false);
   // The New scene form: after a passage, or on its own (at a place on the map when the map was double-clicked).
@@ -252,6 +313,17 @@ export function GraphView({
   const breaks = useMemo(() => new Map(project.passages.map((p) => [p.id, countBreaks(p)])), [project]);
   const exits = useMemo(() => new Map(project.passages.map((p) => [p.id, p.content.filter((b) => b.type === 'exit').map((b) => (b.type === 'exit' ? b.name : ''))])), [project]);
   const auto = useMemo(() => storyLayout(graph, start), [graph, start]);
+  // What's lit: a traced route, or the selected passage and its neighbours; everything else is dimmed.
+  const lit = useMemo(() => {
+    if (trace) {
+      const t = traceRoutes(edges, start, of.get(trace) ?? trace);
+      return t.nodes.size ? t : null;
+    }
+    const sel = selected ? (of.get(selected) ?? selected) : '';
+    if (focusMode !== 'on' || !inspecting || !sel || !graph.nodes.some((n) => n.id === sel)) return null;
+    const near = edges.filter((e) => e.from === sel || e.to === sel);
+    return { nodes: new Set([sel, ...near.map((e) => e.from), ...near.map((e) => e.to)]), edges: new Set(near.map((e) => e.id)) };
+  }, [trace, edges, start, of, selected, focusMode, inspecting, graph.nodes]);
   const [dragging, setDragging] = useState<{ id: string; pos: Position } | null>(null);
   const placed = useMemo(() => {
     const m = new Map<string, Position>();
@@ -284,8 +356,9 @@ export function GraphView({
   // Parallel edges between the same two passages get their own lane so they don't draw on top of each other.
   // Each arrow leaves and enters its cards by whichever sides make the least clutter (see edgeRouting.ts).
   const routes = useMemo(
-    () => routeEdges(new Map([...placed].map(([id, p]) => [id, { x: p.x, y: p.y, w: W, h: H }])), edges.filter((e) => placed.has(e.to)).map((e) => ({ id: e.id, from: e.from, to: e.to }))),
-    [placed, edges],
+    () => routeEdges(new Map([...placed].map(([id, p]) => [id, { x: p.x, y: p.y, w: W, h: H }])), edges.filter((e) => placed.has(e.to) && !isLoop(e)).map((e) => ({ id: e.id, from: e.from, to: e.to }))),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [placed, edges, loops],
   );
   const lanes = useMemo(() => {
     const groups = new Map<string, string[]>();
@@ -310,7 +383,7 @@ export function GraphView({
     moved.current = false;
     setSize({ w: r.width, h: r.height });
     const pad = Math.min(60, Math.max(14, r.width * 0.05)); // smaller margins on small screens
-    const k = Math.min(1.2, Math.max(0.45, Math.min((r.width - 2 * pad) / bounds.width, (r.height - 2 * pad) / bounds.height)));
+    const k = Math.min(1.2, Math.max(0.2, Math.min((r.width - 2 * pad) / bounds.width, (r.height - 2 * pad) / bounds.height)));
     setView({ x: (r.width - bounds.width * k) / 2 - bounds.minX * k, y: (r.height - bounds.height * k) / 2 - bounds.minY * k, k });
   };
   const centerOn = (id: string) => {
@@ -395,6 +468,11 @@ export function GraphView({
   // Map keys: / find, F fit, N new scene, + and − zoom.
   // A route to a passage that doesn't exist: click it to create that passage.
   const fixMissing = (to: string, from: string) => sceneFix('INK_TARGET_MISSING', { target: to, passageId: from }, from, project)?.request ?? null;
+  const unfold = (nodeId: string) => {
+    const next = new Set(folded);
+    next.delete(nodeId.slice(6));
+    setFolded(next);
+  };
   const newScene = () => setSceneForm(selected && project.passages.some((p) => p.id === selected) ? { from: selected } : {});
   const mapKeys = useRef({ fit, zoom: zoomBy, newScene });
   mapKeys.current = { fit, zoom: zoomBy, newScene };
@@ -439,6 +517,15 @@ export function GraphView({
   return (
     <div className="view graph-view">
       <div className="graph-toolbar">
+        <span className="tool-group" role="group" aria-label="Show the story as">
+          <button className={`btn tiny ${mode === 'map' ? 'ok' : ''}`} aria-pressed={mode === 'map'} onClick={() => setMode('map')} title="The story as a map of passages and routes">
+            Map
+          </button>
+          <button className={`btn tiny ${mode === 'outline' ? 'ok' : ''}`} aria-pressed={mode === 'outline'} onClick={() => setMode('outline')} title="The story as an indented list that reads like a branching script">
+            Outline
+          </button>
+        </span>
+        {mode === 'map' && (
         <input
           className="input small graph-search"
           placeholder="Find a passage…"
@@ -447,7 +534,8 @@ export function GraphView({
           onChange={(e) => setQuery(e.target.value)}
           onKeyDown={(e) => e.key === 'Enter' && matches[0] && centerOn(matches[0])}
         />
-        {query && <span className="muted small">{matches.length ? `${matches.length} found · Enter to go` : 'none found'}</span>}
+        )}
+        {mode === 'map' && query && <span className="muted small">{matches.length ? `${matches.length} found · Enter to go` : 'none found'}</span>}
         <button
           className="btn tiny primary"
           onClick={() => setSceneForm(selected && project.passages.some((p) => p.id === selected) ? { from: selected } : {})}
@@ -456,6 +544,94 @@ export function GraphView({
           + New scene
         </button>
         <span className="spacer" />
+        {mode === 'map' && (
+          <>
+            <select className="input small trace-select" value={trace} onChange={(e) => setTrace(e.target.value)} aria-label="Show every way to a passage" title="Light up every route from the start to one passage; the rest of the map dims">
+              <option value="">Trace the ways to…</option>
+              <optgroup label="Endings">
+                {fullGraph.nodes.filter((n) => n.isEnding).map((n) => (
+                  <option key={n.id} value={n.id}>
+                    {n.title}
+                  </option>
+                ))}
+              </optgroup>
+              <optgroup label="Any passage">
+                {fullGraph.nodes.filter((n) => !n.isEnding).map((n) => (
+                  <option key={n.id} value={n.id}>
+                    {n.title}
+                  </option>
+                ))}
+              </optgroup>
+            </select>
+            {trace && (
+              <button className="btn tiny" onClick={() => setTrace('')} title="Show the whole map again">
+                Clear trace
+              </button>
+            )}
+            <button
+              className={`btn tiny ${focusMode === 'on' ? 'ok' : ''}`}
+              aria-pressed={focusMode === 'on'}
+              onClick={() => setFocusMode(focusMode === 'on' ? 'off' : 'on')}
+              title="When a passage is selected, dim everything except the routes into and out of it"
+            >
+              ◎ Focus
+            </button>
+            <button
+              className={`btn tiny ${straight === 'faint' ? 'ok' : ''}`}
+              aria-pressed={straight === 'faint'}
+              onClick={() => setStraight(straight === 'faint' ? 'full' : 'faint')}
+              title="Draw routes that continue on their own (no choice) faintly, so the choices stand out"
+            >
+              ⋯ Faint straight-on routes
+            </button>
+            {groups.length > 1 && (
+              <span className="scenes-menu">
+                <button className={`btn tiny ${folded.size ? 'ok' : ''}`} aria-expanded={showScenes} onClick={() => setShowScenes(!showScenes)} title="Fold a scene's passages into one card">
+                  Scenes{folded.size ? ` (${folded.size} folded)` : ''}
+                </button>
+                {showScenes && (
+                  <div className="scenes-popover card" role="group" aria-label="Fold scenes">
+                    <div className="row">
+                      <button className="btn tiny" onClick={() => setFolded(new Set(groups.filter((g) => g.members.length > 1).map((g) => g.id)))}>
+                        Fold all
+                      </button>
+                      <button className="btn tiny" onClick={() => setFolded(new Set())}>
+                        Unfold all
+                      </button>
+                      <span className="spacer" />
+                      <button className="btn tiny ghost" aria-label="Close" onClick={() => setShowScenes(false)}>
+                        ×
+                      </button>
+                    </div>
+                    <ul>
+                      {groups.map((g, i) => (
+                        <li key={g.id}>
+                          <label className="check">
+                            <input
+                              type="checkbox"
+                              disabled={g.members.length < 2}
+                              checked={folded.has(g.id)}
+                              onChange={(e) => {
+                                const next = new Set(folded);
+                                if (e.target.checked) next.add(g.id);
+                                else next.delete(g.id);
+                                setFolded(next);
+                              }}
+                            />
+                            <span className={`scene-swatch scene-c${i % 6}`} aria-hidden />
+                            {g.title} <span className="muted small">({g.members.length})</span>
+                          </label>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+              </span>
+            )}
+          </>
+        )}
+        {mode === 'map' && (
+          <>
         <span className="tool-group" role="group" aria-label="Zoom">
           <button className="btn tiny" aria-label="Zoom out" title="Zoom out (−)" onClick={() => zoomBy(1 / 1.2)}>
             −
@@ -491,7 +667,13 @@ export function GraphView({
         <button className="btn tiny" aria-pressed={showKey} onClick={toggleKey} title="Show or hide what the marks on the map mean">
           Key
         </button>
+          </>
+        )}
       </div>
+      {mode === 'outline' ? (
+        <StoryOutline project={project} onOpen={onOpen} selected={selected} />
+      ) : (
+      <>
       <div className="map-frame">
         <div className="map-canvas">
         <svg
@@ -519,10 +701,15 @@ export function GraphView({
             const node = (e.target as Element).closest('.node');
             const id = node?.getAttribute('data-id');
             (e.target as Element).setPointerCapture?.(e.pointerId);
+            if (id && isGroupNode(id)) return;
             if (id) {
               const p = placed.get(id)!;
               nodeDrag.current = { id, sx: e.clientX, sy: e.clientY, ox: p.x, oy: p.y, moved: false };
             } else pan.current = { x: e.clientX, y: e.clientY, vx: view.x, vy: view.y };
+          }}
+          onClick={(e) => {
+            const id = (e.target as Element).closest('.node')?.getAttribute('data-id');
+            if (id && isGroupNode(id)) unfold(id);
           }}
           onPointerMove={(e) => {
             const nd = nodeDrag.current;
@@ -562,17 +749,43 @@ export function GraphView({
               const b = placed.get(e.to);
               if (!a) return null;
               const kind = e.pending ? 'pending' : e.kind === 'fallback' || e.kind === 'divert' ? 'fallback' : e.conditional ? 'cond' : 'edge';
-              const hl = hover === e.from || hover === e.to || hoverEdge === e.id;
+              const hl = hover === e.from || hover === e.to || hoverEdge === e.id || (!!lit && lit.edges.has(e.id) && !trace);
+              const shade = lit && !lit.edges.has(e.id) ? 'dim' : straight === 'faint' && kind === 'fallback' && !hl ? 'faint' : '';
               const showLabel = !!e.label && (hoverEdge === e.id || hover === e.from);
               const { i, n } = lanes.get(e.id)!;
               const lane = i - (n - 1) / 2; // 0 for a lone edge; spreads parallel edges apart
+              if (b && isLoop(e)) {
+                // A loop back to an earlier passage: a short stub that names it (click to go there), not a long arrow.
+                const x1 = a.x + W;
+                const y1 = a.y + H / 2 + clampLane(lane * 10) + 8;
+                const name = graph.nodes.find((n) => n.id === e.to)?.title ?? e.to;
+                return (
+                  <g key={e.id} className={`loop-stub ${shade}`} onPointerEnter={() => setHoverEdge(e.id)} onPointerLeave={() => setHoverEdge(null)}>
+                    <line x1={x1} y1={y1} x2={x1 + 26} y2={y1} className={`edge loop ${kind} ${hl ? 'hl' : ''}`} markerEnd={`url(#arrow-${hl ? 'hl' : kind})`} />
+                    <text
+                      x={x1 + 30}
+                      y={y1 + 4}
+                      className="edge-end loop"
+                      role="button"
+                      tabIndex={0}
+                      aria-label={`Loops back to ${name}. Go there`}
+                      onPointerDown={(ev) => ev.stopPropagation()}
+                      onClick={() => centerOn(e.to)}
+                      onKeyDown={(k) => (k.key === 'Enter' || k.key === ' ') && (k.preventDefault(), centerOn(e.to))}
+                    >
+                      ↩ {name.length > 22 ? `${name.slice(0, 21)}…` : name}
+                    </text>
+                    {showLabel && <EdgeLabel x={x1 + 20} y={y1 - 14} text={e.label} />}
+                  </g>
+                );
+              }
               if (!b) {
                 // END or missing destination
                 const x1 = a.x + W;
                 const y1 = a.y + H / 2 + clampLane(lane * 10);
                 const missing = e.to !== 'END';
                 return (
-                  <g key={e.id} onPointerEnter={() => setHoverEdge(e.id)} onPointerLeave={() => setHoverEdge(null)}>
+                  <g key={e.id} className={shade} onPointerEnter={() => setHoverEdge(e.id)} onPointerLeave={() => setHoverEdge(null)}>
                     <line x1={x1} y1={y1} x2={x1 + 40} y2={y1} className={`edge ${missing ? 'missing' : kind} ${hl ? 'hl' : ''}`} markerEnd={`url(#arrow-${hl ? 'hl' : kind})`} />
                     <text
                       x={x1 + 44}
@@ -599,7 +812,7 @@ export function GraphView({
               const d = route.d;
               const [mx, my] = route.mid;
               return (
-                <g key={e.id} onPointerEnter={() => setHoverEdge(e.id)} onPointerLeave={() => setHoverEdge(null)}>
+                <g key={e.id} className={shade} onPointerEnter={() => setHoverEdge(e.id)} onPointerLeave={() => setHoverEdge(null)}>
                   <path d={d} className="edge-hit" />
                   <path d={d} className={`edge ${kind} ${hl ? 'hl' : ''}`} markerEnd={`url(#arrow-${hl ? 'hl' : kind})`} />
                   {(kind === 'cond' || kind === 'pending') && !showLabel && <RouteSign kind={kind} x={mx} y={my} />}
@@ -612,7 +825,10 @@ export function GraphView({
               const reached = endingsReached?.[n.id];
               const tags: TagKind[] = [...(n.isStart ? ['start' as const] : []), ...(n.isEnding ? ['ending' as const] : []), ...(n.reachable ? [] : ['unreachable' as const])];
               const out = graph.edges.filter((e) => e.from === n.id && !e.pending).length;
+              const group = isGroupNode(n.id);
+              const scene = sceneOf.get(group ? n.id.slice(6) : n.id);
               const about = [
+                group ? 'A folded scene: click to unfold it.' : '',
                 n.isStart ? 'The story begins here.' : '',
                 n.isEnding ? 'The story can end here.' : '',
                 n.reachable ? '' : 'No route leads here yet.',
@@ -628,10 +844,13 @@ export function GraphView({
                 <g
                   key={n.id}
                   data-id={n.id}
-                  className={`node ${n.isStart ? 'start' : ''} ${n.isEnding ? 'ending' : ''} ${n.reachable ? '' : 'unreachable'} ${selected === n.id ? 'selected' : ''} ${matches.includes(n.id) ? 'match' : ''} ${dragging?.id === n.id ? 'dragging' : ''} origin-${n.origin}`}
+                  className={`node ${group ? 'folded' : ''} ${lit && !lit.nodes.has(n.id) ? 'dim' : ''} ${n.isStart ? 'start' : ''} ${n.isEnding ? 'ending' : ''} ${n.reachable ? '' : 'unreachable'} ${selected === n.id ? 'selected' : ''} ${matches.includes(n.id) ? 'match' : ''} ${dragging?.id === n.id ? 'dragging' : ''} origin-${n.origin}`}
                   transform={`translate(${p.x},${p.y})`}
                   onKeyDown={(e) => {
-                    if (e.key === 'Enter') {
+                    if (group && (e.key === 'Enter' || e.key === ' ')) {
+                      e.preventDefault();
+                      unfold(n.id);
+                    } else if (e.key === 'Enter') {
                       e.preventDefault();
                       onOpen(n.id);
                     } else if (e.key === ' ') {
@@ -639,7 +858,7 @@ export function GraphView({
                       inspect(n.id);
                     }
                   }}
-                  onDoubleClick={() => onOpen(n.id)}
+                  onDoubleClick={() => !group && onOpen(n.id)}
                   onFocus={() => setHover(n.id)}
                   onBlur={() => setHover(null)}
                   tabIndex={0}
@@ -648,14 +867,15 @@ export function GraphView({
                   onPointerEnter={() => setHover(n.id)}
                   onPointerLeave={() => setHover(null)}
                 >
-                  <title>{`${n.title}${about ? ` — ${about}` : ''} Click to see its lines, double-click to edit, drag to move.`}</title>
+                  <title>{group ? `${n.title} — ${about}` : `${n.title}${about ? ` — ${about}` : ''}${scene !== undefined && groups.length > 1 ? ` Scene: ${groups[scene].title}.` : ''} Click to see its lines, double-click to edit, drag to move.`}</title>
                   <rect width={W} height={H} rx={3} />
                   <rect x={3} y={3} width={W - 6} height={H - 6} rx={2} className="node-inner" />
+                  {scene !== undefined && groups.length > 1 && <rect x={0} y={0} width={4} height={H} className={`scene-stripe scene-c${scene % 6}`} />}
                   <text x={12} y={tags.length ? 26 : 24} className="node-title">
-                    {n.title.length > 24 ? n.title.slice(0, 23) + '…' : n.title}
+                    {(group ? groups[scene ?? 0]?.title ?? n.title : n.title).replace(/^(.{23}).+$/, '$1…')}
                   </text>
                   <text x={12} y={tags.length ? 43 : 41} className="node-id">
-                    {n.id.length > 26 ? n.id.slice(0, 25) + '…' : n.id}
+                    {group ? `${groups[scene ?? 0]?.members.length ?? ''} passages folded · click to open` : n.id.length > 26 ? n.id.slice(0, 25) + '…' : n.id}
                   </text>
                   {tags.map((t) => {
                     const x = tagX;
@@ -700,6 +920,10 @@ export function GraphView({
         {inspecting && selected && project.passages.some((p) => p.id === selected) && (
           <PassageInspector project={project} passageId={selected} update={update} onOpen={onOpen} onClose={closeInspector} onAddScene={(link) => setSceneForm({ from: selected, link })} />
         )}
+      </div>
+      {showKey && <MapKey hiddenGated={graph.edges.length - edges.length} />}
+      </>
+      )}
         {sceneForm && (
           <NewSceneSheet
             project={project}
@@ -713,8 +937,6 @@ export function GraphView({
             onClose={() => setSceneForm(null)}
           />
         )}
-      </div>
-      {showKey && <MapKey hiddenGated={graph.edges.length - edges.length} />}
     </div>
   );
 }

@@ -2,6 +2,16 @@
 
 ## Unreleased
 
+- **Large story maps are easier to follow:**
+  - Passages are placed after everything that leads into them, so routes read left to right. On a 58-passage test
+    story, crossings went from 77 to 25, and no route runs backwards.
+  - Routes that skip columns thread through the gaps between cards. Loops back to an earlier passage are short
+    *↩ name* stubs you can click.
+  - **◎ Focus** dims everything but the selected passage's routes. **Trace the ways to…** lights every route to an
+    ending. **Faint straight-on routes** lets the choices stand out.
+  - **Scenes** can be folded into one card each.
+- **Outline view** on the Graph tab: the story as an indented, branching list, with branches meeting again at the same
+  level and "joins" links to passages already listed.
 - **Add scenes from the story map:** **+ New scene** on the Graph (or N, or double-click the map) adds a scene to a
   converted script, straight after a passage, as a new choice in one, or on its own to connect later. A passage's panel
   has **+ Scene after this** and **+ Choice to a new scene**. The same form is in Review (**+ New scene**, and

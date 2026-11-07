@@ -197,6 +197,18 @@ there. **Key** in the toolbar hides or shows the key; your choice is remembered.
 
   **Afterwards** says where the scene goes next: on to a passage, or the end. Write the rest of it in Review; Undo
   takes the new scene back.
+- **Large stories:** the map places each passage after every passage that leads into it, so routes read left to
+  right; a route that skips columns threads through the gaps between cards, and one that loops back to an earlier
+  passage is a short **↩ name** stub (click it to go there). To follow the flow:
+  - **◎ Focus** (on by default): when a passage's panel is open, everything except its routes in and out dims.
+  - **Trace the ways to…**: pick an ending (or any passage) to light up every route from the start that can reach it.
+  - **⋯ Faint straight-on routes**: draws routes that continue on their own (no choice) faintly, so choices stand out.
+  - **Scenes**: passages are grouped into scenes, starting at each scene heading (`INT.`/`EXT.`), shown by a coloured
+    stripe on each card. Fold a scene to draw it as one card (click the card to unfold it), or **Fold all**.
+- **Outline** (beside **Map**) shows the story as an indented list that reads like a branching script: each passage
+  once, where a reader first reaches it, with its scene heading and first line. A choice's branches are indented and
+  the story carries on below them where they meet again; a route to a passage already listed says **↪ joins** and
+  links to it. Click a choice to fold its branch away, or a title to open it in Review.
 - **Scroll** or **+ / −** to zoom, drag the background to move, **Fit** to see everything. Click the minimap to jump.
 - **Find a passage…** highlights matches; press Enter to go to the first.
 - **Save map** downloads the whole map as an SVG image; **PNG** as a picture.
