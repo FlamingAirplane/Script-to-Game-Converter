@@ -6,7 +6,8 @@
 #   UNITY_LICENSE   the contents of a Unity .ulf licence file (Personal licences work)
 #   UNITY_EMAIL     the Unity account's email
 #   UNITY_PASSWORD  the Unity account's password
-# See https://game.ci/docs/github/activation. Without them, the job says so and passes.
+# See https://game.ci/docs/github/activation. Without them, the Unity jobs show as skipped (not passed), and
+# the licence check says why.
 name: Unity
 
 on:
@@ -26,8 +27,28 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  licence:
+    name: Unity licence
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    outputs:
+      present: ${{ steps.check.outputs.present }}
+    steps:
+      - id: check
+        env:
+          UNITY_LICENSE: ${{ secrets.UNITY_LICENSE }}
+        run: |
+          if [ -n "$UNITY_LICENSE" ]; then
+            echo "present=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "present=false" >> "$GITHUB_OUTPUT"
+            echo "::warning title=Unity checks skipped::No UNITY_LICENSE secret, so the Unity export was not tested in Unity. Add UNITY_LICENSE, UNITY_EMAIL and UNITY_PASSWORD as repository secrets, or run npm run test:unity on a computer with Unity."
+          fi
+
   unity:
     name: Unity (${{ matrix.sample }})
+    needs: licence
+    if: needs.licence.outputs.present == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 60
     strategy:
@@ -40,32 +61,23 @@ jobs:
       UNITY_EMAIL: ${{ secrets.UNITY_EMAIL }}
       UNITY_PASSWORD: ${{ secrets.UNITY_PASSWORD }}
     steps:
-      - name: No Unity licence yet
-        if: env.UNITY_LICENSE == ''
-        run: echo "::notice title=Unity checks skipped::Add the UNITY_LICENSE, UNITY_EMAIL and UNITY_PASSWORD repository secrets to run the Unity checks here. Until then, run npm run test:unity on a computer with Unity."
       - uses: actions/checkout@v7
-        if: env.UNITY_LICENSE != ''
       - uses: actions/setup-node@v7
-        if: env.UNITY_LICENSE != ''
         with:
           node-version: 24
           cache: npm
-      - if: env.UNITY_LICENSE != ''
-        run: npm ci
+      - run: npm ci
       - name: Export the sample as a Unity project
         id: export
-        if: env.UNITY_LICENSE != ''
         run: |
           line=$(npx tsx scripts/unity-check.ts --export-only --sample ${{ matrix.sample }} --version "$UNITY_VERSION" --out unity-projects)
           echo "$line"
           echo "path=$(printf '%s' "$line" | cut -f2 | sed "s#^$PWD/##")" >> "$GITHUB_OUTPUT"
       - uses: actions/cache@v6
-        if: env.UNITY_LICENSE != ''
         with:
           path: ${{ steps.export.outputs.path }}/Library
           key: unity-library-${{ matrix.sample }}-${{ env.UNITY_VERSION }}
       - name: Run the playthrough and Play Mode tests
-        if: env.UNITY_LICENSE != ''
         uses: game-ci/unity-test-runner@v4
         with:
           projectPath: ${{ steps.export.outputs.path }}
@@ -75,7 +87,7 @@ jobs:
           checkName: Unity tests (${{ matrix.sample }})
           artifactsPath: unity-results
       - uses: actions/upload-artifact@v7
-        if: always() && env.UNITY_LICENSE != ''
+        if: always()
         with:
           name: unity-results-${{ matrix.sample }}
           path: unity-results

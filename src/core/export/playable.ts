@@ -2,7 +2,7 @@ import type { ProcessedStory } from '../pipeline';
 import { audioFileName, bytesToBase64, referencedAudio, type AudioAssets } from '../audio';
 import { imageFileName, portraitFiles, referencedImages } from '../images';
 import { log } from '../log';
-import { EXIT_PREFIX, RESERVED_TAGS } from '../isr';
+import { EXIT_PREFIX, fileBase, RESERVED_TAGS } from '../isr';
 import { cueSounds } from '../cues';
 import { describeCondition } from '../gating';
 import { isActive } from '../isr';
@@ -29,7 +29,7 @@ function htmlText(s: string): string {
 }
 
 export function playableFileName(story: ProcessedStory): string {
-  return `${story.project.project.id || 'story'}.html`;
+  return `${fileBase(story.project)}.html`;
 }
 
 export function buildPlayableHtml(story: ProcessedStory, inkRuntimeJs: string, audio: AudioAssets = {}, images: AudioAssets = {}): string {

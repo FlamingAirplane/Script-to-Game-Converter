@@ -440,6 +440,9 @@ input[type='checkbox'], input[type='radio'] { accent-color: var(--ink); }
 .block-transition .autotext { text-align: right; font-variant: small-caps; letter-spacing: 0.08em; }
 .speaker { font-variant: small-caps; text-transform: lowercase; letter-spacing: 0.12em; font-weight: 600; min-width: 0; }
 .paren { flex: 1; min-width: 120px; max-width: 260px; font-style: italic; }
+.voice-ext { flex: 0 0 auto; width: auto; }
+.built-note { margin: 0.6rem 0 0; }
+.import-no-suggestions { border-left: 3px solid var(--pen); padding-left: 0.6rem; }
 .choice { border: 1px solid var(--rule); border-radius: 2px; padding: 10px 12px; margin-bottom: 8px; background: var(--paper-hi); display: flex; flex-direction: column; gap: 8px; }
 .choice-pending { border-color: color-mix(in srgb, var(--review) 50%, transparent); background: color-mix(in srgb, var(--review) 5%, transparent); border-style: dashed; }
 .choice-rejected { opacity: 0.5; }

@@ -1,0 +1,26 @@
+# Weekly update pull requests for npm packages and GitHub Actions, grouped so there are a few PRs, not dozens.
+# inkjs is held back: the Ink it compiles must match the runtime shipped in the Unity and Unreal packages,
+# so it's updated by hand together with those (see src/core/version.ts).
+version: 2
+updates:
+  - package-ecosystem: npm
+    directory: /
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
+    ignore:
+      - dependency-name: inkjs
+    groups:
+      development:
+        dependency-type: development
+        update-types: [minor, patch]
+      runtime:
+        dependency-type: production
+        update-types: [minor, patch]
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    groups:
+      actions:
+        patterns: ['*']

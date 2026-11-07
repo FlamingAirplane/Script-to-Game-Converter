@@ -51,7 +51,7 @@ export function sessionLines(project: StoryProject): SessionLine[] {
     p.content.forEach((b, i) => {
       if (b.type !== 'dialogue') return;
       out.push({
-        slot: recordingSlot(p.id, i),
+        slot: recordingSlot(p, i),
         passageId: p.id,
         index: i,
         number: out.length + 1,

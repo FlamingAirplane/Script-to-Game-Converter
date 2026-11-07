@@ -41,6 +41,27 @@ export function setLocalGist(id: string | null) {
 
 const GIST_ID = /^[0-9a-f]{20,40}$/i;
 
+/** A url(…) that loads from somewhere else (anything but data: and the app's own relative files). */
+const REMOTE_URL = /url\(\s*(['"]?)\s*(?:[a-z][a-z0-9+.-]*:|\/\/)(?!\s*data:)[^)]*\)/gi;
+const strip = (s: string) => s.replace(/@import[^;]*;?/gi, '').replace(REMOTE_URL, (m) => (/^url\(\s*['"]?\s*data:/i.test(m) ? m : 'none'));
+
+/**
+ * The live design without anything that loads from another site (@import, url(https://…)). The app makes no
+ * requests of its own beyond GitHub, so a design read from the Gist can't add any: if the Gist's token
+ * leaked, it could change the look, but not track visitors or pull in other content.
+ */
+export function withoutRemoteLoads(doc: DesignDoc): DesignDoc {
+  const map = (m: Record<string, string>) => Object.fromEntries(Object.entries(m).map(([k, v]) => [k, strip(v)]));
+  return {
+    ...doc,
+    tokens: map(doc.tokens),
+    light: map(doc.light),
+    dark: map(doc.dark),
+    rules: Object.fromEntries(Object.entries(doc.rules).map(([k, r]) => [k, map(r)])),
+    css: strip(doc.css),
+  };
+}
+
 /** Reads the live design (when there is a Gist) and applies it. Never throws: a failure keeps the last copy. */
 export async function loadLiveDesign(fetcher: typeof fetch = fetch): Promise<'updated' | 'same' | 'none' | 'failed'> {
   const id = gistId();
@@ -53,7 +74,7 @@ export async function loadLiveDesign(fetcher: typeof fetch = fetch): Promise<'up
     if (!content) return 'failed';
     const raw = JSON.parse(content);
     if (raw?.format !== DESIGN_FORMAT) return 'failed';
-    const doc = normaliseDesign(raw);
+    const doc = withoutRemoteLoads(normaliseDesign(raw));
     const before = stored('narrative-bridge.design-live');
     setLiveDesign(doc);
     return before === JSON.stringify(doc) ? 'same' : 'updated';

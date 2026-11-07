@@ -22,19 +22,35 @@ export function compileInk(ink: string, sourceMap: SourceMapEntry[] = []): Compi
     // Ink errors arrive through the handler; anything else (e.g. running out of stack) is reported here.
     if (!messages.length) messages.push({ text: `ERROR: line 0: ${e instanceof Error ? `${e.name}: ${e.message}` : String(e)}`, type: 2 });
   }
+  const inkLines = ink.split('\n');
   const diagnostics = messages.map(({ text, type }) => {
     const m = /^(ERROR|WARNING|TODO|AUTHOR):\s*(?:'[^']*'\s*)?line (\d+):\s*(.*)$/s.exec(text);
-    const line = m ? parseInt(m[2], 10) : 0;
-    const message = m ? m[3] : text;
+    const compiler = m ? m[3] : text;
+    // INCLUDE fails before the compiler knows the line: find it.
+    let line = m ? parseInt(m[2], 10) : 0;
+    if (!line && /FileHandler/.test(compiler)) line = inkLines.findIndex((l) => /^\s*INCLUDE\b/.test(l)) + 1;
+    const at = line > 0 ? inkLines[line - 1]?.trim() : undefined;
+    const plain = plainCompilerMessage(compiler);
+    const message = plain ? `${plain}${at ? ` The line: “${at.length > 90 ? `${at.slice(0, 89)}…` : at}”` : ''} (Ink says: ${compiler})` : compiler;
     const entry = sourceMap.find((e) => e.line === line) ?? [...sourceMap].reverse().find((e) => e.line < line);
     const severity = type === 2 ? 'error' : type === 1 ? 'warning' : 'info';
     return diag(severity === 'error' ? 'INK_COMPILE_ERROR' : 'INK_COMPILE_WARNING', severity, 'ink_compilation', message, {
       entityId: entry?.entityId,
-      details: { inkLine: line, passageId: entry?.passageId },
+      details: { inkLine: line, passageId: entry?.passageId, compilerMessage: compiler },
     });
   });
   const ok = !!json && !diagnostics.some((d) => d.severity === 'error');
   return { ok, json: ok ? json : undefined, diagnostics };
+}
+
+/** What an Ink compiler message means, in a writer's words (undefined for messages without a known meaning). */
+export function plainCompilerMessage(message: string): string | undefined {
+  if (/FileHandler|INCLUDE/i.test(message)) return 'A line starting with INCLUDE asks Ink to read another file, which can’t happen here.';
+  if (/already (?:been )?(?:declared|defined)|duplicate|declared more than once/i.test(message)) return 'The same name is declared twice.';
+  if (/Divert target not found|target not found|not found.*divert/i.test(message)) return 'A “->” leads to a passage that doesn’t exist.';
+  if (/Unresolved variable|variable .* not found|not a variable/i.test(message)) return 'A line uses a name Ink doesn’t know.';
+  if (/^Expected|Unexpected|Unknown/i.test(message)) return 'Ink couldn’t read a line: a word or symbol in it means something special to Ink.';
+  return undefined;
 }
 
 export interface SmokeTestReport {

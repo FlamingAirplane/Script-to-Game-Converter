@@ -537,6 +537,18 @@ function BlockRow({
                 </option>
               ))}
             </select>
+            <select
+              className="input small voice-ext"
+              value={block.extension ?? ''}
+              aria-label="How the voice is heard"
+              title="How the voice is heard: on screen, voice-over (V.O.), off screen (O.S.) or off camera (O.C.)"
+              onChange={(e) => onChange(touched({ ...block, extension: e.target.value || undefined }))}
+            >
+              <option value="">on screen</option>
+              <option value="V.O.">V.O.</option>
+              <option value="O.S.">O.S.</option>
+              <option value="O.C.">O.C.</option>
+            </select>
             <input
               className="input small paren"
               placeholder="(parenthetical)"

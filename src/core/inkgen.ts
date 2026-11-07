@@ -7,7 +7,8 @@ import { CONTINUE_TEXT, cueTag, EXIT_PREFIX, exitName, isActive, itemVar, type C
 //
 // Conventions (see "Ink conventions" in the README):
 //  - Items are Boolean VARs named has_<item_id>.
-//  - Dialogue lines are "NAME: text" with a #speaker:<id> tag; parentheticals add #paren:<text>, and
+//  - Dialogue lines are "NAME: text" with a #speaker:<id> tag. A voice extension is shown after the name,
+//    "NAME (V.O.): text", and tagged #ext:V.O.; parentheticals add #paren:<text>, and
 //    a recorded clip adds #audio:<file> (the file ships with the export).
 //  - Transitions carry a #transition tag; scene headings are a #scene tag on the first line.
 //  - Notes and unsupported constructs are preserved as Ink comments.
@@ -26,6 +27,9 @@ export interface GeneratedInk {
   sourceMap: SourceMapEntry[];
 }
 
+/** Words Ink reads as a statement when a line starts with them. */
+const INK_LINE_KEYWORD = /^(?:TODO|VAR|CONST|LIST|EXTERNAL|INCLUDE)\b/;
+
 export function escapeInk(text: string): string {
   let out = text
     .replace(/\\/g, '\\\\')
@@ -33,9 +37,9 @@ export function escapeInk(text: string): string {
     .replace(/\/(?=[/*])/g, '\\/')
     .replace(/-(?=>)/g, '\\-')
     .replace(/<(?=[->])/g, '\\<');
-  // Characters that are syntax at the start of a line.
+  // Characters and words that are syntax at the start of a line (declarations, INCLUDE and TODO notes).
   if (/^[*+\-=(]/.test(out)) out = `\\${out}`;
-  if (/^TODO\b/.test(out)) out = `\\${out}`;
+  else if (INK_LINE_KEYWORD.test(out)) out = `\\${out}`;
   return out;
 }
 
@@ -132,9 +136,10 @@ export function generateInk(project: StoryProject): GeneratedInk {
         case 'dialogue': {
           const who = speakers.get(b.speakerId);
           const name = (who?.displayName ?? b.speakerId).toUpperCase();
+          const ext = b.extension ? ` #ext:${escapeTagValue(b.extension)}` : '';
           const paren = b.parenthetical ? ` #paren:${escapeTagValue(b.parenthetical)}` : '';
           const audio = b.audio ? ` #audio:${audioFileName(b.audio)}` : '';
-          emit(`${escapeInk(`${name}: ${b.text}`)} #speaker:${b.speakerId}${paren}${audio}${sceneTag()}`, p.id);
+          emit(`${escapeInk(`${name}${b.extension ? ` (${b.extension})` : ''}: ${b.text}`)} #speaker:${b.speakerId}${ext}${paren}${audio}${sceneTag()}`, p.id);
           break;
         }
         case 'transition':

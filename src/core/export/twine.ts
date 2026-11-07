@@ -1,7 +1,7 @@
 import { fnv1a } from '../hash';
 import { storyLayout } from '../layout';
 import { log } from '../log';
-import { EXIT_PREFIX, isActive, itemVar, type Choice, type Condition, type Effect, type Passage, type StoryProject } from '../isr';
+import { EXIT_PREFIX, fileBase, isActive, itemVar, type Choice, type Condition, type Effect, type Passage, type StoryProject } from '../isr';
 import type { ProcessedStory } from '../pipeline';
 import { GENERATOR_VERSION } from '../version';
 import { assertExportable, ExportBlockedError } from './common';
@@ -29,7 +29,7 @@ export const SUGARCUBE_VERSION = '2.37.3';
 export type TwineKind = 'sugarcube' | 'plain';
 
 export function twineFileName(story: ProcessedStory, kind: TwineKind = 'sugarcube'): string {
-  return `${story.project.project.id || 'story'}${kind === 'plain' ? '-story-only' : ''}.twee`;
+  return `${fileBase(story.project)}${kind === 'plain' ? '-story-only' : ''}.twee`;
 }
 
 /** Twine passage and link names can't contain these characters. */
@@ -230,7 +230,7 @@ function sugarBody(p: Passage, speakers: Map<string, string>, nameOf: (id: strin
         for (const para of paragraphs(b.text)) add(sugarText(para));
         break;
       case 'dialogue': {
-        const name = (speakers.get(b.speakerId) ?? b.speakerId).toUpperCase();
+        const name = (speakers.get(b.speakerId) ?? b.speakerId).toUpperCase() + (b.extension ? ` (${b.extension})` : '');
         const paren = b.parenthetical ? ` //(${sugarText(b.parenthetical)})//` : '';
         add(`@@.speaker;${sugarText(name)}@@${paren}\n${sugarText(paragraphs(b.text).join('\n'))}`);
         break;
@@ -287,7 +287,7 @@ function plainBody(p: Passage, speakers: Map<string, string>, nameOf: (id: strin
     if (b.type === 'action') blocks.push(...paragraphs(b.text));
     else if (b.type === 'transition') blocks.push(b.text);
     else if (b.type === 'dialogue') {
-      const name = (speakers.get(b.speakerId) ?? b.speakerId).toUpperCase();
+      const name = (speakers.get(b.speakerId) ?? b.speakerId).toUpperCase() + (b.extension ? ` (${b.extension})` : '');
       blocks.push(`${name}${b.parenthetical ? ` (${b.parenthetical})` : ''}: ${paragraphs(b.text).join('\n')}`);
     }
   }

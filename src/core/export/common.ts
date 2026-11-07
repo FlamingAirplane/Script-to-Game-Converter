@@ -2,19 +2,19 @@ import { audioFileName, referencedAudio, type AudioAssets } from '../audio';
 import { imageFileName, referencedImages } from '../images';
 import { blocksExport, diag, type Diagnostic } from '../diagnostics';
 import { fnv1a, sha256Hex } from '../hash';
-import { itemVar } from '../isr';
+import { foldAccents, itemVar, nameCode } from '../isr';
 import type { ProcessedStory } from '../pipeline';
 import { GENERATOR_VERSION, INK_COMPILER, MANIFEST_VERSION } from '../version';
 import type { EngineAdapter, ExportFile, ExportManifest, ExportOptions, ExportResult } from './types';
 
 export function pascalCase(s: string): string {
-  const out = s
-    .normalize('NFKD')
+  const out = foldAccents(s)
     .replace(/[^A-Za-z0-9]+/g, ' ')
     .trim()
     .split(/\s+/)
     .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
     .join('');
+  if (!out && /[\p{L}\p{N}]/u.test(s)) return `Story${nameCode(s).toUpperCase()}`;
   return /^[A-Za-z]/.test(out) ? out.slice(0, 40) : `Story${out}`.slice(0, 40);
 }
 

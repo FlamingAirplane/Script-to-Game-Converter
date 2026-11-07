@@ -2,7 +2,7 @@ import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } fro
 import { reviewAll } from '../core/adapt';
 import { buildStory, type SourceInput } from '../core/builder';
 import type { Diagnostic } from '../core/diagnostics';
-import type { ConversionMode, StoryProject } from '../core/isr';
+import { fileBase, type ConversionMode, type StoryProject } from '../core/isr';
 import type { ConversionState } from '../core/pipeline';
 import { validateSchema } from '../core/schema';
 import { DiagnosticsPanel, type PanelView } from './DiagnosticsPanel';
@@ -505,7 +505,7 @@ export function App() {
       if (projectFile && !as) {
         await writeToHandle(projectFile, json);
         target = projectFile;
-      } else target = await saveFile(`${project.project.id}.nbproj.json`, json, 'application/json', 'project');
+      } else target = await saveFile(`${fileBase(project)}.nbproj.json`, json, 'application/json', 'project');
       if (!target) return; // cancelled
       markCopied(snapshot);
       if (target !== 'downloaded') {
@@ -798,6 +798,7 @@ export function App() {
               characters={processed.project.characters.length}
               choices={processed.project.passages.reduce((n, ps) => n + ps.choices.length, 0)}
               endings={processed.analysis.endings.length}
+              noSuggestions={processed.project.project.mode === 'adaptation' && !processed.project.passages.some((ps) => ps.choices.some((c) => c.origin === 'generated'))}
               counts={{
                 error: processed.diagnostics.filter((d) => d.severity === 'error').length,
                 warning: processed.diagnostics.filter((d) => d.severity === 'warning').length,
@@ -874,6 +875,8 @@ function ImportSummary(props: {
   characters: number;
   choices: number;
   endings: number;
+  /** Interactive adaptation ran but found nothing to suggest. */
+  noSuggestions?: boolean;
   counts: { error: number; warning: number; review: number };
   onDiagnostics: () => void;
   onClose: () => void;
@@ -893,6 +896,12 @@ function ImportSummary(props: {
           : `${[error && n(error, 'error'), warning && n(warning, 'warning'), review && n(review, 'thing', 'things') + ' to review'].filter(Boolean).join(', ')}. ` +
             'Errors stop the export; warnings and reviews are worth a look but don’t.'}
       </p>
+      {props.noSuggestions && (
+        <p className="small import-no-suggestions">
+          No choices were suggested. Interactive adaptation suggests one when someone in the action picks up, takes, finds or pockets a thing (“Mira pockets the brass key.”), and locks a later scene that uses it
+          (“She unlocks the door with the key.”) until the reader has it. You can add choices yourself in Review, or write them into the script as <code>+ [Choice text] -&gt; passage</code> lines.
+        </p>
+      )}
       <div className="row">
         {issues > 0 && (
           <button className="btn small" onClick={props.onDiagnostics}>

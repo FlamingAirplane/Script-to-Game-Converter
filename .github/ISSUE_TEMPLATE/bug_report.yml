@@ -1,0 +1,41 @@
+name: Bug report
+description: Something converted, played or exported wrongly, or the app misbehaved.
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: Thanks for reporting this. For a security problem, please use the Security tab's private report instead.
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened
+      description: What you did, what you expected, and what happened instead.
+    validations:
+      required: true
+  - type: textarea
+    id: script
+    attributes:
+      label: A short script that shows it
+      description: The fewest lines that still show the problem. Only paste writing you're free to share.
+      render: text
+  - type: dropdown
+    id: where
+    attributes:
+      label: Where
+      options:
+        - Import
+        - Review
+        - Graph
+        - Ink
+        - Playtest
+        - Export (playable page, Twine or recording script)
+        - Export (Unity)
+        - Export (Unreal)
+        - Somewhere else
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: Version and browser
+      description: The version is in the footer of the About page; for example "0.4.0, Safari 19 on macOS".

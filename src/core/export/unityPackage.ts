@@ -1,4 +1,5 @@
 import { sha256Hex } from '../hash';
+import { foldAccents, nameCode } from '../isr';
 import { pascalCase } from './common';
 import type { ExportFile } from './types';
 
@@ -25,14 +26,14 @@ const RESERVED = new Set(['Ink', 'UnityEngine', 'UnityEditor', 'System', 'Object
 export const SEMVER = /^\d+\.\d+\.\d+(-[0-9A-Za-z.-]+)?$/;
 
 export function packageSlug(name: string): string {
-  const s = name
-    .normalize('NFKD')
+  const s = foldAccents(name)
     .replace(/([a-z0-9])([A-Z])/g, '$1-$2')
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, '-')
     .replace(/^-+|-+$/g, '')
     .slice(0, 50)
     .replace(/-+$/, '');
+  if (!s && /[\p{L}\p{N}]/u.test(name)) return `story-${nameCode(name)}`;
   return /^[a-z]/.test(s) ? s : `story-${s || 'untitled'}`.replace(/-+$/, '');
 }
 

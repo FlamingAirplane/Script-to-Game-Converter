@@ -1,10 +1,12 @@
 import { diag, type Diagnostic } from './diagnostics';
 import { sha256Hex } from './hash';
 import { log } from './log';
+import { markupToTags, plainText } from './emphasis';
 import {
   cueName,
   cueValue,
   SCHEMA_VERSION,
+  nameCode,
   slugify,
   uniqueId,
   type Character,
@@ -254,7 +256,7 @@ function assemble(
 
   for (const { doc, b } of all) {
     if (b.kind === 'title') {
-      if (/^title$/i.test(b.key) && !title) title = b.value.replace(/\n/g, ' ').replace(/[*_]/g, '');
+      if (/^title$/i.test(b.key) && !title) title = plainText(markupToTags(b.value.replace(/\n/g, ' ')));
       if (/^(author|authors|credit)$/i.test(b.key) && /^author/i.test(b.key)) author = b.value;
       continue;
     }
@@ -301,8 +303,10 @@ function assemble(
       case 'action':
         return { type: 'action', text: b.text, origin: origin(b), source: s };
       case 'dialogue': {
-        const c = characterFor(b.character + (b.extension ? ` (${b.extension})` : ''));
-        return { type: 'dialogue', speakerId: c.id, text: b.text, parenthetical: b.parenthetical, origin: origin(b), source: s };
+        const cue = b.character + (b.extension ? ` (${b.extension})` : '');
+        const c = characterFor(cue);
+        const extension = voiceExtension(cue);
+        return { type: 'dialogue', speakerId: c.id, text: b.text, parenthetical: b.parenthetical, ...(extension ? { extension } : {}), origin: origin(b), source: s };
       }
       case 'transition':
         return { type: 'transition', text: b.text, origin: 'source', source: s };
@@ -397,6 +401,15 @@ function assemble(
     if (i + 1 < passages.length && !explicitFlow) p.divert = passages[i + 1].id;
     else p.isEnding = true;
   });
+  // A script's own "THE END" is the ending, which every reader already marks: kept as a note, not shown twice.
+  for (const p of passages) {
+    if (!p.isEnding || p.choices.length || p.divert) continue;
+    const i = p.content.length - 1;
+    const last = p.content[i];
+    if (i > 0 && last && (last.type === 'action' || last.type === 'transition') && END_MARK.test(plainText(last.text))) {
+      p.content[i] = { type: 'note', text: `The script's ending: ${plainText(last.text).trim()}`, origin: 'transformed', source: last.source };
+    }
+  }
   if (passages.length === 0) {
     const doc = parsed[0]?.doc;
     passages.push({
@@ -464,7 +477,7 @@ function assemble(
   return {
     schemaVersion: SCHEMA_VERSION,
     project: {
-      id: slugify(title) || 'story',
+      id: slugify(title) || (/[\p{L}\p{N}]/u.test(title) ? `story_${nameCode(title)}` : 'story'),
       title,
       author,
       startPassage: start || passages[0].id,
@@ -479,3 +492,11 @@ function assemble(
   };
 }
 
+/** A line that only says the story is over: "THE END", "The End.", "END", "FIN". */
+const END_MARK = /^\s*(?:the\s+end|end|fin)\s*[.!]?\s*$/i;
+
+/** The voice extension in a character cue, written the usual way: "PORTER (V.O.)" → "V.O.", "(os)" → "O.S.". */
+export function voiceExtension(cue: string): string | undefined {
+  const m = /\(\s*(V\.?\s*O|O\.?\s*S|O\.?\s*C)\.?\s*\)/i.exec(cue);
+  return m ? `${m[1].replace(/[^a-z]/gi, '').toUpperCase().split('').join('.')}.` : undefined;
+}
