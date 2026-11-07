@@ -1,4 +1,5 @@
 // Engine-only runtime: the compiler isn't needed to play an already compiled story.
+import { Rich } from './Rich';
 import { pendingSuggestions } from '../core/adapt';
 import { Story } from 'inkjs';
 import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from 'react';
@@ -488,14 +489,14 @@ export function PlaytestView({
               </p>
             ) : l.kind === 'choice' ? (
               <p key={i} className="t-choice">
-                › {T(l.text)}
+                › <Rich text={T(l.text)} />
               </p>
             ) : l.speaker ? (
               <p key={i} className={`t-dialogue${portraitOf(l) ? ' with-portrait' : ''}`}>
                 {portraitOf(l) && <img className="t-portrait" src={portraitOf(l)!.url} alt="" />}
                 <span className="t-speaker">{T(l.speaker)}</span>
                 {l.tags.find((t) => t.startsWith('paren:')) && <span className="t-paren">({T(l.tags.find((t) => t.startsWith('paren:'))!.slice(6))})</span>}
-                <span className="t-text">{T(l.text)}</span>
+                <span className="t-text"><Rich text={T(l.text)} /></span>
               </p>
             ) : (
               <Fragment key={i}>
@@ -505,7 +506,7 @@ export function PlaytestView({
                     <img src={pictureFor(l)!.url} alt={pictureFor(l)!.alt} />
                   </figure>
                 )}
-                <p className={l.tags.includes('transition') ? 't-transition' : `t-action${i === dropCapAt ? ' drop' : ''}`}>{T(l.text)}</p>
+                <p className={l.tags.includes('transition') ? 't-transition' : `t-action${i === dropCapAt ? ' drop' : ''}`}><Rich text={T(l.text)} /></p>
               </Fragment>
             ),
           )}
@@ -528,13 +529,13 @@ export function PlaytestView({
           ) : (
             choices.map((c) => (
               <button key={c.index} className={`choice-btn${choices.length === 1 && c.text === CONTINUE_TEXT ? ' continue' : ''}`} onClick={() => choose(c.index, c.text)}>
-                {T(c.text)}
+                <Rich text={T(c.text)} />
               </button>
             ))
           )}
           {locked.map((l) => (
             <p key={l.choice.id} className="choice-btn locked" aria-disabled="true">
-              <span className="locked-text">{T(l.choice.text)}</span>
+              <span className="locked-text"><Rich text={T(l.choice.text)} /></span>
               <span className="locked-needs">needs {l.needs.map(T).join(', ')}</span>
             </p>
           ))}

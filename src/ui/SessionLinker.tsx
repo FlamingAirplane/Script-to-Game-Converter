@@ -1,4 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent } from 'react';
+import { plainText } from '../core/emphasis';
+import { Rich } from './Rich';
 import type { StoryProject } from '../core/isr';
 import { assignInOrder, detectSegments, formatTime, parseTime, sessionLines, type Segment, type SessionLine } from '../core/session';
 import { newAudioId } from '../core/audio';
@@ -413,9 +415,9 @@ function LineRow({ line: l, seg, changed, active, otherClip, onActivate, onSet, 
         {l.number}
       </button>
       <span className="who small">{l.speaker}</span>
-      <span className="what small" title={l.text}>
+      <span className="what small" title={plainText(l.text)}>
         {l.parenthetical ? <em className="muted">({l.parenthetical}) </em> : null}
-        {l.text}
+        <Rich text={l.text} />
         {otherClip && <span className="muted"> · has its own recording</span>}
       </span>
       <TimeField value={seg?.start} label={`Line ${l.number} start`} onChange={(t) => onSet(t == null ? null : { start: t, end: seg && seg.end > t ? seg.end : t + 1 })} />

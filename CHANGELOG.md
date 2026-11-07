@@ -1,5 +1,17 @@
 # What's new in Narrative Bridge
 
+## Unreleased
+
+- **Italics, bold and underlining are kept** from Fountain, Final Draft, Word, Markdown and Twine scripts. They show in
+  Playtest, the playable story and the Unity panel (which types them out letter by letter); in Review they're written as
+  `<i>…</i>`, `<b>…</b>` and `<u>…</u>`, which you can type too. Recording scripts mark them the Fountain way.
+- **Compare a draft with now:** in Story settings, *Compare* lists the passages added, removed or renamed since a draft,
+  and every line and choice that changed.
+- **Unreal export catches up:** cues (`OnCue`), exits to the game (`OnExit` and `Resume`), the locked choices with what
+  they need, the cue sounds, and helpers for showing italics.
+- **Unity checks on GitHub:** a workflow that runs the Unity package's tests for every sample, once a Unity licence is
+  added as a repository secret (`npm run test:unity -- --export-only` writes the projects it tests).
+
 ## 0.4.0 — 2026-11-06
 
 - **Translations back in:** bring a filled-in translation sheet back on the Export page and see how much of each

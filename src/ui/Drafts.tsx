@@ -1,4 +1,6 @@
 import { useEffect, useState } from 'react';
+import type { StoryProject } from '../core/isr';
+import { CompareSheet } from './CompareSheet';
 import { deleteDraft, listDrafts, onDraftsChanged, when, type DraftSummary } from './draftStore';
 
 function useDrafts(): DraftSummary[] | null {
@@ -20,8 +22,9 @@ function useDrafts(): DraftSummary[] | null {
  * A shelf of drafts kept in this browser. With `projectId`, only that story's drafts and a way to
  * keep a new one; without it, the newest draft of every story (to reopen earlier work).
  */
-export function DraftShelf({ projectId, onKeep, onRestore }: { projectId?: string; onKeep?: (label: string) => Promise<void>; onRestore: (id: number) => void }) {
+export function DraftShelf({ projectId, current, onKeep, onRestore }: { projectId?: string; current?: StoryProject; onKeep?: (label: string) => Promise<void>; onRestore: (id: number) => void }) {
   const all = useDrafts();
+  const [comparing, setComparing] = useState<number | null>(null);
   const [label, setLabel] = useState('');
   const [keeping, setKeeping] = useState(false);
   const [error, setError] = useState('');
@@ -76,6 +79,11 @@ export function DraftShelf({ projectId, onKeep, onRestore }: { projectId?: strin
                 <button className="btn tiny" onClick={() => onRestore(d.id)}>
                   {projectId ? 'Restore' : 'Open'}
                 </button>
+                {projectId && current && (
+                  <button className="btn tiny" aria-label={`Compare draft ${d.label} with now`} onClick={() => setComparing(d.id)}>
+                    Compare
+                  </button>
+                )}
                 {projectId && (
                   <button
                     className="btn tiny ghost"
@@ -90,6 +98,7 @@ export function DraftShelf({ projectId, onKeep, onRestore }: { projectId?: strin
           ))}
         </ol>
       )}
+      {comparing !== null && current && <CompareSheet draftId={comparing} project={current} onRestore={onRestore} onClose={() => setComparing(null)} />}
     </section>
   );
 }

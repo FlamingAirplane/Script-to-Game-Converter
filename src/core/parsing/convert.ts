@@ -1,6 +1,7 @@
 import type JSZip from 'jszip';
 import type { SourceInput } from '../builder';
 import type { SourceFormat } from '../isr';
+import { tagsToFountain } from '../emphasis';
 import { sha256 } from '../hash';
 
 // Converters for formats that aren't plain text. Each turns the file into Fountain (screenplays) or
@@ -45,14 +46,24 @@ export function block(lines: string[], text: string) {
 // ---------------------------------------------------------------------------------------------
 // Final Draft (.fdx): XML with <Paragraph Type="…"><Text>…</Text></Paragraph> inside <Content>.
 
-function fdxParagraphs(xml: string): { type: string; text: string; dual: boolean }[] {
-  const out: { type: string; text: string; dual: boolean }[] = [];
+/** Text runs with their emphasis as Fountain marks (*italic*, **bold**, _underline_), via emphasis tags. */
+function markRuns(runs: { text: string; i: boolean; b: boolean; u: boolean }[]): string {
+  if (!runs.some((r) => (r.i || r.b || r.u) && r.text.trim())) return runs.map((r) => r.text).join('');
+  const tagged = runs.map((r) => (r.text && (r.i || r.b || r.u) ? `${r.i ? '<i>' : ''}${r.b ? '<b>' : ''}${r.u ? '<u>' : ''}${r.text}${r.u ? '</u>' : ''}${r.b ? '</b>' : ''}${r.i ? '</i>' : ''}` : r.text.replace(/</g, '\u0001')));
+  return tagsToFountain(tagged.join('')).replace(/\u0001/g, '<');
+}
+
+function fdxParagraphs(xml: string): { type: string; text: string; marked: string; dual: boolean }[] {
+  const out: { type: string; text: string; marked: string; dual: boolean }[] = [];
   const re = /<DualDialogue\b[^>]*>([\s\S]*?)<\/DualDialogue>|<Paragraph\b([^>]*?)(?:\/>|>([\s\S]*?)<\/Paragraph>)/g;
   let m: RegExpExecArray | null;
   const para = (attrs: string, body: string | undefined, dual: boolean) => {
     const type = /\bType="([^"]*)"/.exec(attrs)?.[1] ?? 'General';
-    const text = [...(body ?? '').matchAll(/<Text\b[^>]*>([\s\S]*?)<\/Text>/g)].map((t) => decodeXml(t[1])).join('');
-    out.push({ type, text: text.replace(/\r\n?/g, '\n'), dual });
+    const runs = [...(body ?? '').matchAll(/<Text\b([^>]*)>([\s\S]*?)<\/Text>/g)].map((t) => {
+      const style = /\bStyle="([^"]*)"/.exec(t[1])?.[1] ?? '';
+      return { text: decodeXml(t[2]).replace(/\r\n?/g, '\n'), i: /Italic/i.test(style), b: /Bold/i.test(style), u: /Underline/i.test(style) };
+    });
+    out.push({ type, text: runs.map((r) => r.text).join(''), marked: markRuns(runs), dual });
   };
   while ((m = re.exec(xml))) {
     if (m[1] !== undefined) {
@@ -89,6 +100,8 @@ export function fdxToFountain(xml: string): string {
   let prev = '';
   for (const p of fdxParagraphs(content)) {
     const text = p.text.trim();
+    // Dialogue, lyrics and action keep their italics and bold (see emphasis.ts); headings and names don't.
+    const marked = p.marked.trim();
     switch (p.type) {
       case 'Scene Heading':
         if (text) block(lines, SCENE_START.test(text) ? text.toUpperCase() : `.${text}`);
@@ -101,22 +114,22 @@ export function fdxToFountain(xml: string): string {
         break;
       case 'Dialogue':
         if (text) {
-          if (prev !== 'Character' && prev !== 'Parenthetical' && prev !== 'Dialogue') block(lines, `!${text}`);
-          else lines.push(...text.split('\n'));
+          if (prev !== 'Character' && prev !== 'Parenthetical' && prev !== 'Dialogue') block(lines, `!${marked}`);
+          else lines.push(...marked.split('\n'));
         }
         break;
       case 'Transition':
         if (text) block(lines, `> ${text}`);
         break;
       case 'Lyrics':
-        if (text) block(lines, text.split('\n').map((l) => `~${l}`).join('\n'));
+        if (text) block(lines, marked.split('\n').map((l) => `~${l}`).join('\n'));
         break;
       case 'New Act':
       case 'End of Act':
         if (text) block(lines, `# ${text}`);
         break;
       default: // Action, General, Shot, Cast List, …
-        if (text) block(lines, fountainAction(text));
+        if (text) block(lines, fountainAction(marked));
     }
     if (text) prev = p.type;
   }
@@ -156,15 +169,25 @@ export async function docxToText(bytes: Uint8Array | ArrayBuffer): Promise<{ tex
   const styleNames = new Map<string, string>();
   for (const m of stylesXml.matchAll(/<w:style\b[^>]*w:styleId="([^"]+)"[^>]*>[\s\S]*?<w:name w:val="([^"]+)"/g)) styleNames.set(m[1], m[2]);
 
-  const paras: { kind: DocxKind; text: string }[] = [];
+  const paras: { kind: DocxKind; text: string; marked: string }[] = [];
   const bodyXml = /<w:body>([\s\S]*)<\/w:body>/.exec(doc)?.[1] ?? doc;
   for (const p of bodyXml.matchAll(/<w:p\b[^>]*?(?:\/>|>([\s\S]*?)<\/w:p>)/g)) {
     const inner = p[1] ?? '';
     const styleId = /<w:pStyle w:val="([^"]+)"/.exec(inner)?.[1] ?? '';
-    const text = [...inner.matchAll(/<w:t(?:\s[^>]*)?>([\s\S]*?)<\/w:t>|<w:(tab|br|cr)\b[^>]*\/>/g)]
-      .map((r) => (r[2] === 'tab' ? ' ' : r[2] ? '\n' : decodeXml(r[1])))
-      .join('');
-    paras.push({ kind: docxKind(styleId, styleNames.get(styleId) ?? ''), text: text.replace(/[ \t]+$/gm, '') });
+    const runText = (xml: string) =>
+      [...xml.matchAll(/<w:t(?:\s[^>]*)?>([\s\S]*?)<\/w:t>|<w:(tab|br|cr)\b[^>]*\/>/g)].map((r) => (r[2] === 'tab' ? ' ' : r[2] ? '\n' : decodeXml(r[1]))).join('');
+    const text = runText(inner);
+    // Italic, bold and underlined runs (w:val="0", "false" or "none" turns one off).
+    const on = (rPr: string, tag: string) => {
+      const m = new RegExp(`<w:${tag}(?:\\s+w:val="([^"]*)")?\\s*/>`).exec(rPr);
+      return !!m && !/^(0|false|none)$/.test(m[1] ?? '');
+    };
+    const runs = [...inner.matchAll(/<w:r\b[^>]*>([\s\S]*?)<\/w:r>/g)].map((r) => {
+      const rPr = /<w:rPr>([\s\S]*?)<\/w:rPr>/.exec(r[1])?.[1] ?? '';
+      return { text: runText(r[1]), i: on(rPr, 'i'), b: on(rPr, 'b'), u: on(rPr, 'u') };
+    });
+    const marked = runs.map((r) => r.text).join('') === text ? markRuns(runs) : text;
+    paras.push({ kind: docxKind(styleId, styleNames.get(styleId) ?? ''), text: text.replace(/[ \t]+$/gm, ''), marked: marked.replace(/[ \t]+$/gm, '') });
   }
 
   const styled = paras.some((p) => p.kind === 'scene' || p.kind === 'character');
@@ -181,12 +204,12 @@ export async function docxToText(bytes: Uint8Array | ArrayBuffer): Promise<{ tex
     if (p.kind === 'h1') md.push(`# ${t}`, '');
     else if (p.kind === 'h2') md.push(`## ${t}`, '');
     else if (p.kind === 'h3') md.push(`### ${t}`, '');
-    else md.push(t.replace(/^(#{1,6}\s)/, '\\$1'), '');
+    else md.push(p.marked.trim().replace(/^(#{1,6}\s)/, '\\$1'), '');
   }
   return { text: md.join('\n').trim() + '\n', format: 'md' };
 }
 
-function docxScreenplayToFountain(paras: { kind: DocxKind; text: string }[]): string {
+function docxScreenplayToFountain(paras: { kind: DocxKind; text: string; marked: string }[]): string {
   const lines: string[] = [];
   let prev: DocxKind | '' = '';
   for (const p of paras) {
@@ -203,8 +226,8 @@ function docxScreenplayToFountain(paras: { kind: DocxKind; text: string }[]): st
         lines.push(/^\(.*\)$/s.test(t) ? t : `(${t})`);
         break;
       case 'dialogue':
-        if (prev === 'character' || prev === 'paren' || prev === 'dialogue') lines.push(...t.split('\n'));
-        else block(lines, `!${t}`);
+        if (prev === 'character' || prev === 'paren' || prev === 'dialogue') lines.push(...p.marked.trim().split('\n'));
+        else block(lines, `!${p.marked.trim()}`);
         break;
       case 'transition':
         block(lines, `> ${t}`);
@@ -215,7 +238,7 @@ function docxScreenplayToFountain(paras: { kind: DocxKind; text: string }[]): st
         block(lines, `# ${t}`);
         break;
       default:
-        block(lines, fountainAction(t));
+        block(lines, fountainAction(p.marked.trim()));
     }
     prev = p.kind;
   }

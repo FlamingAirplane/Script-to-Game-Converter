@@ -1,3 +1,4 @@
+import { markupToTags, plainText } from '../emphasis';
 import { isMarkerLine, parseMarker } from './markers';
 import type { ParsedBlock, Parser } from './types';
 
@@ -63,7 +64,7 @@ export const markdownParser: Parser = {
       const h = /^(#{1,6})\s+(.*?)(?:\s*\{#([\w-]+)\})?\s*#*$/.exec(t);
       if (h) {
         flush();
-        blocks.push({ kind: 'section', depth: h[1].length, text: inline(h[2]), anchor: h[3]?.replace(/-/g, '_'), line: ln });
+        blocks.push({ kind: 'section', depth: h[1].length, text: inline(h[2], true), anchor: h[3]?.replace(/-/g, '_'), line: ln });
         continue;
       }
       if (/^(-{3,}|\*{3,}|_{3,})$/.test(t)) {
@@ -99,12 +100,11 @@ export const markdownParser: Parser = {
   },
 };
 
-function inline(s: string): string {
-  return s
-    .replace(/!\[([^\]]*)\]\([^)]*\)/g, '$1')
-    .replace(/\[([^\]]+)\]\([^)]*\)/g, '$1')
-    .replace(/(\*\*|__)(.+?)\1/g, '$2')
-    .replace(/(\*|_)(.+?)\1/g, '$2')
+/** Inline Markdown as plain text; emphasis is kept as <i>/<b> tags (see emphasis.ts) unless `plain`. */
+function inline(s: string, plain = false): string {
+  const t = s.replace(/!\[([^\]]*)\]\([^)]*\)/g, '$1').replace(/\[([^\]]+)\]\([^)]*\)/g, '$1');
+  const tagged = markupToTags(t, 'markdown');
+  return (plain ? plainText(tagged) : tagged)
     .replace(/`([^`]+)`/g, '$1')
     .replace(/\\([\\`*_{}[\]()#+\-.!>])/g, '$1') // Markdown backslash escapes
     .trim();
