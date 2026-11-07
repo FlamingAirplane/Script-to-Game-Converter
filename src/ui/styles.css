@@ -1265,3 +1265,42 @@ section.drafts > h2 { margin-top: 26px; }
 .edge-end.missing[role='button']:focus-visible { outline: 2px solid var(--pen); }
 .diag-action { margin: 2px 0 8px 28px; }
 .playtest-add-scene { align-self: flex-start; margin-top: 6px; }
+
+/* Story map readability: focus and trace dimming, faint straight-on routes, loop stubs, scenes and the outline. */
+.graph-toolbar { flex-wrap: wrap; row-gap: 6px; }
+.graph .dim, .graph .node.dim { opacity: 0.16; transition: opacity 0.15s; }
+.graph .faint .edge, .graph g.faint path.edge, .graph path.edge.faint { opacity: 0.3; }
+.graph .faint { opacity: 0.35; }
+.edge.loop { stroke-dasharray: 3 2; }
+.edge-end.loop { fill: var(--pen); cursor: pointer; font-size: 11px; }
+.edge-end.loop:hover, .edge-end.loop:focus-visible { text-decoration: underline; outline: none; }
+.scene-stripe { stroke: none !important; filter: none !important; }
+.scene-c0, .node rect.scene-stripe.scene-c0 { fill: var(--rubric); background: var(--rubric); }
+.scene-c1, .node rect.scene-stripe.scene-c1 { fill: var(--teal); background: var(--teal); }
+.scene-c2, .node rect.scene-stripe.scene-c2 { fill: var(--review); background: var(--review); }
+.scene-c3, .node rect.scene-stripe.scene-c3 { fill: var(--warn); background: var(--warn); }
+.scene-c4, .node rect.scene-stripe.scene-c4 { fill: var(--ok); background: var(--ok); }
+.scene-c5, .node rect.scene-stripe.scene-c5 { fill: var(--pen); background: var(--pen); }
+.node.folded > rect:first-child { stroke-width: 2; stroke-dasharray: 8 3; }
+.node.folded .node-id { font-style: italic; }
+.scenes-menu { position: relative; }
+.scenes-popover { position: absolute; right: 0; top: calc(100% + 6px); z-index: 20; width: min(340px, 86vw); max-height: 60vh; overflow: auto; padding: 10px 12px; display: flex; flex-direction: column; gap: 8px; }
+.scenes-popover ul { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 4px; }
+.scenes-popover .check { display: flex; align-items: center; gap: 6px; font-size: 14px; }
+.scene-swatch { display: inline-block; width: 10px; height: 10px; border-radius: 2px; flex: none; }
+.trace-select { max-width: 200px; }
+.story-outline { padding: 14px 22px 40px; overflow: auto; max-height: calc(100vh - 220px); line-height: 1.45; }
+.outline-passage { padding: 3px 0; scroll-margin: 80px; }
+.outline-passage.selected .outline-title { text-decoration: underline; }
+.outline-heading { margin: 10px 0 0; color: var(--faded); letter-spacing: 0.05em; }
+.outline-title { border: 0; background: none; padding: 0; font: 600 16px var(--serif); color: var(--ink); cursor: pointer; text-align: left; }
+.outline-title:hover, .outline-title:focus-visible { color: var(--pen); text-decoration: underline; }
+.outline-choices { list-style: none; margin: 2px 0 6px; padding: 0 0 0 14px; border-left: 1px solid var(--rule-2); }
+.outline-choices > li { margin: 2px 0; }
+.outline-choices summary { cursor: pointer; }
+.outline-choice { color: var(--pen); font-style: italic; }
+.outline-branch { padding-left: 16px; }
+.outline-join, .outline-end, .outline-next, .outline-otherwise { color: var(--faded); }
+.outline-next, .outline-otherwise { margin: 0 0 4px; }
+.outline-missing { color: var(--err); }
+.outline-unreached { margin-top: 24px; border-top: 1px solid var(--rule); padding-top: 8px; }

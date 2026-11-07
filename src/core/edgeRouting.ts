@@ -3,6 +3,10 @@
 // tried as a curve and scored: going through other cards costs most, then crossing arrows already
 // routed, then length and turning back on itself. The cheapest wins. Arrows sharing a side of a card
 // are then spread along it, ordered by where they go, so they fan out instead of piling up.
+//
+// An arrow that skips columns of cards (from a passage to one several columns on) is threaded instead: it leaves
+// the right side, passes each column in between through the nearest gap between cards, and enters the left side,
+// so it runs along the map rather than looping around it.
 
 export type Side = 'top' | 'right' | 'bottom' | 'left';
 export interface Rect {
@@ -115,6 +119,58 @@ function facing(r: Rect, side: Side, other: P): number {
 const fmt = (n: number) => Math.round(n * 10) / 10;
 const pathOf = (c: [P, P, P, P]) => `M${fmt(c[0][0])},${fmt(c[0][1])} C${fmt(c[1][0])},${fmt(c[1][1])} ${fmt(c[2][0])},${fmt(c[2][1])} ${fmt(c[3][0])},${fmt(c[3][1])}`;
 
+/** Cards that sit wholly between two cards, left to right: the columns an arrow from `a` to `b` has to pass. */
+function between(a: Rect, b: Rect, others: Rect[]): Rect[] {
+  return others.filter((r) => r.x >= a.x + a.w + 8 && r.x + r.w <= b.x - 8);
+}
+
+/** A smooth path through points (Catmull-Rom as cubic curves), leaving and arriving level. */
+function smooth(pts: P[]): string {
+  const lead: P = [pts[0][0] - 60, pts[0][1]];
+  const tail: P = [pts[pts.length - 1][0] + 60, pts[pts.length - 1][1]];
+  const all = [lead, ...pts, tail];
+  let d = `M${fmt(pts[0][0])},${fmt(pts[0][1])}`;
+  for (let i = 1; i < all.length - 2; i++) {
+    const [p0, p1, p2, p3] = [all[i - 1], all[i], all[i + 1], all[i + 2]];
+    const c1: P = [p1[0] + (p2[0] - p0[0]) / 6, p1[1] + (p2[1] - p0[1]) / 6];
+    const c2: P = [p2[0] - (p3[0] - p1[0]) / 6, p2[1] - (p3[1] - p1[1]) / 6];
+    d += ` C${fmt(c1[0])},${fmt(c1[1])} ${fmt(c2[0])},${fmt(c2[1])} ${fmt(p2[0])},${fmt(p2[1])}`;
+  }
+  return d;
+}
+
+/**
+ * Waypoints for a threaded arrow: at each column it passes, the free height nearest the straight line from start to
+ * end (between cards, or above or below the column), entered and left level. `used` spreads arrows that share a gap.
+ */
+function threadPoints(start: P, end: P, columns: Rect[], used: Map<string, number>): P[] {
+  const cols = new Map<number, Rect[]>();
+  for (const r of columns) (cols.get(r.x) ?? cols.set(r.x, []).get(r.x)!).push(r);
+  const pts: P[] = [start];
+  for (const [x, cards] of [...cols].sort((p, q) => p[0] - q[0])) {
+    const w = Math.max(...cards.map((c) => c.w));
+    const t = (x + w / 2 - start[0]) / (end[0] - start[0]);
+    const want = start[1] + (end[1] - start[1]) * t;
+    const pad = 9;
+    const blocked = cards.map((c) => [c.y - pad, c.y + c.h + pad] as const).sort((p, q) => p[0] - q[0]);
+    const free = (y: number) => blocked.every(([lo, hi]) => y <= lo || y >= hi);
+    let y = want;
+    if (!free(y)) {
+      const options = blocked.flatMap(([lo, hi]) => [lo, hi]).filter(free);
+      y = options.reduce((best, o) => (Math.abs(o - want) < Math.abs(best - want) ? o : best), options[0] ?? want);
+      // Arrows sharing a gap are spread a little apart.
+      const key = `${x}:${Math.round(y)}`;
+      const n = used.get(key) ?? 0;
+      used.set(key, n + 1);
+      const gapAbove = blocked.some(([lo]) => Math.abs(lo - y) < 0.5);
+      y += (gapAbove ? -1 : 1) * n * 5;
+    }
+    pts.push([x - 4, y], [x + w + 4, y]);
+  }
+  pts.push(end);
+  return pts;
+}
+
 export function routeEdges(cards: Map<string, Rect>, edges: RouteEdge[]): Map<string, Route> {
   const out = new Map<string, Route>();
   const routed: Poly[] = [];
@@ -132,6 +188,10 @@ export function routeEdges(cards: Map<string, Rect>, edges: RouteEdge[]): Map<st
   for (const { e, a, b } of order) {
     if (e.from === e.to) {
       chosen.set(e.id, { fromSide: 'right', toSide: 'top' });
+      continue;
+    }
+    if (between(a, b, all.filter(([id]) => id !== e.from && id !== e.to).map(([, r]) => r)).length) {
+      chosen.set(e.id, { fromSide: 'right', toSide: 'left' });
       continue;
     }
     const others = all.filter(([id]) => id !== e.from && id !== e.to).map(([, r]) => r).filter((r) => overlaps(r, { x: Math.min(a.x, b.x) - 200, y: Math.min(a.y, b.y) - 200, w: Math.abs(a.x - b.x) + a.w + 400, h: Math.abs(a.y - b.y) + a.h + 400 }));
@@ -177,8 +237,19 @@ export function routeEdges(cards: Map<string, Rect>, edges: RouteEdge[]): Map<st
     list.forEach((s, i) => offsets.set(`${s.id}:${s.end}`, (i - (list.length - 1) / 2) * step));
   }
 
+  const used = new Map<string, number>();
+  const rects = [...cards.values()];
   for (const { e, a, b } of order) {
     const c = chosen.get(e.id)!;
+    const columns = e.from === e.to ? [] : between(a, b, rects.filter((r) => r !== a && r !== b));
+    if (columns.length) {
+      const start = port(a, 'right', offsets.get(`${e.id}:from`) ?? 0);
+      const endPort = port(b, 'left', offsets.get(`${e.id}:to`) ?? 0);
+      const pts = threadPoints(start, [endPort[0] - 2, endPort[1]], columns, used);
+      const m = pts[Math.floor(pts.length / 2)];
+      out.set(e.id, { d: smooth(pts), mid: [fmt(m[0]), fmt(m[1])], fromSide: 'right', toSide: 'left' });
+      continue;
+    }
     let cv: [P, P, P, P];
     if (e.from === e.to) {
       // A passage that leads back to itself: a small loop over its top-right corner.
@@ -194,11 +265,15 @@ export function routeEdges(cards: Map<string, Rect>, edges: RouteEdge[]): Map<st
 /** For tests: whether a route's curve passes through a card. */
 export function routeHits(route: Route, card: Rect): boolean {
   const n = route.d.match(/-?\d+(\.\d+)?/g)!.map(Number);
-  const c: [P, P, P, P] = [
-    [n[0], n[1]],
-    [n[2], n[3]],
-    [n[4], n[5]],
-    [n[6], n[7]],
-  ];
-  return throughCards(sample(c), [card]) > 0;
+  // "M x,y" then cubic segments of three points each, each starting where the last ended.
+  for (let i = 2; i + 5 < n.length; i += 6) {
+    const c: [P, P, P, P] = [
+      [n[i - 2], n[i - 1]],
+      [n[i], n[i + 1]],
+      [n[i + 2], n[i + 3]],
+      [n[i + 4], n[i + 5]],
+    ];
+    if (throughCards(sample(c), [card]) > 0) return true;
+  }
+  return false;
 }
