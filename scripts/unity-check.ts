@@ -8,6 +8,8 @@
 //   npm run test:unity -- --ink <folder>     a local Ink Unity Integration checkout (no git download)
 //   npm run test:unity -- --unity <path>     a particular Unity executable
 //   npm run test:unity -- --out <folder>     where the projects go (kept, so later runs reuse Unity's cache)
+//   npm run test:unity -- --export-only --version 6000.3.28f1
+//                                            only write the projects (for CI, which runs Unity itself)
 
 import { spawnSync } from 'node:child_process';
 import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
@@ -40,12 +42,13 @@ function findUnity(): string | null {
   return null;
 }
 
-const unity = findUnity();
-if (!unity) {
+const exportOnly = flag('export-only');
+const unity = exportOnly ? null : findUnity();
+if (!unity && !exportOnly) {
   console.error('Unity isn’t installed where Unity Hub puts it. Pass --unity <path to the Unity executable>.');
   process.exit(2);
 }
-const version = /Editor\/([^/\\]+)[/\\]/.exec(unity.replace(/\\/g, '/') + '/')?.[1] ?? '6000.3.23f1';
+const version = opt('version') ?? (unity && /Editor\/([^/\\]+)[/\\]/.exec(unity.replace(/\\/g, '/') + '/')?.[1]) ?? '6000.3.23f1';
 const out = resolve(opt('out') ?? join(tmpdir(), 'narrative-bridge-unity-check'));
 const ink = opt('ink');
 const samples = opt('sample') ? SAMPLES.filter((s) => s.id === opt('sample')) : SAMPLES;
@@ -98,6 +101,10 @@ for (const sample of samples) {
     m.dependencies['com.inkle.ink-unity-integration'] = `file:${resolve(ink)}`;
     writeFileSync(manifest, JSON.stringify(m, null, 2));
   }
+  if (exportOnly) {
+    console.log(`${sample.id}\t${root}`);
+    continue;
+  }
   const ns = result.unityPackage!.namespace;
   const lines: string[] = [];
   // 1. The smoke test (exit 132 can happen at shutdown after the result is logged, so read the log).
@@ -126,5 +133,5 @@ for (const sample of samples) {
   failed ||= !ok;
   console.log(`${ok ? '✓' : '✗'} ${sample.name} (Unity ${version}${flag('addressables') ? ', Addressables' : ''})\n${lines.join('\n')}`);
 }
-console.log(failed ? '\nSome Unity checks failed.' : '\n✓ Every Unity check passed.');
+if (!exportOnly) console.log(failed ? '\nSome Unity checks failed.' : '\n✓ Every Unity check passed.');
 process.exit(failed ? 1 : 0);

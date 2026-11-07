@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { plainText } from '../core/emphasis';
 import type { AudioRef, VoiceSettings } from '../core/audio';
 import { clipUrl } from './audioStore';
 import { renderClip } from './audioRender';
@@ -76,7 +77,7 @@ export class VoiceQueue {
     }
     if (!synth) return;
     await new Promise<void>((done) => {
-      const u = new SpeechSynthesisUtterance(item.text);
+      const u = new SpeechSynthesisUtterance(plainText(item.text));
       const v = item.voice;
       if (v?.voiceName) u.voice = synth.getVoices().find((x) => x.name === v.voiceName) ?? null;
       if (v?.rate) u.rate = v.rate;

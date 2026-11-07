@@ -1,4 +1,5 @@
 import { useEffect, useRef } from 'react';
+import { plainText } from '../core/emphasis';
 import { effectToInk } from '../core/inkgen';
 import type { ContentBlock, StoryProject } from '../core/isr';
 import { addBreak, removeBreak, type Update } from './projectOps';
@@ -7,7 +8,10 @@ import { addBreak, removeBreak, type Update } from './projectOps';
 // add a Continue break (the reader clicks Continue before reading on) or to remove one.
 
 function preview(b: ContentBlock, project: StoryProject): { kind: string; text: string; muted?: boolean } {
-  const cut = (s: string) => (s.length > 160 ? `${s.slice(0, 159)}…` : s);
+  const cut = (raw: string) => {
+    const s = plainText(raw);
+    return s.length > 160 ? `${s.slice(0, 159)}…` : s;
+  };
   switch (b.type) {
     case 'dialogue': {
       const who = project.characters.find((c) => c.id === b.speakerId)?.displayName ?? b.speakerId;

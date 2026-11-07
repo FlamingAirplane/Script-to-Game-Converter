@@ -1227,3 +1227,26 @@ section.drafts > h2 { margin-top: 26px; }
 /* Translations brought back in (Export → Translation sheet). */
 .translations-in { margin-top: 12px; display: grid; gap: 8px; justify-items: start; }
 .translation-coverage { margin: 0; padding-left: 1.1em; }
+
+/* Comparing a draft with now */
+.sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }
+.sheet.compare-sheet { max-width: min(900px, 100%); display: flex; flex-direction: column; gap: 8px; }
+.compare-summary { margin: 0; font-weight: 600; }
+.compare-notes { margin: 0; padding-left: 1.2em; }
+.compare-list { list-style: none; margin: 0; padding: 0; }
+.compare-passage { border-top: 1px solid var(--rule); }
+.compare-head { all: unset; box-sizing: border-box; cursor: pointer; display: flex; gap: 10px; align-items: baseline; width: 100%; padding: 6px 2px; }
+.compare-head:focus-visible { outline: 2px solid var(--pen); outline-offset: 2px; }
+.compare-title { flex: 1; min-width: 0; overflow-wrap: anywhere; }
+.compare-status { flex: none; font: 600 11px/1.6 var(--mono); text-transform: uppercase; letter-spacing: 0.04em; padding: 0 6px; border-radius: 2px; border: 1px solid var(--rule-2); }
+.compare-added .compare-status { color: var(--ok); border-color: currentColor; }
+.compare-removed .compare-status { color: var(--rubric); border-color: currentColor; }
+.diff-lines { list-style: none; margin: 0 0 8px; padding: 0; font-size: 14px; }
+.diff-lines li { padding: 1px 6px 1px 22px; position: relative; overflow-wrap: anywhere; }
+.diff-mark { position: absolute; left: 6px; font-family: var(--mono); }
+.diff-same { color: var(--ink-2); }
+.diff-added, .diff-added-chip { background: color-mix(in srgb, var(--ok) 18%, transparent); }
+.diff-removed, .diff-removed-chip { background: color-mix(in srgb, var(--rubric) 14%, transparent); text-decoration: line-through; text-decoration-color: color-mix(in srgb, var(--rubric) 60%, transparent); }
+.diff-added-chip, .diff-removed-chip { padding: 0 5px; border-radius: 2px; text-decoration: none; font-family: var(--mono); }
+.diff-fold { font-style: italic; }
+.diff-only-title { margin: 0 0 8px 22px; }

@@ -1,4 +1,5 @@
 import { diag, type Diagnostic } from '../diagnostics';
+import { markupToTags } from '../emphasis';
 import { isMarkerLine, parseMarker } from './markers';
 import type { ParsedBlock, Parser } from './types';
 
@@ -9,14 +10,6 @@ import type { ParsedBlock, Parser } from './types';
 
 const SCENE_RE = /^(?:INT|EXT|EST|INT\.?\/EXT|I\/E)[.\s]/i;
 const TRANSITION_RE = /^[A-Z0-9 .'’\-]+TO:$/;
-
-export function stripEmphasis(s: string): string {
-  return s
-    .replace(/\\([*_])/g, '\u0000$1')
-    .replace(/\*{1,3}([^*\n]+?)\*{1,3}/g, '$1')
-    .replace(/_([^_\n]+?)_/g, '$1')
-    .replace(/\u0000([*_])/g, '$1');
-}
 
 function isCharacterCue(line: string): boolean {
   const t = line.trim();
@@ -71,7 +64,7 @@ export const fountainParser: Parser = {
       if (!actionBuf) return;
       const raw = actionBuf.text.join('\n').replace(/^\n+|\n+$/g, '');
       if (raw.trim()) {
-        const clean = stripEmphasis(raw);
+        const clean = markupToTags(raw);
         blocks.push({ kind: 'action', text: clean, line: actionBuf.line, endLine: actionBuf.line + actionBuf.text.length - 1, transformed: clean !== raw });
       }
       actionBuf = null;
@@ -130,7 +123,7 @@ export const fountainParser: Parser = {
       // Centered text
       if (/^>.*<$/.test(t)) {
         flushAction();
-        blocks.push({ kind: 'action', text: stripEmphasis(t.slice(1, -1).trim()), line: ln, transformed: true });
+        blocks.push({ kind: 'action', text: markupToTags(t.slice(1, -1).trim()), line: ln, transformed: true });
         continue;
       }
       // Transition
@@ -148,7 +141,7 @@ export const fountainParser: Parser = {
       // Lyrics
       if (t.startsWith('~')) {
         flushAction();
-        blocks.push({ kind: 'action', text: `♪ ${stripEmphasis(t.slice(1).trim())}`, line: ln, transformed: true });
+        blocks.push({ kind: 'action', text: `♪ ${markupToTags(t.slice(1).trim())}`, line: ln, transformed: true });
         continue;
       }
       // Character + dialogue
@@ -174,7 +167,7 @@ export const fountainParser: Parser = {
         }
         if (pendingParens.length) speech.push(...pendingParens);
         const raw = speech.join(' ');
-        const clean = stripEmphasis(raw);
+        const clean = markupToTags(raw);
         const words = character.split(/\s+/).length;
         const ambiguity =
           !t.startsWith('@') && (words > 3 || /[.!?]$/.test(character))

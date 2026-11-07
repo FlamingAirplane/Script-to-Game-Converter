@@ -2,6 +2,9 @@ import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import { reviewAll } from '../src/core/adapt';
 import { analyze } from '../src/core/analyzer';
+import { compareProjects, diffLines } from '../src/core/compare';
+import { emphasisHtml, markupToTags, plainText, tagsToFountain } from '../src/core/emphasis';
+import { fdxToFountain } from '../src/core/parsing/convert';
 import { buildStory } from '../src/core/builder';
 import { ADAPTERS, ExportBlockedError, type ExportResult } from '../src/core/export';
 import { conditionToInk, escapeInk, generateInk } from '../src/core/inkgen';
@@ -83,7 +86,7 @@ Hi.
     expect(doc.blocks.find((b) => b.kind === 'dialogue' && b.character === 'ALICE')).toMatchObject({ dual: true });
     expect(doc.blocks.find((b) => b.kind === 'transition')).toMatchObject({ text: 'FADE OUT.' });
     expect(doc.blocks.filter((b) => b.kind === 'note').length).toBe(2);
-    expect(doc.blocks.find((b) => b.kind === 'action')).toMatchObject({ text: 'Action line with emphasis.', transformed: true });
+    expect(doc.blocks.find((b) => b.kind === 'action')).toMatchObject({ text: 'Action line with <i>emphasis</i>.', transformed: true });
   });
   it('detects Fountain inside .txt by content', () => {
     expect(detectFormat('script.txt', fx).format).toBe('fountain');
@@ -258,10 +261,10 @@ describe('Twine import', () => {
     expect(project.variables).toMatchObject([{ id: 'apples', initial: 0 }]);
     const gate = project.passages.find((p) => p.title === 'Gate')!;
     expect(project.project.startPassage).toBe(gate.id);
-    expect(gate.content).toMatchObject([{ type: 'action', text: 'The gate creaks. A bird calls.' }, { type: 'effect', effect: { type: 'add_var', variableId: 'apples', amount: 1 } }]);
+    expect(gate.content).toMatchObject([{ type: 'action', text: 'The gate creaks. A <b>bird</b> calls.' }, { type: 'effect', effect: { type: 'add_var', variableId: 'apples', amount: 1 } }]);
     expect(gate.choices.map((c) => [c.text, c.conditions])).toEqual([['Go in', []], ['Leave', [{ type: 'has_item', itemId: 'basket' }]]]);
     const trees = project.passages.find((p) => p.title === 'Trees')!;
-    expect(trees.content.find((c) => c.type === 'action')).toMatchObject({ text: 'Trees heavy with red apples. Take a basket.' });
+    expect(trees.content.find((c) => c.type === 'action')).toMatchObject({ text: 'Trees heavy with <i>red</i> apples. Take a basket.' });
     expect(trees.content.find((c) => c.type === 'unsupported')).toMatchObject({ text: '(if: $apples > 2)[You have plenty.]' });
     expect(project.passages.find((p) => p.title === 'Home')!.isEnding).toBe(true);
     expect(diagnostics.filter((d) => d.code === 'UNSUPPORTED_CONSTRUCT')).toHaveLength(1);
@@ -465,7 +468,7 @@ describe('Final Draft and Word import', () => {
     expect(project.project.title).toBe('The Locked Archive');
     expect(project.passages.map((p) => p.sceneHeading)).toEqual(['INT. ARCHIVE - NIGHT', 'EXT. CLIFF PATH - DAWN']);
     const blocks = project.passages[0].content;
-    expect(blocks).toContainEqual(expect.objectContaining({ type: 'action', text: 'Rows of shelves vanish into the dark. MIRA lifts a lantern & squints.' }));
+    expect(blocks).toContainEqual(expect.objectContaining({ type: 'action', text: 'Rows of shelves vanish into the dark. <b>MIRA</b> lifts a lantern & squints.' }));
     expect(blocks).toContainEqual(expect.objectContaining({ type: 'dialogue', parenthetical: 'whispering', text: 'The archive is locked. “Again.”' }));
     expect(blocks).toContainEqual(expect.objectContaining({ type: 'action', text: 'THE DOOR CREAKS.' })); // caps action stays action
     expect(blocks.filter((b) => b.type === 'dialogue')).toHaveLength(3);
@@ -1772,5 +1775,81 @@ describe('translations brought back in', () => {
     const routes = JSON.parse(r.files.find((f) => f.path.endsWith('StorySource/PlaythroughRoutes.json'))!.content as string).routes;
     expect(routes.length).toBeGreaterThan(0);
     expect(routes[0]).toHaveProperty('choices');
+  });
+
+  it('gives Unreal the locked choices, cues and exits, and text helpers for italics', async () => {
+    const r = await ADAPTERS.unreal.export(processProject(await archive()), { engine: 'unreal', projectName: 'Archive', engineVersion: '5.7', integrationRef: 'v1.42.21-release', includeDemo: true });
+    const info = r.files.find((f) => f.path.endsWith('NarrativeBridgeStoryInfo.h'))!.content as string;
+    expect(info).toContain('{ TEXT("archive_entry"), TEXT("Open the archive"), TEXT("Archive Key") }');
+    expect(info).toMatch(/static const int32 NumGatedChoices = [1-9]/);
+    expect(info).toContain('static const int32 NumReservedTags = ');
+    expect(info).toContain('TEXT("speaker")');
+    const cpp = r.files.find((f) => f.path.endsWith('NarrativeBridgeComponent.cpp'))!.content as string;
+    expect(cpp).toContain('TEXT("Back to the game: ")');
+    expect(cpp).toContain('OnCue.Broadcast(Name, Value)');
+    expect(cpp).toContain('UNarrativeBridgeComponent::PlainText');
+    const h = r.files.find((f) => f.path.endsWith('NarrativeBridgeComponent.h'))!.content as string;
+    for (const fn of ['void Resume();', 'FNarrativeCue OnCue;', 'FNarrativeExit OnExit;', 'static FString RichText(const FString& Text);']) expect(h).toContain(fn);
+    // Braces balance in the generated C++ (a cheap check without an Unreal build).
+    for (const src of [info, cpp, h]) expect(src.split('{').length).toBe(src.split('}').length);
+  });
+});
+
+describe('comparing drafts', () => {
+  it('lines up two versions line by line', () => {
+    expect(diffLines(['a', 'b', 'c', 'd'], ['a', 'c', 'x', 'd'])).toEqual([
+      { kind: 'same', text: 'a' },
+      { kind: 'removed', text: 'b' },
+      { kind: 'same', text: 'c' },
+      { kind: 'added', text: 'x' },
+      { kind: 'same', text: 'd' },
+    ]);
+    expect(diffLines([], ['a'])).toEqual([{ kind: 'added', text: 'a' }]);
+  });
+
+  it('says which passages, lines and choices changed', async () => {
+    const before = (await build(SAMPLES[0].text, SAMPLES[0].fileName, SAMPLES[0].mode)).project;
+    const after = structuredClone(before);
+    const [first, second] = after.passages;
+    first.title = 'A new name';
+    const said = first.content.findIndex((b) => b.type === 'dialogue' || b.type === 'action');
+    const old = first.content[said] as { text: string };
+    old.text = 'Something else entirely.';
+    after.passages = after.passages.filter((p) => p !== second);
+    after.passages.push({ ...structuredClone(first), id: 'brand_new', title: 'Brand new', choices: [] });
+    const c = compareProjects(before, after);
+    const changed = c.passages.find((p) => p.id === first.id)!;
+    // Just the line: choices name passages by their title now, so the rename doesn't show up in them.
+    expect(changed).toMatchObject({ status: 'changed', oldTitle: before.passages[0].title, added: 1, removed: 1 });
+    expect(changed.lines.find((l) => l.kind === 'added')!.text).toContain('Something else entirely.');
+    expect(c.passages.find((p) => p.id === second.id)!.status).toBe('removed');
+    expect(c.passages.find((p) => p.id === 'brand_new')!.status).toBe('added');
+    expect(c.unchanged).toBe(before.passages.length - 2);
+    expect(compareProjects(before, before).passages).toEqual([]);
+  });
+});
+
+describe('italics and bold', () => {
+  it('turns Fountain and Markdown emphasis into tags, and back', () => {
+    expect(markupToTags('A *quiet* **loud** ***both*** _under_ \\*star\\* 2*3*4 snake_case_name')).toBe('A <i>quiet</i> <b>loud</b> <b><i>both</i></b> <u>under</u> *star* 2*3*4 snake_case_name');
+    expect(markupToTags('__strong__ and _soft_', 'markdown')).toBe('<b>strong</b> and <i>soft</i>');
+    expect(tagsToFountain('A <i>quiet</i> <b>loud</b> *star*')).toBe('A *quiet* **loud** \\*star\\*');
+    expect(markupToTags(tagsToFountain('<b><i>both</i></b> and <u>u</u>'))).toBe('<b><i>both</i></b> and <u>u</u>');
+  });
+
+  it('shows emphasis safely, and counts and speaks the plain text', () => {
+    expect(emphasisHtml('<i>a</i> <script>x</script> <b>&</b>')).toBe('<em>a</em> &lt;script&gt;x&lt;/script&gt; <strong>&amp;</strong>');
+    expect(plainText('The <i>storm</i> <b>took</b> it')).toBe('The storm took it');
+    expect(countWords('The <i>storm</i> took it')).toBe(4);
+  });
+
+  it('keeps emphasis from Fountain, Final Draft and Twine all the way to the Ink', async () => {
+    const { project } = await build('INT. ROOM - DAY\n\nThe *storm* took the **lens**.\n\nMIRA\nI _told_ you.\n');
+    const texts = project.passages.flatMap((p) => p.content.map((b) => ('text' in b ? b.text : '')));
+    expect(texts).toEqual(expect.arrayContaining(['The <i>storm</i> took the <b>lens</b>.', 'I <u>told</u> you.']));
+    const ink = processProject(project).generated.ink;
+    expect(ink).toContain('The <i>storm</i> took the <b>lens</b>.');
+    const fdx = fdxToFountain('<FinalDraft><Content><Paragraph Type="Action"><Text>A </Text><Text Style="Italic">quiet</Text><Text> room.</Text></Paragraph></Content></FinalDraft>');
+    expect(fdx).toBe('A *quiet* room.\n');
   });
 });

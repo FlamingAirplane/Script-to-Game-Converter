@@ -429,8 +429,8 @@ export function ImportView({
             Diagnostics list on the right points out anything it wasn’t sure of), or export a text version from your writing app instead.
           </li>
           <li>
-            <strong>Formatting</strong> such as bold, italics, fonts, dual dialogue and revision marks isn’t kept; the words and structure are. Old .doc files
-            can’t be read: save them as .docx.
+            <strong>Formatting:</strong> italics, bold and underlining are kept (except from PDFs); fonts, dual dialogue and revision marks aren’t. Old .doc
+            files can’t be read: save them as .docx.
           </li>
           <li>
             <strong>Size:</strong> there’s no fixed limit, since everything stays on your computer; very long scripts (hundreds of pages) work but take a few

@@ -1,3 +1,4 @@
+import { tagsToFountain } from '../emphasis';
 import { audioFileName } from '../audio';
 import { log } from '../log';
 import type { StoryProject } from '../isr';
@@ -24,7 +25,7 @@ export function buildRecordingScript(project: StoryProject): string {
       if (b.type !== 'dialogue') return;
       n++;
       const clip = b.audio ? audioFileName(b.audio) : `${recordingSlot(p.id, i)}.wav`;
-      rows.push([n, p.title, names.get(b.speakerId) ?? b.speakerId, b.parenthetical ?? '', b.text, clip, b.audio ? 'yes' : '']);
+      rows.push([n, p.title, names.get(b.speakerId) ?? b.speakerId, b.parenthetical ?? '', tagsToFountain(b.text), clip, b.audio ? 'yes' : '']);
     });
   log('export').info('Built recording script', { lines: n, recorded: rows.filter((r) => r[6] === 'yes').length });
   // A byte-order mark so spreadsheet apps read the file as UTF-8.

@@ -25,8 +25,12 @@ That's it. It works without an internet connection, and your scripts are never u
   on it here.
 
 Scanned PDFs (pictures of pages) and old `.doc` files can't be read. Export the script from your writing app, or save as
-`.docx`, instead. If you have both, an `.fdx` or `.docx` is more exact than a PDF. Bold, italics and fonts aren't kept;
-all of your words are.
+`.docx`, instead. If you have both, an `.fdx` or `.docx` is more exact than a PDF. Italics, bold and underlining are
+kept (PDFs excepted), and show in Playtest, the playable story and Unity. In Review they appear as `<i>…</i>`, `<b>…</b>`
+and `<u>…</u>`, which you can type too. Fonts aren't kept; all of your words are.
+
+**Comparing drafts:** in Story settings, *Compare* next to a draft shows what changed since: passages added, removed or
+renamed, and every line and choice that changed.
 
 ## Hearing your dialogue
 

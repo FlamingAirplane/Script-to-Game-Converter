@@ -1,6 +1,7 @@
 // Story statistics for writers and producers: how long the story is, how much it branches, and
 // how much each character speaks (to plan voice sessions).
 
+import { plainText } from './emphasis';
 import type { StoryProject } from './isr';
 
 /** Typical silent reading speed, words per minute. */
@@ -33,7 +34,7 @@ export interface StoryStats {
 }
 
 export function countWords(text: string): number {
-  return text.match(/[\p{L}\p{N}]+(?:['’-][\p{L}\p{N}]+)*/gu)?.length ?? 0;
+  return plainText(text).match(/[\p{L}\p{N}]+(?:['’-][\p{L}\p{N}]+)*/gu)?.length ?? 0;
 }
 
 export function storyStats(project: StoryProject): StoryStats {

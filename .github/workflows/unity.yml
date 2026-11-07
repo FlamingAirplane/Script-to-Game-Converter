@@ -1,0 +1,81 @@
+# Checks the Unity export in a real Unity editor: each sample story is exported as a Unity project and its
+# Test Runner tests run (the playthrough routes in Edit Mode, the story panel in Play Mode), the same as
+# `npm run test:unity` on a computer with Unity.
+#
+# Needs a Unity licence, saved as repository secrets (Settings → Secrets and variables → Actions):
+#   UNITY_LICENSE   the contents of a Unity .ulf licence file (Personal licences work)
+#   UNITY_EMAIL     the Unity account's email
+#   UNITY_PASSWORD  the Unity account's password
+# See https://game.ci/docs/github/activation. Without them, the job says so and passes.
+name: Unity
+
+on:
+  pull_request:
+    paths:
+      - 'src/core/**'
+      - 'scripts/unity-check.ts'
+      - '.github/workflows/unity.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  checks: write
+
+concurrency:
+  group: unity-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  unity:
+    name: Unity (${{ matrix.sample }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix:
+        sample: [archive, lighthouse, motel]
+    env:
+      UNITY_VERSION: 6000.3.28f1
+      UNITY_LICENSE: ${{ secrets.UNITY_LICENSE }}
+      UNITY_EMAIL: ${{ secrets.UNITY_EMAIL }}
+      UNITY_PASSWORD: ${{ secrets.UNITY_PASSWORD }}
+    steps:
+      - name: No Unity licence yet
+        if: env.UNITY_LICENSE == ''
+        run: echo "::notice title=Unity checks skipped::Add the UNITY_LICENSE, UNITY_EMAIL and UNITY_PASSWORD repository secrets to run the Unity checks here. Until then, run npm run test:unity on a computer with Unity."
+      - uses: actions/checkout@v7
+        if: env.UNITY_LICENSE != ''
+      - uses: actions/setup-node@v7
+        if: env.UNITY_LICENSE != ''
+        with:
+          node-version: 24
+          cache: npm
+      - if: env.UNITY_LICENSE != ''
+        run: npm ci
+      - name: Export the sample as a Unity project
+        id: export
+        if: env.UNITY_LICENSE != ''
+        run: |
+          line=$(npx tsx scripts/unity-check.ts --export-only --sample ${{ matrix.sample }} --version "$UNITY_VERSION" --out unity-projects)
+          echo "$line"
+          echo "path=$(printf '%s' "$line" | cut -f2 | sed "s#^$PWD/##")" >> "$GITHUB_OUTPUT"
+      - uses: actions/cache@v6
+        if: env.UNITY_LICENSE != ''
+        with:
+          path: ${{ steps.export.outputs.path }}/Library
+          key: unity-library-${{ matrix.sample }}-${{ env.UNITY_VERSION }}
+      - name: Run the playthrough and Play Mode tests
+        if: env.UNITY_LICENSE != ''
+        uses: game-ci/unity-test-runner@v4
+        with:
+          projectPath: ${{ steps.export.outputs.path }}
+          unityVersion: ${{ env.UNITY_VERSION }}
+          testMode: all
+          githubToken: ${{ secrets.GITHUB_TOKEN }}
+          checkName: Unity tests (${{ matrix.sample }})
+          artifactsPath: unity-results
+      - uses: actions/upload-artifact@v7
+        if: always() && env.UNITY_LICENSE != ''
+        with:
+          name: unity-results-${{ matrix.sample }}
+          path: unity-results

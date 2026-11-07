@@ -796,7 +796,7 @@ namespace __NAMESPACE__
         }
         void OnStatus(string message)
         {
-            if (status != null) status.text = message;
+            if (status != null) status.text = Markup(message);
         }
 
         void OnEnded()
@@ -925,7 +925,7 @@ namespace __NAMESPACE__
             else
             {
                 Begin(entry);
-                entry.Body.text = entry.Prefix + entry.Text;
+                entry.Body.text = entry.Prefix + Markup(entry.Text);
                 ScrollToEnd();
             }
         }
@@ -960,15 +960,9 @@ namespace __NAMESPACE__
             e.Text = line.Text;
             if (inline && (name != null || paren != null))
             {
-                // The name in its own colour, before the line. Rich text only when the story's text has no
-                // markup of its own, which would otherwise be read as tags.
+                // The name in its own colour, before the line.
                 var label = (name ?? "") + (paren != null ? (name != null ? " " : "") + paren : "") + ": ";
-                if (line.Text.IndexOf('<') < 0 && label.IndexOf('<') < 0)
-                {
-                    SetRichText(e.Body, true);
-                    e.Prefix = "<color=#" + ColorUtility.ToHtmlStringRGBA(SpeakerColour) + "><b>" + label + "</b></color>";
-                }
-                else e.Prefix = label;
+                e.Prefix = "<color=#" + ColorUtility.ToHtmlStringRGBA(SpeakerColour) + "><b>" + Markup(label) + "</b></color>";
             }
             return e;
         }
@@ -1011,27 +1005,29 @@ namespace __NAMESPACE__
                 var next = typing.Peek();
                 Begin(next);
                 var text = next.Text;
+                // Typing counts the letters the reader sees; emphasis tags (<i>, <b>, <u>) aren't typed out.
+                var visible = Plain(text);
                 if (CharactersPerSecond > 0f)
                 {
                     var shown = 0f;
                     var pause = 0f;
                     var count = 0;
-                    while (!skipTyping && count < text.Length)
+                    while (!skipTyping && count < visible.Length)
                     {
                         if (pause > 0f) { pause -= Time.unscaledDeltaTime; yield return null; continue; }
                         shown += CharactersPerSecond * Time.unscaledDeltaTime;
-                        var now = Mathf.Min(text.Length, (int)shown);
+                        var now = Mathf.Min(visible.Length, (int)shown);
                         // A pause at the end of a sentence (. ! ? or …), before the next word.
                         if (theme.punctuationPause > 0f)
                             for (int i = count; i < now; i++)
-                                if (IsSentenceEnd(text, i)) { now = i + 1; shown = now; pause = theme.punctuationPause; break; }
+                                if (IsSentenceEnd(visible, i)) { now = i + 1; shown = now; pause = theme.punctuationPause; break; }
                         count = now;
-                        next.Body.text = next.Prefix + text.Substring(0, count);
+                        next.Body.text = next.Prefix + Markup(Typed(text, count));
                         ScrollToEnd();
                         yield return null;
                     }
                 }
-                next.Body.text = next.Prefix + text;
+                next.Body.text = next.Prefix + Markup(text);
                 skipTyping = false;
                 typing.Dequeue();
                 ScrollToEnd();
@@ -1234,9 +1230,92 @@ namespace __NAMESPACE__
             t.horizontalOverflow = HorizontalWrapMode.Wrap;
             t.verticalOverflow = VerticalWrapMode.Overflow;
 #endif
-            SetRichText(t, false); // story text is shown as written, never read as markup
-            t.text = value;
+            // Story text is shown as written: only its emphasis (<i>, <b>, <u>) is read as markup (see Markup).
+            SetRichText(t, true);
+            t.text = Markup(value);
             return t;
+        }
+
+        /// <summary>
+        /// Text made safe for rich text: the story's emphasis tags (<i>, <b>, <u>) are kept, and any other "<" is shown
+        /// as written instead of being read as markup. uGUI's Text has no underline, so <u> is left out there.
+        /// </summary>
+        public static string Markup(string s)
+        {
+            if (string.IsNullOrEmpty(s) || s.IndexOf('<') < 0) return s;
+            var sb = new System.Text.StringBuilder(s.Length + 16);
+            for (int i = 0; i < s.Length; i++)
+            {
+                if (s[i] != '<') { sb.Append(s[i]); continue; }
+                var tag = EmphasisTagAt(s, i);
+                if (tag > 0)
+                {
+#if !NARRATIVE_BRIDGE_TMP
+                    if (s[i + tag - 2] == 'u') { i += tag - 1; continue; }
+#endif
+                    sb.Append(s, i, tag);
+                    i += tag - 1;
+                    continue;
+                }
+#if NARRATIVE_BRIDGE_TMP
+                sb.Append("<noparse><</noparse>");
+#else
+                // uGUI's Text has no way to escape: a zero-width space keeps "<b" or "<color" from being a tag.
+                sb.Append(i + 1 < s.Length && (char.IsLetter(s[i + 1]) || s[i + 1] == '/') ? "<\\u200B" : "<");
+#endif
+            }
+            return sb.ToString();
+        }
+
+        /// <summary>The length of the emphasis tag (<i>, </b>, …) starting at i, or 0.</summary>
+        static int EmphasisTagAt(string s, int i)
+        {
+            if (s[i] != '<') return 0;
+            var j = i + 1;
+            if (j < s.Length && s[j] == '/') j++;
+            return j + 1 < s.Length && (s[j] == 'i' || s[j] == 'b' || s[j] == 'u') && s[j + 1] == '>' ? j + 2 - i : 0;
+        }
+
+        /// <summary>The text without its emphasis tags: what the reader sees.</summary>
+        public static string Plain(string s)
+        {
+            if (string.IsNullOrEmpty(s) || s.IndexOf('<') < 0) return s;
+            var sb = new System.Text.StringBuilder(s.Length);
+            for (int i = 0; i < s.Length; i++)
+            {
+                var tag = EmphasisTagAt(s, i);
+                if (tag > 0) i += tag - 1;
+                else sb.Append(s[i]);
+            }
+            return sb.ToString();
+        }
+
+        /// <summary>The first count letters the reader sees, with the emphasis tags around them kept and closed.</summary>
+        public static string Typed(string s, int count)
+        {
+            if (s.IndexOf('<') < 0) return s.Substring(0, Mathf.Min(count, s.Length));
+            var sb = new System.Text.StringBuilder(s.Length + 8);
+            var open = new List<char>();
+            var seen = 0;
+            for (int i = 0; i < s.Length; i++)
+            {
+                var tag = EmphasisTagAt(s, i);
+                if (tag > 0)
+                {
+                    var name = s[i + tag - 2];
+                    if (s[i + 1] == '/') { var k = open.LastIndexOf(name); if (k >= 0) open.RemoveAt(k); }
+                    else if (seen >= count) break;
+                    else open.Add(name);
+                    sb.Append(s, i, tag);
+                    i += tag - 1;
+                    continue;
+                }
+                if (seen >= count) break;
+                sb.Append(s[i]);
+                seen++;
+            }
+            for (int k = open.Count - 1; k >= 0; k--) sb.Append("</").Append(open[k]).Append('>');
+            return sb.ToString();
         }
 
         static void SetRichText(UIText t, bool on)

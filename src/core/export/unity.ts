@@ -460,6 +460,11 @@ Shortcuts* (1-9 choose, Space or Return continue) can be turned off, and it uses
 is one (it works with the Input Manager and the Input System package). Its text is TextMeshPro whenever your game has it
 (built into Unity 6, or the TextMeshPro package on 2022.3): set *TMP Font* on the theme to use your own font asset.
 
+## Italics and bold
+Lines keep the script's emphasis as \`<i>…</i>\`, \`<b>…</b>\` and \`<u>…</u>\`. NarrativeView shows them (underline needs
+TextMeshPro) and types them out letter by letter; any other \`<\` in the story is shown as written. In your own UI, use
+\`NarrativeView.Markup(text)\` for rich text or \`NarrativeView.Plain(text)\` for plain text.
+
 ## Cues
 Writers add cues in Narrative Bridge: music, a sound, an ambience, a camera shake, or a name of their own, with an optional
 value (\`#music:calm\`, \`#sound:door_creak\`, \`#shake:0.5\`). They're listed in \`StoryInfo.Cues\` (and with their values in
@@ -3393,6 +3398,11 @@ namespace __NAMESPACE__.EditorTools
                 var locked = 0;
                 var settings = SettingsCheck(view, errors);
                 if (settings == null) return "story UI failed";
+                // Emphasis from the script: typed a letter at a time with its tags closed; any other markup shows as written.
+                var typedCheck = NarrativeView.Typed("a <i>bold</i> move", 4);
+                if (typedCheck != "a <i>bo</i>" || NarrativeView.Plain("<b>x</b><i>y</i>") != "xy") { errors.Add("Story UI: emphasis is typed wrongly (" + typedCheck + ")."); return "story UI failed"; }
+                var escaped = NarrativeView.Markup("<i>a</i> <color=red>b");
+                if (!escaped.StartsWith("<i>a</i> ") || escaped.Contains("<color=red>")) { errors.Add("Story UI: markup in the story's text is read as tags (" + escaped + ")."); return "story UI failed"; }
                 while (!c.HasEnded && steps++ < 200)
                 {
                     // The scene the reader is in shows its picture (when the theme shows pictures).

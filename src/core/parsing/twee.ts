@@ -75,15 +75,18 @@ function splitSetters(s: string): string[] {
   return out.map((x) => x.trim()).filter(Boolean);
 }
 
-/** Removes formatting marks (bold, italic, underline) that the story model doesn't keep. */
+/** Formatting marks as the story's emphasis tags (<i>, <b>, <u>; see emphasis.ts); other HTML is removed. */
 function plainText(s: string): string {
   return s
-    .replace(/''(.+?)''/g, '$1')
-    .replace(/\/\/(.+?)\/\//g, '$1')
-    .replace(/__(.+?)__/g, '$1')
-    .replace(/\*\*(.+?)\*\*/g, '$1')
+    .replace(/''(.+?)''/g, '<b>$1</b>')
+    .replace(/(^|[^:])\/\/(.+?)\/\//g, '$1<i>$2</i>')
+    .replace(/__(.+?)__/g, '<u>$1</u>')
+    .replace(/\*\*(.+?)\*\*/g, '<b>$1</b>')
     .replace(/<br\s*\/?>/gi, '\n')
-    .replace(/<\/?(?:span|div|p|em|strong|i|b|u)(?:\s[^>]*)?>/gi, '')
+    .replace(/<(\/?)(?:em|i)(?:\s[^>]*)?>/gi, '<$1i>')
+    .replace(/<(\/?)(?:strong|b)(?:\s[^>]*)?>/gi, '<$1b>')
+    .replace(/<(\/?)u(?:\s[^>]*)?>/gi, '<$1u>')
+    .replace(/<\/?(?:span|div|p)(?:\s[^>]*)?>/gi, '')
     .replace(/&nbsp;/g, ' ')
     .replace(/[ \t]+$/gm, '');
 }

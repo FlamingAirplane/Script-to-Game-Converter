@@ -279,7 +279,7 @@ const PLAYER_JS = `
       a.onended = a.onerror = nextVoice;
       a.play().catch(nextVoice);
     } else if (window.speechSynthesis && item.who) {
-      var u = new SpeechSynthesisUtterance(item.text), v = meta.voices[item.who] || {};
+      var u = new SpeechSynthesisUtterance(plain(item.text)), v = meta.voices[item.who] || {};
       if (v.voiceName) u.voice = speechSynthesis.getVoices().filter(function (x) { return x.name === v.voiceName; })[0] || null;
       if (v.rate) u.rate = v.rate;
       if (v.pitch) u.pitch = v.pitch;
@@ -406,10 +406,30 @@ const PLAYER_JS = `
     if (!replaying) playSounds(lines.slice(from));
   }
 
+  // Story text with its emphasis (<i>, <b>, <u>) as italics, bold and underline; everything else stays text.
+  function appendRich(parent, text) {
+    var on = { i: 0, b: 0, u: 0 }, last = 0, re = /<([/]?)([ibu])>/g, m;
+    function push(s) {
+      if (!s) return;
+      var node = document.createTextNode(s);
+      if (on.u) { var u = document.createElement('u'); u.appendChild(node); node = u; }
+      if (on.b) { var b = document.createElement('strong'); b.appendChild(node); node = b; }
+      if (on.i) { var i = document.createElement('em'); i.appendChild(node); node = i; }
+      parent.appendChild(node);
+    }
+    while ((m = re.exec(text))) {
+      push(text.slice(last, m.index));
+      on[m[2]] = Math.max(0, on[m[2]] + (m[1] ? -1 : 1));
+      last = re.lastIndex;
+    }
+    push(text.slice(last));
+  }
+  function plain(text) { return String(text).replace(/<[/]?[ibu]>/g, ''); }
+
   function el(tagName, cls, text) {
     var e = document.createElement(tagName);
     if (cls) e.className = cls;
-    if (text != null) e.textContent = text;
+    if (text != null) appendRich(e, String(text));
     return e;
   }
 
@@ -441,7 +461,7 @@ const PLAYER_JS = `
         }
         p.appendChild(el('span', 'speaker', tr(l.speaker)));
         if (l.paren) p.appendChild(el('span', 'paren', '(' + tr(l.paren) + ')'));
-        p.appendChild(document.createTextNode(tr(l.text)));
+        appendRich(p, tr(l.text));
         box.appendChild(p);
       } else box.appendChild(el('p', l.transition ? 'transition' : '', tr(l.text)));
     });

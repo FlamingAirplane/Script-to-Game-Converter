@@ -867,7 +867,7 @@ function StorySettings({ project, update, onKeepDraft, onRestoreDraft }: { proje
       </div>
 
       <AtAGlance project={project} />
-      <DraftShelf projectId={project.project.id} onKeep={onKeepDraft} onRestore={onRestoreDraft} />
+      <DraftShelf projectId={project.project.id} current={project} onKeep={onKeepDraft} onRestore={onRestoreDraft} />
 
       <h3>Characters</h3>
       <table className="table">
