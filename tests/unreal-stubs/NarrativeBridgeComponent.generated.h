@@ -1,0 +1,1 @@
+#define Super UActorComponent

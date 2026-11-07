@@ -10,7 +10,30 @@
 - **Unreal export catches up:** cues (`OnCue`), exits to the game (`OnExit` and `Resume`), the locked choices with what
   they need, the cue sounds, and helpers for showing italics.
 - **Unity checks on GitHub:** a workflow that runs the Unity package's tests for every sample, once a Unity licence is
-  added as a repository secret (`npm run test:unity -- --export-only` writes the projects it tests).
+  added as a repository secret (`npm run test:unity -- --export-only` writes the projects it tests). Without one, the
+  Unity jobs show as skipped, not passed.
+- **Unreal C++ checked on every pull request:** `npm run test:unreal` compiles the generated component against
+  stand-in Unreal and Inkpot headers, so mistakes in the generated code fail CI.
+- **Fixed: lines starting with VAR, CONST, LIST, EXTERNAL or INCLUDE** stopped the story building and every export.
+  They're now shown as written. When the story can't be built, the message says what's wrong in plain words and quotes
+  the line.
+- **V.O., O.S. and O.C. are kept:** "PORTER (V.O.)" stays in the Ink (with an `#ext:V.O.` tag), Playtest, the playable
+  story, Unity, the recording script's Direction column and Twine. Review has a picker for it.
+- **Fixed: "THE END" twice.** A script's own THE END at the end of the story is the ending (kept as a note), so readers
+  see the ending mark once.
+- **Names:** underscores inside words (not_a_knot) are kept in titles; accented titles (Café) keep their letters in
+  package and project names; titles in other scripts (東京の夜) get a short code instead of a blank.
+- **One naming pattern for downloads:** the-last-train.html, the-last-train-recording-script.csv, the-last-train.twee,
+  the-last-train.ink, the-last-train-unity.zip, the-last-train-unreal.zip, the-last-train.nbproj.json.
+- **Recording script clips are numbered without gaps** (hall_001, hall_002…); files named from an older script still match.
+- **Export:** after building a package, the page goes to the download and says what was built. "Package verified" is now
+  "files checked", next to "not yet opened in Unity/Unreal", with what was and wasn't checked. The Unreal description no
+  longer claims variables and saves.
+- **Interactive adaptation says when it found nothing to suggest**, and what makes it suggest a choice.
+- **Privacy wording** now says that a project leaves the browser only if you choose cloud sync, and that the app asks
+  GitHub about new versions and the site's look (with none of your writing). A live design can no longer load files
+  from other sites.
+- **For contributors:** CONTRIBUTING.md, SECURITY.md, issue forms and weekly Dependabot updates.
 
 ## 0.4.0 — 2026-11-06
 

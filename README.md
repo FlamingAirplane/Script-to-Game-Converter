@@ -10,10 +10,12 @@ Turn screenplays and prose into validated [Ink](https://github.com/inkle/ink) st
 
 One source-processing pipeline → one canonical story model (ISR) → one generated Ink story → engine-specific export adapters.
 
-Everything runs locally. Scripts never leave your machine.
+Everything runs locally. Scripts never leave your machine unless you choose to move a project through your own
+private GitHub Gist ("Move to another browser" → the cloud, with your own token). The app also asks GitHub whether a newer
+release is out and fetches the site's current look from a public Gist; neither request carries any of your writing.
 
 **Try it online:** https://flamingairplane.github.io/Script-to-Game-Converter/ (the page runs entirely in your browser;
-nothing is uploaded). After one visit it also works with no connection, and browsers offer to install it as an app
+nothing is uploaded unless you choose cloud sync). After one visit it also works with no connection, and browsers offer to install it as an app
 (see [`scripts/offline-site.ts`](scripts/offline-site.ts)); when a new version is deployed, the app offers to reload into it.
 The site also offers the offline single-file edition for writers. It is rebuilt and redeployed by
 [`.github/workflows/pages.yml`](.github/workflows/pages.yml) on every push to `main`.
@@ -147,7 +149,7 @@ See [`src/samples.ts`](src/samples.ts) for complete examples.
 ## Ink conventions
 
 - Items are Booleans: `VAR has_<item> = false`. Conditions compile from an expression tree (never raw strings).
-- Dialogue: `NAME: text #speaker:<id>`; parentheticals add `#paren:…`; recorded lines add `#audio:<file>`; the first line of a scene carries `#scene:<heading>` and, if the passage has a picture, `#image:<file>` (PNG or JPEG); transitions carry `#transition`.
+- Dialogue: `NAME: text #speaker:<id>`; a voice-over or off-screen line shows it after the name and adds a tag, `NAME (V.O.): text #speaker:<id> #ext:V.O.` (also `O.S.` and `O.C.`); parentheticals add `#paren:…`; recorded lines add `#audio:<file>`; the first line of a scene carries `#scene:<heading>` and, if the passage has a picture, `#image:<file>` (PNG or JPEG); transitions carry `#transition`.
 - Choices are sticky (`+`) unless marked once-only (`*`). A passage's divert becomes an invisible fallback choice when the passage also has choices, so players never get stuck.
 - An exit to the game (`@exit name note`, or **+ Exit to game** in Review) is a single sticky choice
   `+ [Back to the game: name] // note` followed by a gather `-`: a game (Unity's `NarrativeController`) stops there, raises
@@ -157,6 +159,8 @@ See [`src/samples.ts`](src/samples.ts) for complete examples.
   followed by a gather `-`. The Ink importer reads that exact pair back as a break, but only outside an open set of
   choices; hand-written gathers elsewhere still count as unsupported. Twine exports split the passage into
   `Name (continued)` parts joined by a `[[Continue->…]]` link, and the Twine importer joins them again.
+- Lines of the script that Ink would read as code (starting with `*`, `+`, `-`, `=`, `(`, `VAR`, `CONST`, `LIST`, `EXTERNAL`,
+  `INCLUDE` or `TODO`) are escaped with a backslash, so they're shown as written.
 - Output is deterministic: the same ISR always produces byte-identical Ink.
 
 ## Logging
@@ -278,7 +282,13 @@ src/cli/             command-line interface
 schemas/             JSON Schema for the ISR
 docs/                user guide (USER_GUIDE.md) and its screenshots (npm run guide:screenshots)
 tests/               unit, golden-file, compiler, runtime and export tests
+  e2e/               browser tests (WebKit and Chromium)
+  unreal-stubs/      stand-in Unreal and Inkpot headers for npm run test:unreal
+scripts/             build helpers, npm run test:unity and npm run test:unreal
 ```
+
+Contributions are welcome: see [CONTRIBUTING.md](CONTRIBUTING.md), and [SECURITY.md](SECURITY.md) for reporting a
+security problem privately.
 
 ## Not yet supported
 

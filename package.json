@@ -18,7 +18,8 @@
     "icons": "node scripts/icons.mjs",
     "guide:screenshots": "npm run build:single && node scripts/guide-screenshots.mjs",
     "design:publish": "tsx scripts/design-publish.ts",
-    "test:unity": "tsx scripts/unity-check.ts"
+    "test:unity": "tsx scripts/unity-check.ts",
+    "test:unreal": "tsx scripts/unreal-check.ts"
   },
   "repository": {
     "type": "git",

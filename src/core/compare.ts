@@ -48,7 +48,7 @@ function blockLines(b: ContentBlock, p: StoryProject): string[] {
   const name = (id: string) => (p.characters.find((c) => c.id === id)?.displayName ?? id).toUpperCase();
   switch (b.type) {
     case 'dialogue':
-      return [`${name(b.speakerId)}${b.parenthetical ? ` (${b.parenthetical.replace(/^\(|\)$/g, '')})` : ''}: ${b.text}`];
+      return [`${name(b.speakerId)}${b.extension ? ` (${b.extension})` : ''}${b.parenthetical ? ` (${b.parenthetical.replace(/^\(|\)$/g, '')})` : ''}: ${b.text}`];
     case 'action':
       return b.text.split('\n').filter((t) => t.trim());
     case 'transition':

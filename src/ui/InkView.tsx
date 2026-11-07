@@ -1,4 +1,5 @@
 import { Fragment, useMemo, useState } from 'react';
+import { fileBase } from '../core/isr';
 import type { ProcessedStory } from '../core/pipeline';
 import { Badge, download } from './common';
 
@@ -35,7 +36,7 @@ export function InkView({ processed, onOpen }: { processed: ProcessedStory; onOp
   const lines = useMemo(() => generated.ink.split('\n'), [generated.ink]);
   const errorLines = new Map(compile.diagnostics.map((d) => [d.details?.inkLine as number, d]));
   const passageAt = useMemo(() => new Map(generated.sourceMap.map((e) => [e.line, e.passageId])), [generated.sourceMap]);
-  const name = processed.project.project.id || 'story';
+  const name = fileBase(processed.project);
 
   return (
     <div className="view ink-view">

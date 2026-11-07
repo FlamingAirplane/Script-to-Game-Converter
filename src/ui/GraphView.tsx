@@ -5,7 +5,7 @@ import type { StoryGraph } from '../core/analyzer';
 import { errorData, log } from '../core/log';
 import { CARD, storyLayout, type Position } from '../core/layout';
 import { routeEdges } from '../core/edgeRouting';
-import type { StoryProject } from '../core/isr';
+import { fileBase, type StoryProject } from '../core/isr';
 import { PassageInspector } from './PassageInspector';
 import { countBreaks, type Update } from './projectOps';
 
@@ -16,7 +16,6 @@ import { countBreaks, type Update } from './projectOps';
 const { W, H } = CARD;
 
 const mapLog = log('map');
-const slugName = (t: string) => t.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || 'story';
 
 const clampLane = (offset: number) => Math.max(-H / 2 + 8, Math.min(H / 2 - 8, offset));
 
@@ -409,7 +408,7 @@ export function GraphView({
 
   const saveMap = async (format: 'svg' | 'png') => {
     if (!svg.current) return;
-    const name = `${slugName(title)}-map`;
+    const name = `${fileBase(project)}-map`;
     try {
       const m = mapSvg(svg.current, title);
       if (format === 'svg') download(`${name}.svg`, m.svg, 'image/svg+xml');

@@ -2,6 +2,7 @@
 // Versioned independently of the application (see SCHEMA_VERSION).
 
 import type { AudioRef, VoiceSettings } from './audio';
+import { fnv1a } from './hash';
 import type { ImageRef } from './images';
 import type { SessionRef } from './session';
 
@@ -86,7 +87,7 @@ export type Effect =
   | { type: 'add_var'; variableId: string; amount: number };
 
 export type ContentBlock =
-  | { type: 'dialogue'; speakerId: string; text: string; parenthetical?: string; audio?: AudioRef; origin: Provenance; source?: SourceRef }
+  | { type: 'dialogue'; speakerId: string; text: string; parenthetical?: string; /** How the voice is heard: V.O. (voice-over), O.S. (off screen) or O.C. (off camera). */ extension?: string; audio?: AudioRef; origin: Provenance; source?: SourceRef }
   | { type: 'action'; text: string; origin: Provenance; source?: SourceRef }
   | { type: 'transition'; text: string; origin: Provenance; source?: SourceRef }
   | { type: 'note'; text: string; origin: Provenance; source?: SourceRef } // preserved, emitted as Ink comment
@@ -120,7 +121,7 @@ export function exitName(name: string): string {
 }
 
 /** Tags Narrative Bridge writes itself, which a cue can't be called. */
-export const RESERVED_TAGS = new Set(['speaker', 'scene', 'paren', 'image', 'audio', 'transition', 'title', 'author', 'choice']);
+export const RESERVED_TAGS = new Set(['speaker', 'scene', 'paren', 'ext', 'image', 'audio', 'transition', 'title', 'author', 'choice']);
 
 /** A cue's name made safe for a tag (letters, digits and underscores), never one of Narrative Bridge's own tags. */
 export function cueName(name: string): string {
@@ -327,11 +328,22 @@ export function itemVar(itemId: string): string {
   return `has_${itemId}`;
 }
 
+/** The text with accents taken off its letters ("Café" → "Cafe"); other scripts are left as they are. */
+export function foldAccents(s: string): string {
+  return s.normalize('NFKD').replace(/[\u0300-\u036f]/g, '');
+}
+
+/**
+ * A short stable code for a name that has no letters A to Z (e.g. "東京の夜"), so it still gets a name of
+ * its own in file and package names instead of a blank or the same fallback as every other such story.
+ */
+export function nameCode(s: string): string {
+  return fnv1a(s.trim()).slice(0, 6);
+}
+
 /** Deterministic, Ink-safe identifier (letters, digits, underscore; cannot start with a digit). */
 export function slugify(s: string): string {
-  let out = s
-    .normalize('NFKD')
-    .replace(/[̀-ͯ]/g, '')
+  let out = foldAccents(s)
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, '_')
     .replace(/^_+|_+$/g, '')
@@ -339,6 +351,11 @@ export function slugify(s: string): string {
     .replace(/_+$/g, '');
   if (/^[0-9]/.test(out)) out = `s_${out}`;
   return out;
+}
+
+/** The name exports are saved under: the project id with hyphens ("the_last_train" → "the-last-train"). */
+export function fileBase(project: { project: { id: string } }): string {
+  return project.project.id.replace(/_+/g, '-').replace(/^-+|-+$/g, '') || 'story';
 }
 
 /** Returns an id unique within `taken`, appending _2, _3... and records it. */

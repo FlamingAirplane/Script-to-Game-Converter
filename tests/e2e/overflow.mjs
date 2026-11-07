@@ -58,7 +58,7 @@ for (const width of WIDTHS) {
     }
     if (tab === 'Export') {
       await page.getByRole('button', { name: 'Build Unity package' }).click().catch(() => {});
-      await page.getByText('package verified').waitFor({ timeout: 8000 }).catch(() => {});
+      await page.getByText('files checked').waitFor({ timeout: 8000 }).catch(() => {});
     }
     await check(tab);
   }

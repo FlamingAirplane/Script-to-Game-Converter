@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { storyFiles, zipPaths, type StoryFile, type StoryFileKind } from '../core/files';
-import type { StoryProject } from '../core/isr';
+import { fileBase, type StoryProject } from '../core/isr';
 import { getClip } from './audioStore';
 import { renderClip } from './audioRender';
 import { download } from './common';
@@ -62,8 +62,7 @@ export function StoryFiles({ project }: { project: StoryProject }) {
         else zip.file(paths[i], data);
       }
       const bytes = await zip.generateAsync({ type: 'uint8array', compression: 'DEFLATE', compressionOptions: { level: 6 } });
-      const title = project.project.title.replace(/[^\w\- ]+/g, '').trim() || 'story';
-      download(`${title} - files.zip`, bytes, 'application/zip');
+      download(`${fileBase(project)}-files.zip`, bytes, 'application/zip');
       if (missing) setNote(`${missing} file${missing === 1 ? ' isn’t' : 's aren’t'} in this browser, so ${missing === 1 ? 'it was' : 'they were'} left out.`);
     } catch (e) {
       setNote(`Couldn’t make the zip: ${e instanceof Error ? e.message : String(e)}`);

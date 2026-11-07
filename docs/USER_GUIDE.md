@@ -43,7 +43,7 @@ The first screen shows a short *New here? Four steps* card. Click **Got it** to 
 ## 2. A tour of the screen
 
 - **The cover band** (the dark green bar at the top) shows the story's title and its progress (for example
-  *ReviewRequired* or *Succeeded*). *✓ kept in this browser* means your work is being saved automatically. It also holds
+  *Needs review* or *Ready*). *✓ kept in this browser* means your work is being saved automatically. It also holds
   undo ↶ and redo ↷, **keys** (the shortcut card), the theme switch (**auto**, **light** or **dark**), **sounds**,
   **Open project**, **Save project** and **New**.
 - **The chapter tabs** (I Import to VI Export) follow the order you'll usually work in. The copper ribbon marks the open
@@ -231,8 +231,9 @@ The panel beside the story shows:
 
   ![The playable story as a reader sees it](images/playable.jpg)
 
-- **Download recording script (.csv):** every line of dialogue in story order, by character, with the file name each
-  recording should be saved as. Opens in Excel, Numbers or Google Sheets.
+- **Download recording script (.csv):** every line of dialogue in story order, by character, with its direction
+  (V.O., O.S. and the parenthetical) and the file name each recording should be saved as (`hall_001.wav`, `hall_002.wav`…
+  for a passage's lines in order). Opens in Excel, Numbers or Google Sheets.
 - **Download for Twine (.twee):** to keep editing in [Twine](https://twinery.org) (Library → Import). Passages are
   laid out on Twine's map like your story map, and their text reads like your script. Choose what to include:
   - **Story and game logic:** choices that need items, effects and a book style, for Twine's SugarCube format.

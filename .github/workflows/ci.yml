@@ -29,6 +29,8 @@ jobs:
       - run: npm run typecheck
       - run: npm test
       - run: npm run build
+      - name: Unreal C++ compiles (against stand-in Unreal and Inkpot headers)
+        run: npm run test:unreal
 
   e2e:
     runs-on: ubuntu-latest

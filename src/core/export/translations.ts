@@ -75,8 +75,8 @@ export function translationEntries(project: StoryProject, theme: UnityTheme = no
     for (const b of p.content) {
       if (b.type === 'action') for (const para of b.text.split('\n')) add('line', p.id, para);
       else if (b.type === 'dialogue') {
-        // Ink prints dialogue as "NAME: text"; the controller splits off the name.
-        add('speaker', p.id, (names.get(b.speakerId) ?? b.speakerId).toUpperCase());
+        // Ink prints dialogue as "NAME: text" (or "NAME (V.O.): text"); the controller splits off the name.
+        add('speaker', p.id, (names.get(b.speakerId) ?? b.speakerId).toUpperCase() + (b.extension ? ` (${b.extension})` : ''));
         add('direction', p.id, b.parenthetical);
         add('line', p.id, b.text);
       } else if (b.type === 'transition') add('line', p.id, b.text);

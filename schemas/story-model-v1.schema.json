@@ -130,6 +130,7 @@
         "speakerId": { "type": "string" },
         "text": { "type": "string" },
         "parenthetical": { "type": "string" },
+        "extension": { "type": "string" },
         "effect": { "$ref": "#/$defs/effect" },
         "reason": { "type": "string" },
         "review": { "$ref": "#/$defs/review" },

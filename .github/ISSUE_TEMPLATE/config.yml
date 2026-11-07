@@ -1,0 +1,5 @@
+blank_issues_enabled: true
+contact_links:
+  - name: Writer's guide
+    url: https://github.com/FlamingAirplane/Script-to-Game-Converter/blob/main/docs/USER_GUIDE.md
+    about: How each part of the app works, step by step.

@@ -1,0 +1,15 @@
+name: Idea or request
+description: Something Narrative Bridge could do, or do better.
+labels: [enhancement]
+body:
+  - type: textarea
+    id: need
+    attributes:
+      label: What you're trying to do
+      description: The story or game you're working on, and where Narrative Bridge gets in the way.
+    validations:
+      required: true
+  - type: textarea
+    id: idea
+    attributes:
+      label: What would help

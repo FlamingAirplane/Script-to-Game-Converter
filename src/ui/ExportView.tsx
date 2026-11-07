@@ -1,6 +1,6 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { pendingSuggestions } from '../core/adapt';
-import { isPinnedRef } from '../core/export/common';
+import { isPinnedRef, pascalCase } from '../core/export/common';
 import { ADAPTERS, buildPlayableHtml, buildRecordingScript, recordingScriptFileName, buildTwee, ExportBlockedError, playableFileName, twineFileName, unityTarball, unityTarballName, zipExport, type EngineTarget, type ExportResult, type TwineKind } from '../core/export';
 import { SEMVER, unityPackageId } from '../core/export/unityPackage';
 import { languageName } from './language';
@@ -10,7 +10,7 @@ import { normaliseUnityTheme } from '../core/export/unityTheme';
 import inkRuntime from '../../node_modules/inkjs/dist/ink.js?raw';
 import { referencedAudio } from '../core/audio';
 import { referencedImages } from '../core/images';
-import { referencedOriginals } from '../core/isr';
+import { fileBase, referencedOriginals } from '../core/isr';
 import type { ProcessedStory } from '../core/pipeline';
 import { collectClips } from './audioStore';
 import { renderClips } from './audioRender';
@@ -28,7 +28,7 @@ import { RecordingsImport } from './RecordingsImport';
 export function ExportView({ processed, stale, onState, project, update, onReview }: { processed: ProcessedStory; stale: boolean; onState: (s: 'Exporting' | 'Succeeded' | 'Failed' | null) => void; project: StoryProject; update: Update; onReview?: () => void }) {
   const [engine, setEngine] = useState<EngineTarget>('unity');
   const adapter = ADAPTERS[engine];
-  const defaultName = processed.project.project.title.replace(/[^\w]+/g, '') || 'NarrativeProject';
+  const defaultName = pascalCase(processed.project.project.title) || 'NarrativeProject';
   const [opts, setOpts] = useState({ projectName: defaultName, engineVersion: adapter.defaultEngineVersion, integrationRef: adapter.integration.defaultRef, includeDemo: true, unityLayout: 'package' as 'package' | 'project', packageVersion: '1.0.0', unityAddressables: false });
   const [sheetLanguages, setSheetLanguages] = useState('');
   const [result, setResult] = useState<ExportResult | null>(null);
@@ -37,6 +37,7 @@ export function ExportView({ processed, stale, onState, project, update, onRevie
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
   const [preview, setPreview] = useState<string | null>(null);
+  const resultRef = useRef<HTMLElement>(null);
 
   useEffect(() => {
     setOpts((o) => ({ ...o, engineVersion: adapter.defaultEngineVersion, integrationRef: adapter.integration.defaultRef }));
@@ -74,6 +75,8 @@ export function ExportView({ processed, stale, onState, project, update, onRevie
       setPreview(r.files.find((f) => f.path.endsWith('narrative-bridge.manifest.json'))?.path ?? null);
       onState(r.report.errors.length ? 'Failed' : 'Succeeded');
       if (!r.report.errors.length) sfx.stamp();
+      // The result (file list and download) is below the settings: bring it into view.
+      requestAnimationFrame(() => resultRef.current?.scrollIntoView({ behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth', block: 'start' }));
     } catch (e) {
       setError(e instanceof ExportBlockedError ? `Export blocked — ${e.message}` : String(e));
       onState('Failed');
@@ -152,7 +155,7 @@ export function ExportView({ processed, stale, onState, project, update, onRevie
           )}
           <label className="field">
             <span className="muted small">{asPackage ? 'Story name' : 'Project name'}</span>
-            <input className="input" value={opts.projectName} onChange={(e) => setOpts({ ...opts, projectName: e.target.value.replace(/[^\w\- ]/g, '') })} />
+            <input className="input" value={opts.projectName} onChange={(e) => setOpts({ ...opts, projectName: e.target.value.replace(/[^\p{L}\p{N}_\- ]/gu, '') })} />
             {engine === 'unity' && (
               <span className="muted small">
                 Package <code>{pkgId.name}</code> · C# namespace <code>{pkgId.namespace}</code>
@@ -230,6 +233,14 @@ export function ExportView({ processed, stale, onState, project, update, onRevie
           <button className="btn primary big" disabled={busy || stale || blocking.length > 0 || !!processed.smokePending || (asPackage && !versionOk)} onClick={build}>
             {busy ? 'Building…' : engine === 'unity' ? (asPackage ? 'Build Unity package' : 'Build Unity project') : `Build ${adapter.label} package`}
           </button>
+          {result && zip && !busy && (
+            <p className="small built-note" role="status">
+              {result.report.errors.length ? '✗ Built, but a check failed: see below.' : `✓ Built: ${tree.length} files, ${(zip.length / 1024).toFixed(1)} KB.`}{' '}
+              <button className="link" onClick={() => resultRef.current?.scrollIntoView({ block: 'start' })}>
+                Go to the download
+              </button>
+            </p>
+          )}
           {blocking.length > 0 && <p className="error-text small">Fix the errors in the Diagnostics panel to enable export.</p>}
           {error && <p className="error-text">{error}</p>}
         </section>
@@ -267,11 +278,11 @@ export function ExportView({ processed, stale, onState, project, update, onRevie
       </div>
 
       {result && (
-        <section className="card result">
+        <section className="card result" ref={resultRef} aria-label="The built package">
           <div className="row">
             <h2>{result.rootName}</h2>
-            {result.report.errors.length ? <Badge tone="error">verification failed</Badge> : <Badge tone="ok">package verified</Badge>}
-            <Badge tone="muted">engine import: pending</Badge>
+            {result.report.errors.length ? <Badge tone="error">a check failed</Badge> : <Badge tone="ok">files checked</Badge>}
+            <Badge tone="muted">not yet opened in {adapter.label}</Badge>
             <span className="spacer" />
             <span className="muted small">
               {tree.length} files{metas ? ` (+ ${metas} Unity .meta)` : ''} · {zip ? `${(zip.length / 1024).toFixed(1)} KB` : ''}
@@ -281,10 +292,13 @@ export function ExportView({ processed, stale, onState, project, update, onRevie
                 Download .tgz
               </button>
             )}
-            <button className="btn primary" disabled={!zip} onClick={() => zip && download(result.unityPackage && engine === 'unity' && result.rootName === result.unityPackage.name ? `${result.rootName}.zip` : `${result.rootName}-${engine}.zip`, zip, 'application/zip')}>
+            <button className="btn primary" disabled={!zip} onClick={() => zip && download(`${fileBase(processed.project)}-${engine}.zip`, zip, 'application/zip')}>
               Download .zip
             </button>
           </div>
+          <p className="muted small">
+            Checked here: every file the package needs is in it and the story compiles. It hasn’t been opened or built in {adapter.label}; that happens on your developer’s computer.
+          </p>
           {result.report.diagnostics.length > 0 && (
             <ul className="inline-diags">
               {result.report.diagnostics.map((d, i) => (
@@ -434,7 +448,7 @@ function ShareSection({ processed, stale, project, update }: { processed: Proces
             className="btn"
             disabled={stale}
             onClick={() =>
-              run(() => download(`${processed.project.project.id || 'story'}-translations.csv`, translationSheet(processed.project, normaliseUnityTheme(processed.project.presentation?.unity), languageList(languages)), 'text/csv'))
+              run(() => download(`${fileBase(processed.project)}-translations.csv`, translationSheet(processed.project, normaliseUnityTheme(processed.project.presentation?.unity), languageList(languages)), 'text/csv'))
             }
           >
             Download translation sheet (.csv)
@@ -522,7 +536,7 @@ function PackageContents({ engine, layout }: { engine: EngineTarget; layout: 'pa
                   <strong>An Unreal project</strong> (C++) set up for the Inkpot plugin, with a script that fetches Inkpot.
                 </li>
                 <li>
-                  <strong>A Blueprint-friendly component</strong> that plays the story: lines, choices, variables and saves.
+                  <strong>A Blueprint-friendly component</strong> that plays the story: lines, choices, cues, exits to the game, and items the game gives or takes. It has no story panel or saves yet; the developer builds those in Blueprints.
                 </li>
               </>
             )}
@@ -560,7 +574,7 @@ function PackageContents({ engine, layout }: { engine: EngineTarget; layout: 'pa
               <>
                 <li>Unreal Engine {a.defaultEngineVersion} or later</li>
                 <li>
-                  {a.integration.name} at the ref set below (pin a release for repeatable builds)
+                  {a.integration.name} {a.integration.defaultRef}, which the setup script fetches (changeable under Advanced)
                 </li>
               </>
             )}

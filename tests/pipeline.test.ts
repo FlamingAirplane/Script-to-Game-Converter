@@ -416,7 +416,7 @@ describe('share exports', () => {
     const { project } = await build(s.text, s.fileName, 'structured');
     const story = processProject(project);
     const twee = buildTwee(story, 'plain');
-    expect(twineFileName(story, 'plain')).toBe('the_locked_archive-story-only.twee');
+    expect(twineFileName(story, 'plain')).toBe('the-locked-archive-story-only.twee');
     expect(twee).not.toMatch(/<<|@@|\$|\/\*|StoryInit|Stylesheet|"format"|\[ending\]/);
     expect(twee).toContain('MIRA: The archive is locked.');
     // Every choice is offered (conditions are part of the game logic, which is left out).
@@ -1122,11 +1122,17 @@ describe('scene pictures and recordings', () => {
     const { project } = await build(src, 'p.md', 'structured');
     const kinds = project.passages[0].content.map((b) => b.type);
     expect(kinds).toEqual(['action', 'dialogue', 'dialogue']);
-    expect(buildRecordingScript(project)).toContain('hall_002.wav');
+    // Clips are numbered by the passage's dialogue lines, so the narration before them leaves no gap.
+    const csv = buildRecordingScript(project);
+    expect(csv).toContain('hall_001.wav');
+    expect(csv).toContain('hall_002.wav');
+    expect(csv).not.toContain('hall_003.wav');
+    // A file named from an older recording script (numbered with the narration) still finds its line.
+    expect(matchRecordings(project, ['hall_003.wav']).matched.map((m) => m.index)).toEqual([2]);
     project.passages[0].content[2] = { ...(project.passages[0].content[2] as Extract<(typeof project.passages)[0]['content'][number], { type: 'dialogue' }>), audio: { id: 'vo_tomas_ab12', name: 'old.wav', mime: 'audio/wav' } };
-    const r = matchRecordings(project, ['HALL_002.WAV', 'vo_tomas_ab12.mp3', 'notes.wav', '2.wav', '01.ogg']);
+    const r = matchRecordings(project, ['HALL_001.WAV', 'vo_tomas_ab12.mp3', 'notes.wav', '2.wav', '01.ogg']);
     expect(r.matched.map((m) => [m.file, m.passageId, m.index])).toEqual([
-      ['HALL_002.WAV', 'hall', 1],
+      ['HALL_001.WAV', 'hall', 1],
       ['vo_tomas_ab12.mp3', 'hall', 2],
     ]);
     // "2.wav" is the second line, already matched; "01.ogg" is the first, already matched too.
@@ -1851,5 +1857,97 @@ describe('italics and bold', () => {
     expect(ink).toContain('The <i>storm</i> took the <b>lens</b>.');
     const fdx = fdxToFountain('<FinalDraft><Content><Paragraph Type="Action"><Text>A </Text><Text Style="Italic">quiet</Text><Text> room.</Text></Paragraph></Content></FinalDraft>');
     expect(fdx).toBe('A *quiet* room.\n');
+  });
+});
+
+describe('second website review fixes', () => {
+  it('escapes Ink keywords at the start of a line, so the story still builds', async () => {
+    for (const word of ['VAR x = 1', 'CONST y = 2', 'LIST colours = red', 'EXTERNAL f()', 'INCLUDE other.ink', 'TODO: later'])
+      expect(escapeInk(word)).toBe(`\\${word}`);
+    expect(escapeInk('VARIOUS things')).toBe('VARIOUS things');
+    const text = 'INT. HALL - NIGHT\n\nVAR x = 1\n\nLIST colours = red\n\nINCLUDE other.ink\n\nEXTERNAL f()\n';
+    const story = processProject((await build(text)).project);
+    expect(story.compile.ok).toBe(true);
+    expect(story.generated.ink).toContain('\\INCLUDE other.ink');
+  });
+
+  it('says what an Ink compiler message means, with the line', () => {
+    const d = compileInk('Hello\nINCLUDE other.ink\n-> END').diagnostics[0];
+    expect(d.message).toMatch(/^A line starting with INCLUDE asks Ink to read another file.*The line: “INCLUDE other.ink”/);
+    expect(d.details?.inkLine).toBe(2);
+    expect(compileInk('Hi\n-> nowhere').diagnostics[0].message).toMatch(/^A “->” leads to a passage that doesn’t exist/);
+  });
+
+  it('keeps V.O. and O.S. in the Ink, the recording script and Twine', async () => {
+    const { buildRecordingScript, buildTwee } = await import('../src/core/export');
+    const { voiceExtension } = await import('../src/core/builder');
+    expect(['(V.O.)', '(vo)', '(O. S.)', '(O.C.)', "(CONT'D)"].map(voiceExtension)).toEqual(['V.O.', 'V.O.', 'O.S.', 'O.C.', undefined]);
+    const text = 'INT. STATION - NIGHT\n\nPORTER (V.O.)\nLast train.\n\nMIRA (O.S.)\n(quietly)\nWait!\n\nPORTER\nToo late.\n';
+    const { project } = await build(text);
+    expect(project.characters.map((c) => c.displayName)).toEqual(['PORTER', 'MIRA']);
+    const story = processProject(project);
+    expect(story.generated.ink).toContain('PORTER (V.O.): Last train. #speaker:porter #ext:V.O.');
+    expect(story.generated.ink).toContain('MIRA (O.S.): Wait! #speaker:mira #ext:O.S. #paren:quietly');
+    expect(story.generated.ink).toContain('PORTER: Too late. #speaker:porter\n');
+    expect(buildRecordingScript(project)).toContain('MIRA,"O.S., quietly",Wait!');
+    expect(buildTwee(story, 'plain')).toContain('PORTER (V.O.): Last train.');
+    // Ink comes back with the extension, and it isn't taken for a cue.
+    const back = (await build(story.generated.ink, 'story.ink', 'structured')).project;
+    const lines = back.passages[0].content.filter((b) => b.type === 'dialogue');
+    expect(lines.map((b) => b.type === 'dialogue' && b.extension)).toEqual(['V.O.', 'O.S.', undefined]);
+    expect(back.passages[0].content.some((b) => b.type === 'cue')).toBe(false);
+  });
+
+  it("treats the script's own THE END as the ending, so it isn't shown twice", async () => {
+    const { buildTwee } = await import('../src/core/export');
+    const { project } = await build('INT. HALL - NIGHT\n\nThe lamp goes out.\n\n> THE END <\n');
+    const last = project.passages[0].content.at(-1)!;
+    expect(last).toMatchObject({ type: 'note', text: "The script's ending: THE END" });
+    const story = processProject(project);
+    expect(story.generated.ink).not.toMatch(/^THE END$/m);
+    expect(buildTwee(story, 'plain')).not.toMatch(/^THE END$/m);
+    // Only an ending's last line counts; a passage that is just "THE END" keeps it.
+    expect((await build('INT. HALL - NIGHT\n\nTHE END\n')).project.passages[0].content.map((b) => b.type)).toEqual(['action']);
+  });
+
+  it('keeps underscores inside words, accents and other scripts in names', async () => {
+    const { pascalCase } = await import('../src/core/export/common');
+    const { packageSlug } = await import('../src/core/export/unityPackage');
+    const { fileBase } = await import('../src/core/isr');
+    const { project } = await build('Title: not_a_knot\n\nINT. HALL - NIGHT\n\nHello.\n');
+    expect(project.project.title).toBe('not_a_knot');
+    expect((await build('Title: _Underlined_ Title\n\nINT. HALL - NIGHT\n\nHello.\n')).project.project.title).toBe('Underlined Title');
+    expect(pascalCase('Café Noir')).toBe('CafeNoir');
+    expect(packageSlug('Café Noir')).toBe('cafe-noir');
+    const tokyo = (await build('Title: 東京の夜\n\nINT. HALL - NIGHT\n\nHello.\n')).project;
+    expect(tokyo.project.id).toMatch(/^story_[0-9a-f]{6}$/);
+    expect(pascalCase('東京の夜')).toMatch(/^Story[0-9A-F]{6}$/);
+    expect(packageSlug('東京の夜')).toMatch(/^story-[0-9a-f]{6}$/);
+    expect(packageSlug('東京の夜')).not.toBe(packageSlug('大阪の朝'));
+    expect(fileBase(project)).toBe('not-a-knot');
+  });
+
+  it('names every export the same way', async () => {
+    const { playableFileName, recordingScriptFileName, twineFileName } = await import('../src/core/export');
+    const { project } = await build('Title: The Last Train\n\nINT. HALL - NIGHT\n\nHello.\n');
+    const story = processProject(project);
+    expect([playableFileName(story), recordingScriptFileName(project), twineFileName(story)]).toEqual(['the-last-train.html', 'the-last-train-recording-script.csv', 'the-last-train.twee']);
+  });
+});
+
+describe('live design safety', () => {
+  it('drops anything in a live design that would load from another site', async () => {
+    const { withoutRemoteLoads } = await import('../src/ui/design/live');
+    const { normaliseDesign } = await import('../src/ui/design/design');
+    const doc = normaliseDesign({
+      format: 'narrative-bridge-design',
+      tokens: { '--paper': 'url(https://tracker.example/p.png) repeat', '--grain': 'url("data:image/png;base64,AAAA")', '--radius': '8px' },
+      rules: { '.app': { background: 'url(//cdn.example/x.jpg)' } },
+      css: '@import url("https://fonts.example/a.css");\n.x { background: url( https://e.example/y ) }',
+    });
+    const safe = withoutRemoteLoads(doc);
+    expect(safe.tokens).toEqual({ '--paper': 'none repeat', '--grain': 'url("data:image/png;base64,AAAA")', '--radius': '8px' });
+    expect(safe.rules['.app'].background).toBe('none');
+    expect(safe.css).not.toMatch(/example/);
   });
 });

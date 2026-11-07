@@ -56,7 +56,7 @@ export function GettingStarted() {
         </li>
       </ol>
       <p className="muted small">
-        Your scripts never leave this computer — nothing is uploaded. Work is remembered in this browser, but use <strong>Save project</strong> (top
+        Your scripts stay on this computer: nothing is uploaded unless you choose to move a project through your own GitHub account. Work is remembered in this browser, but use <strong>Save project</strong> (top
         right) to keep a copy you can reopen anywhere.
       </p>
       <p className="small">

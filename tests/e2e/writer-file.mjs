@@ -107,7 +107,7 @@ for (const [name, type] of [['WebKit', webkit], ['Chromium', chromium]]) {
     await step('exports a verified Unity package', async () => {
       await page.getByRole('button', { name: /Export/ }).click();
       await page.getByRole('button', { name: 'Build Unity package' }).click();
-      await page.getByText('package verified').waitFor({ timeout: 15000 });
+      await page.getByText('files checked').waitFor({ timeout: 15000 });
       const [dl] = await Promise.all([page.waitForEvent('download'), page.getByRole('button', { name: 'Download .zip' }).click()]);
       const buf = readFileSync(await dl.path());
       if (buf.subarray(0, 2).toString() !== 'PK') throw new Error('download is not a zip');
@@ -152,7 +152,7 @@ for (const [name, type] of [['WebKit', webkit], ['Chromium', chromium]]) {
       if (!/<<if \$has_archive_key>>/.test(full.text) || /<span|"""/.test(full.text)) throw new Error('SugarCube file is missing its logic or still cluttered');
       await page.getByLabel(/Story only/).check();
       const only = await twine();
-      if (only.name !== 'the_locked_archive-story-only.twee') throw new Error(`unexpected file name ${only.name}`);
+      if (only.name !== 'the-locked-archive-story-only.twee') throw new Error(`unexpected file name ${only.name}`);
       if (/<<|@@|\$|StoryInit|"format"/.test(only.text) || !only.text.includes('MIRA: The archive is locked.')) throw new Error('story-only file has extras or is missing text');
     });
     await step('restores the project after a reload', async () => {
@@ -296,7 +296,7 @@ for (const [name, type] of [['WebKit', webkit], ['Chromium', chromium]]) {
       const html = readFileSync(await dl.path(), 'utf8');
       if (!/#audio:vo_|"vo_[^"]+\.wav":"data:audio\/wav;base64,/.test(html)) throw new Error('playable story does not embed the clip');
       await page.getByRole('button', { name: 'Build Unity package' }).click();
-      await page.getByText('package verified').waitFor({ timeout: 15000 });
+      await page.getByText('files checked').waitFor({ timeout: 15000 });
       const [zipDl] = await Promise.all([page.waitForEvent('download'), page.getByRole('button', { name: 'Download .zip' }).click()]);
       const zip = await JSZip.loadAsync(readFileSync(await zipDl.path()));
       if (!Object.keys(zip.files).some((f) => /Resources\/NarrativeBridge\/[^/]+\/Audio\/vo_.+\.wav$/.test(f))) throw new Error('Unity zip has no voice clip');
@@ -329,7 +329,7 @@ for (const [name, type] of [['WebKit', webkit], ['Chromium', chromium]]) {
       const html = readFileSync(await dl.path(), 'utf8');
       if (!/"img_[^"]+\.png":\{"src":"data:image\\?\/png;base64,/.test(html)) throw new Error('playable story does not embed the picture');
       await page.getByRole('button', { name: 'Build Unity package' }).click();
-      await page.getByText('package verified').waitFor({ timeout: 15000 });
+      await page.getByText('files checked').waitFor({ timeout: 15000 });
       const [zipDl] = await Promise.all([page.waitForEvent('download'), page.getByRole('button', { name: 'Download .zip' }).click()]);
       const zip = await JSZip.loadAsync(readFileSync(await zipDl.path()));
       if (!Object.keys(zip.files).some((f) => /Resources\/NarrativeBridge\/[^/]+\/Images\/img_.+\.png\.bytes$/.test(f))) throw new Error('Unity zip has no scene picture');
@@ -439,7 +439,7 @@ for (const [name, type] of [['WebKit', webkit], ['Chromium', chromium]]) {
       await fs.getByRole('button', { name: /Archive Entrance/ }).waitFor();
       let downloaded = false;
       fs.on('download', () => (downloaded = true));
-      const name = 'the_locked_archive.nbproj.json';
+      const name = 'the-locked-archive.nbproj.json';
       await fs.getByRole('button', { name: 'Save project' }).click();
       await fs.getByText(`✓ saved to ${name}`).waitFor({ timeout: 5000 });
       const saved = () => fs.evaluate((n) => JSON.parse(window.__files[n]).project.project.title, name);
