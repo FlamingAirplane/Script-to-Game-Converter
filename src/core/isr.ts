@@ -195,7 +195,11 @@ export interface StoryProject {
   /** Passage positions dragged by hand on the story map (UI only; absent = automatic layout). */
   layout?: Record<string, { x: number; y: number }>;
   /** How the story looks when played in a game engine (absent = defaults). */
-  presentation?: { unity?: UnityTheme };
+  presentation?: {
+    unity?: UnityTheme;
+    /** Players see only the dialogue: narration, transitions, scene headings and parentheticals are left out of what they get (see players.ts). */
+    dialogueOnly?: boolean;
+  };
   /**
    * Translations brought in from a filled-in translation sheet (see export/translations.ts): language codes in
    * the order they were added, and each text's translations by its key (translationKey of the source text).

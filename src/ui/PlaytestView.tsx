@@ -12,6 +12,7 @@ import { CONTINUE_TEXT, exitOf, itemVar } from '../core/isr';
 import type { ProcessedStory } from '../core/pipeline';
 import { audioFileName, referencedAudio } from '../core/audio';
 import { Badge, Empty } from './common';
+import { dialogueOnly as playersSeeDialogueOnly } from '../core/players';
 import { sfx } from './sfx';
 import { plainKey } from './Shortcuts';
 import { VoiceQueue, type VoiceItem } from './voice';
@@ -434,6 +435,11 @@ export function PlaytestView({
         )}
         <div className="stage-head">
           <h2>{processed.project.project.title}</h2>
+          {playersSeeDialogueOnly(processed.project) && (
+            <Badge tone="accent" title="Story settings: players see only the dialogue, so narration, transitions, scene headings and parentheticals are left out here and in every export">
+              players see dialogue only
+            </Badge>
+          )}
           <div className="row">
             <button
               className={`btn tiny ${voicesOn ? 'ok' : ''}`}

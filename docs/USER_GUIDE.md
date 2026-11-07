@@ -146,6 +146,12 @@ Click **Story settings** at the top of the contents.
 ![Story settings: the bookplate, At a glance and lines per character](images/story-settings.jpg)
 
 - **Title, Author, Start passage.**
+- **Players see only the dialogue:** tick it and players get just the spoken lines, plus the choices. Narration,
+  transitions, scene headings and parentheticals are left out of Playtest, the playable story, Twine, Unity, Unreal
+  and the translation sheet. Pictures, music, sounds and portraits stay. Your script isn't changed: untick it and
+  everything comes back. The Ink keeps the hidden lines as comments (`// Players don’t see this: …`) so a developer
+  can still read them. The same box is on the Export page. (The **Dialogue only** button, D, only changes what *you*
+  see in Review and Playtest.)
 - **At a glance:** words, reading time, choices, endings, minutes of spoken dialogue, and a table of lines, words and
   recorded clips per character. Useful when planning a voice session.
 - **Drafts:** see [Saving, drafts and working offline](#10-saving-drafts-and-working-offline).
@@ -233,7 +239,8 @@ chapter.
 ![Playtest, with the story on the left and the state panel on the right](images/playtest.jpg)
 
 Click a choice (or press 1–9) to play. **Undo choice** (Backspace) steps back; **Restart** (R) begins again. **Voices**
-(V) reads the dialogue aloud; **All text / Dialogue only** (D) hides narration.
+(V) reads the dialogue aloud; **All text / Dialogue only** (D) hides narration while you test. To hide it from players too, tick **Players see only
+the dialogue** in Story settings; Playtest then shows *players see dialogue only*.
 
 **Locked shown / Locked hidden** (G) controls the choices you can't take yet because they need an item or value. When
 shown, each sits greyed out under the real choices with a 🔒 and what it needs, such as *needs Archive Key*, so you can

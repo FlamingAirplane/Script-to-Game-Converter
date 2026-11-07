@@ -1,3 +1,4 @@
+import { forPlayers } from '../players';
 import { describeCondition } from '../gating';
 import { isActive, type StoryProject, type UnityTheme } from '../isr';
 import { normaliseUnityTheme } from './unityTheme';
@@ -58,7 +59,9 @@ export function interfaceWords(theme?: UnityTheme): string[] {
 }
 
 /** Every piece of text a player can see, once each, in story order. The panel's words come from the story's Unity look. */
-export function translationEntries(project: StoryProject, theme: UnityTheme = normaliseUnityTheme(project.presentation?.unity)): TranslationEntry[] {
+export function translationEntries(story: StoryProject, theme: UnityTheme = normaliseUnityTheme(story.presentation?.unity)): TranslationEntry[] {
+  // When players see only the dialogue, the narration needn't be translated.
+  const project = forPlayers(story);
   const out: TranslationEntry[] = [];
   const seen = new Set<string>();
   const add = (kind: TranslationKind, passage: string, text: string | undefined) => {

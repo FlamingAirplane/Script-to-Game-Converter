@@ -1312,3 +1312,7 @@ section.drafts > h2 { margin-top: 26px; }
 .route-sign.forced .sign-mark { fill: var(--rubric); font: 700 13px var(--serif); }
 .choice-forced-note { flex-basis: 100%; margin: 2px 0 0; }
 .outline-forced { color: var(--rubric); }
+
+/* Story settings / Export: "Players see only the dialogue". */
+.dialogue-only-setting { margin: 12px 0; gap: 2px; }
+.dialogue-only-setting label { display: flex; align-items: center; gap: 6px; cursor: pointer; }

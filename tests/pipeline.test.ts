@@ -2299,3 +2299,64 @@ Dust.
     expect(unreal.files.find((f) => f.path.endsWith('NarrativeBridgeStoryInfo.h'))!.content).toContain('"Open the door with the key"), TEXT("Brass Key"), true }');
   });
 });
+
+describe('players see only the dialogue', () => {
+  const script = `INT. LIGHTHOUSE - NIGHT
+
+Rain lashes the glass.
+
+MARA
+(whispering)
+Did you hear that?
+
+TOM
+Only the wind.
+
+CUT TO:
+`;
+  const lines = async (project: StoryProject) => {
+    const { Story } = await import('inkjs');
+    const s = processProject(project);
+    expect(s.compile.ok).toBe(true);
+    const st = new Story(s.compile.json!);
+    return { text: st.ContinueMaximally(), tags: st.currentTags ?? [], ink: s.generated.ink, s };
+  };
+
+  it('leaves narration, transitions, scene headings and parentheticals out of what players get', async () => {
+    const { project } = await build(script);
+    const before = await lines(project);
+    expect(before.text).toContain('Rain lashes the glass.');
+    expect(before.ink).toContain('#scene:INT. LIGHTHOUSE - NIGHT');
+    expect(before.ink).toContain('#paren:whispering');
+
+    project.presentation = { dialogueOnly: true };
+    const after = await lines(project);
+    expect(after.text.trim().split('\n')).toEqual(['MARA: Did you hear that?', 'TOM: Only the wind.']);
+    expect(after.ink).not.toMatch(/#scene:|#paren:|#transition/);
+    // The developer can still read what was left out.
+    expect(after.ink).toContain('// Players don’t see this: Rain lashes the glass.');
+    expect(after.ink).toContain('// Players don’t see this: INT. LIGHTHOUSE - NIGHT');
+    // The story itself is unchanged: turning it off brings everything back.
+    expect(project.passages[0].content.some((b) => b.type === 'action')).toBe(true);
+  });
+
+  it('applies to Twine and the translation sheet, and drops a Continue with nothing before it', async () => {
+    const { buildTwee } = await import('../src/core/export');
+    const { translationEntries } = await import('../src/core/export/translations');
+    const { forPlayers } = await import('../src/core/players');
+    const { project } = await build(script);
+    project.presentation = { dialogueOnly: true };
+    const twee = buildTwee(processProject(project), 'sugarcube');
+    const story = twee.slice(twee.indexOf(':: Lighthouse'));
+    const shown = story.replace(/\/\*[\s\S]*?\*\//g, '').replace(/^::.*$/m, '');
+    expect(shown).toContain('Did you hear that?');
+    expect(shown).not.toMatch(/Rain lashes|LIGHTHOUSE|CUT TO|whispering/);
+    expect(story).toContain('Players don’t see this: Rain lashes the glass.');
+    expect(translationEntries(project).map((e) => e.source)).not.toContain('Rain lashes the glass.');
+    const p = project.passages[0];
+    p.content = [{ type: 'action', text: 'Silence.', origin: 'source' }, { type: 'pause', origin: 'source' }, ...p.content, { type: 'pause', origin: 'source' }];
+    const kinds = forPlayers(project).passages[0].content.map((b) => b.type).filter((t) => t !== 'note');
+    expect(kinds[0]).toBe('dialogue'); // the first Continue had nothing before it
+    expect(kinds.at(-1)).toBe('pause'); // the last follows dialogue, so it stays
+  });
+});
