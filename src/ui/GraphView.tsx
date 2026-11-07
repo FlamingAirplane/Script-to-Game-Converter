@@ -7,7 +7,8 @@ import { CARD, storyLayout, type Position } from '../core/layout';
 import { routeEdges } from '../core/edgeRouting';
 import { fileBase, type StoryProject } from '../core/isr';
 import { PassageInspector } from './PassageInspector';
-import { countBreaks, type Update } from './projectOps';
+import { NewSceneSheet } from './NewScene';
+import { countBreaks, type SceneLink, type Update } from './projectOps';
 
 // The story map. Passages are laid out in columns by distance from the start (ordered to reduce
 // crossings), can be dragged to new places (remembered in the project), searched, and navigated
@@ -246,6 +247,8 @@ export function GraphView({
   const edges = useMemo(() => (showGated ? graph.edges : graph.edges.filter((e) => !e.conditional)), [graph.edges, showGated]);
   // The passage panel: open after a passage is clicked (or chosen with Space), closed with Esc or ×.
   const [inspecting, setInspecting] = useState(false);
+  // The New scene form: after a passage, or on its own (at a place on the map when the map was double-clicked).
+  const [sceneForm, setSceneForm] = useState<{ from?: string; link?: SceneLink; at?: Position } | null>(null);
   const breaks = useMemo(() => new Map(project.passages.map((p) => [p.id, countBreaks(p)])), [project]);
   const exits = useMemo(() => new Map(project.passages.map((p) => [p.id, p.content.filter((b) => b.type === 'exit').map((b) => (b.type === 'exit' ? b.name : ''))])), [project]);
   const auto = useMemo(() => storyLayout(graph, start), [graph, start]);
@@ -389,14 +392,16 @@ export function GraphView({
     }
   };
 
-  // Map keys: / find, F fit, + and − zoom.
-  const mapKeys = useRef({ fit, zoom: zoomBy });
-  mapKeys.current = { fit, zoom: zoomBy };
+  // Map keys: / find, F fit, N new scene, + and − zoom.
+  const newScene = () => setSceneForm(selected && project.passages.some((p) => p.id === selected) ? { from: selected } : {});
+  const mapKeys = useRef({ fit, zoom: zoomBy, newScene });
+  mapKeys.current = { fit, zoom: zoomBy, newScene };
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (!plainKey(e)) return;
       if (e.key === '/') document.querySelector<HTMLInputElement>('.graph-search')?.focus();
       else if (e.key.toLowerCase() === 'f') mapKeys.current.fit();
+      else if (e.key.toLowerCase() === 'n') mapKeys.current.newScene();
       else if (e.key === '+' || e.key === '=') mapKeys.current.zoom(1.2);
       else if (e.key === '-' || e.key === '_') mapKeys.current.zoom(1 / 1.2);
       else return;
@@ -441,6 +446,13 @@ export function GraphView({
           onKeyDown={(e) => e.key === 'Enter' && matches[0] && centerOn(matches[0])}
         />
         {query && <span className="muted small">{matches.length ? `${matches.length} found · Enter to go` : 'none found'}</span>}
+        <button
+          className="btn tiny primary"
+          onClick={() => setSceneForm(selected && project.passages.some((p) => p.id === selected) ? { from: selected } : {})}
+          title="Add a scene to the story: after the selected passage, as a new choice, or on its own (N). You can also double-click an empty part of the map."
+        >
+          + New scene
+        </button>
         <span className="spacer" />
         <span className="tool-group" role="group" aria-label="Zoom">
           <button className="btn tiny" aria-label="Zoom out" title="Zoom out (−)" onClick={() => zoomBy(1 / 1.2)}>
@@ -484,7 +496,12 @@ export function GraphView({
           ref={svg}
           className="graph"
           role="group"
-          aria-label={`Story map: ${graph.nodes.length} passages and ${edges.length} links${edges.length < graph.edges.length ? ` (${graph.edges.length - edges.length} locked routes hidden)` : ''}. Tab moves between passages, Space shows a passage's lines, Enter opens it in Review. Drag a passage to move it.`}
+          aria-label={`Story map: ${graph.nodes.length} passages and ${edges.length} links${edges.length < graph.edges.length ? ` (${graph.edges.length - edges.length} locked routes hidden)` : ''}. Tab moves between passages, Space shows a passage's lines, Enter opens it in Review, N adds a new scene. Drag a passage to move it.`}
+          onDoubleClick={(e) => {
+            if ((e.target as Element).closest('.node')) return;
+            const r = svg.current!.getBoundingClientRect();
+            setSceneForm({ at: { x: (e.clientX - r.left - view.x) / view.k - W / 2, y: (e.clientY - r.top - view.y) / view.k - H / 2 } });
+          }}
           onWheel={(e) => {
             const r = svg.current!.getBoundingClientRect();
             const mx = e.clientX - r.left;
@@ -666,7 +683,22 @@ export function GraphView({
         )}
         </div>
         {inspecting && selected && project.passages.some((p) => p.id === selected) && (
-          <PassageInspector project={project} passageId={selected} update={update} onOpen={onOpen} onClose={closeInspector} />
+          <PassageInspector project={project} passageId={selected} update={update} onOpen={onOpen} onClose={closeInspector} onAddScene={(link) => setSceneForm({ from: selected, link })} />
+        )}
+        {sceneForm && (
+          <NewSceneSheet
+            project={project}
+            update={update}
+            from={sceneForm.from}
+            link={sceneForm.link}
+            at={sceneForm.at}
+            onCreated={(id) => {
+              moved.current = true;
+              onSelect(id);
+              setInspecting(true);
+            }}
+            onClose={() => setSceneForm(null)}
+          />
         )}
       </div>
       {showKey && <MapKey hiddenGated={graph.edges.length - edges.length} />}

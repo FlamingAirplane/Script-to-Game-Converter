@@ -1951,3 +1951,59 @@ describe('live design safety', () => {
     expect(safe.css).not.toMatch(/example/);
   });
 });
+
+describe('new scenes from the Graph', () => {
+  const script = 'INT. HALL - NIGHT\n\nThe hall is dark.\n\nINT. ROOM - NIGHT\n\nA lamp burns.\n\nINT. ATTIC - NIGHT\n\nDust everywhere.\n';
+  const load = async () => (await build(script)).project;
+
+  it('puts a scene straight after a passage, between it and where it went', async () => {
+    const { addScene } = await import('../src/ui/projectOps');
+    const p = await load();
+    expect(p.passages.map((x) => [x.id, x.divert])).toEqual([['hall', 'room'], ['room', 'attic'], ['attic', undefined]]);
+    const s = addScene(p, { title: 'The Stairs', heading: 'INT. STAIRS - NIGHT', firstLine: 'The steps creak.', from: 'hall', link: 'continue' });
+    if (typeof s === 'string') throw new Error(s);
+    expect(s).toMatchObject({ id: 'the_stairs', sceneHeading: 'INT. STAIRS - NIGHT', divert: 'room', isEnding: false, origin: 'user_authored' });
+    expect(s.content).toEqual([{ type: 'action', text: 'The steps creak.', origin: 'user_authored' }]);
+    expect(p.passages.map((x) => x.id)).toEqual(['hall', 'the_stairs', 'room', 'attic']);
+    expect(p.passages[0].divert).toBe('the_stairs');
+    const story = processProject(p);
+    expect(story.compile.ok).toBe(true);
+    expect(story.generated.ink).toMatch(/=== the_stairs ===[\s\S]*The steps creak\. #scene:INT\. STAIRS - NIGHT\n-> room/);
+    // After the last passage, the new scene becomes the ending.
+    const end = addScene(p, { title: 'Roof', from: 'attic', link: 'continue' });
+    expect(end).toMatchObject({ isEnding: true });
+    expect(p.passages.find((x) => x.id === 'attic')).toMatchObject({ divert: 'roof', isEnding: false });
+  });
+
+  it('adds a scene as a new choice, keeping the way the passage already went', async () => {
+    const { addScene } = await import('../src/ui/projectOps');
+    const p = await load();
+    const s = addScene(p, { title: 'Cellar', from: 'hall', link: 'choice', choiceText: 'Go down to the cellar', keepPathText: 'Go into the room', then: 'attic' });
+    if (typeof s === 'string') throw new Error(s);
+    const hall = p.passages[0];
+    expect(hall.divert).toBeUndefined();
+    expect(hall.choices.map((c) => [c.text, c.target])).toEqual([['Go into the room', 'room'], ['Go down to the cellar', 'cellar']]);
+    expect(s.divert).toBe('attic');
+    const story = processProject(p);
+    expect(story.compile.ok).toBe(true);
+    expect(story.analysis.graph.nodes.find((n) => n.id === 'cellar')?.reachable).toBe(true);
+    // A passage that already has choices just gets one more.
+    addScene(p, { title: 'Garden', from: 'hall', link: 'choice' });
+    expect(hall.choices.map((c) => c.text)).toEqual(['Go into the room', 'Go down to the cellar', 'Garden']);
+  });
+
+  it('adds a scene on its own at a place on the map, and explains what it can’t do', async () => {
+    const { addScene } = await import('../src/ui/projectOps');
+    const p = await load();
+    const s = addScene(p, { title: 'Dream', link: 'none', at: { x: 400.4, y: 90.6 } });
+    expect(s).toMatchObject({ id: 'dream', isEnding: true });
+    expect(p.layout?.dream).toEqual({ x: 400, y: 91 });
+    expect(processProject(p).analysis.graph.nodes.find((n) => n.id === 'dream')?.reachable).toBe(false);
+    expect(addScene(p, { title: ' ', link: 'none' })).toBe('Give the scene a title.');
+    expect(addScene(p, { title: 'X', link: 'continue' })).toBe('Choose the passage it comes after.');
+    addScene(p, { title: 'Y', from: 'room', link: 'choice' });
+    expect(addScene(p, { title: 'Z', from: 'room', link: 'continue' })).toMatch(/ends with choices/);
+    // Titles that are already used get their own id.
+    expect(addScene(p, { title: 'Dream', link: 'none' })).toMatchObject({ id: 'dream_2' });
+  });
+});

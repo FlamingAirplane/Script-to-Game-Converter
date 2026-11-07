@@ -183,6 +183,17 @@ there. **Key** in the toolbar hides or shows the key; your choice is remembered.
   opens the passage for everything else, and Esc closes the panel.
 - **Double-click** a passage to open it in Review. **Drag** it to rearrange the map; your layout is saved with the
   project. **Reset layout** returns to automatic placement.
+- **Add a scene** to a script you've already converted: **+ New scene** in the toolbar (or N), or **+ Scene after this**
+  and **+ Choice to a new scene** in a passage's panel. Give it a title, and optionally a scene heading
+  (`EXT. BOATHOUSE - NIGHT`) and its first line, then choose where it goes:
+  - **Straight after** a passage: the story goes on into the new scene, then on to wherever that passage went before.
+  - **As a new choice** in a passage: the reader can pick it as well as the ways the story already goes. If that
+    passage went straight on, that way becomes a choice too, so it isn't lost; you choose its wording.
+  - **On its own for now**: nothing leads to it yet (it's marked *Can't be reached*); connect it later with a choice in
+    Review. Double-clicking an empty part of the map starts one here, at that spot.
+
+  **Afterwards** says where the scene goes next: on to a passage, or the end. Write the rest of it in Review; Undo
+  takes the new scene back.
 - **Scroll** or **+ / −** to zoom, drag the background to move, **Fit** to see everything. Click the minimap to jump.
 - **Find a passage…** highlights matches; press Enter to go to the first.
 - **Save map** downloads the whole map as an SVG image; **PNG** as a picture.

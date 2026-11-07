@@ -62,6 +62,7 @@ const GROUPS: { title: string; keys: [string, string][] }[] = [
     keys: [
       ['/', 'Find a passage'],
       ['F', 'Fit the map'],
+      ['N', 'Add a new scene'],
       ['+  /  −', 'Zoom in / out'],
       ['Tab', 'Move between passages'],
       ['Space', "Show a passage's lines"],
