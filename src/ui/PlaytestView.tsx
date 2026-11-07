@@ -1,5 +1,6 @@
 // Engine-only runtime: the compiler isn't needed to play an already compiled story.
 import { Rich } from './Rich';
+import type { SceneRequest } from './NewScene';
 import { pendingSuggestions } from '../core/adapt';
 import { Story } from 'inkjs';
 import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from 'react';
@@ -31,6 +32,8 @@ interface Line {
   kind: 'text' | 'choice' | 'system' | 'cue';
   /** A Continue break was taken here (a choice line that isn't shown). */
   pause?: boolean;
+  /** The passage (Ink knot) the line was read in. */
+  passage?: string;
 }
 
 /** The passage (Ink knot) the reader is in: where the story last read from, even when it offers no choices. */
@@ -63,11 +66,12 @@ function readOn(s: Story, prefix: Line[]): Line[] {
     // Cues come before the line they're on (or alone, at the end of a passage).
     for (const c of cuesIn(tags)) out.push({ text: c.tag, tags: [c.tag], kind: 'cue' });
     if (!raw) continue;
+    const passage = knotOf(s) || undefined;
     const speakerTag = tags.find((t) => t.startsWith('speaker:'));
     if (speakerTag) {
       const i = raw.indexOf(': ');
-      out.push({ speaker: i > 0 ? raw.slice(0, i) : speakerTag.slice(8), text: i > 0 ? raw.slice(i + 2) : raw, tags, kind: 'text' });
-    } else out.push({ text: raw, tags, kind: 'text' });
+      out.push({ speaker: i > 0 ? raw.slice(0, i) : speakerTag.slice(8), text: i > 0 ? raw.slice(i + 2) : raw, tags, kind: 'text', passage });
+    } else out.push({ text: raw, tags, kind: 'text', passage });
   }
   return out;
 }
@@ -115,6 +119,7 @@ export function PlaytestView({
   onShowGated,
   onReview,
   onApproveAll,
+  onNewScene,
 }: {
   processed: ProcessedStory;
   onOpen: (id: string) => void;
@@ -124,6 +129,8 @@ export function PlaytestView({
   onShowGated: (on: boolean) => void;
   onReview?: () => void;
   onApproveAll?: () => void;
+  /** Opens the New scene form, after the passage being played. */
+  onNewScene?: (r: SceneRequest) => void;
 }) {
   const json = processed.compile.json;
   const version = fnv1a(processed.generated.ink);
@@ -390,6 +397,8 @@ export function PlaytestView({
     return file ? pictures.get(file) : undefined;
   };
   const ended = choices.length === 0;
+  // The last passage read, still known once the story has ended (to add a scene after it).
+  const lastWhere = where || ([...lines].reverse().find((l) => l.passage)?.passage ?? '');
   // Choices the reader can't take yet. Not at a Continue break: a passage's choices come after its last break.
   const locked =
     showGated && story.current && !(choices.length === 1 && choices[0].text === CONTINUE_TEXT)
@@ -544,6 +553,11 @@ export function PlaytestView({
               Play again
             </button>
           )}
+          {ended && onNewScene && processed.project.passages.some((p) => p.id === lastWhere) && (
+            <button className="btn small playtest-add-scene" onClick={() => onNewScene({ from: lastWhere, link: 'continue' })} title="Add a scene the story goes on into from here, or a choice that leads to one">
+              + Add a scene here
+            </button>
+          )}
         </div>
         {errors.length > 0 && (
           <div className="error-box">
@@ -558,9 +572,16 @@ export function PlaytestView({
         <section>
           <h3>Position</h3>
           {where ? (
-            <button className="link mono" onClick={() => onOpen(where)}>
-              {where}
-            </button>
+            <>
+              <button className="link mono" onClick={() => onOpen(where)}>
+                {where}
+              </button>
+              {onNewScene && processed.project.passages.some((p) => p.id === where) && (
+                <button className="btn tiny" onClick={() => onNewScene({ from: where })} title="Add a scene after this passage, or as a new choice in it">
+                  + New scene after it
+                </button>
+              )}
+            </>
           ) : (
             <span className="muted small">{ended ? 'ended' : '—'}</span>
           )}

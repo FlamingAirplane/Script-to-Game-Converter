@@ -14,7 +14,8 @@ import { StoryFiles } from './StoryFiles';
 import { RecordingsImport } from './RecordingsImport';
 import { formatMinutes, storyStats } from '../core/stats';
 import { DraftShelf } from './Drafts';
-import { type Update, addChoice, addPassage, deletePassage, findText, mergeCharacter, movePassage, renamePassage, replaceText } from './projectOps';
+import type { SceneRequest } from './NewScene';
+import { type Update, addChoice, deletePassage, findText, mergeCharacter, movePassage, renamePassage, replaceText } from './projectOps';
 
 /** Cues the game is likely to know, with what their value means (see NarrativeCuePlayer in the Unity package). */
 const CUE_SUGGESTIONS: [string, string][] = [
@@ -38,6 +39,7 @@ export function ReviewView({
   onDialogueOnly,
   onKeepDraft,
   onRestoreDraft,
+  onNewScene,
 }: {
   processed: ProcessedStory;
   selected: string;
@@ -47,6 +49,8 @@ export function ReviewView({
   onDialogueOnly: (on: boolean) => void;
   onKeepDraft: (label: string) => Promise<void>;
   onRestoreDraft: (id: number) => void;
+  /** Opens the New scene form. */
+  onNewScene: (r: SceneRequest) => void;
 }) {
   const project = processed.project;
   const [filter, setFilter] = useState('');
@@ -150,13 +154,13 @@ export function ReviewView({
         </ol>
         <button
           className="btn small"
+          title="Add a scene: after the selected passage, as a new choice in it, or on its own"
           onClick={() => {
-            let id = '';
-            update((d) => (id = addPassage(d, passage?.id).id));
-            setTimeout(() => select(id));
+            setContentsOpen(false);
+            onNewScene(passage ? { from: passage.id } : {});
           }}
         >
-          + Add passage
+          + New scene
         </button>
       </aside>
 
@@ -202,6 +206,7 @@ export function ReviewView({
             toggleSource={() => setShowSource(!showSource)}
             dialogueOnly={dialogueOnly}
             onDialogueOnly={onDialogueOnly}
+            onNewScene={onNewScene}
           />
         ) : (
           <p className="muted">Select a passage.</p>
@@ -259,6 +264,7 @@ function PassageEditor({
   toggleSource,
   dialogueOnly,
   onDialogueOnly,
+  onNewScene,
 }: {
   passage: Passage;
   processed: ProcessedStory;
@@ -269,6 +275,7 @@ function PassageEditor({
   toggleSource: () => void;
   dialogueOnly: boolean;
   onDialogueOnly: (on: boolean) => void;
+  onNewScene: (r: SceneRequest) => void;
 }) {
   const project = processed.project;
   const [idDraft, setIdDraft] = useState(passage.id);
@@ -456,6 +463,14 @@ function PassageEditor({
             onReview={(status) => edit((p) => (p.choices[i].review = status))}
             onDelete={() => edit((p) => p.choices.splice(i, 1))}
             onGo={() => c.target !== 'END' && onSelect(c.target)}
+            onNewTarget={() =>
+              onNewScene({
+                title: c.text,
+                purpose: `The choice “${c.text}” in “${passage.title}” will lead to it.`,
+                retarget: { passageId: pid, choiceId: c.id },
+                then: passage.choices.length === 1 && passage.divert ? passage.divert : undefined,
+              })
+            }
           />
         ))}
         <button className="btn tiny" onClick={() => update((d) => addChoice(d, pid))}>
@@ -469,7 +484,13 @@ function PassageEditor({
               className="input small"
               value={passage.divert ? passage.divert : passage.isEnding ? '__end' : '__none'}
               onChange={(e) =>
-                edit((p) => {
+                e.target.value === '__new'
+                  ? onNewScene({
+                      purpose: activeChoices.length ? `“${passage.title}” will go on to it when none of its choices can be taken.` : `“${passage.title}” will go on into it.`,
+                      retarget: { passageId: pid },
+                      then: activeChoices.length ? undefined : (passage.divert ?? (passage.isEnding ? 'END' : undefined)),
+                    })
+                  : edit((p) => {
                   const v = e.target.value;
                   p.isEnding = v === '__end';
                   p.divert = v.startsWith('__') ? undefined : v;
@@ -478,6 +499,7 @@ function PassageEditor({
             >
               <option value="__end">End the story here</option>
               <option value="__none">— nothing (player may get stuck) —</option>
+              <option value="__new">+ A new scene…</option>
               {project.passages
                 .filter((p) => p.id !== pid)
                 .map((p) => (
@@ -689,6 +711,7 @@ function ChoiceEditor({
   onReview,
   onDelete,
   onGo,
+  onNewTarget,
 }: {
   choice: Choice;
   project: StoryProject;
@@ -696,6 +719,8 @@ function ChoiceEditor({
   onReview: (s: Choice['review']) => void;
   onDelete: () => void;
   onGo: () => void;
+  /** Opens the New scene form for a scene this choice leads to. */
+  onNewTarget: () => void;
 }) {
   return (
     <div className={`choice choice-${choice.review}`}>
@@ -703,7 +728,7 @@ function ChoiceEditor({
         <span className="bullet mono">{choice.once ? '*' : '+'}</span>
         <input className="input choice-text" value={choice.text} onChange={(e) => onChange((c) => (c.text = e.target.value))} aria-label="Choice text" />
         <span className="muted">→</span>
-        <select className="input small target" value={choice.target} onChange={(e) => onChange((c) => (c.target = e.target.value))}>
+        <select className="input small target" value={choice.target} onChange={(e) => (e.target.value === '__new' ? onNewTarget() : onChange((c) => (c.target = e.target.value)))}>
           {!project.passages.some((p) => p.id === choice.target) && choice.target !== 'END' && <option value={choice.target}>⚠ {choice.target || '(none)'}</option>}
           {project.passages.map((p) => (
             <option key={p.id} value={p.id}>
@@ -711,6 +736,7 @@ function ChoiceEditor({
             </option>
           ))}
           <option value="END">— End —</option>
+          <option value="__new">+ A new scene…</option>
         </select>
         <button className="icon" title="Open destination" onClick={onGo}>
           ↗

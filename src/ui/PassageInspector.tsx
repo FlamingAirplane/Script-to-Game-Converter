@@ -2,7 +2,7 @@ import { useEffect, useRef } from 'react';
 import { plainText } from '../core/emphasis';
 import { effectToInk } from '../core/inkgen';
 import type { ContentBlock, StoryProject } from '../core/isr';
-import { addBreak, removeBreak, type Update } from './projectOps';
+import { addBreak, goesStraightOn, removeBreak, type SceneLink, type Update } from './projectOps';
 
 // The Graph chapter's passage panel: the selected passage's lines, with a place between each pair to
 // add a Continue break (the reader clicks Continue before reading on) or to remove one.
@@ -42,12 +42,15 @@ export function PassageInspector({
   update,
   onOpen,
   onClose,
+  onAddScene,
 }: {
   project: StoryProject;
   passageId: string;
   update: Update;
   onOpen: (id: string) => void;
   onClose: () => void;
+  /** Opens the New scene form, joined to this passage. */
+  onAddScene?: (link: SceneLink) => void;
 }) {
   const passage = project.passages.find((p) => p.id === passageId);
   const heading = useRef<HTMLHeadingElement>(null);
@@ -105,6 +108,18 @@ export function PassageInspector({
       <p className="muted small">
         {passage.choices.length ? `Then ${passage.choices.length} choice${passage.choices.length === 1 ? '' : 's'}.` : passage.isEnding ? 'Then the story ends.' : 'Then the story continues on its own.'}
       </p>
+      {onAddScene && (
+        <div className="row wrap inspector-add">
+          {goesStraightOn(passage) && (
+            <button className="btn tiny" onClick={() => onAddScene('continue')} title="A new scene the story goes on into after this one">
+              + Scene after this
+            </button>
+          )}
+          <button className="btn tiny" onClick={() => onAddScene('choice')} title="A new choice here that leads to a new scene">
+            + Choice to a new scene
+          </button>
+        </div>
+      )}
       <button className="btn tiny" onClick={() => onOpen(passageId)}>
         Edit in Review
       </button>

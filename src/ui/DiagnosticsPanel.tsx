@@ -4,6 +4,7 @@ import type { StoryProject } from '../core/isr';
 import { SeverityIcon } from './common';
 import { friendly, SEVERITY_LABEL } from './friendly';
 import { Logbook } from './Logbook';
+import { sceneFix, type SceneRequest } from './NewScene';
 
 const SEVERITIES: Severity[] = ['error', 'review', 'warning', 'info'];
 
@@ -17,6 +18,7 @@ export function DiagnosticsPanel({
   view,
   onView,
   onApproveAll,
+  onNewScene,
 }: {
   diagnostics: Diagnostic[];
   project: StoryProject | null;
@@ -26,6 +28,8 @@ export function DiagnosticsPanel({
   onView: (v: PanelView) => void;
   /** Approves every waiting suggestion (undoable). */
   onApproveAll?: () => void;
+  /** Opens the New scene form (for a missing destination, or a scene after a dead end). */
+  onNewScene?: (r: SceneRequest) => void;
 }) {
   const [hidden, setHidden] = useState<Set<Severity>>(new Set(['info']));
   const [technical, setTechnical] = useState(false);
@@ -39,6 +43,7 @@ export function DiagnosticsPanel({
 
   const item = (d: Diagnostic, i: number | string) => {
     const f = friendly(d, project ?? undefined);
+    const fix = project && onNewScene ? sceneFix(d.code, d.details, d.entityId, project) : null;
     return (
       <li key={i}>
         <button className="diag" onClick={() => onJump(d)}>
@@ -63,6 +68,11 @@ export function DiagnosticsPanel({
             </span>
           )}
         </button>
+        {fix && (
+          <button className="btn tiny diag-action" onClick={() => onNewScene!(fix.request)}>
+            + {fix.label}
+          </button>
+        )}
       </li>
     );
   };

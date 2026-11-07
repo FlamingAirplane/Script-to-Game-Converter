@@ -121,6 +121,9 @@ suggestions to review. Type in *Filter passages…* to narrow it down. Press **[
 - **Choices:** each has its wording, where it leads (→, with ↗ to jump there), conditions (**+ condition**, for example
   *has the brass key*), effects (**+ effect**), and **once only** (the choice disappears after it is picked). Add one with
   **+ Add choice**. **Then** sets where the story goes when there are no choices, or **End the story here**.
+- **New scenes:** **+ New scene** under the contents adds one after the selected passage, as a new choice in it, or on
+  its own (the same form as on the Graph, section 5). A choice's destination and **Then** also offer **+ A new
+  scene…**, which creates the scene and points that choice (or Then) at it.
 
 ### Approving suggestions
 
@@ -183,6 +186,17 @@ there. **Key** in the toolbar hides or shows the key; your choice is remembered.
   opens the passage for everything else, and Esc closes the panel.
 - **Double-click** a passage to open it in Review. **Drag** it to rearrange the map; your layout is saved with the
   project. **Reset layout** returns to automatic placement.
+- **Add a scene** to a script you've already converted: **+ New scene** in the toolbar (or N), or **+ Scene after this**
+  and **+ Choice to a new scene** in a passage's panel. Give it a title, and optionally a scene heading
+  (`EXT. BOATHOUSE - NIGHT`) and its first line, then choose where it goes:
+  - **Straight after** a passage: the story goes on into the new scene, then on to wherever that passage went before.
+  - **As a new choice** in a passage: the reader can pick it as well as the ways the story already goes. If that
+    passage went straight on, that way becomes a choice too, so it isn't lost; you choose its wording.
+  - **On its own for now**: nothing leads to it yet (it's marked *Can't be reached*); connect it later with a choice in
+    Review. Double-clicking an empty part of the map starts one here, at that spot.
+
+  **Afterwards** says where the scene goes next: on to a passage, or the end. Write the rest of it in Review; Undo
+  takes the new scene back.
 - **Scroll** or **+ / −** to zoom, drag the background to move, **Fit** to see everything. Click the minimap to jump.
 - **Find a passage…** highlights matches; press Enter to go to the first.
 - **Save map** downloads the whole map as an SVG image; **PNG** as a picture.
@@ -210,7 +224,8 @@ the padlock routes on the Graph.
 
 The panel beside the story shows:
 
-- **Position:** the passage you are in.
+- **Position:** the passage you are in, with **+ New scene after it**. When the story ends, **+ Add a scene here**
+  carries it on from where it ended.
 - **State:** every item and variable. Tick or change them to pretend the game gave or took something; the choices
   update straight away.
 - **Save slot:** **Save** and **Load**. If you edit the story and then load, the save carries over the way a reader's
@@ -303,7 +318,9 @@ These settings are saved with your project. Your developer can change any of the
 | ▲ **worth a look** | Probably fine, but check it. For example, a passage no choice leads to. |
 | ○ **note** | Information only. |
 
-Click an entry to jump to the passage it concerns. Tick **details** to see technical codes. *Nothing to fix* means the
+Click an entry to jump to the passage it concerns. Some entries can be fixed with a new scene: a choice that leads
+to a passage that doesn't exist offers **+ Create** it (under the name the choice uses), and a passage where the reader
+gets stuck offers **+ Add a scene after it**. On the Graph, click *⚠ Missing* to do the same. Tick **details** to see technical codes. *Nothing to fix* means the
 story is ready to export. ⌘. (Ctrl+.) shows or hides the panel.
 
 ![The Logbook](images/logbook.jpg)

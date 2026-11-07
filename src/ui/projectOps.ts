@@ -1,4 +1,4 @@
-import { uniqueId, type Choice, type Passage, type StoryProject } from '../core/isr';
+import { isActive, uniqueId, type Choice, type Passage, type StoryProject } from '../core/isr';
 
 // Pure editing operations on the ISR used by the review UI. Every edit made here is recorded
 // with user_authored provenance so regeneration never silently loses it.
@@ -188,4 +188,110 @@ export function removeBreak(p: StoryProject, passageId: string, at: number) {
 
 export function countBreaks(passage: { content: { type: string }[] }): number {
   return passage.content.filter((b) => b.type === 'pause').length;
+}
+
+/** How a new scene joins the story. */
+export type SceneLink =
+  /** The story goes on from `from` into the new scene (which takes over where `from` went next). */
+  | 'continue'
+  /** A new choice in `from` leads to the new scene. */
+  | 'choice'
+  /** Not connected yet: connect it later (it shows as "Can't be reached"). */
+  | 'none';
+
+export interface NewScene {
+  title: string;
+  /** e.g. "INT. LIGHTHOUSE - NIGHT". */
+  heading?: string;
+  /** The scene's first line of narration. */
+  firstLine?: string;
+  /** The passage it follows, for 'continue' and 'choice'. */
+  from?: string;
+  link: SceneLink;
+  /** The new choice's wording ('choice'). */
+  choiceText?: string;
+  /**
+   * 'choice' only, when `from` goes straight on to another passage and has no choices yet: the wording of a choice
+   * for that way, so it stays open to the reader (a passage with choices only goes straight on when none can be taken).
+   */
+  keepPathText?: string;
+  /** Where the scene goes afterwards: a passage id, or 'END'. Unset: where `from` went next ('continue'), else the end. */
+  then?: string;
+  /** Where to put it on the map. */
+  at?: { x: number; y: number };
+  /** Its id, when something already points at it (a choice whose destination doesn't exist yet). */
+  id?: string;
+  /** Points an existing choice (or, without `choiceId`, a passage's "then") at the new scene. */
+  retarget?: { passageId: string; choiceId?: string };
+}
+
+/** Whether a passage goes straight on (no choices the reader sees), so a scene can be put after it with 'continue'. */
+export function goesStraightOn(p: Passage): boolean {
+  return !p.choices.some((c) => isActive(c.review));
+}
+
+/**
+ * Adds a scene to the story and connects it: after a passage, as a new choice in one, or on its own. Returns the new
+ * passage, or an error for the writer.
+ */
+export function addScene(p: StoryProject, s: NewScene): Passage | string {
+  const title = s.title.trim();
+  if (!title) return 'Give the scene a title.';
+  const from = s.from ? p.passages.find((x) => x.id === s.from) : undefined;
+  if (s.link !== 'none' && !from) return 'Choose the passage it comes after.';
+  if (s.link === 'continue' && from && !goesStraightOn(from)) return `“${from.title}” ends with choices, so add the scene as a new choice instead.`;
+  if (s.then && s.then !== 'END' && !p.passages.some((x) => x.id === s.then)) return 'The passage it goes to next doesn’t exist.';
+  const taken = new Set(p.passages.map((x) => x.id));
+  if (s.id !== undefined) {
+    if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(s.id) || ['END', 'DONE'].includes(s.id.toUpperCase())) return `“${s.id}” can’t be a passage name: use letters, digits and underscores.`;
+    if (taken.has(s.id)) return `There’s already a passage called “${s.id}”.`;
+  }
+  const retargetPassage = s.retarget ? p.passages.find((x) => x.id === s.retarget!.passageId) : undefined;
+  const retargetChoice = s.retarget?.choiceId ? retargetPassage?.choices.find((c) => c.id === s.retarget!.choiceId) : undefined;
+  if (s.retarget && (!retargetPassage || (s.retarget.choiceId && !retargetChoice))) return 'The choice it was for no longer exists.';
+  const id = s.id ?? uniqueId(title, taken, 'scene');
+  const heading = s.heading?.trim();
+  const firstLine = s.firstLine?.trim();
+  const scene: Passage = {
+    id,
+    title,
+    ...(heading ? { sceneHeading: heading } : {}),
+    content: firstLine ? [{ type: 'action', text: firstLine, origin: 'user_authored' }] : [],
+    choices: [],
+    isEnding: false,
+    origin: 'user_authored',
+    review: 'approved',
+  };
+  // Where it goes next.
+  const fromNext = from && goesStraightOn(from) ? (from.divert ?? (from.isEnding ? 'END' : undefined)) : undefined;
+  const then = s.then ?? (s.link === 'continue' ? (fromNext ?? 'END') : 'END');
+  if (then === 'END') scene.isEnding = true;
+  else scene.divert = then;
+
+  if (from && s.link === 'continue') {
+    from.divert = id;
+    from.isEnding = false;
+  } else if (from && s.link === 'choice') {
+    const ids = new Set(p.passages.flatMap((x) => x.choices.map((c) => c.id)));
+    const choice = (text: string, target: string): Choice => ({ id: uniqueId(`${from.id}_${text}`, ids, `${from.id}_choice`), text, target, conditions: [], effects: [], once: false, origin: 'user_authored', review: 'approved' });
+    // A passage that went straight on keeps that way as a choice of its own, or the reader would lose it.
+    if (goesStraightOn(from) && from.divert && from.divert !== 'END') {
+      const target = p.passages.find((x) => x.id === from.divert);
+      from.choices.push(choice(s.keepPathText?.trim() || `Go on to ${target?.title ?? from.divert}`, from.divert));
+      delete from.divert;
+    }
+    from.choices.push(choice(s.choiceText?.trim() || title, id));
+    from.isEnding = false;
+  }
+  if (retargetChoice) retargetChoice.target = id;
+  else if (retargetPassage) {
+    retargetPassage.divert = id;
+    retargetPassage.isEnding = false;
+  }
+  const after = from ?? retargetPassage;
+  const at = after ? p.passages.indexOf(after) : -1;
+  if (at >= 0) p.passages.splice(at + 1, 0, scene);
+  else p.passages.push(scene);
+  if (s.at) p.layout = { ...p.layout, [id]: { x: Math.round(s.at.x), y: Math.round(s.at.y) } };
+  return scene;
 }

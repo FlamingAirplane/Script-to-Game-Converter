@@ -1253,3 +1253,15 @@ section.drafts > h2 { margin-top: 26px; }
 .diff-added-chip, .diff-removed-chip { padding: 0 5px; border-radius: 2px; text-decoration: none; font-family: var(--mono); }
 .diff-fold { font-style: italic; }
 .diff-only-title { margin: 0 0 8px 22px; }
+
+/* The Graph's New scene form. */
+.new-scene { max-width: 520px; display: flex; flex-direction: column; gap: 10px; }
+.new-scene .field { display: flex; flex-direction: column; gap: 4px; }
+.new-scene-link { display: flex; flex-direction: column; gap: 6px; }
+.new-scene-link .mode:has(input:disabled) { opacity: 0.55; }
+.inspector-add { gap: 6px; }
+.new-scene-purpose { margin: 0; padding: 8px 10px; border-left: 3px solid var(--pen); background: var(--pen-bg); }
+.edge-end.missing[role='button'] { cursor: pointer; text-decoration: underline dotted; }
+.edge-end.missing[role='button']:focus-visible { outline: 2px solid var(--pen); }
+.diag-action { margin: 2px 0 8px 28px; }
+.playtest-add-scene { align-self: flex-start; margin-top: 6px; }

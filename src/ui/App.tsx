@@ -27,6 +27,7 @@ const PlaytestView = lazy(() => import('./PlaytestView').then((m) => ({ default:
 import { sfx } from './sfx';
 import { IS_MAC, isTyping, MOD, modKey, plainKey, ShortcutSheet } from './Shortcuts';
 import { ThemeToggle } from './ThemeToggle';
+import { NewSceneSheet, type SceneRequest } from './NewScene';
 import { useProcessedStory } from './useProcessedStory';
 
 type Tab = 'import' | 'review' | 'graph' | 'ink' | 'play' | 'export';
@@ -480,6 +481,8 @@ export function App() {
     setSelected(id);
     setTab('review');
   };
+  // The New scene form, opened from Review, Playtest and Diagnostics (the Graph has its own, to show the scene on the map).
+  const [sceneRequest, setSceneRequest] = useState<SceneRequest | null>(null);
 
   const jump = (d: Diagnostic) => {
     if (!project) return;
@@ -811,7 +814,7 @@ export function App() {
               onClose={() => setJustImported(false)}
             />
           )}
-          {processed && tab === 'review' && <ReviewView processed={{ ...processed, project: project! }} selected={selected} onSelect={setSelected} update={update} dialogueOnly={dialogueOnly} onDialogueOnly={setDialogueOnly} onKeepDraft={(label) => keepDraft(project!, parseDiagnostics, label)} onRestoreDraft={(id) => void restoreDraft(id)} />}
+          {processed && tab === 'review' && <ReviewView processed={{ ...processed, project: project! }} selected={selected} onSelect={setSelected} update={update} dialogueOnly={dialogueOnly} onDialogueOnly={setDialogueOnly} onKeepDraft={(label) => keepDraft(project!, parseDiagnostics, label)} onRestoreDraft={(id) => void restoreDraft(id)} onNewScene={setSceneRequest} />}
           {processed && tab === 'graph' && (
             <GraphView
               graph={processed.analysis.graph}
@@ -831,9 +834,10 @@ export function App() {
             />
           )}
           {processed && tab === 'ink' && <InkView processed={processed} onOpen={open} />}
-          {processed && tab === 'play' && <PlaytestView processed={processed} onOpen={open} dialogueOnly={dialogueOnly} onDialogueOnly={setDialogueOnly} showGated={showGated} onShowGated={setShowGated} onReview={() => setTab('review')} onApproveAll={() => update((d) => reviewAll(d, 'approved'))} />}
+          {processed && tab === 'play' && <PlaytestView processed={processed} onOpen={open} dialogueOnly={dialogueOnly} onDialogueOnly={setDialogueOnly} showGated={showGated} onShowGated={setShowGated} onReview={() => setTab('review')} onApproveAll={() => update((d) => reviewAll(d, 'approved'))} onNewScene={setSceneRequest} />}
           {processed && tab === 'export' && <ExportView processed={processed} stale={stale} onState={setExportState} project={project!} update={update} onReview={() => setTab('review')} />}
           </Suspense>
+          {sceneRequest && project && <NewSceneSheet project={project} update={update} request={sceneRequest} onCreated={open} onClose={() => setSceneRequest(null)} />}
           {(tab === 'import' || tab === 'export') && <footer className="folio">— {TABS.find((t) => t.id === tab)!.numeral.toLowerCase()} —</footer>}
         </div>
         {showDiag && ((processed && tab !== 'import') || panelView === 'log') && (
@@ -851,6 +855,10 @@ export function App() {
             view={panelView}
             onView={setPanelView}
             onApproveAll={() => update((d) => reviewAll(d, 'approved'))}
+            onNewScene={(r) => {
+              setDiagOverlay(false);
+              setSceneRequest(r);
+            }}
           />
         )}
       </div>
