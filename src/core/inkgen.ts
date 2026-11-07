@@ -1,4 +1,5 @@
 import { audioFileName } from './audio';
+import { choiceGuards, isForcing } from './forced';
 import { imageFileName } from './images';
 import { GENERATOR_VERSION } from './version';
 import { CONTINUE_TEXT, cueTag, EXIT_PREFIX, exitName, isActive, itemVar, type Condition, type Effect, type Passage, type StoryProject } from './isr';
@@ -13,6 +14,8 @@ import { CONTINUE_TEXT, cueTag, EXIT_PREFIX, exitName, isActive, itemVar, type C
 //  - Transitions carry a #transition tag; scene headings are a #scene tag on the first line.
 //  - Notes and unsupported constructs are preserved as Ink comments.
 //  - A Continue break is "+ [Continue]" followed by a gather "-": what follows waits for the reader.
+//  - A forced choice ends with "// forced"; every other choice in its passage gets an extra {not (its condition)},
+//    so while it applies it's the only choice (see forced.ts).
 //  - Choices are sticky (+) unless marked once-only (*). A passage divert becomes an invisible
 //    fallback choice when the passage also has choices.
 
@@ -185,10 +188,13 @@ function emitFlow(p: Passage, emit: (line: string, passageId?: string, entityId?
     emit(p.divert ? `-> ${p.divert}` : '-> END', p.id);
     return;
   }
+  const guards = choiceGuards(p);
   for (const c of choices) {
     const bullet = c.once ? '*' : '+';
     const cond = c.conditions.length ? ` {${c.conditions.map(wrap).join(' && ')}}` : '';
-    emit(`${bullet}${cond} [${escapeInk(c.text)}]`, p.id, c.id);
+    // Kept out while a forced choice of this passage applies (each its own {…}, so the Ink importer can tell them apart).
+    const guard = (guards.get(c.id) ?? []).map((g) => ` {${conditionToInk(g)}}`).join('');
+    emit(`${bullet}${cond}${guard} [${escapeInk(c.text)}]${isForcing(c) ? ' // forced' : ''}`, p.id, c.id);
     for (const e of c.effects) emit(`    ${effectToInk(e)}`, p.id, c.id);
     emit(`    -> ${c.target || 'END'}`, p.id, c.id);
   }

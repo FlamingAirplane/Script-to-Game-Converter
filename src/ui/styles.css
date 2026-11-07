@@ -1304,3 +1304,11 @@ section.drafts > h2 { margin-top: 26px; }
 .outline-next, .outline-otherwise { margin: 0 0 4px; }
 .outline-missing { color: var(--err); }
 .outline-unreached { margin-top: 24px; border-top: 1px solid var(--rule); padding-top: 8px; }
+
+/* Forced choices on the story map. */
+.edge.forced { stroke: var(--rubric); stroke-width: 2; }
+.arrowhead.forced { fill: var(--rubric); }
+.route-sign.forced circle { stroke: var(--rubric); }
+.route-sign.forced .sign-mark { fill: var(--rubric); font: 700 13px var(--serif); }
+.choice-forced-note { flex-basis: 100%; margin: 2px 0 0; }
+.outline-forced { color: var(--rubric); }

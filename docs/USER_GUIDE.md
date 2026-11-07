@@ -121,6 +121,12 @@ suggestions to review. Type in *Filter passages…* to narrow it down. Press **[
 - **Choices:** each has its wording, where it leads (→, with ↗ to jump there), conditions (**+ condition**, for example
   *has the brass key*), effects (**+ effect**), and **once only** (the choice disappears after it is picked). Add one with
   **+ Add choice**. **Then** sets where the story goes when there are no choices, or **End the story here**.
+- **Forced choices:** tick **forced** on a choice that has a condition, and once that condition is true the choice is
+  the only one in its passage, so the player has to take it. For example, *Use the brass key* with the condition *has
+  the brass key*: a player who picked up the key earlier must use it here, while one who didn't gets the other
+  choices. If two forced choices could apply at once, the first one wins. It works in Playtest, the playable story,
+  Twine (SugarCube), Unity and Unreal; on the Graph a forced route is marked **!**. In a script, add `@forced` to the
+  choice line.
 - **New scenes:** **+ New scene** under the contents adds one after the selected passage, as a new choice in it, or on
   its own (the same form as on the Graph, section 5). A choice's destination and **Then** also offer **+ A new
   scene…**, which creates the scene and points that choice (or Then) at it.
@@ -448,6 +454,7 @@ Write these on their own lines in any script to control the structure exactly (t
 * [Choice text] -> target                    a choice that disappears once picked
 + [Choice text] -> target                    a choice that can be picked again
 + {has archive_key} [Open it] -> vault @take archive_key
++ {has archive_key} [Use the key] -> vault @forced    once they have the key, it's the only choice
 + {trust >= 2 and not has lamp} [Trust her] -> ally
 - [Markdown link choice](#target)
 -> target                                    continue to another passage

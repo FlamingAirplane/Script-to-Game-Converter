@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- **Forced choices:** tick **forced** on a choice with a condition (or add `@forced` to the choice line in a script),
+  and once the condition holds it's the only choice in its passage. For example, a player who has the brass key must
+  use it. It works in plain Ink (the other choices get an extra condition), so Playtest, the playable story, Twine,
+  Unity and Unreal all follow it. Locked choices aren't shown while a forced choice applies, the Graph marks forced
+  routes with **!**, and Diagnostics warns about a forced choice with no condition.
 - **Large story maps are easier to follow:**
   - Passages are placed after everything that leads into them, so routes read left to right. On a 58-passage test
     story, crossings went from 77 to 25, and no route runs backwards.

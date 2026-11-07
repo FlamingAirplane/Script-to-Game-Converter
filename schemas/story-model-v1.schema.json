@@ -148,6 +148,7 @@
         "conditions": { "type": "array", "items": { "$ref": "#/$defs/condition" } },
         "effects": { "type": "array", "items": { "$ref": "#/$defs/effect" } },
         "once": { "type": "boolean" },
+        "forced": { "type": "boolean" },
         "origin": { "$ref": "#/$defs/provenance" },
         "review": { "$ref": "#/$defs/review" },
         "source": { "$ref": "#/$defs/sourceRef" }

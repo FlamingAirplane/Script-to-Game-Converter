@@ -137,6 +137,7 @@ export function StoryOutline({ project, onOpen, selected }: { project: StoryProj
                     <summary>
                       <span className="outline-choice">{plainText(c.text)}</span>
                       {needs.length > 0 && <span className="muted small"> (needs {needs.join(', ')})</span>}
+                      {c.forced && needs.length > 0 && <span className="outline-forced small"> · forced: the only choice once it’s open</span>}
                       {!opens && <> {branch}</>}
                     </summary>
                     {opens && <div className="outline-branch">{branch}</div>}

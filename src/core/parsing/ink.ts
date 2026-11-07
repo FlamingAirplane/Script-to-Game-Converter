@@ -150,9 +150,12 @@ function scan(text: string): { blocks: ParsedBlock[]; unsupported: InkFeature[] 
     flushUnsupportedNote();
     // Trailing comments on content lines are kept as notes (VAR lines use theirs as item names).
     const trailing = /^(VAR|CONST)\b/.test(t) ? null : /^(.*?[^:\\])\/\/(.*)$/.exec(t);
+    // A choice marked "// forced" is a forced choice (see forced.ts), not a note.
+    let forced = false;
     if (trailing) {
       t = trailing[1].trim();
-      if (trailing[2].trim()) blocks.push({ kind: 'note', text: trailing[2].trim(), line: ln });
+      if (/^[*+]/.test(t) && trailing[2].trim() === 'forced') forced = true;
+      else if (trailing[2].trim()) blocks.push({ kind: 'note', text: trailing[2].trim(), line: ln });
     }
     if (!t) continue;
 
@@ -294,7 +297,7 @@ function scan(text: string): { blocks: ParsedBlock[]; unsupported: InkFeature[] 
       }
       body = unescape(shown.replace(/\u0001/g, '\\[').replace(/\u0002/g, '\\]')).trim();
       const effects: Effect[] = [];
-      const block: ParsedBlock = { kind: 'marker', marker: { type: 'choice', once: choiceM[1] === '*', text: body || '(choice)', target, conditions, effects }, line: ln };
+      const block: ParsedBlock = { kind: 'marker', marker: { type: 'choice', once: choiceM[1] === '*', text: body || '(choice)', target, conditions, effects, ...(forced ? { forced: true } : {}) }, line: ln };
       blocks.push(block);
       choice = block;
       weaveOpen = true;

@@ -1,3 +1,4 @@
+import { forcedOffered } from './forced';
 import { isActive, itemVar, type Choice, type Condition, type StoryProject } from './isr';
 
 // Gated choices: choices that need an item or a value. Playtest uses these to show the ones the reader
@@ -69,7 +70,8 @@ export interface LockedChoice {
  */
 export function lockedChoices(project: StoryProject, passageId: string, read: (name: string) => unknown, offered: string[]): LockedChoice[] {
   const passage = project.passages.find((p) => p.id === passageId);
-  if (!passage) return [];
+  // While a forced choice applies, it's the only way on: nothing else is shown, not even as locked.
+  if (!passage || forcedOffered(passage, offered)) return [];
   const out: LockedChoice[] = [];
   for (const choice of passage.choices) {
     if (!isActive(choice.review) || !choice.conditions.length || offered.includes(choice.text)) continue;

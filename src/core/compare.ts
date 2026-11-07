@@ -78,7 +78,7 @@ export function passageLines(pa: Passage, p: StoryProject, titleOf: (id: string)
     if (!isActive(c.review)) continue;
     const needs = c.conditions.map((x) => describeCondition(x, p));
     const does = c.effects.map((e) => effectText(e, p));
-    out.push(`▸ ${c.text} → ${title(c.target)}${needs.length ? ` (needs ${needs.join(', ')})` : ''}${does.length ? ` (${does.join(', ')})` : ''}`);
+    out.push(`▸ ${c.text} → ${title(c.target)}${needs.length ? ` (needs ${needs.join(', ')})` : ''}${c.forced ? ' (forced)' : ''}${does.length ? ` (${does.join(', ')})` : ''}`);
   }
   if (pa.divert) out.push(`→ ${title(pa.divert)}`);
   if (pa.isEnding) out.push('[ending]');

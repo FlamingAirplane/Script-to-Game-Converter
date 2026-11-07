@@ -153,6 +153,8 @@ export interface Choice {
   conditions: Condition[]; // implicitly AND-ed
   effects: Effect[];
   once: boolean; // '*' (once-only) vs '+' (sticky) in Ink
+  /** While its conditions hold, it's the only choice in the passage (see forced.ts). */
+  forced?: boolean;
   origin: Provenance;
   review: ReviewStatus;
   source?: SourceRef;

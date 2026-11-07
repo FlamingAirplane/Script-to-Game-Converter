@@ -138,12 +138,16 @@ function NodeTag({ kind, x, y = -9 }: { kind: TagKind; x: number; y?: number }) 
   );
 }
 
-/** Small sign at the middle of a route: a padlock (needs an item or value) or ◆ (suggested, waiting for approval). */
-function RouteSign({ kind, x, y }: { kind: 'cond' | 'pending'; x: number; y: number }) {
+/** Small sign at the middle of a route: a padlock (needs an item or value), ! (forced) or ◆ (suggested, waiting for approval). */
+function RouteSign({ kind, x, y }: { kind: 'cond' | 'pending' | 'forced'; x: number; y: number }) {
   return (
     <g className={`route-sign ${kind}`} transform={`translate(${x},${y})`} pointerEvents="none">
       <circle r={9.5} />
-      {kind === 'cond' ? (
+      {kind === 'forced' ? (
+        <text y={4} textAnchor="middle" className="sign-mark">
+          !
+        </text>
+      ) : kind === 'cond' ? (
         <>
           <path d="M-3.2 -0.5 V-3 A3.2 3.2 0 0 1 3.2 -3 V-0.5" className="sign-line" />
           <rect x={-4.6} y={-0.8} width={9.2} height={6.6} rx={1.3} className="sign-fill" />
@@ -173,7 +177,7 @@ const KEY_STORE = 'narrative-bridge.map-key';
 
 /** The map's key, in plain words, drawn with the same marks as the map. */
 function MapKey({ hiddenGated }: { hiddenGated: number }) {
-  const line = (kind: string, sign?: 'cond' | 'pending') => (
+  const line = (kind: string, sign?: 'cond' | 'pending' | 'forced') => (
     <svg width="58" height="20" aria-hidden>
       <path d="M2 10 H50" className={`edge ${kind}`} markerEnd={`url(#arrow-${kind})`} />
       {sign && <RouteSign kind={sign} x={26} y={10} />}
@@ -194,6 +198,7 @@ function MapKey({ hiddenGated }: { hiddenGated: number }) {
         {line('cond', 'cond')} a choice that needs an item or value
         {hiddenGated > 0 && <span className="muted"> ({hiddenGated} locked route{hiddenGated === 1 ? '' : 's'} hidden; press “Locked routes” to see them)</span>}
       </li>
+      <li>{line('forced', 'forced')} a forced choice: once its condition holds, the only way on</li>
       <li>{line('fallback')} continues on its own</li>
       <li>
         <svg width="58" height="20" aria-hidden>
@@ -737,7 +742,7 @@ export function GraphView({
           }}
         >
           <defs>
-            {['edge', 'cond', 'pending', 'fallback', 'hl'].map((k) => (
+            {['edge', 'cond', 'forced', 'pending', 'fallback', 'hl'].map((k) => (
               <marker key={k} id={`arrow-${k}`} viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
                 <path d="M0,0 L10,5 L0,10 z" className={`arrowhead ${k}`} />
               </marker>
@@ -748,7 +753,7 @@ export function GraphView({
               const a = placed.get(e.from);
               const b = placed.get(e.to);
               if (!a) return null;
-              const kind = e.pending ? 'pending' : e.kind === 'fallback' || e.kind === 'divert' ? 'fallback' : e.conditional ? 'cond' : 'edge';
+              const kind = e.pending ? 'pending' : e.kind === 'fallback' || e.kind === 'divert' ? 'fallback' : e.forced ? 'forced' : e.conditional ? 'cond' : 'edge';
               const hl = hover === e.from || hover === e.to || hoverEdge === e.id || (!!lit && lit.edges.has(e.id) && !trace);
               const shade = lit && !lit.edges.has(e.id) ? 'dim' : straight === 'faint' && kind === 'fallback' && !hl ? 'faint' : '';
               const showLabel = !!e.label && (hoverEdge === e.id || hover === e.from);
@@ -803,7 +808,7 @@ export function GraphView({
                     >
                       {missing ? `⚠ Missing: ${e.to}${fixMissing(e.to, e.from) ? ' (click to create it)' : ''}` : 'The End'}
                     </text>
-                    {(kind === 'cond' || kind === 'pending') && !missing && <RouteSign kind={kind} x={x1 + 20} y={y1} />}
+                    {(kind === 'cond' || kind === 'pending' || kind === 'forced') && !missing && <RouteSign kind={kind} x={x1 + 20} y={y1} />}
                     {showLabel && <EdgeLabel x={x1 + 20} y={y1 - 14} text={e.label} />}
                   </g>
                 );
@@ -815,7 +820,7 @@ export function GraphView({
                 <g key={e.id} className={shade} onPointerEnter={() => setHoverEdge(e.id)} onPointerLeave={() => setHoverEdge(null)}>
                   <path d={d} className="edge-hit" />
                   <path d={d} className={`edge ${kind} ${hl ? 'hl' : ''}`} markerEnd={`url(#arrow-${hl ? 'hl' : kind})`} />
-                  {(kind === 'cond' || kind === 'pending') && !showLabel && <RouteSign kind={kind} x={mx} y={my} />}
+                  {(kind === 'cond' || kind === 'pending' || kind === 'forced') && !showLabel && <RouteSign kind={kind} x={mx} y={my} />}
                   {showLabel && <EdgeLabel x={mx} y={my} text={e.kind === 'fallback' ? 'otherwise' : e.label} />}
                 </g>
               );

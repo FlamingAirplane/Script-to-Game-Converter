@@ -18,6 +18,8 @@ export interface GraphEdge {
   kind: 'choice' | 'divert' | 'fallback';
   conditional: boolean;
   pending: boolean;
+  /** A forced choice: while its condition holds, the only way on from its passage. */
+  forced?: boolean;
 }
 
 export interface StoryGraph {
@@ -117,7 +119,16 @@ export function analyze(project: StoryProject): Analysis {
       if (pending)
         for (const e of c.effects)
           if (e.type === 'give_item' && !pendingGivers.has(e.itemId)) pendingGivers.set(e.itemId, { label: `the suggested choice "${c.text}" in "${p.title}"`, entityId: c.id, passageId: p.id });
-      if (c.target) edges.push({ id: c.id, from: p.id, to: c.target, label: c.text, kind: 'choice', conditional: c.conditions.length > 0, pending });
+      if (c.forced && !c.conditions.length)
+        ds.push(
+          diag('FORCED_WITHOUT_CONDITION', 'warning', STAGE, `Choice "${c.text}" in "${p.title}" is marked forced but has no condition, so it changes nothing.`, {
+            entityId: c.id,
+            details: { passageId: p.id },
+            remediation: 'Give it a condition (for example, has the brass key), or untick “forced”.',
+            exportBlocked: false,
+          }),
+        );
+      if (c.target) edges.push({ id: c.id, from: p.id, to: c.target, label: c.text, kind: 'choice', conditional: c.conditions.length > 0, pending, ...(c.forced && c.conditions.length ? { forced: true } : {}) });
     }
     if (p.divert) {
       if (p.divert !== 'END' && !byId.has(p.divert))

@@ -2,6 +2,7 @@ import { log } from '../log';
 import type { ProcessedStory } from '../pipeline';
 import { portraitFiles } from '../images';
 import { cueName, cueTag, exitName, isActive, itemVar, type Condition } from '../isr';
+import { isForcing } from '../forced';
 import { describeCondition } from '../gating';
 import { assertExportable, audioFiles, buildManifest, imageFiles, commonFiles, itemVarNames, json, sourceFiles, storyVersion, verifyExport } from './common';
 import type { EngineAdapter, ExportFile, ExportOptions, ExportResult } from './types';
@@ -372,6 +373,8 @@ namespace ${id.namespace}
         /// <summary>Cues the writer attached a sound to (e.g. "music:calm"), and each one's clip (an #audio-style file name; see NarrativeController.LoadVoiceClip).</summary>
         public static readonly string[] CueSoundTags = { ${soundTags.map(([t]) => csString(t)).join(', ')} };
         public static readonly string[] CueSoundFiles = { ${soundTags.map(([, f]) => csString(f)).join(', ')} };
+        /// <summary>Forced choices, as "passage\\ntext": while one is on offer it's the only choice, so nothing is shown as locked.</summary>
+        public static readonly string[] ForcedChoices = { ${story.project.passages.flatMap((p) => (knots.has(p.id) ? p.choices.filter(isForcing).map((c) => csString(`${p.id}\n${c.text.trim()}`)) : [])).join(', ')} };
         /// <summary>Choices that need an item or a value (NarrativeController.LockedChoices lists the ones locked right now).</summary>
         public static readonly GatedChoice[] GatedChoices =
         {
@@ -428,6 +431,8 @@ stories) without clashing, and it never changes your scenes, build settings or p
 - **Locked choices:** a choice that needs an item or a value the player doesn't have is left out by ink. The story panel
   shows it greyed out with what it needs (\`Use the brass key · Needs Brass Key\`; *Show Locked Choices* on the theme), and
   \`LockedChoices\` lists them for your own UI. \`CurrentPassage\` says which passage the reader is in.
+- **Forced choices:** while a forced choice's condition holds, ink offers only that choice in its passage (the others carry
+  an extra condition), and \`LockedChoices\` stays empty. \`StoryInfo.ForcedChoices\` lists them.
 - **Your own UI:** remove the NarrativeView and draw the story from the events above.
 - **Voice:** recorded lines play through the controller's AudioSource; set *Voice Source* to route them through your mixer.
 - **Portraits:** \`StoryInfo.PortraitSpeakers\` lists the characters with a portrait; \`NarrativeController.LoadPortrait(line.SpeakerId)\`
@@ -1446,6 +1451,8 @@ namespace __NAMESPACE__
                 locked.Clear();
                 if (Story == null || HasEnded || IsAtExit || IsWaitingForContinue || Story.currentChoices.Count == 0) return locked;
                 var passage = CurrentPassage;
+                // While a forced choice is on offer, it's the only way on: nothing is shown as locked.
+                if (Story.currentChoices.Exists(c => System.Array.IndexOf(StoryInfo.ForcedChoices, passage + "\\n" + c.text) >= 0)) return locked;
                 foreach (var g in StoryInfo.GatedChoices)
                 {
                     if (g.Passage != passage || Story.currentChoices.Exists(c => c.text == g.Text)) continue;
