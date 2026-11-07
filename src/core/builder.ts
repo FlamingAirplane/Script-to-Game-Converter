@@ -2,6 +2,7 @@ import { diag, type Diagnostic } from './diagnostics';
 import { sha256Hex } from './hash';
 import { log } from './log';
 import { markupToTags, plainText } from './emphasis';
+import { stripGuards } from './forced';
 import {
   cueName,
   cueValue,
@@ -366,6 +367,7 @@ function assemble(
               conditions: m.conditions,
               effects: m.effects,
               once: m.once,
+              ...(m.forced ? { forced: true } : {}),
               origin: 'source',
               review: 'approved',
               source: s,
@@ -394,6 +396,9 @@ function assemble(
     p.divert = resolveRel(p.divert);
     for (const c of p.choices) c.target = resolveRel(c.target) ?? '';
   }
+
+  // Ink written by Narrative Bridge spells out what forced choices do to the other choices; take that back off.
+  for (const p of passages) if (p.choices.some((c) => c.forced)) stripGuards(p);
 
   // Linear flow: passages without explicit control flow continue to the next passage.
   passages.forEach((p, i) => {

@@ -15,6 +15,7 @@ import { RecordingsImport } from './RecordingsImport';
 import { formatMinutes, storyStats } from '../core/stats';
 import { DraftShelf } from './Drafts';
 import type { SceneRequest } from './NewScene';
+import { describeCondition } from '../core/gating';
 import { type Update, addChoice, deletePassage, findText, mergeCharacter, movePassage, renamePassage, replaceText } from './projectOps';
 
 /** Cues the game is likely to know, with what their value means (see NarrativeCuePlayer in the Unity package). */
@@ -187,6 +188,8 @@ export function ReviewView({
             <dd>What happens when the choice is picked, e.g. the player gets or loses an item.</dd>
             <dt>once only</dt>
             <dd>The choice disappears after it has been picked once.</dd>
+            <dt>forced</dt>
+            <dd>Once its condition is true (e.g. the player has the key), it’s the only choice here: the player has to take it.</dd>
           </dl>
         </details>
         {selected === STORY_SETTINGS ? (
@@ -774,6 +777,17 @@ function ChoiceEditor({
           <input type="checkbox" checked={choice.once} onChange={(e) => onChange((c) => (c.once = e.target.checked))} />{' '}
           <span title="Once only: after the player picks this choice, it disappears if they come back here">once only</span>
         </label>
+        <label className="check small">
+          <input type="checkbox" checked={!!choice.forced} onChange={(e) => onChange((c) => (e.target.checked ? (c.forced = true) : delete c.forced))} />{' '}
+          <span title="Forced: once its condition is true, this is the only choice here, so the player has to take it">forced</span>
+        </label>
+        {choice.forced && (
+          <p className={`small choice-forced-note ${choice.conditions.length ? 'muted' : 'sev-warning'}`}>
+            {choice.conditions.length
+              ? `While this is true (${choice.conditions.map((x) => describeCondition(x, project)).join(' and ')}), it’s the only choice here.`
+              : 'Add a condition (+ condition) for this to do anything: the player is forced to take it once the condition is true.'}
+          </p>
+        )}
         <span className="spacer" />
         {choice.review === 'pending' && (
           <>

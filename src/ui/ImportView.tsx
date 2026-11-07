@@ -454,6 +454,7 @@ export function ImportView({
 @set trust = 2      @add trust 1             variable effects
 * [Choice text] -> target                    once-only choice
 + {has archive_key} [Open it] -> vault @take archive_key
++ {has archive_key} [Use the key] -> vault @forced   once they have the key, the only choice
 + {trust >= 2 and not has lamp} [Trust her] -> ally
 - [Markdown link choice](#target)
 -> target   /   @end                         divert / ending

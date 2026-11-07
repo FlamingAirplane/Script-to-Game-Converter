@@ -18,7 +18,7 @@ export type Marker =
   | { type: 'item'; id: string; displayName?: string; consumable: boolean }
   | { type: 'var'; id: string; value: boolean | number | string }
   | { type: 'effect'; effect: Effect }
-  | { type: 'choice'; text: string; target: string; conditions: Condition[]; effects: Effect[]; once: boolean };
+  | { type: 'choice'; text: string; target: string; conditions: Condition[]; effects: Effect[]; once: boolean; forced?: boolean };
 
 export type ParsedBlock = { line: number; endLine?: number; ambiguity?: string; transformed?: boolean } & (
   | { kind: 'title'; key: string; value: string }

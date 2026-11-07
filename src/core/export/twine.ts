@@ -1,6 +1,7 @@
 import { fnv1a } from '../hash';
 import { storyLayout } from '../layout';
 import { log } from '../log';
+import { choiceGuards } from '../forced';
 import { EXIT_PREFIX, fileBase, isActive, itemVar, type Choice, type Condition, type Effect, type Passage, type StoryProject } from '../isr';
 import type { ProcessedStory } from '../pipeline';
 import { GENERATOR_VERSION } from '../version';
@@ -252,7 +253,9 @@ function sugarBody(p: Passage, speakers: Map<string, string>, nameOf: (id: strin
   // Effects and notes after the last paragraph sit just above the links.
   flushSilent();
 
-  const choices = p.choices.filter((c) => isActive(c.review));
+  // A forced choice keeps the others out while it applies, as in Ink: they get its condition, negated.
+  const guards = choiceGuards(p);
+  const choices = p.choices.filter((c) => isActive(c.review)).map((c) => ({ ...c, conditions: [...c.conditions, ...(guards.get(c.id) ?? [])] }));
   if (choices.length === 0) {
     blocks.push(p.divert && p.divert !== 'END' ? `[[Continue->${nameOf(p.divert)}]]` : END_MARKUP);
     return joinBlocks(blocks);

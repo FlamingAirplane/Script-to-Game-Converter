@@ -38,6 +38,7 @@ const TITLES: Record<string, string> = {
   CUE_NAME_TYPO: 'A cue’s name looks like a typo.',
   EXIT_THEN_END: 'The story ends right after an exit to the game.',
   IMAGE_WITHOUT_TEXT: "A scene picture won't show: the passage has no text.",
+  FORCED_WITHOUT_CONDITION: 'A forced choice has no condition, so it changes nothing.',
   MULTIPLE_DIVERTS: 'This passage says where to go next more than once.',
   UNAPPROVED_GENERATED: 'A suggestion is waiting for your OK.',
   UNSUPPORTED_CONSTRUCT: 'Part of your script couldn’t be converted, so it was kept as a note.',

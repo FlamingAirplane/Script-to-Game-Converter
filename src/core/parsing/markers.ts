@@ -13,6 +13,7 @@ import type { Marker } from './types';
 //   @exit fight [note]               an exit to the game: the dialogue stops until the game resumes it
 //   * [Choice text] -> target        once-only choice
 //   + {has key} [Choice text] -> target @take key     sticky, gated choice with effects
+//   + {has key} [Choice text] -> target @forced       while it's open, the only choice in the passage
 //   - [Choice text](#target)         Markdown link form
 
 const KEYWORDS = new Set(['passage', 'start', 'end', 'pause', 'exit', 'cue', 'item', 'var', 'give', 'take', 'set', 'add']);
@@ -77,10 +78,10 @@ export function parseMarker(line: string): Marker | null {
   m = /^([*+])\s*((?:\{[^}]*\}\s*)*)\[([^\]]+)\]\s*(?:->\s*([A-Za-z_][\w.]*))?(.*)$/.exec(t);
   if (m) {
     const conds = [...m[2].matchAll(/\{([^}]*)\}/g)].map((x) => parseCondition(x[1]));
-    return { type: 'choice', once: m[1] === '*', conditions: conds, text: m[3].trim(), target: m[4] ?? '', effects: parseEffects(m[5]) };
+    return { type: 'choice', once: m[1] === '*', conditions: conds, text: m[3].trim(), target: m[4] ?? '', effects: parseEffects(m[5]), ...(/(?:^|\s)@forced\b/.test(m[5]) ? { forced: true } : {}) };
   }
   m = /^[-*]\s+\[([^\]]+)\]\(#([^)]+)\)(.*)$/.exec(t);
-  if (m) return { type: 'choice', once: false, conditions: [], text: m[1].trim(), target: m[2].trim(), effects: parseEffects(m[3]) };
+  if (m) return { type: 'choice', once: false, conditions: [], text: m[1].trim(), target: m[2].trim(), effects: parseEffects(m[3]), ...(/(?:^|\s)@forced\b/.test(m[3]) ? { forced: true } : {}) };
 
   m = /^@([a-z]+)\s*(.*)$/.exec(t);
   if (!m || !KEYWORDS.has(m[1])) return null;

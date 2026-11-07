@@ -1786,7 +1786,7 @@ describe('translations brought back in', () => {
   it('gives Unreal the locked choices, cues and exits, and text helpers for italics', async () => {
     const r = await ADAPTERS.unreal.export(processProject(await archive()), { engine: 'unreal', projectName: 'Archive', engineVersion: '5.7', integrationRef: 'v1.42.21-release', includeDemo: true });
     const info = r.files.find((f) => f.path.endsWith('NarrativeBridgeStoryInfo.h'))!.content as string;
-    expect(info).toContain('{ TEXT("archive_entry"), TEXT("Open the archive"), TEXT("Archive Key") }');
+    expect(info).toContain('{ TEXT("archive_entry"), TEXT("Open the archive"), TEXT("Archive Key"), false }');
     expect(info).toMatch(/static const int32 NumGatedChoices = [1-9]/);
     expect(info).toContain('static const int32 NumReservedTags = ');
     expect(info).toContain('TEXT("speaker")');
@@ -2192,5 +2192,110 @@ You run.
     );
     // The alley's two branches meet at the night; the night's never meet again (each ends).
     expect([...meetingPoints(project)]).toEqual([['alley', 'night']]);
+  });
+});
+
+describe('forced choices', () => {
+  const story = `@item brass_key "Brass Key"
+@start cottage
+
+@passage cottage Cottage
+
+A key glints on the mantel.
+
+* [Take the key] -> hall @give brass_key
+* [Leave it] -> hall
+
+@passage hall Hall
+
+A locked door, and a staircase.
+
++ {has brass_key} [Open the door with the key] -> vault @forced
++ [Climb the stairs] -> attic
++ [Wait] -> attic
+
+@passage vault Vault
+
+Inside.
+
+@end
+
+@passage attic Attic
+
+Dust.
+
+@end
+`;
+
+  it('makes the forced choice the only one once its condition holds', async () => {
+    const { Story } = await import('inkjs');
+    const { project } = await build(story, 'story.md', 'structured');
+    expect(project.passages.find((p) => p.id === 'hall')!.choices.map((c) => !!c.forced)).toEqual([true, false, false]);
+    const s = processProject(project);
+    expect(s.compile.ok).toBe(true);
+    expect(s.generated.ink).toContain('+ {has_brass_key} [Open the door with the key] // forced');
+    expect(s.generated.ink).toContain('+ {not has_brass_key} [Climb the stairs]');
+    const play = (pick: number) => {
+      const st = new Story(s.compile.json!);
+      st.ContinueMaximally();
+      st.ChooseChoiceIndex(pick);
+      st.ContinueMaximally();
+      return st.currentChoices.map((c) => c.text);
+    };
+    expect(play(0)).toEqual(['Open the door with the key']); // took the key: forced
+    expect(play(1)).toEqual(['Climb the stairs', 'Wait']); // left it
+  });
+
+  it('comes back from Ink unchanged, keeps other choices’ own conditions, and the first forced choice wins', async () => {
+    const { generateInk } = await import('../src/core/inkgen');
+    const { choiceGuards } = await import('../src/core/forced');
+    const { project } = await build(story, 'story.md', 'structured');
+    const hall = project.passages.find((p) => p.id === 'hall')!;
+    // A second forced choice, and an ordinary choice with a condition of its own.
+    hall.choices.push({ ...hall.choices[1], id: 'hall_rest', text: 'Rest', forced: true, conditions: [{ type: 'compare', variableId: 'tired', op: '==', value: true }] });
+    project.variables.push({ id: 'tired', initial: false, origin: 'source' } as never);
+    hall.choices[2].conditions = [{ type: 'not', condition: { type: 'has_item', itemId: 'lamp' } }];
+    project.items.push({ id: 'lamp', displayName: 'Lamp', consumable: false, origin: 'source' });
+    const guards = choiceGuards(hall);
+    expect(guards.get(hall.choices[0].id)).toEqual([]); // first forced: nothing over it
+    expect(guards.get('hall_rest')!.length).toBe(1); // the second gives way to the first
+    expect(guards.get(hall.choices[1].id)!.length).toBe(2);
+    const ink = generateInk(project).ink;
+    expect(processProject(project).compile.ok).toBe(true);
+    const back = (await build(ink, 'story.ink', 'structured')).project;
+    const strip = (x: string) => x.replace(/ \(source line \d+\)/g, '');
+    expect(strip(generateInk(back).ink)).toBe(strip(ink));
+    expect(back.passages.find((p) => p.id === 'hall')!.choices.map((c) => [c.text, !!c.forced, c.conditions.length])).toEqual([
+      ['Open the door with the key', true, 1],
+      ['Climb the stairs', false, 0],
+      ['Wait', false, 1],
+      ['Rest', true, 1],
+    ]);
+  });
+
+  it('shows nothing as locked while a forced choice is on offer, and warns when one has no condition', async () => {
+    const { lockedChoices } = await import('../src/core/gating');
+    const { project } = await build(story, 'story.md', 'structured');
+    const hall = project.passages.find((p) => p.id === 'hall')!;
+    hall.choices[2].conditions = [{ type: 'has_item', itemId: 'brass_key' }, { type: 'compare', variableId: 'x', op: '>', value: 1 }];
+    const read = (n: string) => (n === 'has_brass_key' ? true : 0);
+    expect(lockedChoices(project, 'hall', read, ['Open the door with the key'])).toEqual([]);
+    expect(lockedChoices(project, 'hall', read, ['Climb the stairs']).map((l) => l.choice.text)).toEqual(['Wait']);
+    hall.choices[0].conditions = [];
+    expect(processProject(project).diagnostics.some((d) => d.code === 'FORCED_WITHOUT_CONDITION')).toBe(true);
+    expect(processProject(project).analysis.graph.edges.find((e) => e.id === hall.choices[0].id)?.forced).toBeUndefined();
+  });
+
+  it('carries forced choices into the playable page, Twine, Unity and Unreal', async () => {
+    const { buildTwee, buildPlayableHtml } = await import('../src/core/export');
+    const { project } = await build(story, 'story.md', 'structured');
+    const s = processProject(project);
+    expect(buildTwee(s, 'sugarcube')).toMatch(/<<if not \$has_brass_key>>\[\[Climb the stairs/);
+    expect(buildPlayableHtml(s, '/* runtime */')).toContain('"f":1');
+    const opts = { engineVersion: '6000.3', integrationRef: 'v1.21.0', includeDemo: true };
+    const unity = await ADAPTERS.unity.export(s, { engine: 'unity', projectName: 'P', ...opts });
+    expect(unity.files.find((f) => f.path.endsWith('StoryInfo.cs'))!.content).toContain('ForcedChoices = { "hall\\nOpen the door with the key" }');
+    const unreal = await ADAPTERS.unreal.export(s, { engine: 'unreal', projectName: 'P', ...opts, engineVersion: '5.7' });
+    expect(unreal.files.find((f) => f.path.endsWith('NarrativeBridgeStoryInfo.h'))!.content).toContain('"Open the door with the key"), TEXT("Brass Key"), true }');
   });
 });
