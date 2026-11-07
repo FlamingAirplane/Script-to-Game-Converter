@@ -4,7 +4,10 @@
 
 - **Add scenes from the story map:** **+ New scene** on the Graph (or N, or double-click the map) adds a scene to a
   converted script, straight after a passage, as a new choice in one, or on its own to connect later. A passage's panel
-  has **+ Scene after this** and **+ Choice to a new scene**.
+  has **+ Scene after this** and **+ Choice to a new scene**. The same form is in Review (**+ New scene**, and
+  **+ A new scene…** as a choice's destination or a passage's Then), Playtest (**+ New scene after it**, and **+ Add a
+  scene here** at the end), and Diagnostics: a choice leading to a passage that doesn't exist offers to create it (also
+  by clicking *⚠ Missing* on the Graph), and a dead end offers a scene after it.
 - **Italics, bold and underlining are kept** from Fountain, Final Draft, Word, Markdown and Twine scripts. They show in
   Playtest, the playable story and the Unity panel (which types them out letter by letter); in Review they're written as
   `<i>…</i>`, `<b>…</b>` and `<u>…</u>`, which you can type too. Recording scripts mark them the Fountain way.

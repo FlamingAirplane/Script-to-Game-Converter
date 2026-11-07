@@ -219,6 +219,10 @@ export interface NewScene {
   then?: string;
   /** Where to put it on the map. */
   at?: { x: number; y: number };
+  /** Its id, when something already points at it (a choice whose destination doesn't exist yet). */
+  id?: string;
+  /** Points an existing choice (or, without `choiceId`, a passage's "then") at the new scene. */
+  retarget?: { passageId: string; choiceId?: string };
 }
 
 /** Whether a passage goes straight on (no choices the reader sees), so a scene can be put after it with 'continue'. */
@@ -238,7 +242,14 @@ export function addScene(p: StoryProject, s: NewScene): Passage | string {
   if (s.link === 'continue' && from && !goesStraightOn(from)) return `“${from.title}” ends with choices, so add the scene as a new choice instead.`;
   if (s.then && s.then !== 'END' && !p.passages.some((x) => x.id === s.then)) return 'The passage it goes to next doesn’t exist.';
   const taken = new Set(p.passages.map((x) => x.id));
-  const id = uniqueId(title, taken, 'scene');
+  if (s.id !== undefined) {
+    if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(s.id) || ['END', 'DONE'].includes(s.id.toUpperCase())) return `“${s.id}” can’t be a passage name: use letters, digits and underscores.`;
+    if (taken.has(s.id)) return `There’s already a passage called “${s.id}”.`;
+  }
+  const retargetPassage = s.retarget ? p.passages.find((x) => x.id === s.retarget!.passageId) : undefined;
+  const retargetChoice = s.retarget?.choiceId ? retargetPassage?.choices.find((c) => c.id === s.retarget!.choiceId) : undefined;
+  if (s.retarget && (!retargetPassage || (s.retarget.choiceId && !retargetChoice))) return 'The choice it was for no longer exists.';
+  const id = s.id ?? uniqueId(title, taken, 'scene');
   const heading = s.heading?.trim();
   const firstLine = s.firstLine?.trim();
   const scene: Passage = {
@@ -272,7 +283,13 @@ export function addScene(p: StoryProject, s: NewScene): Passage | string {
     from.choices.push(choice(s.choiceText?.trim() || title, id));
     from.isEnding = false;
   }
-  const at = from ? p.passages.indexOf(from) : -1;
+  if (retargetChoice) retargetChoice.target = id;
+  else if (retargetPassage) {
+    retargetPassage.divert = id;
+    retargetPassage.isEnding = false;
+  }
+  const after = from ?? retargetPassage;
+  const at = after ? p.passages.indexOf(after) : -1;
   if (at >= 0) p.passages.splice(at + 1, 0, scene);
   else p.passages.push(scene);
   if (s.at) p.layout = { ...p.layout, [id]: { x: Math.round(s.at.x), y: Math.round(s.at.y) } };

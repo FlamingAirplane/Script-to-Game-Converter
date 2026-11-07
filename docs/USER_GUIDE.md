@@ -121,6 +121,9 @@ suggestions to review. Type in *Filter passages…* to narrow it down. Press **[
 - **Choices:** each has its wording, where it leads (→, with ↗ to jump there), conditions (**+ condition**, for example
   *has the brass key*), effects (**+ effect**), and **once only** (the choice disappears after it is picked). Add one with
   **+ Add choice**. **Then** sets where the story goes when there are no choices, or **End the story here**.
+- **New scenes:** **+ New scene** under the contents adds one after the selected passage, as a new choice in it, or on
+  its own (the same form as on the Graph, section 5). A choice's destination and **Then** also offer **+ A new
+  scene…**, which creates the scene and points that choice (or Then) at it.
 
 ### Approving suggestions
 
@@ -221,7 +224,8 @@ the padlock routes on the Graph.
 
 The panel beside the story shows:
 
-- **Position:** the passage you are in.
+- **Position:** the passage you are in, with **+ New scene after it**. When the story ends, **+ Add a scene here**
+  carries it on from where it ended.
 - **State:** every item and variable. Tick or change them to pretend the game gave or took something; the choices
   update straight away.
 - **Save slot:** **Save** and **Load**. If you edit the story and then load, the save carries over the way a reader's
@@ -314,7 +318,9 @@ These settings are saved with your project. Your developer can change any of the
 | ▲ **worth a look** | Probably fine, but check it. For example, a passage no choice leads to. |
 | ○ **note** | Information only. |
 
-Click an entry to jump to the passage it concerns. Tick **details** to see technical codes. *Nothing to fix* means the
+Click an entry to jump to the passage it concerns. Some entries can be fixed with a new scene: a choice that leads
+to a passage that doesn't exist offers **+ Create** it (under the name the choice uses), and a passage where the reader
+gets stuck offers **+ Add a scene after it**. On the Graph, click *⚠ Missing* to do the same. Tick **details** to see technical codes. *Nothing to fix* means the
 story is ready to export. ⌘. (Ctrl+.) shows or hides the panel.
 
 ![The Logbook](images/logbook.jpg)

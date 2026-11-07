@@ -2007,3 +2007,52 @@ describe('new scenes from the Graph', () => {
     expect(addScene(p, { title: 'Dream', link: 'none' })).toMatchObject({ id: 'dream_2' });
   });
 });
+
+describe('new scenes elsewhere in the app', () => {
+  const script = 'INT. HALL - NIGHT\n\nThe hall is dark.\n\nINT. ROOM - NIGHT\n\nA lamp burns.\n';
+
+  it('creates a passage a choice already leads to, under that name', async () => {
+    const { addScene, addChoice } = await import('../src/ui/projectOps');
+    const { sceneFix } = await import('../src/ui/NewScene');
+    const { project: p } = await build(script);
+    const c = addChoice(p, 'hall')!;
+    c.target = 'boat_house';
+    const before = processProject(p);
+    const missing = before.diagnostics.find((d) => d.code === 'INK_TARGET_MISSING')!;
+    const fix = sceneFix(missing.code, missing.details, missing.entityId, p)!;
+    expect(fix.label).toBe('Create “Boat House”');
+    expect(fix.request).toMatchObject({ id: 'boat_house', title: 'Boat House' });
+    const s = addScene(p, { ...fix.request, title: fix.request.title!, link: 'none' });
+    expect(s).toMatchObject({ id: 'boat_house', isEnding: true });
+    const after = processProject(p);
+    expect(after.diagnostics.some((d) => d.code === 'INK_TARGET_MISSING')).toBe(false);
+    expect(after.compile.ok).toBe(true);
+    // A name that's taken or not a passage name is explained.
+    expect(addScene(p, { title: 'X', id: 'room', link: 'none' })).toMatch(/already a passage called “room”/);
+    expect(addScene(p, { title: 'X', id: 'END', link: 'none' })).toMatch(/can’t be a passage name/);
+  });
+
+  it('points an existing choice, or a passage’s "then", at a new scene', async () => {
+    const { addScene, addChoice } = await import('../src/ui/projectOps');
+    const { project: p } = await build(script);
+    const c = addChoice(p, 'hall')!;
+    const s = addScene(p, { title: 'Cellar', link: 'none', retarget: { passageId: 'hall', choiceId: c.id } });
+    if (typeof s === 'string') throw new Error(s);
+    expect(p.passages[0].choices[0].target).toBe('cellar');
+    expect(p.passages.map((x) => x.id)).toEqual(['hall', 'cellar', 'room']);
+    const t = addScene(p, { title: 'Porch', link: 'none', retarget: { passageId: 'room' }, then: 'END' });
+    expect(t).toMatchObject({ isEnding: true });
+    expect(p.passages.find((x) => x.id === 'room')).toMatchObject({ divert: 'porch', isEnding: false });
+    expect(processProject(p).compile.ok).toBe(true);
+    expect(addScene(p, { title: 'Gone', link: 'none', retarget: { passageId: 'hall', choiceId: 'nope' } })).toBe('The choice it was for no longer exists.');
+  });
+
+  it('offers a scene after a passage where the reader gets stuck', async () => {
+    const { sceneFix } = await import('../src/ui/NewScene');
+    const { project: p } = await build(script);
+    p.passages[1].isEnding = false;
+    const stuck = processProject(p).diagnostics.find((d) => d.code === 'NO_AVAILABLE_CHOICES')!;
+    expect(sceneFix(stuck.code, stuck.details, stuck.entityId, p)).toEqual({ label: 'Add a scene after it', request: { from: 'room', link: 'continue' } });
+    expect(sceneFix('EMPTY_PASSAGE', undefined, 'room', p)).toBeNull();
+  });
+});

@@ -7,8 +7,8 @@ import { CARD, storyLayout, type Position } from '../core/layout';
 import { routeEdges } from '../core/edgeRouting';
 import { fileBase, type StoryProject } from '../core/isr';
 import { PassageInspector } from './PassageInspector';
-import { NewSceneSheet } from './NewScene';
-import { countBreaks, type SceneLink, type Update } from './projectOps';
+import { NewSceneSheet, sceneFix, type SceneRequest } from './NewScene';
+import { countBreaks, type Update } from './projectOps';
 
 // The story map. Passages are laid out in columns by distance from the start (ordered to reduce
 // crossings), can be dragged to new places (remembered in the project), searched, and navigated
@@ -248,7 +248,7 @@ export function GraphView({
   // The passage panel: open after a passage is clicked (or chosen with Space), closed with Esc or ×.
   const [inspecting, setInspecting] = useState(false);
   // The New scene form: after a passage, or on its own (at a place on the map when the map was double-clicked).
-  const [sceneForm, setSceneForm] = useState<{ from?: string; link?: SceneLink; at?: Position } | null>(null);
+  const [sceneForm, setSceneForm] = useState<SceneRequest | null>(null);
   const breaks = useMemo(() => new Map(project.passages.map((p) => [p.id, countBreaks(p)])), [project]);
   const exits = useMemo(() => new Map(project.passages.map((p) => [p.id, p.content.filter((b) => b.type === 'exit').map((b) => (b.type === 'exit' ? b.name : ''))])), [project]);
   const auto = useMemo(() => storyLayout(graph, start), [graph, start]);
@@ -393,6 +393,8 @@ export function GraphView({
   };
 
   // Map keys: / find, F fit, N new scene, + and − zoom.
+  // A route to a passage that doesn't exist: click it to create that passage.
+  const fixMissing = (to: string, from: string) => sceneFix('INK_TARGET_MISSING', { target: to, passageId: from }, from, project)?.request ?? null;
   const newScene = () => setSceneForm(selected && project.passages.some((p) => p.id === selected) ? { from: selected } : {});
   const mapKeys = useRef({ fit, zoom: zoomBy, newScene });
   mapKeys.current = { fit, zoom: zoomBy, newScene };
@@ -572,8 +574,21 @@ export function GraphView({
                 return (
                   <g key={e.id} onPointerEnter={() => setHoverEdge(e.id)} onPointerLeave={() => setHoverEdge(null)}>
                     <line x1={x1} y1={y1} x2={x1 + 40} y2={y1} className={`edge ${missing ? 'missing' : kind} ${hl ? 'hl' : ''}`} markerEnd={`url(#arrow-${hl ? 'hl' : kind})`} />
-                    <text x={x1 + 44} y={y1 + 4} className={`edge-end ${missing ? 'missing' : ''}`}>
-                      {missing ? `⚠ Missing: ${e.to}` : 'The End'}
+                    <text
+                      x={x1 + 44}
+                      y={y1 + 4}
+                      className={`edge-end ${missing ? 'missing' : ''}`}
+                      {...(missing && fixMissing(e.to, e.from)
+                        ? {
+                            role: 'button',
+                            tabIndex: 0,
+                            'aria-label': `${e.to} doesn’t exist yet. Create it`,
+                            onClick: () => setSceneForm(fixMissing(e.to, e.from)!),
+                            onKeyDown: (k: React.KeyboardEvent) => (k.key === 'Enter' || k.key === ' ') && (k.preventDefault(), setSceneForm(fixMissing(e.to, e.from)!)),
+                          }
+                        : {})}
+                    >
+                      {missing ? `⚠ Missing: ${e.to}${fixMissing(e.to, e.from) ? ' (click to create it)' : ''}` : 'The End'}
                     </text>
                     {(kind === 'cond' || kind === 'pending') && !missing && <RouteSign kind={kind} x={x1 + 20} y={y1} />}
                     {showLabel && <EdgeLabel x={x1 + 20} y={y1 - 14} text={e.label} />}
@@ -689,9 +704,7 @@ export function GraphView({
           <NewSceneSheet
             project={project}
             update={update}
-            from={sceneForm.from}
-            link={sceneForm.link}
-            at={sceneForm.at}
+            request={sceneForm}
             onCreated={(id) => {
               moved.current = true;
               onSelect(id);

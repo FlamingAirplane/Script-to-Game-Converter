@@ -1260,3 +1260,8 @@ section.drafts > h2 { margin-top: 26px; }
 .new-scene-link { display: flex; flex-direction: column; gap: 6px; }
 .new-scene-link .mode:has(input:disabled) { opacity: 0.55; }
 .inspector-add { gap: 6px; }
+.new-scene-purpose { margin: 0; padding: 8px 10px; border-left: 3px solid var(--pen); background: var(--pen-bg); }
+.edge-end.missing[role='button'] { cursor: pointer; text-decoration: underline dotted; }
+.edge-end.missing[role='button']:focus-visible { outline: 2px solid var(--pen); }
+.diag-action { margin: 2px 0 8px 28px; }
+.playtest-add-scene { align-self: flex-start; margin-top: 6px; }

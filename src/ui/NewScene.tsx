@@ -1,6 +1,48 @@
 import { useMemo, useState } from 'react';
 import type { StoryProject } from '../core/isr';
-import { addScene, goesStraightOn, type SceneLink, type Update } from './projectOps';
+import { addScene, goesStraightOn, type NewScene, type SceneLink, type Update } from './projectOps';
+
+/** A readable title from a passage id: "boat_house" → "Boat House". */
+export function titleFromId(id: string): string {
+  return id.replace(/_+/g, ' ').trim().replace(/\b\w/g, (c) => c.toUpperCase());
+}
+
+/**
+ * What a diagnostic offers to add, if anything: the missing passage a choice or "then" leads to, or a scene after a
+ * passage where the reader gets stuck.
+ */
+export function sceneFix(code: string, details: Record<string, unknown> | undefined, entityId: string | undefined, project: StoryProject): { label: string; request: SceneRequest } | null {
+  const target = typeof details?.target === 'string' ? details.target : undefined;
+  if (code === 'INK_TARGET_MISSING' && target && /^[A-Za-z_][A-Za-z0-9_]*$/.test(target) && !project.passages.some((p) => p.id === target)) {
+    const from = typeof details?.passageId === 'string' ? details.passageId : entityId;
+    const fromTitle = project.passages.find((p) => p.id === from)?.title;
+    return {
+      label: `Create “${titleFromId(target)}”`,
+      request: { id: target, title: titleFromId(target), purpose: `${fromTitle ? `“${fromTitle}” leads` : 'Something leads'} to “${target}”, which doesn’t exist yet: this creates it.` },
+    };
+  }
+  if (code === 'NO_AVAILABLE_CHOICES' && entityId && project.passages.some((p) => p.id === entityId)) return { label: 'Add a scene after it', request: { from: entityId, link: 'continue' } };
+  return null;
+}
+
+/** What opens the New scene form: where the scene joins the story, or what it's for. */
+export interface SceneRequest {
+  /** The passage it comes after. */
+  from?: string;
+  link?: SceneLink;
+  /** Where on the map it goes (the map was double-clicked there). */
+  at?: { x: number; y: number };
+  /** Its id, when something already points at it. */
+  id?: string;
+  /** A title to start with. */
+  title?: string;
+  /** What it's for, shown in place of the "where it goes" choices (e.g. "For the choice “Run”"). */
+  purpose?: string;
+  /** The choice, or passage's "then", that will lead to it. */
+  retarget?: NewScene['retarget'];
+  /** Where it goes afterwards, to start with. */
+  then?: string;
+}
 
 // The Graph chapter's "New scene" form: a scene added to a story already converted from a script, joined to it
 // after a passage (the story goes on into it), as a new choice in a passage, or on its own to connect later.
@@ -8,33 +50,28 @@ import { addScene, goesStraightOn, type SceneLink, type Update } from './project
 export function NewSceneSheet({
   project,
   update,
-  from: initialFrom,
-  link: initialLink,
-  at,
+  request,
   onCreated,
   onClose,
 }: {
   project: StoryProject;
   update: Update;
-  /** The passage it comes after, when it was started from one. */
-  from?: string;
-  link?: SceneLink;
-  /** Where on the map it goes (when started by double-clicking the map). */
-  at?: { x: number; y: number };
+  request: SceneRequest;
   onCreated: (id: string) => void;
   onClose: () => void;
 }) {
-  const [title, setTitle] = useState('');
+  const { from: initialFrom, link: initialLink, at, id, purpose, retarget } = request;
+  const [title, setTitle] = useState(request.title ?? '');
   const [heading, setHeading] = useState('');
   const [firstLine, setFirstLine] = useState('');
   const [from, setFrom] = useState(initialFrom ?? '');
   const fromPassage = project.passages.find((p) => p.id === from);
   const straight = !fromPassage || goesStraightOn(fromPassage);
   const [link, setLink] = useState<SceneLink>(initialLink ?? (initialFrom ? 'continue' : 'none'));
-  const effectiveLink: SceneLink = link === 'continue' && !straight ? 'choice' : link;
+  const effectiveLink: SceneLink = purpose ? 'none' : link === 'continue' && !straight ? 'choice' : link;
   const [choiceText, setChoiceText] = useState('');
   const [keepPathText, setKeepPathText] = useState('');
-  const [then, setThen] = useState<string>('');
+  const [then, setThen] = useState<string>(request.then ?? '');
   const [error, setError] = useState('');
   const title_ = (id: string) => (id === 'END' ? 'the end' : (project.passages.find((p) => p.id === id)?.title ?? id));
 
@@ -56,6 +93,8 @@ export function NewSceneSheet({
       keepPathText,
       then: thenValue,
       at,
+      id,
+      retarget,
     };
     // Tried on a copy first: a problem changes nothing and is shown here. (Adding is deterministic, so the id is the same.)
     const r = addScene(structuredClone(project), scene);
@@ -99,6 +138,9 @@ export function NewSceneSheet({
           <textarea className="input" rows={2} value={firstLine} placeholder="e.g. Rain hammers the tin roof." onChange={(e) => setFirstLine(e.target.value)} />
         </label>
 
+        {purpose ? (
+          <p className="small new-scene-purpose">{purpose}</p>
+        ) : (
         <fieldset className="modes new-scene-link">
           <legend className="muted small">Where it goes in the story</legend>
           {initialFrom === undefined && (
@@ -142,6 +184,7 @@ export function NewSceneSheet({
             </span>
           </label>
         </fieldset>
+        )}
 
         {effectiveLink === 'choice' && (
           <label className="field">
