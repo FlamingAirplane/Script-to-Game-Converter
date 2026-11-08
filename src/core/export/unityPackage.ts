@@ -139,6 +139,9 @@ const INK_DEFINES = [
   { name: 'com.unity.addressables', expression: '1.19.0', define: 'NARRATIVE_BRIDGE_ADDRESSABLES' },
   // Translations from Unity's Localization package's string tables.
   { name: 'com.unity.localization', expression: '1.0.0', define: 'NARRATIVE_BRIDGE_LOCALIZATION' },
+  // The Enter Dialogue Trigger's trigger colliders, when the game has 3D or 2D physics.
+  { name: 'com.unity.modules.physics', expression: '1.0.0', define: 'NARRATIVE_BRIDGE_PHYSICS' },
+  { name: 'com.unity.modules.physics2d', expression: '1.0.0', define: 'NARRATIVE_BRIDGE_PHYSICS_2D' },
 ];
 
 export function runtimeAsmdef(id: UnityPackageId) {
@@ -354,7 +357,7 @@ using __NAMESPACE__;
 public class StoryTrigger : MonoBehaviour
 {
     public NarrativeController story;
-    [Tooltip("Where to start, one of StoryInfo.Passages. Empty starts from the beginning.")]
+    [StoryPassage, Tooltip("Where to start, one of StoryInfo.Passages. Empty starts from the beginning.")]
     public string passage = "";
     [Tooltip("Only objects with this tag start the story.")]
     public string playerTag = "Player";
@@ -385,6 +388,215 @@ public class StoryTrigger : MonoBehaviour
     }
 
     void OnEnded() => storyFinished.Invoke();
+}
+`;
+
+export const ENTER_DIALOGUE_TRIGGER_CS = `using System;
+using UnityEngine;
+using UnityEngine.Events;
+
+namespace __NAMESPACE__
+{
+    /// <summary>A passage of the story (one of StoryInfo.Passages): the Inspector shows a list to pick from.</summary>
+    public class StoryPassageAttribute : PropertyAttribute { }
+
+    /// <summary>
+    /// A line of dialogue in the passage named by another field (a label from StoryInfo.Lines, "line_…"): the
+    /// Inspector lists that passage's lines as they read.
+    /// </summary>
+    public class StoryLineAttribute : PropertyAttribute
+    {
+        public readonly string PassageField;
+        public StoryLineAttribute(string passageField) { PassageField = passageField; }
+    }
+
+    /// <summary>
+    /// Enter Dialogue Trigger: enters the story at a passage, or at a line of dialogue in it, when the player walks into
+    /// this object's trigger collider (or when you call Enter()). Pick the Line to pick a conversation up partway: the
+    /// player went off to fetch the flowers, comes back, and the talk goes on at "You found them!" instead of from the
+    /// top. When the story has already run, it keeps what it knows (its variables and items); Fresh Start starts over.
+    /// </summary>
+    [AddComponentMenu("Narrative Bridge/__MENU_TITLE__/Enter Dialogue Trigger")]
+    public class NarrativeEnterDialogueTrigger : MonoBehaviour
+    {
+        [Tooltip("The story to enter. Empty uses the one in the scene.")]
+        public NarrativeController story;
+        [StoryPassage, Tooltip("The passage to enter. Empty is the beginning of the story.")]
+        public string passage = "";
+        [StoryLine("passage"), Tooltip("The line of dialogue in that passage the player picks up on. Empty is the top of the passage.")]
+        public string line = "";
+        [Tooltip("Enter when an object with this tag walks into the trigger collider. Empty: only when you call Enter().")]
+        public string playerTag = "Player";
+        [Tooltip("Enter only when the player has this item (an item id, without has_), e.g. the flowers. Empty: always.")]
+        public string requiredItem = "";
+        [Tooltip("Enter only the first time.")]
+        public bool onlyOnce = true;
+        [Tooltip("Start the story over there (forgetting its variables and items) instead of keeping what it knows.")]
+        public bool freshStart;
+
+        [Tooltip("The dialogue was entered.")]
+        public UnityEvent entered = new UnityEvent();
+        [Tooltip("The dialogue ended, or handed over to the game at an exit.")]
+        public UnityEvent finished = new UnityEvent();
+
+        bool used, active;
+
+        /// <summary>Where it enters: the passage, or "passage.line_…" for a line (empty for the beginning).</summary>
+        public string Target => string.IsNullOrEmpty(passage) || string.IsNullOrEmpty(line) ? passage : passage + "." + line;
+
+        /// <summary>Whether Enter() would enter the dialogue now.</summary>
+        public bool CanEnter => Controller() != null && !(onlyOnce && used) && (string.IsNullOrEmpty(requiredItem) || Controller().HasItem(requiredItem));
+
+        void OnEnable()
+        {
+            var s = Controller();
+            if (s == null) return;
+            s.StoryEnded += OnFinished;
+            s.ExitReached += OnExit;
+        }
+
+        void OnDisable()
+        {
+            if (story == null) return;
+            story.StoryEnded -= OnFinished;
+            story.ExitReached -= OnExit;
+        }
+
+#if NARRATIVE_BRIDGE_PHYSICS
+        void OnTriggerEnter(Collider other) { if (IsPlayer(other.gameObject)) Enter(); }
+#endif
+#if NARRATIVE_BRIDGE_PHYSICS_2D
+        void OnTriggerEnter2D(Collider2D other) { if (IsPlayer(other.gameObject)) Enter(); }
+#endif
+
+        bool IsPlayer(GameObject other) => !string.IsNullOrEmpty(playerTag) && other.CompareTag(playerTag);
+
+        /// <summary>Enters the dialogue at Target (e.g. from your own "talk" button).</summary>
+        public void Enter()
+        {
+            if (!CanEnter) return;
+            var s = Controller();
+            var target = Target;
+            if (!string.IsNullOrEmpty(target) && !NarrativeController.IsStartPoint(target))
+            {
+                Debug.LogError("[NarrativeBridge] Enter Dialogue Trigger: the story has no passage or line called " + target + ".", this);
+                return;
+            }
+            used = true;
+            active = true;
+            if (string.IsNullOrEmpty(target)) s.StartStory();
+            else if (freshStart) s.StartAt(target);
+            else s.EnterAt(target);
+            entered.Invoke();
+        }
+
+        NarrativeController Controller()
+        {
+            if (story == null) story = FindAnyController();
+            return story;
+        }
+
+        static NarrativeController FindAnyController()
+        {
+#if UNITY_2023_1_OR_NEWER
+            return UnityEngine.Object.FindFirstObjectByType<NarrativeController>();
+#else
+            return UnityEngine.Object.FindObjectOfType<NarrativeController>();
+#endif
+        }
+
+        void OnExit(string exit) => OnFinished();
+
+        void OnFinished()
+        {
+            if (!active) return;
+            active = false;
+            finished.Invoke();
+        }
+
+        void OnValidate()
+        {
+            if (!string.IsNullOrEmpty(passage) && Array.IndexOf(StoryInfo.Passages, passage) < 0)
+                Debug.LogWarning("[NarrativeBridge] Enter Dialogue Trigger on " + name + ": the story has no passage called " + passage + ".", this);
+            else if (!string.IsNullOrEmpty(line) && !NarrativeController.IsStartPoint(Target))
+                Debug.LogWarning("[NarrativeBridge] Enter Dialogue Trigger on " + name + ": " + passage + " has no line " + line + " (was it changed in the script?).", this);
+        }
+    }
+}
+`;
+
+export const STORY_POINT_DRAWERS_CS = `using System.Collections.Generic;
+using UnityEditor;
+using UnityEngine;
+
+namespace __NAMESPACE__.EditorTools
+{
+    /// <summary>Lists the story's passages for a [StoryPassage] string field.</summary>
+    [CustomPropertyDrawer(typeof(StoryPassageAttribute))]
+    public class StoryPassageDrawer : PropertyDrawer
+    {
+        public override void OnGUI(Rect position, SerializedProperty property, GUIContent label)
+        {
+            if (property.propertyType != SerializedPropertyType.String) { EditorGUI.PropertyField(position, property, label); return; }
+            var values = new List<string> { "" };
+            var shown = new List<GUIContent> { new GUIContent("(beginning of the story)") };
+            for (int i = 0; i < StoryInfo.Passages.Length; i++)
+            {
+                values.Add(StoryInfo.Passages[i]);
+                var title = StoryInfo.PassageTitles[i];
+                shown.Add(new GUIContent(title == StoryInfo.Passages[i] ? title : title + " (" + StoryInfo.Passages[i] + ")"));
+            }
+            StoryPointPopup.Draw(position, property, label, values, shown);
+        }
+    }
+
+    /// <summary>Lists one passage's lines of dialogue, as they read, for a [StoryLine("passageField")] string field.</summary>
+    [CustomPropertyDrawer(typeof(StoryLineAttribute))]
+    public class StoryLineDrawer : PropertyDrawer
+    {
+        public override void OnGUI(Rect position, SerializedProperty property, GUIContent label)
+        {
+            if (property.propertyType != SerializedPropertyType.String) { EditorGUI.PropertyField(position, property, label); return; }
+            var field = ((StoryLineAttribute)attribute).PassageField;
+            var path = property.propertyPath;
+            var dot = path.LastIndexOf('.');
+            var passageProp = property.serializedObject.FindProperty(dot < 0 ? field : path.Substring(0, dot + 1) + field);
+            var passage = passageProp != null && passageProp.propertyType == SerializedPropertyType.String ? passageProp.stringValue : "";
+            var values = new List<string> { "" };
+            var shown = new List<GUIContent> { new GUIContent("(top of the passage)") };
+            for (int i = 0; i < StoryInfo.Lines.Length; i++)
+            {
+                var l = StoryInfo.Lines[i];
+                var cut = l.IndexOf('.');
+                if (cut < 0 || l.Substring(0, cut) != passage) continue;
+                values.Add(l.Substring(cut + 1));
+                shown.Add(new GUIContent(StoryInfo.LineTexts[i].Replace("/", "\\u2215"), l));
+            }
+            using (new EditorGUI.DisabledScope(string.IsNullOrEmpty(passage)))
+                StoryPointPopup.Draw(position, property, label, values, shown);
+        }
+    }
+
+    static class StoryPointPopup
+    {
+        /// Draws a popup of the values; a value the story no longer has stays, marked as missing, until it's changed.
+        public static void Draw(Rect position, SerializedProperty property, GUIContent label, List<string> values, List<GUIContent> shown)
+        {
+            var current = property.stringValue ?? "";
+            var index = values.IndexOf(current);
+            if (index < 0)
+            {
+                values.Add(current);
+                shown.Add(new GUIContent(current + " (not in the story)"));
+                index = values.Count - 1;
+            }
+            EditorGUI.BeginProperty(position, label, property);
+            EditorGUI.BeginChangeCheck();
+            var picked = EditorGUI.Popup(position, label, index, shown.ToArray());
+            if (EditorGUI.EndChangeCheck()) property.stringValue = values[picked];
+            EditorGUI.EndProperty();
+        }
+    }
 }
 `;
 

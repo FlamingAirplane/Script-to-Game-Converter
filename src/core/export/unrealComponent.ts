@@ -135,9 +135,27 @@ public:
     UFUNCTION(BlueprintCallable, Category = "Narrative Bridge")
     void StartStory();
 
-    /** Starts (or restarts) the story at a passage, e.g. when the player talks to someone. See NarrativeBridgeStoryInfo::Passages. */
+    /**
+     * Starts (or restarts) the story at a passage, e.g. when the player talks to someone (see NarrativeBridgeStoryInfo::Passages),
+     * or at a line of dialogue in one, "passage.line_…" (see NarrativeBridgeStoryInfo::Lines), to pick a conversation up partway.
+     */
     UFUNCTION(BlueprintCallable, Category = "Narrative Bridge")
     void StartAt(const FString& Passage);
+
+    /**
+     * Enters the dialogue at a passage or a line of dialogue ("passage.line_…"), e.g. when the player talks to someone again:
+     * the page starts afresh there, but the story keeps what it knows (its variables and items). The first time, it's StartAt.
+     */
+    UFUNCTION(BlueprintCallable, Category = "Narrative Bridge")
+    void EnterAt(const FString& Name);
+
+    /** Whether the story can start at (or jump to) this name: one of NarrativeBridgeStoryInfo::Passages or ::Lines. */
+    UFUNCTION(BlueprintPure, Category = "Narrative Bridge")
+    static bool IsStartPoint(const FString& Name);
+
+    /** Whether the player has an item (an item id, without "has_"): your inventory's answer, or the story's. */
+    UFUNCTION(BlueprintPure, Category = "Narrative Bridge")
+    bool HasItem(const FString& ItemId) const;
 
     /** Takes one of the choices (by its index in OnChoices). */
     UFUNCTION(BlueprintCallable, Category = "Narrative Bridge")
@@ -151,7 +169,7 @@ public:
     UFUNCTION(BlueprintCallable, Category = "Narrative Bridge")
     void Resume();
 
-    /** Goes on at another passage (after a lost fight, say), keeping the story's variables and items. Works away from an exit too. */
+    /** Goes on at another passage or line (after a lost fight, say), keeping the story's variables and items. Works away from an exit too. */
     UFUNCTION(BlueprintCallable, Category = "Narrative Bridge")
     void ResumeAt(const FString& Passage);
 
@@ -188,7 +206,7 @@ public:
     UFUNCTION(BlueprintPure, Category = "Narrative Bridge")
     FString GetCurrentPassage() const;
 
-    /** The passage the story was started at (StartAt), or empty when it started from the beginning. */
+    /** The passage or line the story was started at (StartAt), or empty when it started from the beginning. */
     UFUNCTION(BlueprintPure, Category = "Narrative Bridge")
     FString GetStartPassage() const { return StartPassage; }
 
@@ -397,6 +415,20 @@ namespace
     }
 
     bool IsPassage(const FString& Name) { return Listed(NarrativeBridgeStoryInfo::Passages, NarrativeBridgeStoryInfo::NumPassages, Name); }
+    bool IsLine(const FString& Name) { return Listed(NarrativeBridgeStoryInfo::Lines, NarrativeBridgeStoryInfo::NumLines, Name); }
+
+    /** The passage a start point is in: the name itself, or the passage of a line ("garden" for "garden.line_…"). */
+    FString PassageOfName(const FString& Name)
+    {
+        int32 Dot = INDEX_NONE;
+        return Name.FindChar(TEXT('.'), Dot) ? Name.Left(Dot) : Name;
+    }
+
+    /**
+     * The Ink path to choose for a start point. A line is reached through its entry knot, "passage__line_…", which
+     * diverts to the line's label (a label after a Continue break sits inside the weave, where a path can't name it).
+     */
+    FString InkPathOf(const FString& Name) { return IsLine(Name) ? Name.Replace(TEXT("."), TEXT("__")) : Name; }
     bool IsItemVariable(const FString& Name) { return Listed(NarrativeBridgeStoryInfo::ItemVariables, NarrativeBridgeStoryInfo::NumItemVariables, Name); }
     bool IsStoryVariable(const FString& Name) { return Listed(NarrativeBridgeStoryInfo::Variables, NarrativeBridgeStoryInfo::NumVariables, Name); }
 
@@ -560,8 +592,41 @@ void UNarrativeBridgeComponent::StartStory()
 
 void UNarrativeBridgeComponent::StartAt(const FString& Passage)
 {
-    if (!IsPassage(Passage)) { ReportError(FString::Printf(TEXT("There is no passage called %s."), *Passage)); return; }
+    if (!IsStartPoint(Passage)) { ReportError(FString::Printf(TEXT("There is no passage or line called %s."), *Passage)); return; }
     Begin(Passage);
+}
+
+bool UNarrativeBridgeComponent::IsStartPoint(const FString& Name)
+{
+    return !Name.IsEmpty() && (IsPassage(Name) || IsLine(Name));
+}
+
+void UNarrativeBridgeComponent::EnterAt(const FString& Name)
+{
+    if (!InkStory) { StartAt(Name); return; }
+    if (!IsStartPoint(Name)) { ReportError(FString::Printf(TEXT("There is no passage or line called %s."), *Name)); return; }
+    const bool bExited = IsAtExit();
+    // Saved as a jump, like ResumeAt, so a save carries over to a revised story.
+    ChoicePath.Add(JumpMark + Name);
+    Transcript.Reset();
+    bHasEnded = false;
+    LastPassage = PassageOfName(Name);
+    SetStatus(FString());
+    StopVoice();
+    InkStory->ChoosePath(InkPathOf(Name));
+    OnRestarted.Broadcast();
+    if (bExited) OnResumed.Broadcast();
+    Advance();
+}
+
+bool UNarrativeBridgeComponent::HasItem(const FString& ItemId) const
+{
+    if (UObject* Inventory = Authority()) return INarrativeInventoryAuthority::Execute_HasItem(Inventory, ItemId);
+    const FString Var = TEXT("has_") + ItemId;
+    if (!InkStory || !IsItemVariable(Var)) return false;
+    bool bFound = false;
+    const FInkpotValue Value = GetVariable(Var, bFound);
+    return bFound && UInkpotValueLibrary::InkpotValueAsBool(Value);
 }
 
 void UNarrativeBridgeComponent::Begin(const FString& Passage)
@@ -592,11 +657,11 @@ void UNarrativeBridgeComponent::Begin(const FString& Passage)
     Transcript.Reset();
     bHasEnded = false;
     StartPassage = Passage;
-    LastPassage = Passage;
+    LastPassage = PassageOfName(Passage);
     LoadNote.Reset();
     SetStatus(FString());
     StopVoice();
-    if (!Passage.IsEmpty()) InkStory->ChoosePath(Passage);
+    if (!Passage.IsEmpty()) InkStory->ChoosePath(InkPathOf(Passage));
     OnRestarted.Broadcast();
     Advance();
 }
@@ -706,12 +771,12 @@ void UNarrativeBridgeComponent::Resume()
 void UNarrativeBridgeComponent::ResumeAt(const FString& Passage)
 {
     if (!InkStory) return;
-    if (!IsPassage(Passage)) { ReportError(FString::Printf(TEXT("There is no passage called %s."), *Passage)); return; }
+    if (!IsStartPoint(Passage)) { ReportError(FString::Printf(TEXT("There is no passage or line called %s."), *Passage)); return; }
     const bool bExited = IsAtExit();
     // Saves record the jump, so a save carries over to a revised story too.
     ChoicePath.Add(JumpMark + Passage);
-    InkStory->ChoosePath(Passage);
-    LastPassage = Passage;
+    InkStory->ChoosePath(InkPathOf(Passage));
+    LastPassage = PassageOfName(Passage);
     bHasEnded = false;
     StopVoice();
     if (bExited) OnResumed.Broadcast();
@@ -995,11 +1060,11 @@ bool UNarrativeBridgeComponent::TryLoadState(const FString& Save, FString& Error
 void UNarrativeBridgeComponent::ReplayChoices(const TArray<FString>& Path, const FString& SavedVersion)
 {
     InkStory->ResetState();
-    if (IsPassage(StartPassage)) InkStory->ChoosePath(StartPassage);
+    if (IsStartPoint(StartPassage)) InkStory->ChoosePath(InkPathOf(StartPassage));
     ChoicePath.Reset();
     Transcript.Reset();
     bHasEnded = false;
-    LastPassage = StartPassage;
+    LastPassage = PassageOfName(StartPassage);
     StopVoice();
     int32 Followed = 0;
     // The host's inventory is already where the save left it.
@@ -1017,9 +1082,9 @@ void UNarrativeBridgeComponent::ReplayChoices(const TArray<FString>& Path, const
         {
             // A jump the game made with ResumeAt.
             const FString Target = Path[i].Mid(JumpMark.Len());
-            if (!IsPassage(Target)) break;
-            InkStory->ChoosePath(Target);
-            LastPassage = Target;
+            if (!IsStartPoint(Target)) break;
+            InkStory->ChoosePath(InkPathOf(Target));
+            LastPassage = PassageOfName(Target);
             ChoicePath.Add(Path[i]);
             ++Followed;
             ++i;

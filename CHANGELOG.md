@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+- **Enter Dialogue Trigger (Unity and Unreal):** start a conversation at any **line of dialogue**, not just at the top
+  of a passage. Talk to the gardener about flowers, go and fetch some, come back, and the trigger picks up at "You found
+  them!" instead of replaying the whole conversation. Pick the passage and the line from lists in the Inspector or the
+  Details panel. It can wait until the player has an item, and it keeps what the story already knows. In code it's
+  `StartAt("passage.line_…")` or `EnterAt(…)`, and the lines are listed in `StoryInfo.Lines`. The Unity Story Debugger
+  can jump to a line, and the smoke test and Unreal automation tests start at every line.
+- **Fixed:** an exit's note came back twice (as a note too) when Narrative Bridge's own Ink was brought back in.
+
 - **The Unreal export catches up with Unity:** the Unreal project now has a themed **story panel** (the Story UI look
   on the Export page, with typing, portraits, scene pictures, locked choices greyed out, and Settings and save-slot
   menus). It also gets **save slots and an autosave** that carry over to a revised story, **translations** from the

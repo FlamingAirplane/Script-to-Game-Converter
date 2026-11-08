@@ -153,6 +153,12 @@ See [`src/samples.ts`](src/samples.ts) for complete examples, and the
 
 - Items are Booleans: `VAR has_<item> = false`. Conditions compile from an expression tree (never raw strings).
 - Dialogue: `NAME: text #speaker:<id>`; a voice-over or off-screen line shows it after the name and adds a tag, `NAME (V.O.): text #speaker:<id> #ext:V.O.` (also `O.S.` and `O.C.`); parentheticals add `#paren:…`; recorded lines add `#audio:<file>`; the first line of a scene carries `#scene:<heading>` and, if the passage has a picture, `#image:<file>` (PNG or JPEG); transitions carry `#transition`.
+- Every dialogue line is a labelled gather, `- (line_<speaker>_<first words>) NAME: text …`, and gets an entry knot at the
+  end of the file, `=== passage__line_… ===` / `-> passage.line_…`, so a game can start the story at that line:
+  `StartAt("passage.line_…")`, `EnterAt` (keeps the story's variables) or `ResumeAt`, and the Unity and Unreal **Enter
+  Dialogue Trigger** (see `src/core/lines.ts`). The entry knot is needed because a label after a Continue break or an exit
+  is inside the weave, where a runtime path can't name it. The label comes from the words, so it stays the same when
+  other lines are added. The Ink importer drops the labels and entry knots and makes them again.
 - Choices are sticky (`+`) unless marked once-only (`*`). A passage's divert becomes an invisible fallback choice when the passage also has choices, so players never get stuck.
 - An exit to the game (`@exit name note`, or **+ Exit to game** in Review) is a single sticky choice
   `+ [Back to the game: name] // note` followed by a gather `-`: a game (Unity's `NarrativeController`) stops there, raises

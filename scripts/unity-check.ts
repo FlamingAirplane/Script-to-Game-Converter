@@ -113,7 +113,8 @@ for (const sample of samples) {
   const compileErrors = [...new Set(smoke.match(/^.*(error CS\d+|Assembly has duplicate|has compile errors).*$/gm) ?? [])];
   if (!compileErrors.length && /Scripts have compiler errors/.test(smoke)) compileErrors.push('Scripts have compiler errors (see ' + join(root, 'smoke.log') + ')');
   const line = /\[NarrativeBridge\] Smoke test[^\n]*/.exec(smoke)?.[0];
-  const smokeOk = !!line && / 0 runtime errors\.$/.test(line) && !compileErrors.length;
+  // (Unity on Windows ends its log lines with \r.)
+  const smokeOk = !!line && / 0 runtime errors\.\s*$/.test(line) && !compileErrors.length;
   lines.push(`  smoke test: ${smokeOk ? 'passed' : 'FAILED'}${line ? `\n    ${line.replace('[NarrativeBridge] ', '')}` : ''}`);
   if (compileErrors.length) lines.push(...compileErrors.slice(0, 8).map((e) => `    ${e}`));
   if (!smokeOk && line) lines.push(...(smoke.slice(smoke.indexOf(line) + line.length).split('\n').slice(1, 6).filter((l) => l.trim() && !/^UnityEngine\./.test(l)).map((l) => `    ${l}`)));

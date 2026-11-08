@@ -308,6 +308,14 @@ The Unreal project gives the developer the same: a story panel, saves that survi
 locked choices, and tests that replay every ending. Opened in Unreal, it brings the story in by itself, and with the
 runnable demo ticked, pressing Play shows the story.
 
+**Picking a conversation up partway.** Both packages come with an **Enter Dialogue Trigger**. The developer puts it on
+a character or a spot in the level and picks a passage and the **line of dialogue** the player picks up on, from a list
+of your lines as they read. For example, a gardener asks the player for flowers and the player goes off to find some.
+When the player comes back with them, the trigger goes straight to "You found them!" instead of replaying the whole
+conversation. It can wait until the player has an item, such as the flowers. The story remembers what happened before,
+so items and choices still count. You don't need to mark anything in your script: every spoken line can be a starting
+point.
+
 **Story UI** (Unity and Unreal) sets how the story panel looks and behaves in the game: about 70 settings in groups you can
 open and close, with a preview beside them. A setting you've changed is marked ● with a **↺** beside it that puts
 just that one back to its default (the chosen look's); each group has **↺ Reset … to defaults**, and **Reset to

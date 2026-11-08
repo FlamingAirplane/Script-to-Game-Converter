@@ -9,11 +9,14 @@ import type { EngineAdapter, ExportFile, ExportOptions, ExportResult } from './t
 import { storyRoutes, type StoryRoute } from './routes';
 import { cueSounds } from '../cues';
 import { audioFileName } from '../audio';
+import { lineEntries } from '../lines';
 import { translationSheet } from './translations';
 import { normaliseUnityTheme, unityThemeJson } from './unityTheme';
 import { SETTINGS_CS, THEME_CS, VIEW_CS } from './unityUi';
 import {
   editorAsmdef,
+  ENTER_DIALOGUE_TRIGGER_CS,
+  STORY_POINT_DRAWERS_CS,
   fillTemplate,
   FIRST_OPEN_CS,
   INK_PACKAGE,
@@ -89,6 +92,7 @@ export const unityAdapter: EngineAdapter = {
       { path: `${pkg}Runtime/SaveStorage.cs`, content: cs(SAVE_STORAGE_CS) },
       { path: `${pkg}Runtime/NarrativeLocalization.cs`, content: cs(LOCALIZATION_CS) },
       { path: `${pkg}Runtime/NarrativeCuePlayer.cs`, content: cs(CUE_PLAYER_CS) },
+      { path: `${pkg}Runtime/NarrativeEnterDialogueTrigger.cs`, content: cs(ENTER_DIALOGUE_TRIGGER_CS) },
       { path: `${pkg}Runtime/NarrativeController.cs`, content: cs(CONTROLLER_CS) },
       { path: `${pkg}Runtime/NarrativeTheme.cs`, content: cs(THEME_CS) },
       { path: `${pkg}Runtime/NarrativeView.cs`, content: cs(VIEW_CS) },
@@ -103,6 +107,7 @@ export const unityAdapter: EngineAdapter = {
       { path: `${pkg}Editor/${id.namespace}.Editor.asmdef`, content: json(editorAsmdef(id)) },
       { path: `${pkg}Editor/NarrativeBridgeEditor.cs`, content: cs(EDITOR_CS) },
       { path: `${pkg}Editor/StoryDebuggerWindow.cs`, content: cs(DEBUGGER_CS) },
+      { path: `${pkg}Editor/StoryPointDrawers.cs`, content: cs(STORY_POINT_DRAWERS_CS) },
       { path: `${pkg}Editor/StoryRoutes.cs`, content: storyRoutesCs(routes, id) },
       { path: `${pkg}Editor/PlaythroughRunner.cs`, content: cs(ROUTES_RUNNER_CS) },
       { path: `${pkg}Editor/AddressablesSetup.cs`, content: cs(ADDRESSABLES_SETUP_CS) },
@@ -308,7 +313,9 @@ export function conditionCs(c: Condition): string {
 function storyInfoCs(story: ProcessedStory, id: UnityPackageId, addressables = false): string {
   const items = itemVarNames(story);
   const vars = story.project.variables.map((v) => v.id);
-  const passages = [...story.generated.ink.matchAll(/^=== (\w+) ===$/gm)].map((m) => m[1]);
+  const lines = lineEntries(story.project);
+  const entryKnots = new Set(lines.map((l) => l.entryKnot));
+  const passages = [...story.generated.ink.matchAll(/^=== (\w+) ===$/gm)].map((m) => m[1]).filter((k) => !entryKnots.has(k));
   const portraits = Object.entries(portraitFiles(story.project));
   const exits = [...new Set(story.project.passages.flatMap((p) => p.content.flatMap((b) => (b.type === 'exit' ? [exitName(b.name)] : []))))];
   const cueBlocks = story.project.passages.flatMap((p) => p.content.flatMap((b) => (b.type === 'cue' ? [b] : [])));
@@ -357,6 +364,13 @@ namespace ${id.namespace}
         public static readonly string[] Passages = { ${passages.map(csString).join(', ')} };
         /// <summary>Each passage's title, in the same order as Passages (for save slots and menus).</summary>
         public static readonly string[] PassageTitles = { ${passages.map((k) => csString(story.project.passages.find((p) => p.id === k)?.title || k)).join(', ')} };
+        /// <summary>
+        /// Every line of dialogue the story can start at, as "passage.line_…": StartAt(name) or ResumeAt(name) picks a
+        /// conversation up there instead of at the top of its passage (StoryTrigger's Line does it without code).
+        /// </summary>
+        public static readonly string[] Lines = { ${lines.map((l) => csString(l.path)).join(', ')} };
+        /// <summary>Each line as it reads, "MARA: Did you bring the flowers?", in the same order as Lines (for menus).</summary>
+        public static readonly string[] LineTexts = { ${lines.map((l) => csString(l.display)).join(', ')} };
         /// <summary>Ink variables that mirror inventory items (has_&lt;item&gt;).</summary>
         public static readonly string[] ItemVariables = { ${items.map(csString).join(', ')} };
         /// <summary>Story variables the game is allowed to read and write.</summary>
@@ -412,6 +426,12 @@ stories) without clashing, and it never changes your scenes, build settings or p
 ## Connect it to your game
 - **Start it where you want.** Turn off *Start On Awake* and call \`StartStory()\`, or \`StartAt("passage")\` to begin at a
   scene (for a conversation with one character, say). The passages are listed in \`StoryInfo.Passages\`.
+- **Pick a conversation up partway.** Every line of dialogue can be a starting point too: \`StartAt("passage.line_…")\`
+  (listed in \`StoryInfo.Lines\`, with how each reads in \`StoryInfo.LineTexts\`). \`EnterAt(name)\` does the same but keeps
+  what the story knows (its variables and items) when it has already run. Without code, add an **Enter Dialogue
+  Trigger** (*Add Component → Narrative Bridge → ${id.menuTitle}*) to an object with a trigger collider, pick the *Passage* and the *Line*
+  the player picks up on, and, if you like, the item the player must have: talk about flowers, go and get them, come
+  back, and the conversation goes on at "You found them!" instead of from the top.
 - **Events, from code:** \`LineShown\` (a \`Line\` with \`Speaker\`, \`Text\`, \`Scene\`, \`Paren\`, \`Image\`, \`Tags\`),
   \`ChoicesShown\` → \`Choose(i)\`, \`ContinueShown\` → \`Continue()\`, \`StoryEnded\`, \`Restarted\`, \`StatusChanged\`,
   \`RuntimeError\`, plus **\`TagFound\`** for tags the story uses that Narrative Bridge doesn't (\`#shake\`, \`#music:calm\`)
@@ -1406,7 +1426,7 @@ namespace __NAMESPACE__
         public bool HasEnded { get; private set; }
         public IReadOnlyList<Line> Transcript => transcript;
         public string Status => status;
-        /// <summary>The passage the story was started at (StartAt), or null when it started from the beginning.</summary>
+        /// <summary>The passage or line the story was started at (StartAt), or null when it started from the beginning.</summary>
         public string StartPassage { get; private set; }
 
         /// <summary>The story is at a Continue break: its only choice is Continue.</summary>
@@ -1559,12 +1579,34 @@ namespace __NAMESPACE__
         /// <summary>Starts (or restarts) the story from the beginning.</summary>
         public void StartStory() => Begin(null);
 
-        /// <summary>Starts (or restarts) the story at a passage, e.g. when the player talks to someone. See StoryInfo.Passages.</summary>
+        /// <summary>
+        /// Starts (or restarts) the story at a passage, e.g. when the player talks to someone (see StoryInfo.Passages),
+        /// or at a line of dialogue in one, "passage.line_…" (see StoryInfo.Lines), to pick a conversation up partway.
+        /// </summary>
         public void StartAt(string passage)
         {
-            if (Array.IndexOf(StoryInfo.Passages, passage) < 0) { ReportError("There is no passage called " + passage + "."); return; }
+            if (!IsStartPoint(passage)) { ReportError("There is no passage or line called " + passage + "."); return; }
             Begin(passage);
         }
+
+        /// <summary>Starts (or restarts) the story at a line of dialogue in a passage: StartAt(passage + "." + line).</summary>
+        public void StartAtLine(string passage, string line) => StartAt(string.IsNullOrEmpty(line) ? passage : passage + "." + line);
+
+        /// <summary>Whether the story can start at (or jump to) this name: one of StoryInfo.Passages or StoryInfo.Lines.</summary>
+        public static bool IsStartPoint(string name) =>
+            !string.IsNullOrEmpty(name) && (Array.IndexOf(StoryInfo.Passages, name) >= 0 || Array.IndexOf(StoryInfo.Lines, name) >= 0);
+
+        /// <summary>The passage a start point is in: the name itself, or the passage of a line ("garden" for "garden.line_…").</summary>
+        public static string PassageOf(string name)
+        {
+            if (string.IsNullOrEmpty(name)) return name;
+            var dot = name.IndexOf('.');
+            return dot < 0 ? name : name.Substring(0, dot);
+        }
+
+        // A line is reached through its entry knot, "passage__line_…", which diverts to the line's label in the
+        // passage (a label after a Continue break sits inside the weave, where a path can't name it).
+        static string InkPathOf(string name) => Array.IndexOf(StoryInfo.Lines, name) >= 0 ? name.Replace(".", "__") : name;
 
         void Begin(string passage)
         {
@@ -1595,10 +1637,10 @@ namespace __NAMESPACE__
             transcript.Clear();
             HasEnded = false;
             StartPassage = passage;
-            lastPassage = passage;
+            lastPassage = PassageOf(passage);
             SetStatus("");
             StopVoice();
-            if (passage != null) Story.ChoosePathString(passage);
+            if (passage != null) Story.ChoosePathString(InkPathOf(passage));
             Restarted?.Invoke();
             Advance();
         }
@@ -1620,19 +1662,52 @@ namespace __NAMESPACE__
 
         /// <summary>
         /// Goes on after an exit at another passage (e.g. "won_fight" or "lost_fight"), keeping the story's
-        /// variables and items. Also works when the dialogue isn't at an exit, to jump there. See StoryInfo.Passages.
+        /// variables and items. Also works when the dialogue isn't at an exit, to jump there. See StoryInfo.Passages;
+        /// a line of dialogue, "passage.line_…" (StoryInfo.Lines), goes on from that line.
         /// </summary>
         public void ResumeAt(string passage)
         {
             if (Story == null) return;
-            if (Array.IndexOf(StoryInfo.Passages, passage) < 0) { ReportError("There is no passage called " + passage + "."); return; }
+            if (!IsStartPoint(passage)) { ReportError("There is no passage or line called " + passage + "."); return; }
             var exited = IsAtExit;
             // Saves record the jump, so a save carries over to a revised story too.
             choicePath.Add(JumpMark + passage);
-            Story.ChoosePathString(passage);
+            lastPassage = PassageOf(passage);
+            Story.ChoosePathString(InkPathOf(passage));
             StopVoice();
             if (exited) { Resumed?.Invoke(); onResume.Invoke(); }
             Advance();
+        }
+
+        /// <summary>
+        /// Enters the dialogue at a passage or a line of dialogue ("passage.line_…", see StoryInfo.Lines), e.g. when the
+        /// player talks to someone again: the page starts afresh there, but the story keeps what it knows (its variables
+        /// and items) from before. The first time, it starts the story there (StartAt).
+        /// </summary>
+        public void EnterAt(string name)
+        {
+            if (Story == null) { StartAt(name); return; }
+            if (!IsStartPoint(name)) { ReportError("There is no passage or line called " + name + "."); return; }
+            var exited = IsAtExit;
+            // Saved as a jump, like ResumeAt, so a save carries over to a revised story.
+            choicePath.Add(JumpMark + name);
+            transcript.Clear();
+            HasEnded = false;
+            lastPassage = PassageOf(name);
+            SetStatus("");
+            StopVoice();
+            Story.ChoosePathString(InkPathOf(name));
+            Restarted?.Invoke();
+            if (exited) { Resumed?.Invoke(); onResume.Invoke(); }
+            Advance();
+        }
+
+        /// <summary>Whether the player has an item (an id from StoryInfo.ItemVariables, without "has_"): your inventory's answer, or the story's.</summary>
+        public bool HasItem(string itemId)
+        {
+            if (authority != null) return authority.HasItem(itemId);
+            var name = "has_" + itemId;
+            return Story != null && Array.IndexOf(StoryInfo.ItemVariables, name) >= 0 && Story.variablesState[name] is bool b && b;
         }
 
         /// <summary>How a jump (ResumeAt) is written in a save's choice path.</summary>
@@ -2163,7 +2238,7 @@ namespace __NAMESPACE__
         void ReplayChoices(List<string> path, string savedVersion)
         {
             Story.ResetState();
-            if (StartPassage != null && Array.IndexOf(StoryInfo.Passages, StartPassage) >= 0) Story.ChoosePathString(StartPassage);
+            if (IsStartPoint(StartPassage)) Story.ChoosePathString(InkPathOf(StartPassage));
             choicePath.Clear();
             transcript.Clear();
             HasEnded = false;
@@ -2182,8 +2257,8 @@ namespace __NAMESPACE__
                     {
                         // A jump the game made with ResumeAt.
                         var target = path[i].Substring(JumpMark.Length);
-                        if (Array.IndexOf(StoryInfo.Passages, target) < 0) break;
-                        Story.ChoosePathString(target);
+                        if (!IsStartPoint(target)) break;
+                        Story.ChoosePathString(InkPathOf(target));
                         choicePath.Add(path[i]);
                         followed++;
                         i++;
@@ -2284,6 +2359,7 @@ namespace __NAMESPACE__.EditorTools
         NarrativeController target;
         Vector2 scroll;
         int jumpIndex;
+        string[] jumpTargets, jumpLabels;
         bool showVariables = true, showItems = true, showTranscript = true;
 
         [MenuItem("Tools/Narrative Bridge/__MENU_TITLE__/Story Debugger")]
@@ -2385,13 +2461,26 @@ namespace __NAMESPACE__.EditorTools
         void DrawJump(NarrativeController c)
         {
             if (StoryInfo.Passages.Length == 0) return;
+            // Passages, then every line of dialogue ("garden/MARA: Did you bring…"), so a conversation can be picked up partway.
+            if (jumpTargets == null)
+            {
+                var targets = new List<string>(StoryInfo.Passages);
+                var labels = new List<string>(StoryInfo.Passages);
+                for (int i = 0; i < StoryInfo.Lines.Length; i++)
+                {
+                    targets.Add(StoryInfo.Lines[i]);
+                    labels.Add("Lines/" + NarrativeController.PassageOf(StoryInfo.Lines[i]) + "/" + StoryInfo.LineTexts[i].Replace("/", "\\u2215"));
+                }
+                jumpTargets = targets.ToArray();
+                jumpLabels = labels.ToArray();
+            }
             using (new EditorGUILayout.HorizontalScope())
             {
-                jumpIndex = EditorGUILayout.Popup("Jump to", Mathf.Clamp(jumpIndex, 0, StoryInfo.Passages.Length - 1), StoryInfo.Passages);
+                jumpIndex = EditorGUILayout.Popup("Jump to", Mathf.Clamp(jumpIndex, 0, jumpTargets.Length - 1), jumpLabels);
                 if (GUILayout.Button("Go", GUILayout.Width(40)))
                 {
-                    if (c.Story == null) c.StartAt(StoryInfo.Passages[jumpIndex]);
-                    else c.ResumeAt(StoryInfo.Passages[jumpIndex]);
+                    if (c.Story == null) c.StartAt(jumpTargets[jumpIndex]);
+                    else c.ResumeAt(jumpTargets[jumpIndex]);
                 }
             }
         }
@@ -3327,6 +3416,16 @@ namespace __NAMESPACE__.EditorTools
         }
 
         /// Starts the story at every passage, as a game does for a conversation, without runtime errors.
+        // Just the letters and digits of a line, lower case, without rich text tags (to compare lines however they're styled).
+        static string Letters(string s)
+        {
+            if (s == null) return "";
+            s = System.Text.RegularExpressions.Regex.Replace(s, "<[^>]+>", "");
+            var sb = new System.Text.StringBuilder();
+            foreach (var ch in s) if (char.IsLetterOrDigit(ch)) sb.Append(char.ToLowerInvariant(ch));
+            return sb.ToString();
+        }
+
         static string StartAtCheck(List<string> errors)
         {
             var go = new GameObject("NarrativeBridge start-at check");
@@ -3340,7 +3439,20 @@ namespace __NAMESPACE__.EditorTools
                     c.StartAt(p);
                     if (c.Story == null || c.StartPassage != p) { errors.Add("StartAt(" + p + ") did not start the story there."); break; }
                 }
-                return errors.Count == before ? "start-at passed (" + StoryInfo.Passages.Length + " passages)" : "start-at failed";
+                // Every line of dialogue too: the first thing shown is that line, in its passage.
+                for (int i = 0; i < StoryInfo.Lines.Length; i++)
+                {
+                    var l = StoryInfo.Lines[i];
+                    c.StartAt(l);
+                    var said = StoryInfo.LineTexts[i];
+                    var colon = said.IndexOf(": ", System.StringComparison.Ordinal);
+                    var words = Letters(colon < 0 ? said : said.Substring(colon + 2));
+                    var first = c.Transcript.Count > 0 ? Letters(c.Transcript[0].SourceText ?? c.Transcript[0].Text) : null;
+                    if (words.Length > 12) words = words.Substring(0, 12);
+                    if (c.Story == null || c.StartPassage != l || first == null || !first.Contains(words))
+                    { errors.Add("StartAt(" + l + ") did not start the story at that line."); break; }
+                }
+                return errors.Count == before ? "start-at passed (" + StoryInfo.Passages.Length + " passages, " + StoryInfo.Lines.Length + " lines)" : "start-at failed";
             }
             finally { UnityEngine.Object.DestroyImmediate(go); }
         }

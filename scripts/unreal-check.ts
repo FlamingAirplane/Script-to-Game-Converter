@@ -53,9 +53,9 @@ int32 CheckStoryInfo()
 {
     using namespace NarrativeBridgeStoryInfo;
     int32 N = 0;
-    const TCHAR* const* Lists[] = { Passages, PassageTitles, ItemVariables, Variables, Exits, Cues, CueTags, CueSoundTags, CueSoundFiles, PortraitSpeakers, PortraitFiles, ReservedTags };
+    const TCHAR* const* Lists[] = { Passages, PassageTitles, Lines, LineTexts, ItemVariables, Variables, Exits, Cues, CueTags, CueSoundTags, CueSoundFiles, PortraitSpeakers, PortraitFiles, ReservedTags };
     for (const TCHAR* const* List : Lists) N += List[0] ? 1 : 0;
-    N += NumPassages + NumItemVariables + NumVariables + NumExits + NumCues + NumCueTags + NumCueSoundTags + NumPortraitSpeakers + NumReservedTags;
+    N += NumPassages + NumLines + NumItemVariables + NumVariables + NumExits + NumCues + NumCueTags + NumCueSoundTags + NumPortraitSpeakers + NumReservedTags;
     const TCHAR* Strings[] = { Title, ProjectId, StoryVersion, SourceLanguage, StoryAssetPath, AudioPackagePath, ThemeFile, TranslationsFile, ImageFolder, SaveFolder, ContinueText, ExitPrefix };
     N += Strings[0] ? 1 : 0;
     const FReader Reader;

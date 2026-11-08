@@ -950,7 +950,8 @@ describe('Unity package', () => {
       if (c.includes('using Ink.Runtime;')) expect(c, f.path).not.toMatch(/[^.\w](Object|Path)\.[A-Z]/);
     }
     const info = text(r, 'StoryInfo.cs');
-    const knots = [...(await archive()).generated.ink.matchAll(/^=== (\w+) ===$/gm)].map((m) => `"${m[1]}"`);
+    // Every knot but the entry knots for starting at a line (see lines.ts).
+    const knots = [...(await archive()).generated.ink.matchAll(/^=== (\w+) ===$/gm)].map((m) => m[1]).filter((k) => !k.includes('__line_')).map((k) => `"${k}"`);
     expect(info).toContain(`Passages = { ${knots.join(', ')} };`);
     expect(info).toContain('public const string ResourceFolder = "NarrativeBridge/locked-archive/";');
     expect(text(r, 'NarrativeBridgeEditor.cs')).toContain('const string AssetFolder = "Assets/NarrativeBridge/LockedArchive";');
@@ -2400,5 +2401,66 @@ CUT TO:
     const kinds = forPlayers(project).passages[0].content.map((b) => b.type).filter((t) => t !== 'note');
     expect(kinds[0]).toBe('dialogue'); // the first Continue had nothing before it
     expect(kinds.at(-1)).toBe('pause'); // the last follows dialogue, so it stays
+  });
+});
+
+describe('starting at a line of dialogue', () => {
+  const src = `@item flowers "Flowers"\n@passage garden Garden\nMARA: Do you like flowers?\n@pause\nMARA: Could you bring me some?\n@exit get_flowers The player goes to pick flowers\nMARA: You found them!\n@take flowers\nMARA: You found them!\n+ [Goodbye] -> END\n`;
+
+  it('labels every dialogue line in Ink and adds an entry knot a game can start at', async () => {
+    const { lineEntries } = await import('../src/core/lines');
+    const { project } = await build(src, 'g.md', 'structured');
+    const story = processProject(project);
+    expect(story.compile.ok).toBe(true);
+    const lines = lineEntries(project);
+    // The label comes from the speaker and the words; the same line twice gets a number.
+    expect(lines.map((l) => l.path)).toEqual(['garden.line_mara_do_you_like_flowers', 'garden.line_mara_could_you_bring_me_some', 'garden.line_mara_you_found_them', 'garden.line_mara_you_found_them_2']);
+    expect(lines[2].display).toBe('MARA: You found them!');
+    expect(story.generated.ink).toContain('- (line_mara_could_you_bring_me_some) MARA: Could you bring me some? #speaker:mara');
+    expect(story.generated.ink).toContain('=== garden__line_mara_you_found_them ===\n-> garden.line_mara_you_found_them');
+    // Choosing the entry knot starts at that line: after the Continue break and the exit, with the story's variables.
+    const { Story } = await import('inkjs');
+    const s = new Story(story.compile.json!);
+    s.variablesState['has_flowers'] = true;
+    s.ChoosePathString(lines[2].entryKnot);
+    expect(s.Continue()).toBe('MARA: You found them!\n');
+    expect(s.ContinueMaximally()).toContain('MARA: You found them!');
+    expect(s.variablesState['has_flowers']).toBe(false);
+    expect(s.currentChoices.map((c) => c.text)).toEqual(['Goodbye']);
+    // From the start, the labels change nothing.
+    const t = new Story(story.compile.json!);
+    expect(t.ContinueMaximally()).toBe('MARA: Do you like flowers?\n');
+  });
+
+  it('brings the labelled Ink back unchanged, and has no lines for Ink kept as written', async () => {
+    const { lineEntries } = await import('../src/core/lines');
+    const { project } = await build(src, 'g.md', 'structured');
+    const ink = generateInk(project).ink;
+    const back = (await build(ink, 'g.ink', 'structured')).project;
+    expect(back.passages.map((p) => p.id)).toEqual(['garden']);
+    expect(back.passages[0].content.filter((b) => b.type === 'dialogue')).toHaveLength(4);
+    const strip = (x: string) => x.replace(/ \(source line \d+\)/g, '');
+    expect(strip(generateInk(back).ink)).toBe(strip(ink));
+    const kept = await buildStory([{ fileName: 's.ink', text: '-> a\n=== a ===\nMIRA: Hi {name}.\n-> END\n', inkMode: 'keep' }], { mode: 'structured' });
+    expect(lineEntries(kept.project)).toEqual([]);
+  });
+
+  it('gives Unity and Unreal the lines and an Enter Dialogue Trigger', async () => {
+    const { project } = await build(src, 'g.md', 'structured');
+    const story = processProject(project);
+    const unity = await ADAPTERS.unity.export(story, { engine: 'unity', projectName: 'Garden', engineVersion: '6000.0', integrationRef: 'v1.2.3', includeDemo: false });
+    const u = (end: string) => String(unity.files.find((f) => f.path.endsWith(end))!.content);
+    expect(u('StoryInfo.cs')).toContain('public static readonly string[] Passages = { "garden" };');
+    expect(u('StoryInfo.cs')).toContain('"garden.line_mara_you_found_them_2"');
+    expect(u('StoryInfo.cs')).toContain('"MARA: You found them!"');
+    expect(u('NarrativeController.cs')).toContain('public void EnterAt(string name)');
+    expect(u('NarrativeEnterDialogueTrigger.cs')).toContain('[StoryLine("passage")');
+    expect(u('StoryPointDrawers.cs')).toContain('[CustomPropertyDrawer(typeof(StoryLineAttribute))]');
+    const unreal = await ADAPTERS.unreal.export(story, { engine: 'unreal', projectName: 'Garden', engineVersion: '5.7', integrationRef: 'v1.2.3', includeDemo: false });
+    const r = (end: string) => String(unreal.files.find((f) => f.path.endsWith(end))!.content);
+    expect(r('NarrativeBridgeStoryInfo.h')).toContain('static const TCHAR* Passages[] = { TEXT("garden") };');
+    expect(r('NarrativeBridgeStoryInfo.h')).toContain('static const int32 NumLines = 4;');
+    expect(r('NarrativeEnterDialogueTrigger.h')).toContain('meta = (GetOptions = "GetLineOptions")');
+    expect(r('NarrativeBridgeComponent.cpp')).toContain('InkStory->ChoosePath(InkPathOf(Name));');
   });
 });

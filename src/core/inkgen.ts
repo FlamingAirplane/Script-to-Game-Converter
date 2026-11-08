@@ -1,6 +1,7 @@
 import { audioFileName } from './audio';
 import { choiceGuards, isForcing } from './forced';
 import { imageFileName } from './images';
+import { lineEntries, passageLineLabels } from './lines';
 import { forPlayers } from './players';
 import { GENERATOR_VERSION } from './version';
 import { CONTINUE_TEXT, cueTag, EXIT_PREFIX, exitName, isActive, itemVar, type Condition, type Effect, type Passage, type StoryProject } from './isr';
@@ -18,6 +19,8 @@ import { CONTINUE_TEXT, cueTag, EXIT_PREFIX, exitName, isActive, itemVar, type C
 //  - A Continue break is "+ [Continue]" followed by a gather "-": what follows waits for the reader.
 //  - A forced choice ends with "// forced"; every other choice in its passage gets an extra {not (its condition)},
 //    so while it applies it's the only choice (see forced.ts).
+//  - Every dialogue line is a labelled gather, "- (line_<speaker>_<words>) NAME: text", and gets an entry knot at the
+//    end, "=== passage__line_… ===" "-> passage.line_…", so a game can start the story at that line (see lines.ts).
 //  - Choices are sticky (+) unless marked once-only (*). A passage divert becomes an invisible
 //    fallback choice when the passage also has choices.
 
@@ -129,6 +132,8 @@ export function generateInk(story: StoryProject): GeneratedInk {
     emit('');
     emit(`=== ${p.id} ===`, p.id);
     if (p.title && p.title !== p.id) emit(`// ${p.title.replace(/\n/g, ' ')}${p.source ? ` (source line ${p.source.line})` : ''}`, p.id);
+    const labels = passageLineLabels(p);
+    let lineIndex = 0;
     let firstText = true;
     const sceneTag = () => {
       if (!firstText) return '';
@@ -146,7 +151,8 @@ export function generateInk(story: StoryProject): GeneratedInk {
           const ext = b.extension ? ` #ext:${escapeTagValue(b.extension)}` : '';
           const paren = b.parenthetical ? ` #paren:${escapeTagValue(b.parenthetical)}` : '';
           const audio = b.audio ? ` #audio:${audioFileName(b.audio)}` : '';
-          emit(`${escapeInk(`${name}${b.extension ? ` (${b.extension})` : ''}: ${b.text}`)} #speaker:${b.speakerId}${ext}${paren}${audio}${sceneTag()}`, p.id);
+          // A labelled gather, so a game can start the story here (see lines.ts).
+          emit(`- (${labels[lineIndex++]}) ${escapeInk(`${name}${b.extension ? ` (${b.extension})` : ''}: ${b.text}`)} #speaker:${b.speakerId}${ext}${paren}${audio}${sceneTag()}`, p.id);
           break;
         }
         case 'transition':
@@ -181,6 +187,15 @@ export function generateInk(story: StoryProject): GeneratedInk {
       }
     }
     emitFlow(p, emit);
+  }
+  const entries = lineEntries(project);
+  if (entries.length) {
+    emit('');
+    emit('// Where a game can start the story at a line of dialogue: StartAt("passage.line_…") chooses one of these.');
+    for (const e of entries) {
+      emit(`=== ${e.entryKnot} ===`, e.passageId);
+      emit(`-> ${e.path}`, e.passageId);
+    }
   }
   emit('');
   return { ink: lines.join('\n'), sourceMap };
