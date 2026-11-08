@@ -19,6 +19,7 @@ import { Badge, SeverityIcon, download } from './common';
 import type { StoryProject } from '../core/isr';
 import type { Update } from './projectOps';
 import { UnityThemeEditor } from './UnityThemeEditor';
+import { DialogueOnlySetting } from './DialogueOnlySetting';
 import { INK_COMPILER } from '../core/version';
 
 const INKJS_VERSION = INK_COMPILER.version;
@@ -115,6 +116,7 @@ export function ExportView({ processed, stale, onState, project, update, onRevie
             </>
           )}
         </p>
+        <DialogueOnlySetting project={project} update={update} />
       </section>
       <ShareSection processed={processed} stale={stale} project={project} update={update} />
 

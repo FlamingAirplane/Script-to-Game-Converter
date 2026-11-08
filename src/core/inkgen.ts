@@ -1,6 +1,7 @@
 import { audioFileName } from './audio';
 import { choiceGuards, isForcing } from './forced';
 import { imageFileName } from './images';
+import { forPlayers } from './players';
 import { GENERATOR_VERSION } from './version';
 import { CONTINUE_TEXT, cueTag, EXIT_PREFIX, exitName, isActive, itemVar, type Condition, type Effect, type Passage, type StoryProject } from './isr';
 
@@ -12,7 +13,8 @@ import { CONTINUE_TEXT, cueTag, EXIT_PREFIX, exitName, isActive, itemVar, type C
 //    "NAME (V.O.): text", and tagged #ext:V.O.; parentheticals add #paren:<text>, and
 //    a recorded clip adds #audio:<file> (the file ships with the export).
 //  - Transitions carry a #transition tag; scene headings are a #scene tag on the first line.
-//  - Notes and unsupported constructs are preserved as Ink comments.
+//  - Notes and unsupported constructs are preserved as Ink comments. So is everything but dialogue when players
+//    see only the dialogue (presentation.dialogueOnly; see players.ts).
 //  - A Continue break is "+ [Continue]" followed by a gather "-": what follows waits for the reader.
 //  - A forced choice ends with "// forced"; every other choice in its passage gets an extra {not (its condition)},
 //    so while it applies it's the only choice (see forced.ts).
@@ -87,8 +89,10 @@ export function effectToInk(e: Effect): string {
   }
 }
 
-export function generateInk(project: StoryProject): GeneratedInk {
-  if (project.inkPassthrough !== undefined) return passthrough(project);
+export function generateInk(story: StoryProject): GeneratedInk {
+  if (story.inkPassthrough !== undefined) return passthrough(story);
+  // "Players see only the dialogue": narration and the rest become comments.
+  const project = forPlayers(story);
 
   const lines: string[] = [];
   const sourceMap: SourceMapEntry[] = [];

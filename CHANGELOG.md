@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- **Players see only the dialogue:** a new box in Story settings (and on the Export page). When it's ticked, players
+  get only the spoken lines and the choices. Narration, transitions, scene headings and parentheticals are left out of
+  Playtest, the playable story, Twine, Unity, Unreal and the translation sheet, and the Ink keeps them as comments.
+  Your script itself is unchanged.
 - **Forced choices:** tick **forced** on a choice with a condition (or add `@forced` to the choice line in a script),
   and once the condition holds it's the only choice in its passage. For example, a player who has the brass key must
   use it. It works in plain Ink (the other choices get an extra condition), so Playtest, the playable story, Twine,

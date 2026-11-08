@@ -14,6 +14,7 @@ import { StoryFiles } from './StoryFiles';
 import { RecordingsImport } from './RecordingsImport';
 import { formatMinutes, storyStats } from '../core/stats';
 import { DraftShelf } from './Drafts';
+import { DialogueOnlySetting } from './DialogueOnlySetting';
 import type { SceneRequest } from './NewScene';
 import { describeCondition } from '../core/gating';
 import { type Update, addChoice, deletePassage, findText, mergeCharacter, movePassage, renamePassage, replaceText } from './projectOps';
@@ -917,6 +918,7 @@ function StorySettings({ project, update, onKeepDraft, onRestoreDraft }: { proje
           </span>
         </div>
       </div>
+      <DialogueOnlySetting project={project} update={update} />
 
       <AtAGlance project={project} />
       <DraftShelf projectId={project.project.id} current={project} onKeep={onKeepDraft} onRestore={onRestoreDraft} />

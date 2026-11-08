@@ -1,3 +1,4 @@
+import { forPlayers } from '../players';
 import { fnv1a } from '../hash';
 import { storyLayout } from '../layout';
 import { log } from '../log';
@@ -110,7 +111,7 @@ function twinePositions(story: ProcessedStory): Map<string, string> {
 
 export function buildTwee(story: ProcessedStory, kind: TwineKind = 'sugarcube'): string {
   assertExportable(story);
-  const project: StoryProject = story.project;
+  const project: StoryProject = forPlayers(story.project);
   if (project.inkPassthrough !== undefined)
     throw new ExportBlockedError('Twine export works from converted scripts. This story was imported as Ink, so export it as Ink or to an engine instead.');
   const plain = kind === 'plain';

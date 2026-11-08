@@ -17,8 +17,8 @@
     },
     "presentation": {
       "type": "object",
-      "description": "How the story looks in a game engine. unity: the Unity story UI theme (see UnityTheme in src/core/isr.ts).",
-      "properties": { "unity": { "type": "object" } }
+      "description": "How the story looks to players. unity: the Unity story UI theme (see UnityTheme in src/core/isr.ts). dialogueOnly: players see only the dialogue (see src/core/players.ts).",
+      "properties": { "unity": { "type": "object" }, "dialogueOnly": { "type": "boolean" } }
     },
     "project": {
       "type": "object",
