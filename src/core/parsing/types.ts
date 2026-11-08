@@ -6,6 +6,7 @@ export type Marker =
   | { type: 'passage'; id: string; title?: string }
   | { type: 'start'; id: string }
   | { type: 'end' }
+  | { type: 'cutscene' }
   | { type: 'divert'; target: string }
   /** A Continue break: what follows waits for the reader. */
   | { type: 'pause' }

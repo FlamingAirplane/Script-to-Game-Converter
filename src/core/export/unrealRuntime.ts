@@ -61,6 +61,10 @@ struct FNarrativeLine
     UPROPERTY(BlueprintReadOnly, Category = "Narrative Bridge")
     bool bIsTransition = false;
 
+    /** A cutscene line (#cutscene): the story panel shows it alone, then goes on by itself. */
+    UPROPERTY(BlueprintReadOnly, Category = "Narrative Bridge")
+    bool bIsCutscene = false;
+
     /** The text, speaker, scene and stage direction as written (the others are in the current language). */
     UPROPERTY(BlueprintReadOnly, Category = "Narrative Bridge")
     FString SourceText;

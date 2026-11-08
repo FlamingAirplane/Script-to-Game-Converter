@@ -198,6 +198,7 @@ struct FNarrativePanelWords
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Narrative Bridge") FString Autosave = TEXT("Autosave");
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Narrative Bridge") FString Empty = TEXT("empty");
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Narrative Bridge") FString OlderVersion = TEXT("earlier version");
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Narrative Bridge") FString Skip = TEXT("Skip");
 };
 
 /**
@@ -309,6 +310,8 @@ private:
     /** Takes a choice: shows it in the transcript (when the theme keeps them), then lets the story go on. */
     void Pick(int32 Index);
     void GoOn();
+    /** A cutscene line has been read (or skipped): the next line, or the choices, may come. */
+    void EndCutsceneLine();
     FString T(const FString& Source) const;
     int32 FontSize(float Scale = 1.f) const;
     FSlateFontInfo Font(int32 Size, const TCHAR* Typeface) const;
@@ -349,6 +352,9 @@ private:
     float TypingClock = 0.f;
     float PauseLeft = 0.f;
     float AutoAdvanceLeft = -1.f;
+    /** Seconds the cutscene line on screen stays (-1: none); it waits for Skip when the player turned Go on by itself Off. */
+    float CutsceneLeft = -1.f;
+    bool bCutsceneWaits = false;
     FString PortraitSpeaker;
     bool bPortraitRight = false;
     bool bMenuOpen = false;
@@ -801,6 +807,7 @@ void UNarrativeStoryWidget::Redraw()
     ClearPrompt();
     Pending.Reset();
     Prompt = EPrompt::None;
+    CutsceneLeft = -1.f;
     SetVisibility(ESlateVisibility::SelfHitTestInvisible);
     if (!Story) return;
     if (StatusText) StatusText->SetText(FText::FromString(Story->GetStatus()));
@@ -824,7 +831,8 @@ void UNarrativeStoryWidget::ClearLines()
 void UNarrativeStoryWidget::ShowLine(const FNarrativeLine& Line, bool bType)
 {
     if (Line.bIsChoice && !Theme.bShowChoiceHistory) return;
-    if (!Line.bIsChoice && Theme.Transcript == TEXT("line")) ClearLines();
+    // A cutscene shows one line at a time, like subtitles.
+    if (!Line.bIsChoice && (Theme.Transcript == TEXT("line") || Line.bIsCutscene)) ClearLines();
     if (!Line.Scene.IsEmpty() && Theme.Transcript == TEXT("scene")) ClearLines();
     if (Theme.bShowPictures && !Line.Image.IsEmpty()) ShowPicture(Line.Image);
     if (Theme.bShowPortraits && !Line.bIsChoice && (!Line.SpeakerId.IsEmpty() || !Theme.bKeepPortraitForNarration)) ShowPortrait(Line.SpeakerId);
@@ -997,6 +1005,7 @@ void UNarrativeStoryWidget::HandleRestarted()
     ClearLines();
     ClearPrompt();
     Pending.Reset();
+    CutsceneLeft = -1.f;
     Prompt = EPrompt::None;
     if (Portrait) Portrait->SetVisibility(ESlateVisibility::Collapsed);
     PortraitSpeaker.Reset();
@@ -1037,11 +1046,26 @@ void UNarrativeStoryWidget::NativeTick(const FGeometry& MyGeometry, float InDelt
         if (TypingShown >= Total) TypingBlock = nullptr;
         return;
     }
+    if (CutsceneLeft >= 0.f)
+    {
+        // A cutscene line stays long enough to read, then the story goes on by itself.
+        if (!bMenuOpen && !bCutsceneWaits) CutsceneLeft -= InDeltaTime;
+        if (CutsceneLeft >= 0.f) return;
+        EndCutsceneLine();
+    }
     if (Pending.Num() > 0)
     {
         const FNarrativeLine Next = Pending[0];
         Pending.RemoveAt(0);
         ShowLine(Next, true);
+        if (Next.bIsCutscene)
+        {
+            // 1.2 s + 0.055 s a letter, 2 to 9 s, as in Narrative Bridge's other readers; Skip goes on now.
+            CutsceneLeft = FMath::Clamp(1.2f + UNarrativeBridgeComponent::PlainText(Next.Text).Len() * 0.055f, 2.f, 9.f);
+            bCutsceneWaits = UNarrativeSettings::GetAutoAdvance() == ENarrativeAutoAdvance::Off;
+            ClearPrompt();
+            ContinueButton = Button(Choices, T(Words.Skip) + TEXT("  \\u203A"), [this] { EndCutsceneLine(); });
+        }
         return;
     }
     if (Prompt != EPrompt::None && !bPromptShown) ShowPrompt();
@@ -1078,6 +1102,13 @@ void UNarrativeStoryWidget::Pick(int32 Index)
     Story->Choose(Index);
 }
 
+void UNarrativeStoryWidget::EndCutsceneLine()
+{
+    if (CutsceneLeft < 0.f) return;
+    CutsceneLeft = -1.f;
+    ClearPrompt();
+}
+
 void UNarrativeStoryWidget::GoOn()
 {
     if (!Story || !Story->IsWaitingForContinue()) return;
@@ -1097,6 +1128,7 @@ FReply UNarrativeStoryWidget::NativeOnKeyDown(const FGeometry& InGeometry, const
     if (Key == EKeys::SpaceBar || Key == EKeys::Enter || Key == EKeys::Gamepad_FaceButton_Bottom)
     {
         if (TypingBlock && Theme.bClickToSkip) FinishTyping();
+        else if (CutsceneLeft >= 0.f) EndCutsceneLine();
         else if (ContinueButton && Pending.Num() == 0) GoOn();
         return FReply::Handled();
     }

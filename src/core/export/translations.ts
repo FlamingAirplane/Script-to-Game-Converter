@@ -54,7 +54,7 @@ export function interfaceWords(theme?: UnityTheme): string[] {
     // NarrativeView.SettingsWords (keep in step with unityUi.ts).
     'Settings', 'Text size', 'Typing speed', 'Go on by itself', 'High contrast', 'Voice volume', 'Language',
     'Slow', 'Normal', 'Fast', 'Instant', 'As designed', 'On', 'Off', 'Reset', 'Close',
-    'Save to a slot', 'Load a save', 'Slot', 'Autosave', 'empty', 'earlier version',
+    'Save to a slot', 'Load a save', 'Slot', 'Autosave', 'empty', 'earlier version', 'Skip',
   ];
 }
 

@@ -127,6 +127,14 @@ suggestions to review. Type in *Filter passages…* to narrow it down. Press **[
   choices. If two forced choices could apply at once, the first one wins. It works in Playtest, the playable story,
   Twine (SugarCube), Unity and Unreal; on the Graph a forced route is marked **!**. In a script, add `@forced` to the
   choice line.
+- **Cutscenes:** tick **🎬 Cutscene** under a passage's title to play it as a cutscene. Players see only its
+  dialogue (narration, transitions, the scene heading and parentheticals are left out), one line at a time, centred
+  like subtitles. Each line stays long enough to read (about 1.2 seconds plus a little for every letter, 2 to 9
+  seconds), then the next appears by itself. **Skip** shows the rest straight away, and the passage's choices come
+  once the cutscene is over. Continue breaks inside a cutscene are dropped, since it goes on by itself. In a script,
+  put `@cutscene` on its own line in the passage. It works in Playtest, the playable story, Twine (SugarCube, with
+  `<<timed>>`), and the Unity and Unreal story panels, where the player's *Go on by itself: Off* setting makes each
+  line wait for a click.
 - **New scenes:** **+ New scene** under the contents adds one after the selected passage, as a new choice in it, or on
   its own (the same form as on the Graph, section 5). A choice's destination and **Then** also offer **+ A new
   scene…**, which creates the scene and points that choice (or Then) at it.
@@ -470,6 +478,7 @@ Write these on their own lines in any script to control the structure exactly (t
 - [Markdown link choice](#target)
 -> target                                    continue to another passage
 @pause                                       a Continue break: the player clicks Continue to read on
+@cutscene                                    this passage is a cutscene: only its dialogue, playing by itself
 @exit wolf_fight The player fights wolves    an exit to the game: the dialogue stops while the game plays
 @end                                         end the story here
 ## Heading {#custom_id}                      a Markdown heading as a passage with a chosen id

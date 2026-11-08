@@ -153,6 +153,7 @@ font-size:13px;font-variant:small-caps;text-transform:lowercase;letter-spacing:.
 .speaker{display:block;font-size:13px;font-variant:small-caps;text-transform:lowercase;letter-spacing:.16em;font-weight:600;color:var(--ink2)}
 .paren{display:block;font-style:italic;color:var(--faded);font-size:16px}
 .text p.chosen{text-indent:0;text-align:center;font-style:italic;color:var(--pen);margin:14px 0;font-size:16px}
+.text p.dialogue.cut{text-align:center;margin:0;padding:10px 1.5em;background:rgba(40,54,24,.06);border-top:1px solid var(--rule)}.text p.dialogue.cut+p.dialogue.cut{border-top:0}.text p.cut.now{animation:cutin .45s ease-out}@keyframes cutin{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:none}}@media (prefers-reduced-motion:reduce){.text p.cut.now{animation:none}}
 .text p.transition{text-indent:0;text-align:right;font-size:13px;font-variant:small-caps;text-transform:lowercase;letter-spacing:.14em;color:var(--faded)}
 .choices{margin-top:22px;border-top:1px solid var(--rule);padding-top:12px;display:flex;flex-direction:column}
 .choice{position:relative;text-align:left;font:italic 18px var(--serif);color:var(--ink);background:none;border:0;border-bottom:1px dotted var(--rule);
@@ -175,6 +176,21 @@ const PLAYER_JS = `
   var json = document.getElementById('story-json').textContent;
   var $ = function (id) { return document.getElementById(id); };
   var story, lines = [], history = [];
+  // A cutscene (lines tagged #cutscene) plays one line at a time, going on by itself: how many lines show so far
+  // (null: all of them), and the timer for the next. Times as in players.ts: 1.2 s + 0.055 s a letter, 2 to 9 s.
+  var reveal = null, cutTimer = null;
+  function cutSeconds(text) { return Math.min(9, Math.max(2, 1.2 + String(text).length * 0.055)); }
+  function nextShown(n) {
+    var i = n;
+    while (i < lines.length && lines[i].cue) i++;
+    return i < lines.length && lines[i].cut ? i + 1 : null;
+  }
+  function stopCutscene() { clearTimeout(cutTimer); cutTimer = null; reveal = null; }
+  function playCutscene() {
+    clearTimeout(cutTimer);
+    if (reveal === null) return;
+    cutTimer = setTimeout(function () { reveal = nextShown(reveal); render(); playCutscene(); }, cutSeconds(lines[reveal - 1].text) * 1000);
+  }
   document.title = meta.title;
   $('title').textContent = meta.title;
   $('rh-title').textContent = meta.title;
@@ -391,13 +407,14 @@ const PLAYER_JS = `
 
   function continueStory() {
     var from = lines.length;
+    stopCutscene();
     while (story.canContinue) {
       var raw = (story.Continue() || '').trim();
       var tags = story.currentTags || [];
       // Cues for the game (#music:calm) come before the line they're on, or alone at the end of a passage.
       cuesIn(tags).forEach(function (c) { lines.push({ cue: c.tag }); });
       if (!raw) continue;
-      var line = { text: raw, scene: tag(tags, 'scene'), transition: tags.indexOf('transition') >= 0, audio: tag(tags, 'audio'), image: tag(tags, 'image'), who: tag(tags, 'speaker') };
+      var line = { text: raw, scene: tag(tags, 'scene'), transition: tags.indexOf('transition') >= 0, audio: tag(tags, 'audio'), image: tag(tags, 'image'), who: tag(tags, 'speaker'), cut: tags.indexOf('cutscene') >= 0 };
       if (tag(tags, 'speaker') !== null) {
         var i = raw.indexOf(': ');
         if (i > 0) { line.speaker = raw.slice(0, i); line.text = raw.slice(i + 2); }
@@ -407,6 +424,7 @@ const PLAYER_JS = `
     }
     speak(lines.slice(from));
     if (!replaying) playSounds(lines.slice(from));
+    if (!replaying) for (var c = from; c < lines.length; c++) if (lines[c].cut) { reveal = c + 1; playCutscene(); break; }
   }
 
   // Story text with its emphasis (<i>, <b>, <u>) as italics, bold and underline; everything else stays text.
@@ -440,7 +458,8 @@ const PLAYER_JS = `
     var box = $('text');
     box.textContent = '';
     syncBackground();
-    lines.forEach(function (l) {
+    lines.forEach(function (l, at) {
+      if (reveal !== null && at >= reveal) return; // a cutscene line still to come
       if (l.pause || l.cue) return; // a Continue break: the page simply goes on; a cue plays, it isn't read
       if (l.chosen && l.chosen.indexOf('${EXIT_PREFIX}') === 0) { box.appendChild(el('p', 'chosen game-played', '⇥ the game played here ⇤')); return; }
       if (l.chosen) { box.appendChild(el('p', 'chosen', tr(l.chosen))); return; }
@@ -455,7 +474,7 @@ const PLAYER_JS = `
       }
       if (l.speaker) {
         var face = l.who && portraits[l.who] && pictures[portraits[l.who]];
-        var p = el('p', face ? 'dialogue with-portrait' : 'dialogue');
+        var p = el('p', (face ? 'dialogue with-portrait' : 'dialogue') + (l.cut ? ' cut' : '') + (l.cut && reveal !== null && at === reveal - 1 ? ' now' : ''));
         if (face) {
           var img = el('img', 'portrait');
           img.src = face.src;
@@ -470,6 +489,14 @@ const PLAYER_JS = `
     });
     var nav = $('choices');
     nav.textContent = '';
+    if (reveal !== null) {
+      // A cutscene is playing: the choices come once it's over.
+      var skip = el('button', 'choice continue', 'Skip the cutscene');
+      skip.onclick = function () { stopCutscene(); render(); };
+      nav.appendChild(skip);
+      $('undo').disabled = !history.length;
+      return;
+    }
     var choices = story.currentChoices;
     if (!choices.length) {
       if (lines.length) chime();
@@ -575,6 +602,7 @@ const PLAYER_JS = `
     if (!h) return;
     story.state.LoadJson(h.state);
     lines = h.lines;
+    stopCutscene();
     render();
     save();
   }

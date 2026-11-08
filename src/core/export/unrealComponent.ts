@@ -787,6 +787,7 @@ FNarrativeLine UNarrativeBridgeComponent::ParseLine(const FString& Raw, const TA
         else if (Name == TEXT("image")) Line.Image = Value;
         else if (Name == TEXT("audio")) Line.VoiceClip = Value;
         else if (Name == TEXT("transition")) Line.bIsTransition = true;
+        else if (Name == TEXT("cutscene")) Line.bIsCutscene = true;
     }
     Line.Text = Raw;
     if (!Line.Speaker.IsEmpty())

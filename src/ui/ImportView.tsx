@@ -459,6 +459,7 @@ export function ImportView({
 - [Markdown link choice](#target)
 -> target   /   @end                         divert / ending
 @pause                                       Continue break: the player clicks Continue to read on
+@cutscene                                    the passage is a cutscene: only its dialogue, playing by itself
 @exit wolf_fight The player fights wolves    exit to the game: the dialogue stops while the game plays
 ## Heading {#custom_id}                      Markdown heading as a passage`}</pre>
       </details>

@@ -337,6 +337,9 @@ function assemble(
           case 'end':
             p.isEnding = true;
             return null;
+          case 'cutscene':
+            p.cutscene = true;
+            return null;
           case 'heading':
             if (!p.sceneHeading) p.sceneHeading = m.text;
             return null;
