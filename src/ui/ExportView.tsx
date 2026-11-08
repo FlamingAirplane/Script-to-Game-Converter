@@ -193,17 +193,15 @@ export function ExportView({ processed, stale, onState, project, update, onRevie
               </span>
             </div>
           )}
-          {engine === 'unity' && (
-            <label className="field">
-              <span className="muted small">Translation sheet: language columns to add (e.g. fr, de). Every package has the sheet; translators fill the columns in.</span>
-              <input className="input mono" value={sheetLanguages} placeholder="e.g. fr, de" onChange={(e) => setSheetLanguages(e.target.value)} />
-            </label>
-          )}
+          <label className="field">
+            <span className="muted small">Translation sheet: language columns to add (e.g. fr, de). Every export has the sheet; translators fill the columns in.</span>
+            <input className="input mono" value={sheetLanguages} placeholder="e.g. fr, de" onChange={(e) => setSheetLanguages(e.target.value)} />
+          </label>
           </details>
           {!asPackage && (
             <label className="check">
               <input type="checkbox" checked={opts.includeDemo} onChange={(e) => setOpts({ ...opts, includeDemo: e.target.checked })} />
-              Include runnable demo ({engine === 'unity' ? 'auto-created scene with the story UI' : 'Blueprint-friendly C++ component'})
+              Include runnable demo ({engine === 'unity' ? 'auto-created scene with the story UI' : 'press Play to see the story in its story panel'})
             </label>
           )}
 
@@ -247,12 +245,10 @@ export function ExportView({ processed, stale, onState, project, update, onRevie
           {error && <p className="error-text">{error}</p>}
         </section>
 
-        {engine === 'unity' && (
-          <details className="advanced advanced-card">
-            <summary>Advanced: the look of the story window in Unity (colours, fonts, layout and more)</summary>
-            <UnityThemeEditor project={project} update={update} />
-          </details>
-        )}
+        <details className="advanced advanced-card">
+          <summary>Advanced: the look of the story window in {adapter.label} (colours, fonts, layout and more)</summary>
+          <UnityThemeEditor project={project} update={update} engine={engine} />
+        </details>
 
         <section className="card">
           <p className="for-dev small">For your developer</p>
@@ -440,7 +436,7 @@ function ShareSection({ processed, stale, project, update }: { processed: Proces
           <h2>Translation sheet</h2>
           <p className="muted small">
             Every line, choice, name and button the player sees, one per row, for translators: add a column per language (for example <code>fr</code> or{' '}
-            <code>de</code>) and fill it in. The Unity package shows the story in any language the sheet has.
+            <code>de</code>) and fill it in. The Unity and Unreal exports show the story in any language the sheet has.
           </p>
           <label className="field">
             <span className="muted small">Language columns to start with (optional)</span>
@@ -538,7 +534,10 @@ function PackageContents({ engine, layout }: { engine: EngineTarget; layout: 'pa
                   <strong>An Unreal project</strong> (C++) set up for the Inkpot plugin, with a script that fetches Inkpot.
                 </li>
                 <li>
-                  <strong>A Blueprint-friendly component</strong> that plays the story: lines, choices, cues, exits to the game, and items the game gives or takes. It has no story panel or saves yet; the developer builds those in Blueprints.
+                  <strong>Ready-made code</strong> that plays the story: lines, choices, Continue breaks, exits to the game, saves, items and translations (C++, usable from Blueprints).
+                </li>
+                <li>
+                  <strong>A story panel</strong> styled with the Story UI settings below, and tests that replay every ending.
                 </li>
               </>
             )}
@@ -557,7 +556,7 @@ function PackageContents({ engine, layout }: { engine: EngineTarget; layout: 'pa
             ) : (
               <>
                 <li>Run the setup script (it fetches Inkpot), then open the project in Unreal and let it build.</li>
-                <li>Add the story component to the game and hook it to their own interface.</li>
+                <li>Put the story where it belongs in the game (a menu adds it to a level), and connect it to their gameplay: the README explains how.</li>
               </>
             )}
           </ul>

@@ -304,7 +304,11 @@ instructions for the developer. The Unity package installs the free Ink Unity In
 have it yet, and gives the developer ways to connect the story to the game: start it at any passage, react to its tags
 and variables, and use the game's own inventory and save system.
 
-**Story UI** (Unity only) sets how the story panel looks and behaves in the game: about 70 settings in groups you can
+The Unreal project gives the developer the same: a story panel, saves that survive a revised story, translations, cues,
+locked choices, and tests that replay every ending. Opened in Unreal, it brings the story in by itself, and with the
+runnable demo ticked, pressing Play shows the story.
+
+**Story UI** (Unity and Unreal) sets how the story panel looks and behaves in the game: about 70 settings in groups you can
 open and close, with a preview beside them. A setting you've changed is marked ● with a **↺** beside it that puts
 just that one back to its default (the chosen look's); each group has **↺ Reset … to defaults**, and **Reset to
 defaults** at the top puts everything back.

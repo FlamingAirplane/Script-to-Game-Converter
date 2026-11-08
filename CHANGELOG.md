@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+- **The Unreal export catches up with Unity:** the Unreal project now has a themed **story panel** (the Story UI look
+  on the Export page, with typing, portraits, scene pictures, locked choices greyed out, and Settings and save-slot
+  menus). It also gets **save slots and an autosave** that carry over to a revised story, **translations** from the
+  translation sheet, a **cue player** that plays the sounds you attached, starting at any passage, going on elsewhere
+  after an exit (`ResumeAt`), story variables, and a game-owned inventory. Opened in Unreal, the project brings the story
+  in by itself; press Play to see it. **Automation tests** replay every ending.
+- **Fixed:** the Unreal export didn't build against the real Inkpot plugin (a wrong `SetBool` call). It's now built and
+  tested with Unreal Engine 5.7 and Inkpot (`npm run test:unreal:build`).
+
 - **Players see only the dialogue:** a new box in Story settings (and on the Export page). When it's ticked, players
   get only the spoken lines and the choices. Narration, transitions, scene headings and parentheticals are left out of
   Playtest, the playable story, Twine, Unity, Unreal and the translation sheet, and the Ink keeps them as comments.

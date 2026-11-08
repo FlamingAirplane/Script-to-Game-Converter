@@ -1,9 +1,12 @@
-# Stand-in Unreal and Inkpot headers
+# Stand-in Unreal headers
 
-Just enough of Unreal Engine's and Inkpot's headers for `npm run test:unreal` to check that the C++ in the
-Unreal export is valid C++ (`clang++ -fsyntax-only`), so a typo or a wrong type in the generated code fails CI.
+Just enough of Unreal Engine's `CoreMinimal.h` (`TCHAR`, `TEXT`, `int32`…) for `npm run test:unreal` to check that the C++
+the Unreal export generates for each story is valid C++ (`clang++ -fsyntax-only`): `NarrativeBridgeStoryInfo.h` (the
+story's passages, cues, portraits and the C++ conditions of its locked choices) and `NarrativeBridgeRoutes.h` (its
+playthrough routes). That's the C++ that changes from story to story, so a story whose text or conditions turn into bad
+C++ fails CI.
 
-They are not the real headers. Passing this check doesn't mean the project builds in Unreal: the macros
-(`UCLASS`, `UFUNCTION`…) do nothing here, and the Inkpot classes only have the members the generated code
-uses, written to match Inkpot's API. When the generated code starts using something new from Unreal or
-Inkpot, add it here with the same signature as the real header.
+The rest of the export's C++ (the story component, story panel, cue player and editor module) is the same for every
+story and uses much more of Unreal and Inkpot than stand-ins could honestly imitate. `npm run test:unreal:build` builds
+all of it with a real Unreal Engine and Inkpot, and with `--test` runs its automation tests; run it after changing those
+templates.

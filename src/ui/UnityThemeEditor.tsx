@@ -38,7 +38,8 @@ function describe(f: ThemeField, v: unknown): string {
   return String(v);
 }
 
-export function UnityThemeEditor({ project, update }: { project: StoryProject; update: Update }) {
+export function UnityThemeEditor({ project, update, engine = 'unity' }: { project: StoryProject; update: Update; engine?: 'unity' | 'unreal' }) {
+  const engineName = engine === 'unreal' ? 'Unreal' : 'Unity';
   const saved = project.presentation?.unity;
   const theme = normaliseUnityTheme(saved);
   const [open, setOpen] = useState<Set<ThemeGroup>>(() => new Set(OPEN_AT_FIRST));
@@ -81,8 +82,8 @@ export function UnityThemeEditor({ project, update }: { project: StoryProject; u
         </button>
       </div>
       <p className="muted small">
-        The panel your Unity game shows the story in: {UNITY_THEME_FIELDS.length} settings for how it looks and behaves. Your developer can change any of them later in Unity
-        too, in the NarrativeTheme asset.
+        The panel your {engineName} game shows the story in: {UNITY_THEME_FIELDS.length} settings for how it looks and behaves. Your developer can change any of them later in {engineName}
+        too, in {engine === 'unreal' ? 'a Narrative Theme asset' : 'the NarrativeTheme asset'}.
       </p>
       <div className="unity-theme-grid">
         <div className="unity-theme-controls">

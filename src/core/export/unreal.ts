@@ -1,7 +1,8 @@
 import { audioFileName } from '../audio';
 import { cueSounds } from '../cues';
 import { describeCondition } from '../gating';
-import { cueTag, EXIT_PREFIX, exitName, isActive, RESERVED_TAGS } from '../isr';
+import { portraitFiles } from '../images';
+import { CONTINUE_TEXT, cueName, cueTag, EXIT_PREFIX, exitName, isActive, itemVar, RESERVED_TAGS, type Condition } from '../isr';
 import { isForcing } from '../forced';
 import type { ProcessedStory } from '../pipeline';
 import { storyRoutes } from './routes';
@@ -9,11 +10,26 @@ import { translationSheet } from './translations';
 import { assertExportable, audioFiles, buildManifest, imageFiles, commonFiles, isPinnedRef, itemVarNames, json, pascalCase, sourceFiles, storyVersion } from './common';
 import type { EngineAdapter, ExportFile, ExportOptions, ExportResult } from './types';
 import { finalize } from './unity';
+import { normaliseUnityTheme } from './unityTheme';
+import { COMPONENT_CPP, COMPONENT_H } from './unrealComponent';
+import { CUE_PLAYER_CPP, CUE_PLAYER_H, INVENTORY_COMPONENT_H, TRIGGER_CPP, TRIGGER_H } from './unrealCues';
+import { EDITOR_MODULE_CPP, editorBuildCs, keySamples, routesH, testsCpp } from './unrealEditor';
+import { fillUnreal, INVENTORY_H, LOCALIZATION_CPP, LOCALIZATION_H, SAVE_STORAGE_H, SETTINGS_CPP, SETTINGS_H, TYPES_H } from './unrealRuntime';
+import { DEMO_CPP, DEMO_H, PANEL_CPP, PANEL_H, THEME_CPP, themeH, unrealThemeJson, WIDGET_CPP, WIDGET_H } from './unrealUi';
 
-// Unreal adapter. Uses The Chinese Room's Inkpot plugin, provisioned at a pinned ref by the
-// included setup script (never vendored). The canonical .ink lives in StorySource/ and is imported
-// by Inkpot into a native story asset. The C++ component targets Inkpot's documented
-// subsystem/story API — verify it against the pinned Inkpot release (see README).
+// Unreal adapter. Uses The Chinese Room's Inkpot plugin, provisioned at a pinned ref by the included setup script (never
+// vendored). The export is a complete Unreal project with two C++ modules:
+// - the game module: the story component (a port of the Unity package's NarrativeController), its translations, the
+//   player's reading settings, the cue player, a themed story panel (UMG, built in C++ from the same look as the Unity
+//   story panel), and helpers for hooking the story into a game (see unrealRuntime.ts, unrealComponent.ts, unrealCues.ts,
+//   unrealUi.ts);
+// - the editor module: it imports the story files the first time the project opens, adds Tools → Narrative Bridge, and
+//   holds the automation tests (see unrealEditor.ts).
+// The canonical .ink lives in StorySource/ and Inkpot imports it as a native story asset. `npm run test:unreal:build`
+// builds the export with a real Unreal Engine and Inkpot; `npm run test:unreal` checks its C++ against stand-in headers.
+
+/** Where the story's runtime files (the look, the translation sheet, pictures) are, under Content/. Staged with the game. */
+const DATA = 'NarrativeBridge/Data/';
 
 export const unrealAdapter: EngineAdapter = {
   id: 'unreal',
@@ -27,45 +43,75 @@ export const unrealAdapter: EngineAdapter = {
   requirements: (o) => [
     { id: 'unreal', label: `Unreal Engine ${o.engineVersion}`, detail: 'Inkpot documents UE 5.7 or later. Install via the Epic Games Launcher.', probe: { paths: ['/Users/Shared/Epic Games', 'C:\\Program Files\\Epic Games'] } },
     { id: 'toolchain', label: 'C++ toolchain', detail: 'Visual Studio 2022 with "Game development with C++" on Windows, or Xcode on macOS.', probe: { command: 'xcodebuild -version' } },
-    { id: 'dotnet', label: '.NET runtime (for Inklecate-based import)', detail: 'Inkpot imports .ink through Inklecate, which needs a .NET runtime.', probe: { command: 'dotnet --list-runtimes' } },
+    { id: 'dotnet', label: '.NET runtime (for Inklecate-based import)', detail: 'Inkpot imports .ink through Inklecate, which needs a .NET runtime. Without it the story is imported from its compiled JSON instead.', probe: { command: 'dotnet --list-runtimes' } },
     { id: 'git', label: 'Git on PATH', detail: 'The setup script clones Inkpot at the pinned ref.', probe: { command: 'git --version' } },
   ],
   async export(story, options) {
     assertExportable(story);
     const name = pascalCase(options.projectName);
     const root = `${name}/`;
+    const src = `${root}Source/${name}/`;
+    const ed = `${root}Source/${name}Editor/`;
     const manifest = await buildManifest(story, options, this);
-    // Unreal imports audio through the editor, so clips ship next to the story source to drag in.
+    const theme = normaliseUnityTheme(options.unityTheme ?? story.project.presentation?.unity);
+    // Voice clips and cue sounds are imported as Sound Waves by the editor module (into Content/NarrativeBridge/Audio).
     const voice = audioFiles(story, options.audio, `${root}StorySource/VoiceClips/`);
-    // Pictures too: drag them into the Content Browser; the #image tag names the file.
-    const pictures = imageFiles(story, options.images, `${root}StorySource/Images/`);
+    // Pictures are decoded at run time from their PNG/JPEG bytes (as in the Unity package): no import settings needed.
+    const pictures = imageFiles(story, options.images, `${root}Content/${DATA}Images/`);
+    // Playthrough routes for the tests; not for Ink with randomness, which needn't replay the same way.
+    const routes = /RANDOM\(|\{~/.test(story.generated.ink) ? [] : storyRoutes(story.compile.json!, story.project);
+    const fill = (template: string) => fillUnreal(template, name);
     const files: ExportFile[] = [
       { path: `${root}${name}.uproject`, content: json(uproject(name, options)) },
       { path: `${root}StorySource/MainStory.ink`, content: story.generated.ink },
       { path: `${root}StorySource/MainStory.compiled.json`, content: story.compile.json! },
-      // Every piece of text the player sees, keyed by its text, with any translations brought in (see translations.ts).
-      { path: `${root}StorySource/Translations.csv`, content: translationSheet(story.project) },
-      // Choice routes that reach every ending, for the game's own tests (see routes.ts).
-      ...(/RANDOM\(|\{~/.test(story.generated.ink) ? [] : [{ path: `${root}StorySource/PlaythroughRoutes.json`, content: json({ about: 'Choices (by their text) that play from the start to each ending. Replay them through the story component and check each ending passage is reached and the last line matches.', routes: storyRoutes(story.compile.json!, story.project) }) }]),
+      ...(routes.length ? [{ path: `${root}StorySource/PlaythroughRoutes.json`, content: json({ about: 'Choices (by their text) that play from the start to each ending. The NarrativeBridge.Playthrough automation tests replay them.', routes }) }] : []),
       ...voice.files,
+      // The story panel's look and the translation sheet, read at run time (see NarrativeTheme and NarrativeLocalization).
+      { path: `${root}Content/${DATA}Theme.json`, content: json(unrealThemeJson(theme)) },
+      { path: `${root}Content/${DATA}Translations.csv`, content: translationSheet(story.project, theme, options.translationLanguages ?? []) },
       ...pictures.files,
-      { path: `${root}Config/DefaultGame.ini`, content: `[/Script/EngineSettings.GeneralProjectSettings]\nProjectName=${story.project.project.title.replace(/\n/g, ' ')}\n` },
-      { path: `${root}Config/DefaultEngine.ini`, content: '[/Script/Engine.Engine]\n+ActiveGameNameRedirects=(OldGameName="TP_Blank",NewGameName="/Script/' + name + '")\n' },
+      { path: `${root}Config/DefaultGame.ini`, content: defaultGameIni(story) },
+      { path: `${root}Config/DefaultEngine.ini`, content: defaultEngineIni(name, theme, options.includeDemo) },
       { path: `${root}Source/${name}.Target.cs`, content: target(name, 'Game') },
       { path: `${root}Source/${name}Editor.Target.cs`, content: target(name, 'Editor') },
-      { path: `${root}Source/${name}/${name}.Build.cs`, content: buildCs(name) },
-      { path: `${root}Source/${name}/${name}.cpp`, content: `#include "Modules/ModuleManager.h"\n\nIMPLEMENT_PRIMARY_GAME_MODULE(FDefaultGameModuleImpl, ${name}, "${name}");\n` },
-      { path: `${root}Source/${name}/NarrativeBridgeStoryInfo.h`, content: storyInfoH(story) },
+      { path: `${src}${name}.Build.cs`, content: buildCs(name) },
+      { path: `${src}${name}.cpp`, content: `#include "Modules/ModuleManager.h"\n\nIMPLEMENT_PRIMARY_GAME_MODULE(FDefaultGameModuleImpl, ${name}, "${name}");\n` },
+      { path: `${src}NarrativeBridgeStoryInfo.h`, content: storyInfoH(story, name) },
+      { path: `${src}NarrativeBridgeTypes.h`, content: fill(TYPES_H) },
+      { path: `${src}NarrativeInventoryAuthority.h`, content: fill(INVENTORY_H) },
+      { path: `${src}NarrativeSaveStorage.h`, content: fill(SAVE_STORAGE_H) },
+      { path: `${src}NarrativeLocalization.h`, content: fill(LOCALIZATION_H) },
+      { path: `${src}NarrativeLocalization.cpp`, content: fill(LOCALIZATION_CPP) },
+      { path: `${src}NarrativeSettings.h`, content: fill(SETTINGS_H) },
+      { path: `${src}NarrativeSettings.cpp`, content: fill(SETTINGS_CPP) },
+      { path: `${src}NarrativeBridgeComponent.h`, content: fill(COMPONENT_H) },
+      { path: `${src}NarrativeBridgeComponent.cpp`, content: fill(COMPONENT_CPP) },
+      { path: `${src}NarrativeCuePlayer.h`, content: fill(CUE_PLAYER_H) },
+      { path: `${src}NarrativeCuePlayer.cpp`, content: fill(CUE_PLAYER_CPP) },
+      { path: `${src}NarrativeStoryTrigger.h`, content: fill(TRIGGER_H) },
+      { path: `${src}NarrativeStoryTrigger.cpp`, content: fill(TRIGGER_CPP) },
+      { path: `${src}NarrativeSimpleInventory.h`, content: fill(INVENTORY_COMPONENT_H) },
+      { path: `${src}NarrativeTheme.h`, content: fill(themeH(theme)) },
+      { path: `${src}NarrativeTheme.cpp`, content: fill(THEME_CPP) },
+      { path: `${src}NarrativeStoryWidget.h`, content: fill(WIDGET_H) },
+      { path: `${src}NarrativeStoryWidget.cpp`, content: fill(WIDGET_CPP) },
+      { path: `${src}NarrativeStoryPanel.h`, content: fill(PANEL_H) },
+      { path: `${src}NarrativeStoryPanel.cpp`, content: fill(PANEL_CPP) },
       ...(options.includeDemo
         ? [
-            { path: `${root}Source/${name}/NarrativeBridgeComponent.h`, content: componentH(name) },
-            { path: `${root}Source/${name}/NarrativeBridgeComponent.cpp`, content: COMPONENT_CPP },
+            { path: `${src}NarrativeDemoGameMode.h`, content: fill(DEMO_H) },
+            { path: `${src}NarrativeDemoGameMode.cpp`, content: fill(DEMO_CPP) },
           ]
         : []),
+      { path: `${ed}${name}Editor.Build.cs`, content: editorBuildCs(name) },
+      { path: `${ed}${name}Editor.cpp`, content: fill(EDITOR_MODULE_CPP) },
+      { path: `${ed}NarrativeBridgeRoutes.h`, content: routesH(routes) },
+      { path: `${ed}NarrativeBridgeTests.cpp`, content: testsCpp(keySamples(story.project.passages.flatMap((p) => p.choices.map((c) => c.text)).slice(0, 3))) },
       { path: `${root}Plugins/README.md`, content: `Run ../Scripts/setup_inkpot.sh (macOS/Linux) or ..\\Scripts\\setup_inkpot.ps1 (Windows) to install Inkpot @ ${options.integrationRef} into Plugins/Inkpot/.\n` },
       { path: `${root}Scripts/setup_inkpot.sh`, content: setupSh(options) },
       { path: `${root}Scripts/setup_inkpot.ps1`, content: setupPs1(options) },
-      { path: `${root}Content/NarrativeBridge/README.md`, content: 'Import ../../StorySource/MainStory.ink here (drag into the Content Browser) to create the Inkpot story asset.\n' },
+      { path: `${root}Content/NarrativeBridge/README.md`, content: 'The editor imports ../../StorySource/MainStory.ink here (as the Inkpot story asset MainStory) and the voice clips into Audio/ the first time the project opens; Tools → Narrative Bridge → Re-import Story Files does it again. Data/ holds the story panel\'s look, the translation sheet and the scene pictures, read while the game runs.\n' },
       { path: `${root}README.md`, content: readme(story, options, name) },
       ...commonFiles(story, manifest, `${root}NarrativeBridge/`),
       ...sourceFiles(story, `${root}NarrativeBridge/`, options.originals),
@@ -89,7 +135,7 @@ export const unrealAdapter: EngineAdapter = {
     };
     for (const n of voice.missing) result.report.warnings.push(`Voice clip "${n}" is missing from this browser, so it was left out of the package.`);
     for (const n of pictures.missing) result.report.warnings.push(`Scene picture "${n}" is missing from this browser, so it was left out of the package.`);
-    finalize(result, story, [`${root}${name}.uproject`, `${root}StorySource/MainStory.ink`, `${root}Source/${name}/${name}.Build.cs`]);
+    finalize(result, story, [`${root}${name}.uproject`, `${root}StorySource/MainStory.ink`, `${src}${name}.Build.cs`]);
     return result;
   },
 };
@@ -100,7 +146,10 @@ function uproject(name: string, o: ExportOptions) {
     EngineAssociation: o.engineVersion,
     Category: '',
     Description: 'Generated by Narrative Bridge',
-    Modules: [{ Name: name, Type: 'Runtime', LoadingPhase: 'Default', AdditionalDependencies: ['Engine'] }],
+    Modules: [
+      { Name: name, Type: 'Runtime', LoadingPhase: 'Default', AdditionalDependencies: ['Engine', 'UMG'] },
+      { Name: `${name}Editor`, Type: 'Editor', LoadingPhase: 'Default' },
+    ],
     Plugins: [{ Name: 'Inkpot', Enabled: true }],
   };
 }
@@ -116,7 +165,7 @@ public class ${cls} : TargetRules
         Type = TargetType.${kind};
         DefaultBuildSettings = BuildSettingsVersion.Latest;
         IncludeOrderVersion = EngineIncludeOrderVersion.Latest;
-        ExtraModuleNames.Add("${name}");
+        ExtraModuleNames.Add("${name}");${kind === 'Editor' ? `\n        ExtraModuleNames.Add("${name}Editor");` : ''}
     }
 }
 `;
@@ -130,10 +179,42 @@ public class ${name} : ModuleRules
     public ${name}(ReadOnlyTargetRules Target) : base(Target)
     {
         PCHUsage = PCHUsageMode.UseExplicitOrSharedPCHs;
-        PublicDependencyModuleNames.AddRange(new string[] { "Core", "CoreUObject", "Engine", "Inkpot" });
+        // The editor module (and your own) include the story's headers.
+        PublicIncludePaths.Add(ModuleDirectory);
+        PublicDependencyModuleNames.AddRange(new string[] { "Core", "CoreUObject", "Engine", "InputCore", "Slate", "SlateCore", "UMG", "Json", "JsonUtilities", "Inkpot", "InkPlusPlus" });
     }
 }
 `;
+}
+
+function defaultGameIni(story: ProcessedStory): string {
+  return `[/Script/EngineSettings.GeneralProjectSettings]
+ProjectName=${story.project.project.title.replace(/\n/g, ' ')}
+
+[/Script/UnrealEd.ProjectPackagingSettings]
+; The story asset and its sounds are loaded by path, so cook them; the look, the translations and the pictures are read as files.
++DirectoriesToAlwaysCook=(Path="/Game/NarrativeBridge")
++DirectoriesToAlwaysStageAsUFS=(Path="${DATA.replace(/\/$/, '')}")
+`;
+}
+
+function defaultEngineIni(name: string, theme: ReturnType<typeof normaliseUnityTheme>, demo: boolean): string {
+  // Scale the UI with the screen as the theme was designed (its reference resolution, matched by width, height or both).
+  const rule = theme.matchWidthOrHeight <= 0.25 ? 'Horizontal' : theme.matchWidthOrHeight >= 0.75 ? 'Vertical' : 'ShortestSide';
+  const reference = rule === 'Horizontal' ? theme.referenceWidth : theme.referenceHeight;
+  return `[/Script/Engine.Engine]
++ActiveGameNameRedirects=(OldGameName="TP_Blank",NewGameName="/Script/${name}")
+
+[/Script/Engine.UserInterfaceSettings]
+UIScaleRule=${rule}
+UIScaleCurve=(EditorCurveData=(Keys=((Time=0.000000,Value=0.000000),(Time=${(reference * 8).toFixed(6)},Value=8.000000))),ExternalCurve=None)
+${demo ? `
+[/Script/EngineSettings.GameMapsSettings]
+; Press Play: the demo game mode puts the story on screen in any level.
+GlobalDefaultGameMode=/Script/${name}.NarrativeDemoGameMode
+EditorStartupMap=/Engine/Maps/Entry
+GameDefaultMap=/Engine/Maps/Entry
+` : ''}`;
 }
 
 function setupSh(o: ExportOptions) {
@@ -168,26 +249,57 @@ function setupSteps(o: ExportOptions, name: string): string[] {
   return [
     `Run Scripts/setup_inkpot.sh (or .ps1 on Windows) to clone Inkpot @ ${o.integrationRef} into Plugins/Inkpot.`,
     `Right-click ${name}.uproject → Generate project files, then build the "${name}Editor" target (or open the .uproject and accept the rebuild prompt).`,
-    'In the editor, drag StorySource/MainStory.ink into Content/NarrativeBridge to let Inkpot import it as a story asset.',
+    'Open the project: the first time, the editor imports StorySource/MainStory.ink (as an Inkpot story asset) and the voice clips into Content/NarrativeBridge.',
     o.includeDemo
-      ? 'Add a "Narrative Bridge" component to any actor, set its Story Asset, and bind OnLine / OnChoices in Blueprint (or call Choose).'
-      : 'Use Inkpot\'s Blueprint nodes (Begin Story, Continue, Choose Choice) to run the story.',
+      ? 'Press Play: the story runs in its themed story panel. To put it in your own level, use Tools → Narrative Bridge → Add … to the Level.'
+      : 'Tools → Narrative Bridge → Add … to the Level adds an actor with the story, its story panel and its cue player; or add a "Narrative Bridge" component to any actor and bind its events in Blueprint.',
+    `Optional: run the story's automation tests (Tools → Session Frontend → Automation, filter "NarrativeBridge").`,
   ];
 }
 
-function storyInfoH(story: ProcessedStory) {
+const q = (s: string) => `TEXT(${JSON.stringify(s)})`;
+
+/** A choice's condition as C++, reading Ink variables through V (a NarrativeBridgeStoryInfo::FVariableReader). */
+export function conditionCpp(c: Condition): string {
+  switch (c.type) {
+    case 'has_item':
+      return `V.Has(${q(itemVar(c.itemId))})`;
+    case 'not':
+      return `!(${conditionCpp(c.condition)})`;
+    case 'and':
+      return `(${c.conditions.map(conditionCpp).join(' && ') || 'true'})`;
+    case 'or':
+      return `(${c.conditions.map(conditionCpp).join(' || ') || 'false'})`;
+    case 'compare': {
+      const v = c.value;
+      if (typeof v === 'string') return `V.CompareText(${q(c.variableId)}, ${q(c.op)}, ${q(v)})`;
+      if (typeof v === 'boolean') return `V.CompareBool(${q(c.variableId)}, ${q(c.op)}, ${v})`;
+      return `V.CompareNumber(${q(c.variableId)}, ${q(c.op)}, ${Number.isInteger(v) ? `${v}.0` : String(v)})`;
+    }
+  }
+}
+
+function storyInfoH(story: ProcessedStory, module: string) {
   const items = itemVarNames(story);
-  const q = (s: string) => `TEXT(${JSON.stringify(s)})`;
   const list = (name: string, values: string[], about: string) =>
     `    /** ${about} */\n    static const TCHAR* ${name}[] = { ${values.length ? values.map(q).join(', ') : 'nullptr'} };\n    static const int32 Num${name} = ${values.length};`;
   const passages = [...story.generated.ink.matchAll(/^=== (\w+) ===$/gm)].map((m) => m[1]);
   const knots = new Set(passages);
   const blocks = story.project.passages.flatMap((p) => p.content);
   const exits = [...new Set(blocks.flatMap((b) => (b.type === 'exit' ? [exitName(b.name)] : [])))];
-  const cueTags = [...new Set(blocks.flatMap((b) => (b.type === 'cue' ? [cueTag(b.name, b.value)] : [])))];
+  const cueBlocks = blocks.flatMap((b) => (b.type === 'cue' ? [b] : []));
+  const cues = [...new Set(cueBlocks.map((b) => cueName(b.name)))];
+  const cueTags = [...new Set(cueBlocks.map((b) => cueTag(b.name, b.value)))];
   const sounds = [...cueSounds(story.project)].map(([tag, ref]) => [tag, audioFileName(ref)] as const);
-  const gated = story.project.passages.flatMap((p) =>
-    knots.has(p.id) ? p.choices.filter((c) => isActive(c.review) && c.conditions.length).map((c) => `{ ${q(p.id)}, ${q(c.text.trim())}, ${q(c.conditions.map((x) => describeCondition(x, story.project)).join(', '))}, ${isForcing(c) ? 'true' : 'false'} }`) : [],
+  const portraits = Object.entries(portraitFiles(story.project));
+  const gated = story.project.passages.flatMap((p) => (knots.has(p.id) ? p.choices.filter((c) => isActive(c.review) && c.conditions.length).map((c) => ({ passage: p.id, choice: c })) : []));
+  const requirements = gated.map(
+    ({ choice }, i) =>
+      `    static const FRequirement Requirements${i}[] = { ${choice.conditions.map((x) => `{ ${q(describeCondition(x, story.project))}, [](const FVariableReader& V) -> bool { return ${conditionCpp(x)}; } }`).join(', ')} };`,
+  );
+  const gatedRows = gated.map(
+    ({ passage, choice }, i) =>
+      `{ Requirements${i}, ${choice.conditions.length}, ${q(passage)}, ${q(choice.text.trim())}, ${q(choice.conditions.map((x) => describeCondition(x, story.project)).join(', '))}, ${isForcing(choice) ? 'true' : 'false'} }`,
   );
   return `// Auto-generated by Narrative Bridge. Regenerated on every export.
 #pragma once
@@ -197,20 +309,67 @@ function storyInfoH(story: ProcessedStory) {
 namespace NarrativeBridgeStoryInfo
 {
     static const TCHAR* Title = ${q(story.project.project.title)};
-    /** Changes whenever the generated Ink changes. Saves from another version must be rejected. */
+    static const TCHAR* ProjectId = ${q(story.project.project.id)};
+    /** Changes whenever the generated Ink changes. Saves from another version are carried over by replaying their choices. */
     static const TCHAR* StoryVersion = ${q(storyVersion(story))};
+    /** The language the story is written in (the translation sheet's "source" column). */
+    static const TCHAR* SourceLanguage = TEXT("en");
+
+    /** The Inkpot story asset the editor imports from StorySource/MainStory.ink. */
+    static const TCHAR* StoryAssetPath = TEXT("/Game/NarrativeBridge/MainStory.MainStory");
+    /** Where the editor imports the voice clips and cue sounds (StorySource/VoiceClips). */
+    static const TCHAR* AudioPackagePath = TEXT("/Game/NarrativeBridge/Audio/");
+    /** The story's files read while the game runs, under Content/ (staged with the game; see Config/DefaultGame.ini). */
+    static const TCHAR* ThemeFile = TEXT("${DATA}Theme.json");
+    static const TCHAR* TranslationsFile = TEXT("${DATA}Translations.csv");
+    static const TCHAR* ImageFolder = TEXT("${DATA}Images/");
+    /** Save slots go in Saved/SaveGames/NarrativeBridge/<this>/. */
+    static const TCHAR* SaveFolder = ${q(module)};
+
+    /** The text of a Continue break's only choice, and the text before an exit's name (see the Ink conventions). */
+    static const TCHAR* ContinueText = ${q(CONTINUE_TEXT)};
+    static const TCHAR* ExitPrefix = ${q(EXIT_PREFIX)};
+
+${list('Passages', passages, 'Every passage (Ink knot) the story can start at: UNarrativeBridgeComponent::StartAt.')}
+    /** Each passage's title, in the same order as Passages (for save slots and menus). */
+    static const TCHAR* PassageTitles[] = { ${passages.length ? passages.map((k) => q(story.project.passages.find((p) => p.id === k)?.title || k)).join(', ') : 'nullptr'} };
     static const TCHAR* ItemVariables[] = { ${items.length ? items.map(q).join(', ') : 'nullptr'} };
     static const int32 NumItemVariables = ${items.length};
-${list('Passages', passages, 'Every passage (Ink knot) the story can start at.')}
+${list('Variables', story.project.variables.map((v) => v.id), 'Story variables the game is allowed to read and write (GetVariable, SetVariable).')}
 ${list('Exits', exits, "The story's exits to the game (UNarrativeBridgeComponent::OnExit gives their names).")}
+${list('Cues', cues, 'The cues the writer added (#music:calm → "music"); the Narrative Cue Player plays them.')}
 ${list('CueTags', cueTags, 'Every cue as it appears in the story, with its value (e.g. "music:calm"); OnCue broadcasts them.')}
 ${list('CueSoundTags', sounds.map(([tag]) => tag), 'Cues the writer attached a sound to, and (in CueSoundFiles, same order) the file in StorySource/VoiceClips/ to play.')}
 ${list('CueSoundFiles', sounds.map(([, f]) => f), 'The sound for each of CueSoundTags.')}
+${list('PortraitSpeakers', portraits.map(([k]) => k), "Characters with a portrait (speaker ids, as in #speaker tags), and (in PortraitFiles) each one's picture in ImageFolder.")}
+${list('PortraitFiles', portraits.map(([, f]) => f), 'The picture for each of PortraitSpeakers.')}
 ${list('ReservedTags', [...RESERVED_TAGS], "Narrative Bridge's own tags (speaker:, audio:, …): every other tag is a cue.")}
 
-    /** A choice that needs an item or a value: Ink leaves it out of the choices while it's locked. Show it greyed out if you like. */
+    /** Reads the story's variables for a locked choice's conditions (the story component gives one). */
+    struct FVariableReader
+    {
+        virtual ~FVariableReader() = default;
+        /** Whether a variable is true (items are Ink Booleans named has_<item>). */
+        virtual bool Has(const TCHAR* Name) const = 0;
+        virtual bool CompareNumber(const TCHAR* Name, const TCHAR* Op, double Value) const = 0;
+        virtual bool CompareText(const TCHAR* Name, const TCHAR* Op, const TCHAR* Value) const = 0;
+        virtual bool CompareBool(const TCHAR* Name, const TCHAR* Op, bool Value) const = 0;
+    };
+
+    /** One condition: in plain words ("Brass Key", "trust at least 2") and as a test of the story's variables. */
+    struct FRequirement
+    {
+        const TCHAR* Words;
+        bool (*Test)(const FVariableReader& V);
+    };
+
+${requirements.join('\n')}
+
+    /** A choice that needs an item or a value: Ink leaves it out of the choices while it's locked (GetLockedChoices lists them). */
     struct FGatedChoice
     {
+        const FRequirement* Requirements;
+        int32 NumRequirements;
         const TCHAR* Passage;
         const TCHAR* Text;
         /** What it needs, in words (e.g. "Archive Key"). */
@@ -218,224 +377,11 @@ ${list('ReservedTags', [...RESERVED_TAGS], "Narrative Bridge's own tags (speaker
         /** A forced choice: while it's on offer it's the only choice in its passage, so show nothing else as locked. */
         bool bForced;
     };
-    static const FGatedChoice GatedChoices[] = { ${gated.length ? gated.join(', ') : '{ nullptr, nullptr, nullptr, false }'} };
-    static const int32 NumGatedChoices = ${gated.length};
+    static const FGatedChoice GatedChoices[] = { ${gatedRows.length ? gatedRows.join(',\n        ') : '{ nullptr, 0, nullptr, nullptr, nullptr, false }'} };
+    static const int32 NumGatedChoices = ${gatedRows.length};
 }
 `;
 }
-
-function componentH(name: string) {
-  const api = `${name.toUpperCase()}_API`;
-  return `// Generated by Narrative Bridge. Thin Blueprint-friendly wrapper around Inkpot.
-// Written against Inkpot's UInkpot subsystem / UInkpotStory API; verify against your pinned Inkpot release.
-#pragma once
-
-#include "CoreMinimal.h"
-#include "Components/ActorComponent.h"
-#include "NarrativeBridgeComponent.generated.h"
-
-class UInkpotStory;
-class UInkpotStoryAsset;
-
-DECLARE_DYNAMIC_MULTICAST_DELEGATE_ThreeParams(FNarrativeLine, const FString&, Speaker, const FString&, Text, const TArray<FString>&, Tags);
-DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FNarrativeChoices, const TArray<FString>&, Choices);
-DECLARE_DYNAMIC_MULTICAST_DELEGATE(FNarrativeEnded);
-DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(FNarrativeCue, const FString&, Name, const FString&, Value);
-DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FNarrativeExit, const FString&, ExitName);
-
-UCLASS(ClassGroup = (NarrativeBridge), meta = (BlueprintSpawnableComponent, DisplayName = "Narrative Bridge"))
-class ${api} UNarrativeBridgeComponent : public UActorComponent
-{
-    GENERATED_BODY()
-
-public:
-    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Narrative Bridge")
-    TObjectPtr<UInkpotStoryAsset> StoryAsset;
-
-    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Narrative Bridge")
-    bool bStartOnBeginPlay = true;
-
-    UPROPERTY(BlueprintAssignable, Category = "Narrative Bridge")
-    FNarrativeLine OnLine;
-
-    UPROPERTY(BlueprintAssignable, Category = "Narrative Bridge")
-    FNarrativeChoices OnChoices;
-
-    UPROPERTY(BlueprintAssignable, Category = "Narrative Bridge")
-    FNarrativeEnded OnEnded;
-
-    /** A cue the writer added (#music:calm gives "music", "calm"): play music or a sound, shake the camera… See NarrativeBridgeStoryInfo::CueSoundTags for the sounds attached in Narrative Bridge. */
-    UPROPERTY(BlueprintAssignable, Category = "Narrative Bridge")
-    FNarrativeCue OnCue;
-
-    /** An exit to the game: the dialogue stops here and the game plays (a fight, a puzzle…) until it calls Resume. */
-    UPROPERTY(BlueprintAssignable, Category = "Narrative Bridge")
-    FNarrativeExit OnExit;
-
-    /** Goes on with the story after an exit to the game. */
-    UFUNCTION(BlueprintCallable, Category = "Narrative Bridge")
-    void Resume();
-
-    UFUNCTION(BlueprintPure, Category = "Narrative Bridge")
-    bool IsAtExit() const { return bAtExit; }
-
-    /** A line without its emphasis tags (<i>, <b>, <u>), for a plain Text Block. */
-    UFUNCTION(BlueprintPure, Category = "Narrative Bridge")
-    static FString PlainText(const FString& Text);
-
-    /** A line for a Rich Text Block whose text style set has rows named i, b and u (closing tags become </>). */
-    UFUNCTION(BlueprintPure, Category = "Narrative Bridge")
-    static FString RichText(const FString& Text);
-
-    UFUNCTION(BlueprintCallable, Category = "Narrative Bridge")
-    void StartStory();
-
-    UFUNCTION(BlueprintCallable, Category = "Narrative Bridge")
-    void Choose(int32 Index);
-
-    UFUNCTION(BlueprintPure, Category = "Narrative Bridge")
-    FString GetStoryVersion() const;
-
-    /** Host-authoritative inventory: push the game's item state into Ink before continuing. */
-    UFUNCTION(BlueprintCallable, Category = "Narrative Bridge")
-    void SetItemOwned(const FString& ItemId, bool bOwned);
-
-protected:
-    virtual void BeginPlay() override;
-
-private:
-    void Advance();
-    void BroadcastCues(const TArray<FString>& Tags);
-
-    bool bAtExit = false;
-
-    UPROPERTY(Transient)
-    TObjectPtr<UInkpotStory> Story;
-};
-`;
-}
-
-const COMPONENT_CPP = `// Generated by Narrative Bridge.
-#include "NarrativeBridgeComponent.h"
-#include "NarrativeBridgeStoryInfo.h"
-#include "Engine/Engine.h"
-#include "Inkpot/Inkpot.h"
-#include "Inkpot/InkpotStory.h"
-#include "Inkpot/InkpotChoice.h"
-#include "Asset/InkpotStoryAsset.h"
-
-void UNarrativeBridgeComponent::BeginPlay()
-{
-    Super::BeginPlay();
-    if (bStartOnBeginPlay) StartStory();
-}
-
-void UNarrativeBridgeComponent::StartStory()
-{
-    if (!StoryAsset)
-    {
-        UE_LOG(LogTemp, Error, TEXT("[NarrativeBridge] No StoryAsset assigned. Import StorySource/MainStory.ink first."));
-        return;
-    }
-    UInkpot* Inkpot = GEngine->GetEngineSubsystem<UInkpot>();
-    Story = Inkpot->BeginStory(StoryAsset);
-    Advance();
-}
-
-void UNarrativeBridgeComponent::Choose(int32 Index)
-{
-    if (!Story) return;
-    bAtExit = false;
-    Story->ChooseChoiceIndex(Index);
-    Advance();
-}
-
-void UNarrativeBridgeComponent::Resume()
-{
-    // An exit is a lone choice in Ink: taking it goes on with the story.
-    if (bAtExit) Choose(0);
-}
-
-FString UNarrativeBridgeComponent::PlainText(const FString& Text)
-{
-    static const TCHAR* EmphasisTags[] = { TEXT("<i>"), TEXT("</i>"), TEXT("<b>"), TEXT("</b>"), TEXT("<u>"), TEXT("</u>") };
-    FString Out = Text;
-    for (const TCHAR* Tag : EmphasisTags) Out.ReplaceInline(Tag, TEXT(""), ESearchCase::CaseSensitive);
-    return Out;
-}
-
-FString UNarrativeBridgeComponent::RichText(const FString& Text)
-{
-    static const TCHAR* Closing[] = { TEXT("</i>"), TEXT("</b>"), TEXT("</u>") };
-    FString Out = Text;
-    for (const TCHAR* Tag : Closing) Out.ReplaceInline(Tag, TEXT("</>"), ESearchCase::CaseSensitive);
-    return Out;
-}
-
-void UNarrativeBridgeComponent::BroadcastCues(const TArray<FString>& Tags)
-{
-    for (const FString& Raw : Tags)
-    {
-        const FString Tag = Raw.TrimStartAndEnd();
-        FString Name = Tag;
-        FString Value;
-        int32 Colon = INDEX_NONE;
-        if (Tag.FindChar(TEXT(':'), Colon))
-        {
-            Name = Tag.Left(Colon).TrimStartAndEnd();
-            Value = Tag.Mid(Colon + 1).TrimStartAndEnd();
-        }
-        if (Name.IsEmpty()) continue;
-        bool bReserved = false;
-        for (int32 i = 0; i < NarrativeBridgeStoryInfo::NumReservedTags; ++i)
-            if (Name == NarrativeBridgeStoryInfo::ReservedTags[i]) { bReserved = true; break; }
-        if (!bReserved) OnCue.Broadcast(Name, Value);
-    }
-}
-
-void UNarrativeBridgeComponent::SetItemOwned(const FString& ItemId, bool bOwned)
-{
-    if (Story) Story->SetBool(FString(TEXT("has_")) + ItemId, bOwned);
-}
-
-FString UNarrativeBridgeComponent::GetStoryVersion() const
-{
-    return NarrativeBridgeStoryInfo::StoryVersion;
-}
-
-void UNarrativeBridgeComponent::Advance()
-{
-    while (Story->CanContinue())
-    {
-        const FString Raw = Story->Continue().TrimStartAndEnd();
-        const TArray<FString> Tags = Story->GetCurrentTags();
-        BroadcastCues(Tags);
-        if (Raw.IsEmpty()) continue;
-        FString Speaker;
-        FString Text = Raw;
-        for (const FString& Tag : Tags)
-        {
-            if (Tag.StartsWith(TEXT("speaker:")))
-            {
-                Raw.Split(TEXT(": "), &Speaker, &Text);
-                break;
-            }
-        }
-        OnLine.Broadcast(Speaker, Text, Tags);
-    }
-    TArray<FString> Labels;
-    for (UInkpotChoice* Choice : Story->GetCurrentChoices()) Labels.Add(Choice->GetString());
-    const FString ExitPrefix = TEXT("${EXIT_PREFIX}");
-    if (Labels.Num() == 1 && Labels[0].StartsWith(ExitPrefix))
-    {
-        bAtExit = true;
-        OnExit.Broadcast(Labels[0].Mid(ExitPrefix.Len()));
-        return;
-    }
-    if (Labels.Num() > 0) OnChoices.Broadcast(Labels);
-    else OnEnded.Broadcast();
-}
-`;
 
 function readme(story: ProcessedStory, o: ExportOptions, name: string) {
   return `# ${story.project.project.title} — Unreal Engine export
@@ -447,45 +393,96 @@ ${setupSteps(o, name).map((s, i) => `${i + 1}. ${s}`).join('\n')}
 
 ## Requirements
 - Unreal Engine ${o.engineVersion} (Inkpot documents 5.7+), a C++ toolchain (Visual Studio 2022 "Game development with C++" on Windows, Xcode on macOS),
-  and a .NET runtime for Inkpot's Inklecate-based import.
+  and a .NET runtime for Inkpot's Inklecate-based import (without one, the story asset is made from \`MainStory.compiled.json\`).
 
 ## Layout
-- \`StorySource/MainStory.ink\` — canonical validated Ink (a Narrative Bridge convention, not a required Inkpot folder).
-- \`StorySource/MainStory.compiled.json\` — preflight output, for reference/testing only; Inkpot owns native asset generation.
-- \`StorySource/Translations.csv\` — every line, choice and name the player sees, keyed by its text, with a column per language
-  translators fill in (and any translations already brought in). Look a line up by its key (FNV-1a of its words; see the sheet's
-  source column) to show it in another language.
-- \`StorySource/PlaythroughRoutes.json\` — choices (by their text) that play from the start to every ending, with the ending
-  passage and last line, to replay in your own automation tests after wiring the story in.
-- \`Source/${name}/NarrativeBridgeComponent.*\` — Blueprint-friendly wrapper (OnLine, OnChoices, OnEnded, OnCue, OnExit, Choose, Resume).
+- \`StorySource/MainStory.ink\` — canonical validated Ink; the editor imports it as the Inkpot story asset \`Content/NarrativeBridge/MainStory\`.
+- \`StorySource/MainStory.compiled.json\` — the compiled story, which the automation tests play.
+- \`StorySource/PlaythroughRoutes.json\` — choices (by their text) that play from the start to every ending.
+- \`StorySource/VoiceClips/\` — recorded dialogue and cue sounds; imported into \`Content/NarrativeBridge/Audio\`.
+- \`Content/NarrativeBridge/Data/\` — the story panel's look (\`Theme.json\`), the translation sheet (\`Translations.csv\`) and the scene
+  pictures, read while the game runs (\`Config/DefaultGame.ini\` stages them with the game).
+- \`Source/${name}/\` — the game module: the story component, story panel, cue player, translations and settings.
+- \`Source/${name}Editor/\` — the editor module: importing the story files, *Tools → Narrative Bridge*, and the automation tests.
 - \`NarrativeBridge/\` — manifest, validation report, ISR, source map and original sources.
+
+## The story component
+Add a **Narrative Bridge** component to any actor (or use *Tools → Narrative Bridge → Add ${story.project.project.title} to the Level*, which also adds
+the story panel and the cue player). It plays \`Content/NarrativeBridge/MainStory\` unless you set *Story Asset*.
+- **Start it where you want.** Turn off *Start On Begin Play* and call \`StartStory\`, or \`StartAt("passage")\` to begin at a scene
+  (the passages are in \`NarrativeBridgeStoryInfo::Passages\`). The **Narrative Story Trigger** component starts it when the player walks in.
+- **Events** (bind them in Blueprint): \`OnLine\` (speaker, text, tags) and \`OnLineShown\` (an \`FNarrativeLine\` with the scene, stage direction,
+  picture and voice clip), \`OnChoices\` → \`Choose(index)\`, \`OnContinue\` → \`Continue\`, \`OnEnded\`, \`OnRestarted\`, \`OnStatusChanged\`,
+  \`OnRuntimeError\`, \`OnCue\` / \`OnTag\` for the writer's cues, and \`OnVariableChanged\` for every story variable and item.
+- **Exits to the game**: \`OnExit\` fires (with the exit's name, one of \`NarrativeBridgeStoryInfo::Exits\`) instead of \`OnChoices\`, and the story
+  panel steps aside. When the gameplay is done, call \`Resume\` to go on from there, or \`ResumeAt("passage")\` to go on somewhere else (after a
+  lost fight, say); set variables or items first to tell the story what happened.
+- **Variables**: \`GetVariable\` / \`GetVariableAsString\` and \`SetVariable\` for the story's own variables (\`NarrativeBridgeStoryInfo::Variables\`).
+- **Inventory**: items are Ink Booleans \`has_<item>\`. Implement **Narrative Inventory Authority** (\`HasItem\`, \`GiveItem\`, \`TakeItem\`) on an
+  actor or component, in C++ or Blueprint, and your inventory becomes the one source of truth: the story asks it before every step and sends it
+  the gains and losses. **Narrative Simple Inventory** is a ready-made one. Or call \`SetItemOwned\` yourself.
+- **Locked choices**: a choice that needs an item or a value the player doesn't have is left out by Ink. \`GetLockedChoices\` lists the ones in
+  the current passage with what they need in words (the story panel shows them greyed out), and \`GetCurrentPassage\` says where the reader is.
+- **Forced choices**: while a forced choice's condition holds, Ink offers only that choice in its passage, and \`GetLockedChoices\` stays empty.
+- **Pictures and portraits**: \`LoadPicture(file)\`, \`LoadPortrait(speakerId)\` and \`GetCurrentPicture\` give textures for your own UI.
+- **Voice**: lines with a recorded clip play it (in order, scaled by the player's *Voice volume*); \`LoadVoiceClip\` gives the Sound Wave.
+
+## The story panel
+The **Narrative Story Panel** component puts a **Narrative Story Widget** on screen for the story on its actor: story text (everything so far,
+the current scene, or one line at a time) typed out letter by letter, the speaking character's portrait, the scene picture behind, choices,
+the Continue button, the ending, and a toolbar with Restart, Save, Load and Settings. Keys: 1-9 choose, Space or Return continues (or finishes
+the line being typed), Escape closes a menu. Its look is the one chosen in Narrative Bridge (\`Content/NarrativeBridge/Data/Theme.json\`, about
+70 settings in groups: colours, panel, text, speakers and scenes, typing and pacing, choices and buttons, toolbar, scene pictures, character
+portraits, screen and sound). To change it in the editor, make a **Narrative Theme** data asset and set it on the story panel. *Font Family*
+uses your own font. The UI scales with the screen from the theme's reference resolution (\`Config/DefaultEngine.ini\`). To design your own UI,
+leave the story panel out and use the component's events.
+
+## Italics and bold
+Lines keep the script's emphasis as \`<i>…</i>\`, \`<b>…</b>\` and \`<u>…</u>\`. The story panel shows them. In your own UI, pass a line through
+\`PlainText\` for a plain Text Block, or through \`RichText\` for a Rich Text Block whose text style set has rows named \`i\`, \`b\` and \`u\`.
+
+## Cues
+Writers add cues in Narrative Bridge: music, a sound, an ambience, a camera shake, or a name of their own, with an optional value
+(\`#music:calm\`, \`#sound:door_creak\`, \`#shake:0.5\`), listed in \`NarrativeBridgeStoryInfo::Cues\` and \`CueTags\`. The **Narrative Cue Player**
+component plays them without code: it lists every cue with a likely action (play or stop music, play a sound, loop an ambience, shake the camera
+with your *Shake Class*, or only raise \`OnAnyCue\`). **Sounds the writer attached to cues come with the project and play by themselves**
+(\`CueSoundTags\`; turn off *Play Story Sounds* to use only yours). To use your own sound for a value, add one named after it to the cue
+(a sound called *calm* for \`music:calm\`). A music or ambience cue with no value stops it.
+
+## Saves
+The story panel's *Save* and *Load* open a menu of slots (*Save Slots* on the component, 3 by default), each showing the passage and when it was
+saved, and an **autosave** is kept each time the reader reaches a new passage (*Autosave*). From Blueprint: \`SaveToSlot\`, \`LoadFromSlot\` (0 is
+the autosave), \`GetSlots\`, \`DeleteSlot\` and \`OnSaved\`. Slots are small JSON files in \`Saved/SaveGames/NarrativeBridge/${name}/\`; to keep them
+in your game's own saves, give *Save Storage* an object implementing **Narrative Save Storage**. Set *Save Slots* to 0 for the single quick save.
+
+\`SaveState\` returns text you can keep in your own save system, and \`TryLoadState\` restores it. A save from an earlier version of the story is
+carried over: the new version is replayed with the same choices, so revising the story doesn't break players' saves. \`GetLoadNote\` says what happened.
+
+## Translations
+\`Content/NarrativeBridge/Data/Translations.csv\` lists every piece of text the player sees (lines, choices, speaker names, scene headings, stage
+directions, what locked choices need, and the story panel's own words), one per row, with a key made from its text. Translators add a column per
+language (\`fr\`, \`de\`…) and fill it in; put their sheet in its place (or call \`UNarrativeLocalization::UseSheet\`). \`SetLanguage\` picks the
+language (\`""\` for the story as written; the first time, the player's system language if the sheet has it), and the Settings menu gains a
+*Language* row. Lines are found by their text, so revising the story keeps every translation whose line didn't change. \`FNarrativeLine\`'s
+\`SourceText\` (and \`SourceSpeaker\`…) keep the original words.
+
+## Player settings
+The panel's *Settings* button opens a menu where the player sets the text size, typing speed (slow, normal, fast or instant), whether it goes on
+by itself, high contrast and the voice volume. They're kept in GameUserSettings and shared by every Narrative Bridge story in the game. Your own
+options menu can set the same things through **Narrative Settings** (\`SetTextScale\`, \`SetTypingSpeed\`, \`SetAutoAdvance\`, \`SetHighContrast\`,
+\`SetVoiceVolume\`, \`ResetSettings\`); the menu's words are in the widget's *Words*.
+
+## Automation tests
+*Tools → Session Frontend → Automation*, filter \`NarrativeBridge\`, or headless:
+\`UnrealEditor-Cmd ${name}.uproject -ExecCmds="Automation RunTests NarrativeBridge; Quit" -unattended -nullrhi\`. They replay every playthrough
+route (each must offer the same choices, reach the same ending and finish on the same line as when it was exported), start at every passage,
+save and load (and carry a save over from an earlier version), and check the translation keys and the story panel's look.
 
 ## Integration notes
 - Inkpot is not vendored. \`Scripts/setup_inkpot.*\` clones it at \`${o.integrationRef}\`.${isPinnedRef(o.integrationRef) ? '' : ' **This is a branch — pin a tested tag or commit SHA.**'}
-- The component targets Inkpot's \`UInkpot::BeginStory\` / \`UInkpotStory\` API. Header paths and method names can change between
-  Inkpot releases; if the build fails, compare against \`Plugins/Inkpot/Source\` and the InkpotDemo project.
-- Engine import and in-editor smoke tests are recorded as \`pending\` in the manifest until run.
-
-## Italics and bold
-Lines keep the script's emphasis as \`<i>…</i>\`, \`<b>…</b>\` and \`<u>…</u>\`. For a plain Text Block, pass a line through
-\`PlainText\`; for a Rich Text Block, add rows named \`i\`, \`b\` and \`u\` to its text style set and pass it through \`RichText\`.
-
-## Cues, exits and locked choices
-- **Cues** (\`#music:calm\`, \`#shake\`): \`OnCue\` gives each one's name and value as the story reaches it. The sounds the writer
-  attached are listed in \`NarrativeBridgeStoryInfo::CueSoundTags\` / \`CueSoundFiles\` and ship in \`StorySource/VoiceClips/\`.
-- **Exits to the game**: \`OnExit\` fires instead of \`OnChoices\`; let the game play, then call \`Resume\`. The names are in
-  \`NarrativeBridgeStoryInfo::Exits\`.
-- **Locked choices**: Ink leaves a choice out while its condition fails. \`NarrativeBridgeStoryInfo::GatedChoices\` lists each one
-  with its passage and what it needs in words, to show it greyed out.
-- **Forced choices**: while a forced choice's condition holds, Ink offers only that choice in its passage (the others carry
-  an extra condition). Its \`GatedChoices\` entry has \`bForced\` set: when it's on offer, show nothing else as locked.
-
-## Voice clips
-Recorded dialogue ships in \`StorySource/VoiceClips/\`. Drag the folder into \`Content/NarrativeBridge/Audio\` to import the clips as
-Sound Waves. Lines with a clip carry an \`audio:<file>\` tag in \`OnLine\`'s Tags; play the matching Sound Wave from Blueprint.
-
-## Inventory and saves
-Items are Ink Booleans \`has_<item>\`. Keep the game inventory authoritative and call \`SetItemOwned\` before continuing.
-Persist \`GetStoryVersion()\` with save data and restart the narrative if it differs.
+- The C++ targets Inkpot's \`UInkpot::BeginStory\` / \`UInkpotStory\` API and InkPlusPlus's \`Ink::FStory\`. Header paths and method names can
+  change between Inkpot releases; if the build fails, compare against \`Plugins/Inkpot/Source\`.
+- Exporting again replaces \`Source/\`, \`StorySource/\`, \`Config/\` and \`Content/NarrativeBridge/Data/\`; run *Tools → Narrative Bridge →
+  Re-import Story Files* afterwards. Your own Narrative Theme assets and levels are kept.
 `;
 }

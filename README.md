@@ -241,9 +241,15 @@ carries a save over, starts at every passage and clicks through the story panel:
 *A complete new Unity project* (or `--unity-project` on the command line) wraps the same package in a project that creates a
 demo scene on first open.
 
-**Unreal** (5.7+): a C++ project with Inkpot enabled, `Scripts/setup_inkpot.sh|ps1` to clone Inkpot at the pinned ref,
-`StorySource/MainStory.ink` for Inkpot to import, and a Blueprint-friendly `UNarrativeBridgeComponent`. The component targets
-Inkpot's `UInkpot::BeginStory` / `UInkpotStory` API. Check it against your pinned Inkpot release (see the generated README).
+**Unreal** (5.7+): a C++ project with Inkpot enabled and `Scripts/setup_inkpot.sh|ps1` to clone Inkpot at the pinned ref,
+with the same features as the Unity package. A Blueprint-friendly `UNarrativeBridgeComponent` starts at any passage, presents
+choices, Continue breaks and exits to the game (`Resume`, `ResumeAt`), exposes variables, keeps the game's inventory in step
+(`INarrativeInventoryAuthority`), lists locked choices with what they need, translates (`Translations.csv`), plays voice clips,
+and saves with slots, an autosave and carry-over to a revised story. A themed story panel (a UMG widget built in C++ from the
+Export page's Story UI look) has a typewriter, portraits, scene pictures, and Settings and save-slot menus. There's also a cue
+player, a story trigger and a simple inventory. The editor module imports `StorySource/` on first open, adds *Tools → Narrative
+Bridge*, and holds automation tests that replay every playthrough route. `npm run test:unreal:build` builds the export with a
+real Unreal Engine and Inkpot (`--test` runs its automation tests).
 
 ## Design editor (for the site's owner)
 
@@ -286,8 +292,8 @@ schemas/             JSON Schema for the ISR
 docs/                user guide (USER_GUIDE.md) and its screenshots (npm run guide:screenshots)
 tests/               unit, golden-file, compiler, runtime and export tests
   e2e/               browser tests (WebKit and Chromium)
-  unreal-stubs/      stand-in Unreal and Inkpot headers for npm run test:unreal
-scripts/             build helpers, npm run test:unity and npm run test:unreal
+  unreal-stubs/      a stand-in CoreMinimal.h for npm run test:unreal
+scripts/             build helpers, npm run test:unity, test:unreal and test:unreal:build
 ```
 
 Contributions are welcome: see [CONTRIBUTING.md](CONTRIBUTING.md), and [SECURITY.md](SECURITY.md) for reporting a
@@ -296,5 +302,5 @@ security problem privately.
 ## Not yet supported
 
 scanned PDFs (PDF import reads the text layer) and dual dialogue in PDFs; AI-assisted adaptation (would require explicit
-consent before sending scripts anywhere); carrying Unreal saves over to a revised story (the Unreal component still asks
-you to restart the narrative when the story version differs).
+consent before sending scripts anywhere); in Unreal, an in-editor story debugger and Unreal String Tables (the Unity package
+has a Story Debugger window and Localization-package tables).
