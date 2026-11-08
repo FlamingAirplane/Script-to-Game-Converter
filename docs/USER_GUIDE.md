@@ -133,8 +133,8 @@ suggestions to review. Type in *Filter passages…* to narrow it down. Press **[
   seconds), then the next appears by itself. **Skip** shows the rest straight away, and the passage's choices come
   once the cutscene is over. Continue breaks inside a cutscene are dropped, since it goes on by itself. In a script,
   put `@cutscene` on its own line in the passage. It works in Playtest, the playable story, Twine (SugarCube, with
-  `<<timed>>`) and Unity, where the player's *Go on by itself: Off* setting makes each line wait for a click. In
-  Unreal, a cutscene's lines carry a `cutscene` tag for the game to show the same way.
+  `<<timed>>`), and the Unity and Unreal story panels, where the player's *Go on by itself: Off* setting makes each
+  line wait for a click.
 - **New scenes:** **+ New scene** under the contents adds one after the selected passage, as a new choice in it, or on
   its own (the same form as on the Graph, section 5). A choice's destination and **Then** also offer **+ A new
   scene…**, which creates the scene and points that choice (or Then) at it.
@@ -312,7 +312,11 @@ instructions for the developer. The Unity package installs the free Ink Unity In
 have it yet, and gives the developer ways to connect the story to the game: start it at any passage, react to its tags
 and variables, and use the game's own inventory and save system.
 
-**Story UI** (Unity only) sets how the story panel looks and behaves in the game: about 70 settings in groups you can
+The Unreal project gives the developer the same: a story panel, saves that survive a revised story, translations, cues,
+locked choices, and tests that replay every ending. Opened in Unreal, it brings the story in by itself, and with the
+runnable demo ticked, pressing Play shows the story.
+
+**Story UI** (Unity and Unreal) sets how the story panel looks and behaves in the game: about 70 settings in groups you can
 open and close, with a preview beside them. A setting you've changed is marked ● with a **↺** beside it that puts
 just that one back to its default (the chosen look's); each group has **↺ Reset … to defaults**, and **Reset to
 defaults** at the top puts everything back.

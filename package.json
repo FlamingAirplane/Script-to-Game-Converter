@@ -19,7 +19,8 @@
     "guide:screenshots": "npm run build:single && node scripts/guide-screenshots.mjs",
     "design:publish": "tsx scripts/design-publish.ts",
     "test:unity": "tsx scripts/unity-check.ts",
-    "test:unreal": "tsx scripts/unreal-check.ts"
+    "test:unreal": "tsx scripts/unreal-check.ts",
+    "test:unreal:build": "tsx scripts/unreal-build.ts"
   },
   "repository": {
     "type": "git",

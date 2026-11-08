@@ -1103,7 +1103,7 @@ describe('scene pictures and recordings', () => {
     expect(unity.files.map((f) => f.path)).toContain('com.narrativebridge.p/Runtime/Resources/NarrativeBridge/p/Images/img_hall_1.png.bytes');
     expect(unity.report.warnings.filter((w) => /picture/.test(w))).toEqual([]);
     const unreal = await ADAPTERS.unreal.export(story, { engine: 'unreal', projectName: 'P', ...opts, engineVersion: '5.7' });
-    expect(unreal.files.map((f) => f.path)).toContain('P/StorySource/Images/img_hall_1.png');
+    expect(unreal.files.map((f) => f.path)).toContain('P/Content/NarrativeBridge/Data/Images/img_hall_1.png');
     const missing = await ADAPTERS.unity.export(story, { engine: 'unity', projectName: 'P', ...opts, images: {} });
     expect(missing.report.warnings).toContain('Scene picture "hall.png" is missing from this browser, so it was left out of the package.');
     const html = buildPlayableHtml(story, '/* runtime */', {}, { img_hall_1: png });
@@ -1776,8 +1776,10 @@ describe('translations brought back in', () => {
 
   it('ships the translation sheet and playthrough routes with Unreal', async () => {
     const r = await ADAPTERS.unreal.export(processProject(await archive()), { engine: 'unreal', projectName: 'Archive', engineVersion: '5.7', integrationRef: 'v1.42.21-release', includeDemo: true });
-    const sheet = r.files.find((f) => f.path.endsWith('StorySource/Translations.csv'))!.content as string;
+    const sheet = r.files.find((f) => f.path.endsWith('Content/NarrativeBridge/Data/Translations.csv'))!.content as string;
     expect(sheet.split('\r\n')[0]).toBe('key,kind,passage,source');
+    // The story panel's own words are in the sheet too, as in the Unity package.
+    expect(sheet).toContain(',interface,,Save to a slot');
     const routes = JSON.parse(r.files.find((f) => f.path.endsWith('StorySource/PlaythroughRoutes.json'))!.content as string).routes;
     expect(routes.length).toBeGreaterThan(0);
     expect(routes[0]).toHaveProperty('choices');
@@ -1786,18 +1788,58 @@ describe('translations brought back in', () => {
   it('gives Unreal the locked choices, cues and exits, and text helpers for italics', async () => {
     const r = await ADAPTERS.unreal.export(processProject(await archive()), { engine: 'unreal', projectName: 'Archive', engineVersion: '5.7', integrationRef: 'v1.42.21-release', includeDemo: true });
     const info = r.files.find((f) => f.path.endsWith('NarrativeBridgeStoryInfo.h'))!.content as string;
-    expect(info).toContain('{ TEXT("archive_entry"), TEXT("Open the archive"), TEXT("Archive Key"), false }');
+    expect(info).toContain('1, TEXT("archive_entry"), TEXT("Open the archive"), TEXT("Archive Key"), false }');
+    // Each locked choice's condition is C++ the component tests against the story's variables.
+    expect(info).toContain('{ TEXT("Archive Key"), [](const FVariableReader& V) -> bool { return V.Has(TEXT("has_archive_key")); } }');
     expect(info).toMatch(/static const int32 NumGatedChoices = [1-9]/);
     expect(info).toContain('static const int32 NumReservedTags = ');
     expect(info).toContain('TEXT("speaker")');
     const cpp = r.files.find((f) => f.path.endsWith('NarrativeBridgeComponent.cpp'))!.content as string;
-    expect(cpp).toContain('TEXT("Back to the game: ")');
+    expect(info).toContain('static const TCHAR* ExitPrefix = TEXT("Back to the game: ");');
     expect(cpp).toContain('OnCue.Broadcast(Name, Value)');
     expect(cpp).toContain('UNarrativeBridgeComponent::PlainText');
+    // Inkpot's SetBool takes a third, out, argument.
+    expect(cpp).not.toMatch(/SetBool\([^,)]*,[^,)]*\)/);
     const h = r.files.find((f) => f.path.endsWith('NarrativeBridgeComponent.h'))!.content as string;
-    for (const fn of ['void Resume();', 'FNarrativeCue OnCue;', 'FNarrativeExit OnExit;', 'static FString RichText(const FString& Text);']) expect(h).toContain(fn);
+    const api = ['void Resume();', 'void ResumeAt(const FString& Passage);', 'void StartAt(const FString& Passage);', 'FNarrativeCue OnCue;', 'FNarrativeWords OnExit;', 'FNarrativeVariable OnVariableChanged;', 'TArray<FNarrativeLockedChoice> GetLockedChoices() const;', 'bool TryLoadState(const FString& Save, FString& Error);', 'static FString RichText(const FString& Text);'];
+    for (const fn of api) expect(h).toContain(fn);
     // Braces balance in the generated C++ (a cheap check without an Unreal build).
     for (const src of [info, cpp, h]) expect(src.split('{').length).toBe(src.split('}').length);
+  });
+
+  it('gives Unreal the story panel, its look, an editor module and automation tests', async () => {
+    const opts = { engine: 'unreal' as const, projectName: 'Archive', engineVersion: '5.7', integrationRef: 'v1.42.21-release' };
+    const r = await ADAPTERS.unreal.export(processProject(await archive()), { ...opts, includeDemo: true, unityTheme: { preset: 'night' } as never });
+    const file = (end: string) => r.files.find((f) => f.path.endsWith(end))?.content as string;
+    // The look chosen on the Export page, under the C++ property names, colours in linear space.
+    const theme = JSON.parse(file('Content/NarrativeBridge/Data/Theme.json'));
+    expect(theme.Preset).toBe('night');
+    expect(theme.bShowSpeakers).toBe(true);
+    expect(theme.Background).toEqual({ R: expect.any(Number), G: expect.any(Number), B: expect.any(Number), A: 1 });
+    expect(file('NarrativeTheme.h')).toContain('bool bShowLockedChoices = true;');
+    // Float literals always have a decimal point (1.0f; 1f isn't C++).
+    expect(file('NarrativeTheme.h')).not.toMatch(/[^.\d\w]\d+f[;,)]/);
+    // Two modules: the game and its editor tools, which hold the tests.
+    const uproject = JSON.parse(file('Archive.uproject'));
+    expect(uproject.Modules.map((m: { Name: string; Type: string }) => m.Name + ':' + m.Type)).toEqual(['Archive:Runtime', 'ArchiveEditor:Editor']);
+    expect(file('ArchiveEditor.Target.cs')).toContain('ExtraModuleNames.Add("ArchiveEditor");');
+    expect(file('Archive.Build.cs')).toContain('"UMG"');
+    expect(file('NarrativeBridgeRoutes.h')).toMatch(/static const int32 NumRoutes = [1-9]/);
+    const tests = file('NarrativeBridgeTests.cpp');
+    for (const t of ['"NarrativeBridge.Playthrough"', '"NarrativeBridge.StartAtEveryPassage"', '"NarrativeBridge.Saves"', '"NarrativeBridge.TranslationKeys"']) expect(tests).toContain(t);
+    expect(tests).toContain('UNarrativeLocalization::Key(TEXT("The lamp is out.")), FString(TEXT("nb_');
+    // Press Play: the demo game mode, and the story's files cooked and staged with the game.
+    expect(file('Config/DefaultEngine.ini')).toContain('GlobalDefaultGameMode=/Script/Archive.NarrativeDemoGameMode');
+    expect(file('Config/DefaultGame.ini')).toContain('+DirectoriesToAlwaysCook=(Path="/Game/NarrativeBridge")');
+    for (const f of ['NarrativeStoryWidget.cpp', 'NarrativeStoryPanel.cpp', 'NarrativeCuePlayer.cpp', 'NarrativeLocalization.cpp', 'NarrativeSettings.cpp', 'NarrativeStoryTrigger.cpp', 'NarrativeSimpleInventory.h', 'NarrativeDemoGameMode.cpp']) expect(file(f), f).toBeTruthy();
+    for (const f of r.files.filter((x) => /\.(h|cpp)$/.test(x.path))) {
+      const src = f.content as string;
+      expect(src.split('{').length, f.path).toBe(src.split('}').length);
+      expect(src, f.path).not.toContain('__API__');
+    }
+    const plain = await ADAPTERS.unreal.export(processProject(await archive()), { ...opts, includeDemo: false });
+    expect(plain.files.some((f) => f.path.endsWith('NarrativeDemoGameMode.cpp'))).toBe(false);
+    expect(plain.files.find((f) => f.path.endsWith('Config/DefaultEngine.ini'))!.content).not.toContain('GlobalDefaultGameMode');
   });
 });
 
@@ -2418,5 +2460,10 @@ Look.
     const all = unity.files.map((f) => f.content).join('\n');
     expect(all).toContain('else if (t == "cutscene") cutscene = true;');
     expect(all).toContain('CutsceneSeconds(visible)');
+    const unreal = await ADAPTERS.unreal.export(s, { engine: 'unreal', projectName: 'P', engineVersion: '5.7', integrationRef: 'v1.21.0', includeDemo: true });
+    const cpp = unreal.files.map((f) => f.content).join('\n');
+    expect(cpp).toContain('else if (Name == TEXT("cutscene")) Line.bIsCutscene = true;');
+    expect(cpp).toContain('if (Next.bIsCutscene)');
+    expect(cpp).toMatch(/ReservedTags[^;]*"cutscene"/);
   });
 });
