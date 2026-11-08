@@ -2360,3 +2360,63 @@ CUT TO:
     expect(kinds.at(-1)).toBe('pause'); // the last follows dialogue, so it stays
   });
 });
+
+describe('cutscenes', () => {
+  const script = `INT. LIGHTHOUSE - NIGHT
+
+@cutscene
+
+Rain lashes the glass.
+
+MARA
+(whispering)
+Did you hear that?
+
+@pause
+
+TOM
+Only the wind.
+
+EXT. CLIFF - DAY
+
+Waves break below.
+
+MARA
+Look.
+`;
+
+  it('plays only a cutscene’s dialogue, tagged #cutscene, with nothing to click in between', async () => {
+    const { Story } = await import('inkjs');
+    const { project } = await build(script);
+    const [cut, after] = project.passages;
+    expect(cut.cutscene).toBe(true);
+    expect(after.cutscene).toBeUndefined();
+    const s = processProject(project);
+    expect(s.compile.ok).toBe(true);
+    expect(s.generated.ink).toContain('MARA: Did you hear that? #speaker:mara #cutscene');
+    expect(s.generated.ink).toContain('// Players don’t see this: Rain lashes the glass.');
+    const st = new Story(s.compile.json!);
+    const text = st.ContinueMaximally();
+    // No Continue break inside the cutscene, the scene after it as written.
+    expect(text).not.toContain('Rain lashes');
+    expect(text).not.toContain('whispering');
+    expect(text).toContain('MARA: Did you hear that?\nTOM: Only the wind.\nWaves break below.');
+    expect(st.currentTags).not.toContain('cutscene'); // "Look." is after the cutscene
+  });
+
+  it('comes back from Ink, and carries into Twine, the playable page and Unity', async () => {
+    const { buildTwee, buildPlayableHtml } = await import('../src/core/export');
+    const { project } = await build(script);
+    const s = processProject(project);
+    const back = (await build(s.generated.ink, 'story.ink', 'structured')).project;
+    expect(back.passages.map((p) => !!p.cutscene)).toEqual([true, false]);
+    const twee = buildTwee(s, 'sugarcube');
+    expect(twee).toMatch(/Did you hear that\?\n<<timed \d\.\ds t8n>>\n@@\.speaker;TOM@@\nOnly the wind\.\n<<next \d\.\ds>>\n\[\[Continue->/);
+    expect(twee.match(/<<timed/g)).toHaveLength(1);
+    expect(buildPlayableHtml(s, '/* runtime */')).toContain("cut: tags.indexOf('cutscene') >= 0");
+    const unity = await ADAPTERS.unity.export(s, { engine: 'unity', projectName: 'P', engineVersion: '6000.3', integrationRef: 'v1.21.0', includeDemo: true });
+    const all = unity.files.map((f) => f.content).join('\n');
+    expect(all).toContain('else if (t == "cutscene") cutscene = true;');
+    expect(all).toContain('CutsceneSeconds(visible)');
+  });
+});

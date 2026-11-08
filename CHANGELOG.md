@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- **Cutscenes:** tick **🎬 Cutscene** on a passage in Review, or put `@cutscene` in it in a script. Players then see
+  only its dialogue, one line at a time and centred like subtitles, with each line moving on by itself once there's
+  been time to read it. **Skip** shows the rest at once, and the passage's choices come after. It works in Playtest,
+  the playable story, Twine (SugarCube) and Unity, and Unreal gets a `cutscene` tag on each line.
 - **Players see only the dialogue:** a new box in Story settings (and on the Export page). When it's ticked, players
   get only the spoken lines and the choices. Narration, transitions, scene headings and parentheticals are left out of
   Playtest, the playable story, Twine, Unity, Unreal and the translation sheet, and the Ink keeps them as comments.

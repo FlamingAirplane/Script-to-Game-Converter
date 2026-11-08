@@ -1,4 +1,4 @@
-import { forPlayers } from '../players';
+import { cutsceneSeconds, forPlayers } from '../players';
 import { fnv1a } from '../hash';
 import { storyLayout } from '../layout';
 import { log } from '../log';
@@ -259,7 +259,7 @@ function sugarBody(p: Passage, speakers: Map<string, string>, nameOf: (id: strin
   const choices = p.choices.filter((c) => isActive(c.review)).map((c) => ({ ...c, conditions: [...c.conditions, ...(guards.get(c.id) ?? [])] }));
   if (choices.length === 0) {
     blocks.push(p.divert && p.divert !== 'END' ? `[[Continue->${nameOf(p.divert)}]]` : END_MARKUP);
-    return joinBlocks(blocks);
+    return p.cutscene ? cutsceneBlocks(blocks) : joinBlocks(blocks);
   }
   const links = choices.map((c) => choiceLink(c, nameOf));
   // Ink's invisible fallback: offered only when every choice is conditional and none is available.
@@ -270,7 +270,30 @@ function sugarBody(p: Passage, speakers: Map<string, string>, nameOf: (id: strin
   }
   // Hidden choices would leave empty lines; inside the choices block the stylesheet removes them.
   blocks.push(links.some((l) => l.startsWith('<<if')) ? `@@.choices;\n${links.join('\n')}\n@@` : links.join('\n'));
-  return joinBlocks(blocks);
+  return p.cutscene ? cutsceneBlocks(blocks) : joinBlocks(blocks);
+}
+
+/**
+ * A cutscene in SugarCube: each line appears after the one before has had time to be read (<<timed>> … <<next>>),
+ * and the links last. Lines that print nothing (effects, notes) go with the line after them.
+ */
+function cutsceneBlocks(blocks: string[]): string[] {
+  const groups: string[] = [];
+  let silent = '';
+  for (const b of blocks) {
+    if (b.endsWith('\\')) silent += `${b}\n`;
+    else (groups.push(silent + b), (silent = ''));
+  }
+  if (silent) groups.push(silent.trimEnd());
+  if (groups.length < 2) return joinBlocks(blocks);
+  const shown = (b: string) => b.replace(/\/\*[\s\S]*?\*\/|<<[^>]*>>|@@\.[\w-]+;|@@|\\/g, '').trim();
+  const out = [groups[0]];
+  groups.slice(1).forEach((g, i) => {
+    const wait = `${cutsceneSeconds(shown(groups[i])).toFixed(1)}s`;
+    out.push(i ? `<<next ${wait}>>` : `<<timed ${wait} t8n>>`, g);
+  });
+  out.push('<</timed>>');
+  return out;
 }
 
 /** Blocks separated by a blank line, except after a silent line (which already swallows its line break). */

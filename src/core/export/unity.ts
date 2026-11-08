@@ -1369,6 +1369,8 @@ namespace __NAMESPACE__
             /// <summary>A choice the player made (shown in the transcript), not story text.</summary>
             public bool IsChoice;
             public bool IsTransition;
+            /// <summary>A cutscene line (from #cutscene): shown one at a time, going on by itself.</summary>
+            public bool IsCutscene;
             /// <summary>The text, speaker, scene and stage direction as written (Text and the rest are in NarrativeLocalization.Language).</summary>
             public string SourceText, SourceSpeaker, SourceScene, SourceParen;
         }
@@ -1695,7 +1697,7 @@ namespace __NAMESPACE__
         }
 
         static bool IsStoryTag(string t) =>
-            t == "transition" || t.StartsWith("speaker:") || t.StartsWith("scene:") || t.StartsWith("paren:") || t.StartsWith("ext:") || t.StartsWith("image:") || t.StartsWith("audio:");
+            t == "transition" || t == "cutscene" || t.StartsWith("speaker:") || t.StartsWith("scene:") || t.StartsWith("paren:") || t.StartsWith("ext:") || t.StartsWith("image:") || t.StartsWith("audio:");
 
         // ---- Voice clips: lines tagged #audio:<file> play in order --------------------------
 
@@ -1734,6 +1736,7 @@ namespace __NAMESPACE__
         {
             string speaker = null, speakerId = null, scene = null, paren = null, image = null;
             var transition = false;
+            var cutscene = false;
             foreach (var t in tags)
             {
                 if (t.StartsWith("speaker:")) speaker = speakerId = t.Substring(8).Trim();
@@ -1741,6 +1744,7 @@ namespace __NAMESPACE__
                 else if (t.StartsWith("paren:")) paren = t.Substring(6).Trim();
                 else if (t.StartsWith("image:")) image = t.Substring(6).Trim();
                 else if (t == "transition") transition = true;
+                else if (t == "cutscene") cutscene = true;
             }
             var text = raw;
             if (speaker != null)
@@ -1748,7 +1752,7 @@ namespace __NAMESPACE__
                 var colon = raw.IndexOf(": ", StringComparison.Ordinal);
                 if (colon > 0) { speaker = raw.Substring(0, colon); text = raw.Substring(colon + 2); }
             }
-            return Localize(new Line { Speaker = speaker, SpeakerId = speakerId, Text = text, Tags = tags, Scene = scene, Paren = paren, Image = image, IsTransition = transition, SourceText = text, SourceSpeaker = speaker, SourceScene = scene, SourceParen = paren });
+            return Localize(new Line { Speaker = speaker, SpeakerId = speakerId, Text = text, Tags = tags, Scene = scene, Paren = paren, Image = image, IsTransition = transition, IsCutscene = cutscene, SourceText = text, SourceSpeaker = speaker, SourceScene = scene, SourceParen = paren });
         }
 
         // ---- Scene pictures: the first line of a scene may carry #image:<file> ----------------

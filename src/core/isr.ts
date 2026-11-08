@@ -121,7 +121,7 @@ export function exitName(name: string): string {
 }
 
 /** Tags Narrative Bridge writes itself, which a cue can't be called. */
-export const RESERVED_TAGS = new Set(['speaker', 'scene', 'paren', 'ext', 'image', 'audio', 'transition', 'title', 'author', 'choice']);
+export const RESERVED_TAGS = new Set(['speaker', 'scene', 'paren', 'ext', 'image', 'audio', 'transition', 'title', 'author', 'choice', 'cutscene']);
 
 /** A cue's name made safe for a tag (letters, digits and underscores), never one of Narrative Bridge's own tags. */
 export function cueName(name: string): string {
@@ -167,6 +167,8 @@ export interface Passage {
   sceneHeading?: string;
   /** A picture for the scene, shown when the passage begins. */
   image?: ImageRef;
+  /** A cutscene: players see only its dialogue, one line at a time, going on by itself (see players.ts). */
+  cutscene?: boolean;
   content: ContentBlock[];
   choices: Choice[];
   divert?: string; // unconditional continuation when there are no choices

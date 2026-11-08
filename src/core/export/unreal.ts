@@ -484,6 +484,9 @@ Lines keep the script's emphasis as \`<i>…</i>\`, \`<b>…</b>\` and \`<u>…<
 Recorded dialogue ships in \`StorySource/VoiceClips/\`. Drag the folder into \`Content/NarrativeBridge/Audio\` to import the clips as
 Sound Waves. Lines with a clip carry an \`audio:<file>\` tag in \`OnLine\`'s Tags; play the matching Sound Wave from Blueprint.
 
+A **cutscene**'s lines carry a \`cutscene\` tag in \`OnLine\`'s Tags. Only its dialogue reaches the game: show the lines one at a time,
+each for long enough to read (Narrative Bridge's own readers use 1.2 s + 0.055 s a letter, between 2 and 9 s), with a way to skip.
+
 ## Inventory and saves
 Items are Ink Booleans \`has_<item>\`. Keep the game inventory authoritative and call \`SetItemOwned\` before continuing.
 Persist \`GetStoryVersion()\` with save data and restart the narrative if it differs.

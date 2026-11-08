@@ -365,6 +365,18 @@ function PassageEditor({
 
       <ScenePicture passage={passage} update={update} />
 
+      <div className="cutscene-setting">
+        <label>
+          <input type="checkbox" checked={!!passage.cutscene} onChange={(e) => edit((p) => (e.target.checked ? (p.cutscene = true) : delete p.cutscene))} />{' '}
+          <strong>🎬 Cutscene</strong>
+        </label>
+        <span className="muted small">
+          {passage.cutscene
+            ? `Players see only its dialogue${passage.content.some((b) => b.type === 'action' || b.type === 'transition') || passage.sceneHeading ? ' (narration, transitions and the scene heading are left out)' : ''}, one line at a time, going on by itself; they can skip it.${passage.choices.length ? ' Its choices come once it’s over.' : ''}`
+            : 'Play this passage as a cutscene: only the dialogue, one line at a time, going on by itself.'}
+        </span>
+      </div>
+
       <section className="blocks">
         <h3>Content</h3>
         {passage.content.length === 0 && <p className="muted small">No narrative content.</p>}
