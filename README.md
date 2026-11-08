@@ -135,7 +135,9 @@ Existing interactive stories can be opened and worked on like any other project.
 @give archive_key   @take archive_key        item effects
 @set trust = 2      @add trust 1             variable effects
 * [Choice text] -> target                    once-only choice
++ [Choice text] -> target                    choice that can be picked again
 + {has archive_key} [Open it] -> vault @take archive_key
++ {has archive_key} [Use the key] -> vault @forced    forced: once they have the key, it's the only choice
 + {trust >= 2 and not has lamp} [Trust her] -> ally
 - [Markdown link choice](#target)
 -> target   /   @end                         divert / ending
@@ -144,7 +146,8 @@ Existing interactive stories can be opened and worked on like any other project.
 ## Heading {#custom_id}                      Markdown heading as a passage
 ```
 
-See [`src/samples.ts`](src/samples.ts) for complete examples.
+See [`src/samples.ts`](src/samples.ts) for complete examples, and the
+[user guide](docs/USER_GUIDE.md#13-structured-markers) for what each marker does.
 
 ## Ink conventions
 
