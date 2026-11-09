@@ -8,7 +8,7 @@ import { reviewAll } from '../core/adapt';
 import { buildStory } from '../core/builder';
 import { sortDiagnostics, type Diagnostic } from '../core/diagnostics';
 import { ADAPTERS, buildPlayableHtml, buildRecordingScript, recordingScriptFileName, buildTwee, ExportBlockedError, playableFileName, twineFileName, type EngineTarget } from '../core/export';
-import type { ConversionMode, StoryProject } from '../core/isr';
+import { DEFAULT_MODE, type ConversionMode, type StoryProject } from '../core/isr';
 import { base64ToBytes, type AudioAssets } from '../core/audio';
 import { BINARY_EXTENSIONS, prepareInput } from '../core/parsing/convert';
 import { formatEntry, LEVELS, log, logbook, type LogLevel } from '../core/log';
@@ -17,7 +17,8 @@ import { processProject } from '../core/pipeline';
 const HELP = `Narrative Bridge — screenplays and prose → Ink → Unity / Unreal
 
 Usage:
-  narrative-bridge convert <files...>          (.fountain .txt .md .fdx .docx .pdf, or a story: .ink .twee .tw .html) [--mode faithful|adaptation|structured] [--approve-all]
+  narrative-bridge convert <files...>          (.fountain .txt .md .fdx .docx .pdf, or a story: .ink .twee .tw .html) [--mode structured|faithful|adaptation] [--approve-all]
+                                      (default: structured; markers such as @passage build the story, a script without them converts scene by scene)
                                       [--edit-ink | --keep-ink]  (Ink: make it editable, or keep it exactly as written;
                                        default: editable unless it uses Ink the editor can't show)
                                       [--out story.ink] [--project story.nbproj.json] [--title "Title"]
@@ -92,7 +93,7 @@ async function load(args: Args) {
   // Ink: editable when possible unless told otherwise (see SourceInput.inkMode).
   const inkMode = args['keep-ink'] ? 'keep' : args['edit-ink'] ? 'edit' : undefined;
   if (inkMode) for (const i of inputs) if (/\.ink$/i.test(i.fileName)) i.inkMode = inkMode;
-  const mode = (args.mode as ConversionMode) ?? 'faithful';
+  const mode = (args.mode as ConversionMode) ?? DEFAULT_MODE;
   if (!['faithful', 'adaptation', 'structured'].includes(mode)) usage(`Unknown mode ${mode}`);
   const { project, diagnostics } = await buildStory(inputs, { mode, title: typeof args.title === 'string' ? args.title : undefined });
   if (args['approve-all']) reviewAll(project, 'approved');
