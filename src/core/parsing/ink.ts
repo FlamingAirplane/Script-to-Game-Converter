@@ -136,6 +136,7 @@ function scan(text: string): { blocks: ParsedBlock[]; unsupported: InkFeature[] 
         unsupportedNote = { line: ln, reason: unsup[1], lines: [] };
         continue;
       }
+      if (generated && /^Where a game can start the story at a line of dialogue/.test(c)) continue;
       if (generated && (GENERATOR_HEADER.test(c) || (!sawKnot && !sawText && blocks.every((b) => b.kind === 'title' || b.kind === 'marker')))) continue;
       if (generated && bodyStart && lastPassage >= 0) {
         // "// Passage title (source line N)" right after a knot header.
@@ -155,9 +156,23 @@ function scan(text: string): { blocks: ParsedBlock[]; unsupported: InkFeature[] 
     if (trailing) {
       t = trailing[1].trim();
       if (/^[*+]/.test(t) && trailing[2].trim() === 'forced') forced = true;
-      else if (trailing[2].trim()) blocks.push({ kind: 'note', text: trailing[2].trim(), line: ln });
+      // (An exit's trailing comment is its note, read with the exit below.)
+      else if (trailing[2].trim() && !/^\+\s*\[Back to the game: \w+\]$/.test(t)) blocks.push({ kind: 'note', text: trailing[2].trim(), line: ln });
     }
     if (!t) continue;
+
+    if (generated) {
+      // Narrative Bridge's own entry knots for starting at a line ("=== hall__line_x ===" "-> hall.line_x"; see
+      // lines.ts) are made again on export, so they're left out.
+      const entry = /^={2,}\s*([A-Za-z_]\w*?)__(line_\w+)\s*=*\s*$/.exec(t);
+      if (entry && lines[i + 1]?.trim() === `-> ${entry[1]}.${entry[2]}`) {
+        i++;
+        continue;
+      }
+      // A dialogue line's label, "- (line_x) MARA: Hi", is made again from its words too.
+      const labelled = /^-\s*\(line_\w+\)\s+(.*)$/.exec(t);
+      if (labelled && !weaveOpen) t = labelled[1];
+    }
 
     if (/^(INCLUDE|EXTERNAL|LIST)\b/.test(t)) {
       lossy(ln, t.split(/\s/)[0]);

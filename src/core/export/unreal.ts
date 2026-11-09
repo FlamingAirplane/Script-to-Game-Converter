@@ -4,6 +4,7 @@ import { describeCondition } from '../gating';
 import { portraitFiles } from '../images';
 import { CONTINUE_TEXT, cueName, cueTag, EXIT_PREFIX, exitName, isActive, itemVar, RESERVED_TAGS, type Condition } from '../isr';
 import { isForcing } from '../forced';
+import { lineEntries } from '../lines';
 import type { ProcessedStory } from '../pipeline';
 import { storyRoutes } from './routes';
 import { translationSheet } from './translations';
@@ -12,7 +13,7 @@ import type { EngineAdapter, ExportFile, ExportOptions, ExportResult } from './t
 import { finalize } from './unity';
 import { normaliseUnityTheme } from './unityTheme';
 import { COMPONENT_CPP, COMPONENT_H } from './unrealComponent';
-import { CUE_PLAYER_CPP, CUE_PLAYER_H, INVENTORY_COMPONENT_H, TRIGGER_CPP, TRIGGER_H } from './unrealCues';
+import { CUE_PLAYER_CPP, CUE_PLAYER_H, ENTER_DIALOGUE_TRIGGER_CPP, ENTER_DIALOGUE_TRIGGER_H, INVENTORY_COMPONENT_H, TRIGGER_CPP, TRIGGER_H } from './unrealCues';
 import { EDITOR_MODULE_CPP, editorBuildCs, keySamples, routesH, testsCpp } from './unrealEditor';
 import { fillUnreal, INVENTORY_H, LOCALIZATION_CPP, LOCALIZATION_H, SAVE_STORAGE_H, SETTINGS_CPP, SETTINGS_H, TYPES_H } from './unrealRuntime';
 import { DEMO_CPP, DEMO_H, PANEL_CPP, PANEL_H, THEME_CPP, themeH, unrealThemeJson, WIDGET_CPP, WIDGET_H } from './unrealUi';
@@ -91,6 +92,8 @@ export const unrealAdapter: EngineAdapter = {
       { path: `${src}NarrativeCuePlayer.cpp`, content: fill(CUE_PLAYER_CPP) },
       { path: `${src}NarrativeStoryTrigger.h`, content: fill(TRIGGER_H) },
       { path: `${src}NarrativeStoryTrigger.cpp`, content: fill(TRIGGER_CPP) },
+      { path: `${src}NarrativeEnterDialogueTrigger.h`, content: fill(ENTER_DIALOGUE_TRIGGER_H) },
+      { path: `${src}NarrativeEnterDialogueTrigger.cpp`, content: fill(ENTER_DIALOGUE_TRIGGER_CPP) },
       { path: `${src}NarrativeSimpleInventory.h`, content: fill(INVENTORY_COMPONENT_H) },
       { path: `${src}NarrativeTheme.h`, content: fill(themeH(theme)) },
       { path: `${src}NarrativeTheme.cpp`, content: fill(THEME_CPP) },
@@ -283,7 +286,9 @@ function storyInfoH(story: ProcessedStory, module: string) {
   const items = itemVarNames(story);
   const list = (name: string, values: string[], about: string) =>
     `    /** ${about} */\n    static const TCHAR* ${name}[] = { ${values.length ? values.map(q).join(', ') : 'nullptr'} };\n    static const int32 Num${name} = ${values.length};`;
-  const passages = [...story.generated.ink.matchAll(/^=== (\w+) ===$/gm)].map((m) => m[1]);
+  const lines = lineEntries(story.project);
+  const entryKnots = new Set(lines.map((l) => l.entryKnot));
+  const passages = [...story.generated.ink.matchAll(/^=== (\w+) ===$/gm)].map((m) => m[1]).filter((k) => !entryKnots.has(k));
   const knots = new Set(passages);
   const blocks = story.project.passages.flatMap((p) => p.content);
   const exits = [...new Set(blocks.flatMap((b) => (b.type === 'exit' ? [exitName(b.name)] : [])))];
@@ -333,6 +338,9 @@ namespace NarrativeBridgeStoryInfo
 ${list('Passages', passages, 'Every passage (Ink knot) the story can start at: UNarrativeBridgeComponent::StartAt.')}
     /** Each passage's title, in the same order as Passages (for save slots and menus). */
     static const TCHAR* PassageTitles[] = { ${passages.length ? passages.map((k) => q(story.project.passages.find((p) => p.id === k)?.title || k)).join(', ') : 'nullptr'} };
+${list('Lines', lines.map((l) => l.path), 'Every line of dialogue the story can start at, "passage.line_…": StartAt, EnterAt or ResumeAt picks a conversation up there (the Narrative Enter Dialogue Trigger does it without code).')}
+    /** Each line as it reads, "MARA: Did you bring the flowers?", in the same order as Lines (for menus). */
+    static const TCHAR* LineTexts[] = { ${lines.length ? lines.map((l) => q(l.display)).join(', ') : 'nullptr'} };
     static const TCHAR* ItemVariables[] = { ${items.length ? items.map(q).join(', ') : 'nullptr'} };
     static const int32 NumItemVariables = ${items.length};
 ${list('Variables', story.project.variables.map((v) => v.id), 'Story variables the game is allowed to read and write (GetVariable, SetVariable).')}
@@ -411,6 +419,11 @@ Add a **Narrative Bridge** component to any actor (or use *Tools → Narrative B
 the story panel and the cue player). It plays \`Content/NarrativeBridge/MainStory\` unless you set *Story Asset*.
 - **Start it where you want.** Turn off *Start On Begin Play* and call \`StartStory\`, or \`StartAt("passage")\` to begin at a scene
   (the passages are in \`NarrativeBridgeStoryInfo::Passages\`). The **Narrative Story Trigger** component starts it when the player walks in.
+- **Pick a conversation up partway.** Every line of dialogue can be a starting point too: \`StartAt("passage.line_…")\` (listed in
+  \`NarrativeBridgeStoryInfo::Lines\`, with how each reads in \`LineTexts\`). \`EnterAt(name)\` does the same but keeps what the story
+  knows (its variables and items) when it has already run. Without code, add a **Narrative Enter Dialogue Trigger** component to the
+  actor, pick the *Passage* and the *Line* the player picks up on, and, if you like, the *Required Item*: talk about flowers, go and
+  get them, come back, and the conversation goes on at "You found them!" instead of from the top.
 - **Events** (bind them in Blueprint): \`OnLine\` (speaker, text, tags) and \`OnLineShown\` (an \`FNarrativeLine\` with the scene, stage direction,
   picture and voice clip), \`OnChoices\` → \`Choose(index)\`, \`OnContinue\` → \`Continue\`, \`OnEnded\`, \`OnRestarted\`, \`OnStatusChanged\`,
   \`OnRuntimeError\`, \`OnCue\` / \`OnTag\` for the writer's cues, and \`OnVariableChanged\` for every story variable and item.

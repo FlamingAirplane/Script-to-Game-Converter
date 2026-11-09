@@ -351,6 +351,46 @@ bool FNarrativeBridgePassagesTest::RunTest(const FString& Parameters)
     return true;
 }
 
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FNarrativeBridgeLinesTest, "NarrativeBridge.StartAtEveryLine", Flags)
+
+// Just the letters and digits of a line, lower case, without rich text tags (to compare lines however they're styled).
+static FString LettersOf(const FString& In)
+{
+    FString Out;
+    bool bInTag = false;
+    for (const TCHAR Ch : In)
+    {
+        if (Ch == TEXT('<')) bInTag = true;
+        else if (Ch == TEXT('>')) bInTag = false;
+        else if (!bInTag && FChar::IsAlnum(Ch)) Out.AppendChar(FChar::ToLower(Ch));
+    }
+    return Out;
+}
+
+bool FNarrativeBridgeLinesTest::RunTest(const FString& Parameters)
+{
+    FPlay Play(*this);
+    if (!Play.Story) return false;
+    for (int32 i = 0; i < NarrativeBridgeStoryInfo::NumLines; ++i)
+    {
+        const FString Line = NarrativeBridgeStoryInfo::Lines[i];
+        // The first thing shown is that line (by its first words), in its passage, whether started or entered later.
+        const FString Said = NarrativeBridgeStoryInfo::LineTexts[i];
+        int32 Colon = INDEX_NONE;
+        const FString Words = LettersOf(Said.FindChar(TEXT(':'), Colon) ? Said.Mid(Colon + 1) : Said).Left(12);
+        for (int32 Pass = 0; Pass < 2; ++Pass)
+        {
+            if (Pass == 0) Play.Story->StartAt(Line);
+            else Play.Story->EnterAt(Line);
+            TestTrue(FString::Printf(TEXT("%s starts"), *Line), Play.Story->IsStarted() && Play.Story->GetStatus().IsEmpty());
+            const TArray<FNarrativeLine>& Shown = Play.Story->GetTranscript();
+            TestTrue(FString::Printf(TEXT("%s shows that line first"), *Line), Shown.Num() > 0 && LettersOf(Shown[0].Text).Contains(Words));
+        }
+        TestEqual(FString::Printf(TEXT("%s is where it started"), *Line), Play.Story->GetStartPassage(), Line);
+    }
+    return true;
+}
+
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FNarrativeBridgeSavesTest, "NarrativeBridge.Saves", Flags)
 
 bool FNarrativeBridgeSavesTest::RunTest(const FString& Parameters)

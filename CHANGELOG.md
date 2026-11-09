@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- **Enter Dialogue Trigger (Unity and Unreal):** start a conversation at any **line of dialogue**, not just at the top
+  of a passage. Talk to the gardener about flowers, go and fetch some, come back, and the trigger picks up at "You found
+  them!" instead of replaying the whole conversation. Pick the passage and the line from lists in the Inspector or the
+  Details panel. It can wait until the player has an item, and it keeps what the story already knows. In code it's
+  `StartAt("passage.line_…")` or `EnterAt(…)`, and the lines are listed in `StoryInfo.Lines`. The Unity Story Debugger
+  can jump to a line, and the smoke test and Unreal automation tests start at every line.
+- **Fixed:** an exit's note came back twice (as a note too) when Narrative Bridge's own Ink was brought back in.
 - **Cutscenes:** tick **🎬 Cutscene** on a passage in Review, or put `@cutscene` in it in a script. Players then see
   only its dialogue, one line at a time and centred like subtitles, with each line moving on by itself once there's
   been time to read it. **Skip** shows the rest at once, and the passage's choices come after. It works in Playtest,
