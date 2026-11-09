@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import type { SourceInput } from '../core/builder';
-import type { ConversionMode } from '../core/isr';
+import { DEFAULT_MODE, type ConversionMode } from '../core/isr';
 import { BINARY_EXTENSIONS, CONVERTED_EXTENSIONS, prepareInput } from '../core/parsing/convert';
 import { inkUnsupported, type InkFeature } from '../core/parsing/ink';
 import { SUPPORTED_EXTENSIONS } from '../core/parsing/registry';
@@ -25,9 +25,9 @@ const OFFLINE_COPY_AVAILABLE = import.meta.env.PROD && typeof location !== 'unde
 const FEATURED = SAMPLES.find((s) => s.id === 'lighthouse') ?? SAMPLES[0];
 
 const MODES: { id: ConversionMode; name: string; desc: string; when: string; recommended?: boolean }[] = [
-  { id: 'faithful', name: 'Faithful conversion', desc: 'Keeps your story exactly as written: each scene becomes a passage (a page of the story) and nothing is invented.', when: 'Use this when your script is finished and you want it playable as it is.', recommended: true },
+  { id: 'structured', name: 'Structured import', desc: 'Builds the story exactly as you mark it: markers you type into the script, like @passage, @item and choices, set out the passages, branches and items. A script without markers still converts scene by scene.', when: 'Use this for any script: add markers as you plan the branches (see the marker reference below).', recommended: true },
+  { id: 'faithful', name: 'Faithful conversion', desc: 'Keeps your story exactly as written: each scene becomes a passage (a page of the story) and nothing is invented.', when: 'Use this when your script is finished and you want it playable as it is.' },
   { id: 'adaptation', name: 'Interactive adaptation', desc: 'Also suggests choices, and paths that need an item (like a key), drawn from your text. You accept or reject each one.', when: 'Use this when you want help turning a linear script into one with choices.' },
-  { id: 'structured', name: 'Structured import', desc: 'Reads markers you type into the script, like @passage and @item, to build the story exactly as you mark it.', when: 'Use this when you’ve already planned the branches (see the marker reference below).' },
 ];
 
 /** "tunnels, gathers (lines 4, 9)…": the kinds of Ink the editor can't show, briefly. */
@@ -166,7 +166,7 @@ export function ImportView({
   const [files, setFiles] = useState<(SourceInput & { inkFeatures?: InkFeature[] })[]>([]);
   const [paste, setPaste] = useState('');
   const [pasteName, setPasteName] = useState('script.fountain');
-  const [mode, setMode] = useState<ConversionMode>('faithful');
+  const [mode, setMode] = useState<ConversionMode>(DEFAULT_MODE);
   const [title, setTitle] = useState('');
   const [drag, setDrag] = useState(false);
   const [error, setError] = useState('');
@@ -439,13 +439,13 @@ export function ImportView({
           <li>
             <strong>Words used here:</strong> a <em>passage</em> is one page or scene of the story; <em>Ink</em> is the scripting language games read;{' '}
             <em>Fountain</em> is a plain-text screenplay format; <em>Diagnostics</em> are the notes about anything to check; <em>markers</em> like{' '}
-            <code>@passage</code> are optional tags for planning branches yourself.
+            <code>@passage</code> are tags you type into the script to plan passages and branches yourself.
           </li>
         </ul>
       </details>
 
       <details className="card markers-help">
-        <summary>Structured marker reference (optional tags for planning branches)</summary>
+        <summary>Structured marker reference (tags for planning passages, branches and items)</summary>
         <pre className="mono small">{`@passage archive_entry Archive Entrance     start a passage (id + optional title)
 @start archive_entry                         choose the start passage
 @item archive_key "Archive Key" consumable   declare an inventory item
@@ -461,6 +461,7 @@ export function ImportView({
 @pause                                       Continue break: the player clicks Continue to read on
 @cutscene                                    the passage is a cutscene: only its dialogue, playing by itself
 @exit wolf_fight The player fights wolves    exit to the game: the dialogue stops while the game plays
+@cue music calm                              a cue for the game (Ink tag #music:calm)
 ## Heading {#custom_id}                      Markdown heading as a passage`}</pre>
       </details>
 

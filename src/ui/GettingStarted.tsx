@@ -46,7 +46,7 @@ export function GettingStarted() {
           <strong>Bring your script:</strong> drop in a screenplay or prose file (Final Draft, Word, PDF, Fountain, text), or paste it.
         </li>
         <li>
-          <strong>Pick a mode:</strong> <em>Faithful</em> keeps it as written; <em>Interactive adaptation</em> suggests choices for your OK.
+          <strong>Pick a mode:</strong> <em>Structured</em> (the default) follows markers like <code>@passage</code> and choices you type into the script; <em>Faithful</em> keeps it as written; <em>Interactive adaptation</em> suggests choices for your OK.
         </li>
         <li>
           <strong>Review and play</strong> each scene, and fix anything listed under <em>Diagnostics</em> (the notes on the right).

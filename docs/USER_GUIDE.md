@@ -83,12 +83,16 @@ Not ready to use your own script? Scroll down to **Or start from a sample**.
 
 ### Step 2: Conversion mode
 
+- **Structured import** (the default, marked *recommended*) builds the story exactly as you mark it, from markers you
+  write into the script: `@passage` to start a passage, `+ [Choice] -> target` for a choice, `@item` and `{has key}` for
+  a route that needs an item, and so on. See [Structured markers](#13-structured-markers). A script without any markers
+  still converts, one passage per scene, so you can start without them and add them as you plan the branches.
 - **Faithful conversion** keeps your story exactly as written. Each scene becomes a passage, in order. Nothing is
   invented.
 - **Interactive adaptation** also suggests choices grounded in your text, such as picking up an item and a later path
   that needs it. Suggestions are marked *generated* and *pending*, and **nothing is added until you approve it**.
-- **Structured import** follows markers you write into the script (`@passage`, `@item`, choices and so on). See
-  [Structured markers](#13-structured-markers). Markers also work in the other two modes.
+
+Markers work in all three modes.
 
 Optionally type a **Story title** (otherwise it comes from the title page), then click **Convert**.
 
@@ -460,14 +464,15 @@ Press **?** at any time to see them all. On Windows and Linux, use Ctrl instead 
 
 ## 13. Structured markers
 
-Write these on their own lines in any script to control the structure exactly (they work in every mode, and drive
-*Structured import*):
+Markers are short lines you write into any script (Fountain, plain text, Markdown, or a Final Draft, Word or PDF file) to
+decide the structure yourself. They drive *Structured import*, the default mode, and work in the other modes too. Each
+marker goes on a line of its own; ids are letters, digits and underscores.
 
 ```text
 @passage archive_entry Archive Entrance     start a passage (id + optional title)
 @start archive_entry                         choose the start passage
 @item archive_key "Archive Key" consumable   declare an item (consumable is a label for the game)
-@var trust = 0                               declare a variable (true/false, a number or "text")
+@var trust = 0                               declare a variable (true/false, a whole number or "text")
 @give archive_key   @take archive_key        give or take an item
 @set trust = 2      @add trust 1             change a variable
 * [Choice text] -> target                    a choice that disappears once picked
@@ -480,12 +485,37 @@ Write these on their own lines in any script to control the structure exactly (t
 @pause                                       a Continue break: the player clicks Continue to read on
 @cutscene                                    this passage is a cutscene: only its dialogue, playing by itself
 @exit wolf_fight The player fights wolves    an exit to the game: the dialogue stops while the game plays
+@cue music calm                              a cue for the game: music, ambience, a sound or a screen shake
 @end                                         end the story here
 ## Heading {#custom_id}                      a Markdown heading as a passage with a chosen id
 ```
 
-The **Structured marker reference** at the bottom of the Import page has the same list. *The Locked Archive* sample uses
-them throughout.
+A few rules worth knowing:
+
+- Once a script has a `@passage`, only `@passage` lines start passages; scene headings stay inside the passage they're in.
+  Anything before the first `@passage` (other than `@item`, `@var` and `@start`) goes into a passage called *Opening*.
+- A passage with no choices and no `-> target` goes on to the next passage in the script; the last one is an ending.
+- A passage can have choices **and** a `-> target`: the target is taken only when none of the choices is open.
+- Items and variables used by `@give`, `@take`, `@set` or `@add` are declared for you if you forget. An item that's only
+  used in a `{condition}` must be declared with `@item`.
+
+This is how the markers in a small script become a story map:
+
+```mermaid
+flowchart LR
+    yard["@passage yard"] -->|"* [Ask about the key] -> stables"| stables["@passage stables"]
+    stables -->|"@exit wolf_fight"| game[["The game plays"]]
+    game -->|"resumes the story"| stables
+    stables -->|"@give gate_key, then -> yard"| yard
+    yard -->|"+ {has gate_key} [Unlock the gate] -> gate"| gate["@passage gate<br/>@cutscene"]
+    yard -->|"+ [Walk away] -> END"| END(["END"])
+    gate -->|"@end"| END
+```
+
+**[The structured marker reference](STRUCTURED_MARKERS.md)** has every marker in detail with examples, the full rules
+for conditions, a worked example with the Ink it turns into, what each export does with each marker, and diagrams of the
+whole pipeline and of how items unlock choices. The **Structured marker reference** at the bottom of the Import page has
+the short list, and *The Locked Archive* sample uses markers throughout.
 
 ## 14. Troubleshooting
 

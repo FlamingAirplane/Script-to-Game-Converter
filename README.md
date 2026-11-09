@@ -10,6 +10,10 @@ Turn screenplays and prose into validated [Ink](https://github.com/inkle/ink) st
 
 One source-processing pipeline → one canonical story model (ISR) → one generated Ink story → engine-specific export adapters.
 
+Write the structure into the script itself with [structured markers](docs/STRUCTURED_MARKERS.md) (`@passage`, choices
+like `+ [Open the door] -> vault`, `@item`, `@exit`…), the default way to use the app; a script without them still
+converts scene by scene.
+
 Everything runs locally. Scripts never leave your machine unless you choose to move a project through your own
 private GitHub Gist ("Move to another browser" → the cloud, with your own token). The app also asks GitHub whether a newer
 release is out and fetches the site's current look from a public Gist; neither request carries any of your writing.
@@ -46,7 +50,7 @@ whole app offline in any modern browser. Nothing is installed and nothing is upl
 CLI:
 
 ```bash
-npm run cli -- convert script.fountain --mode faithful --out story.ink
+npm run cli -- convert script.fountain --out story.ink      # structured by default; --mode faithful|adaptation
 npm run cli -- convert my-story.twee --out story.ink        # open a Twine story (also .html) or Ink (.ink)
 npm run cli -- validate story.md
 npm run cli -- export script.fountain --mode adaptation --approve-all --engine unity --out ./build
@@ -73,7 +77,7 @@ npm run test:offline    # the website opens, converts, plays and exports offline
 
 | Tab | What it does |
 | --- | --- |
-| **Import** | Drop Fountain, Final Draft (`.fdx`), Word (`.docx`), PDF, plain text or Markdown files (or paste), or open a Twine (`.twee`, `.html`) or Ink (`.ink`) story to keep working on it; choose a conversion mode, or start from a sample. |
+| **Import** | Drop Fountain, Final Draft (`.fdx`), Word (`.docx`), PDF, plain text or Markdown files (or paste), or open a Twine (`.twee`, `.html`) or Ink (`.ink`) story to keep working on it; choose a conversion mode (Structured, which follows [markers](docs/STRUCTURED_MARKERS.md), is the default), or start from a sample. |
 | **Review** | Every passage with its content, provenance (`source` / `transformed` / `generated` / `edited`) and the original source lines side by side. Edit text, choices, conditions, effects, items and variables; approve or reject proposed branches; find & replace, merge duplicate characters, reorder passages. Give characters voices, and record or attach a clip for any line. *Dialogue only* (D) hides everything but spoken lines. **Story settings** shows the story at a glance (words, reading time, choices, endings, spoken minutes and lines per character) and keeps **drafts**. |
 | **Graph** | The story as an old map (or an indented **Outline**): start, endings, unreachable passages, conditional and proposed routes. For large stories: focus on a passage, trace every way to an ending, faint straight-on routes, and fold scenes. Drag passages to arrange them (saved with the project), search, minimap; click a passage to edit it; *+ New scene* adds a scene after a passage, as a new choice, or on its own. *Save map* downloads the whole map as SVG or PNG. |
 | **Ink** | The deterministic generated Ink, compiled live with the pinned inkjs compiler; compile errors are mapped back to passages. |
@@ -119,19 +123,58 @@ Existing interactive stories can be opened and worked on like any other project.
   default: it plays and exports as before, but edits in Review don't change it. The Import page says which features
   decided that and lets you convert anyway, keeping those lines as notes. CLI: `--edit-ink` / `--keep-ink`.
 
-## Conversion modes
+## Structured markers (the default)
 
-- **Faithful conversion** — scenes become passages in source order; nothing is invented. Every dialogue line, action, parenthetical, transition and note is preserved (notes and unsupported constructs become Ink comments).
-- **Interactive adaptation** — deterministic, local heuristics propose branches grounded in the text (e.g. an optional item pickup and a later item-gated path with a way back). Proposals are marked `generated` and are **not emitted to Ink until approved**.
-- **Structured import** — explicit markers drive the structure. They also work in the other modes.
+**Structured import is the default mode** on the Import page and in the CLI. Write your script as usual and add markers on
+their own lines wherever you want to decide the structure: `@passage` starts a passage, `+ [Choice] -> target` offers a
+choice, `@item` / `@give` / `{has key}` gate a route behind an item, `@exit` hands over to the game. A script without
+markers still converts, one passage per scene or Markdown heading.
 
-### Structured markers
+```fountain
+@item gate_key "Gate Key"
+
+@passage yard The Yard
+
+GUARD
+Nobody passes without a key.
+
+* [Ask about the key] -> stables
++ {has gate_key} [Unlock the gate] -> gate @take gate_key
+
+@passage stables The Stables
+@exit wolf_fight The player fights the wolves.
+@give gate_key
+-> yard
+
+@passage gate The Gate
+@cutscene
+
+GUARD
+Go on, then.
+
+@end
+```
+
+```mermaid
+flowchart LR
+    S["Script + markers<br/>Fountain · Markdown · text<br/>Final Draft · Word · PDF"] --> P["Parsers<br/>shared marker grammar"]
+    P --> ISR[("Story model (ISR)")]
+    ISR --> R["Review · Graph"]
+    R --> ISR
+    ISR --> INK["Generated Ink<br/>compiled + smoke-tested"]
+    INK --> W["Playtest ·<br/>playable web page"]
+    INK --> U["Unity package"]
+    INK --> E["Unreal project"]
+    ISR --> T["Twine (.twee)"]
+```
+
+Cheat sheet (each marker on its own line):
 
 ```text
 @passage archive_entry Archive Entrance     start a passage (id + optional title)
 @start archive_entry                         choose the start passage
 @item archive_key "Archive Key" consumable   declare an inventory item
-@var trust = 0                               declare a variable (bool / int / "string")
+@var trust = 0                               declare a variable (true/false, a whole number or "text")
 @give archive_key   @take archive_key        item effects
 @set trust = 2      @add trust 1             variable effects
 * [Choice text] -> target                    once-only choice
@@ -144,11 +187,23 @@ Existing interactive stories can be opened and worked on like any other project.
 @pause                                       Continue break: the player clicks Continue to read on
 @cutscene                                    the passage is a cutscene: only its dialogue, playing by itself
 @exit wolf_fight The player fights wolves    exit to the game: the dialogue stops while the game plays
+@cue music calm                              a cue for the game (Ink tag #music:calm)
 ## Heading {#custom_id}                      Markdown heading as a passage
 ```
 
-See [`src/samples.ts`](src/samples.ts) for complete examples, and the
-[user guide](docs/USER_GUIDE.md#13-structured-markers) for what each marker does.
+**[The structured marker reference](docs/STRUCTURED_MARKERS.md)** covers every marker (syntax, what it does, an example),
+how passages end and flow on, conditions, a worked example with the exact Ink it produces, and diagrams of the pipeline,
+the story map and the item flow. [`src/samples.ts`](src/samples.ts) has complete examples (*The Locked Archive* uses
+markers throughout).
+
+## Conversion modes
+
+- **Structured import** (default) — explicit markers drive the structure, as above. Without markers, scenes (or Markdown
+  headings) become passages in source order, just as in Faithful conversion.
+- **Faithful conversion** — scenes become passages in source order; nothing is invented. Every dialogue line, action, parenthetical, transition and note is preserved (notes and unsupported constructs become Ink comments). Markers work here too.
+- **Interactive adaptation** — deterministic, local heuristics propose branches grounded in the text (e.g. an optional item pickup and a later item-gated path with a way back). Proposals are marked `generated` and are **not emitted to Ink until approved**. Markers work here too.
+
+CLI: `--mode structured|faithful|adaptation` (default `structured`).
 
 ## Ink conventions
 
