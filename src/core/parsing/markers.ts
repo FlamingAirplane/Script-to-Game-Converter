@@ -5,6 +5,7 @@ import type { Marker } from './types';
 //   @passage <id> [Title words]      start a passage
 //   @start <id>                      set the start passage
 //   @end                             mark the current passage as an ending
+//   @cutscene                        the current passage is a cutscene: only its dialogue, playing by itself
 //   -> <target>                      unconditional divert
 //   @item <id> ["Display Name"] [consumable]
 //   @var <id> = <true|false|number|"text">
@@ -16,7 +17,7 @@ import type { Marker } from './types';
 //   + {has key} [Choice text] -> target @forced       while it's open, the only choice in the passage
 //   - [Choice text](#target)         Markdown link form
 
-const KEYWORDS = new Set(['passage', 'start', 'end', 'pause', 'exit', 'cue', 'item', 'var', 'give', 'take', 'set', 'add']);
+const KEYWORDS = new Set(['passage', 'start', 'end', 'cutscene', 'pause', 'exit', 'cue', 'item', 'var', 'give', 'take', 'set', 'add']);
 
 export function isMarkerLine(line: string): boolean {
   const t = line.trim();
@@ -95,6 +96,8 @@ export function parseMarker(line: string): Marker | null {
       return rest.trim() ? { type: 'start', id: rest.trim() } : null;
     case 'end':
       return { type: 'end' };
+    case 'cutscene':
+      return { type: 'cutscene' };
     case 'pause':
       return { type: 'pause' };
     case 'exit': {

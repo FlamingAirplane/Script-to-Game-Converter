@@ -142,6 +142,7 @@ Existing interactive stories can be opened and worked on like any other project.
 - [Markdown link choice](#target)
 -> target   /   @end                         divert / ending
 @pause                                       Continue break: the player clicks Continue to read on
+@cutscene                                    the passage is a cutscene: only its dialogue, playing by itself
 @exit wolf_fight The player fights wolves    exit to the game: the dialogue stops while the game plays
 ## Heading {#custom_id}                      Markdown heading as a passage
 ```
@@ -159,6 +160,10 @@ See [`src/samples.ts`](src/samples.ts) for complete examples, and the
   Dialogue Trigger** (see `src/core/lines.ts`). The entry knot is needed because a label after a Continue break or an exit
   is inside the weave, where a runtime path can't name it. The label comes from the words, so it stays the same when
   other lines are added. The Ink importer drops the labels and entry knots and makes them again.
+- A cutscene (`@cutscene`, or **🎬 Cutscene** in Review) keeps only its dialogue, each line tagged `#cutscene`; the rest
+  becomes comments (`// Players don’t see this: …`) and its Continue breaks are dropped. Readers show the lines one at a
+  time, going on by themselves after 1.2 s + 0.055 s a letter (2 to 9 s), with a Skip button. The Ink importer reads
+  `#cutscene` back.
 - Choices are sticky (`+`) unless marked once-only (`*`). A passage's divert becomes an invisible fallback choice when the passage also has choices, so players never get stuck.
 - An exit to the game (`@exit name note`, or **+ Exit to game** in Review) is a single sticky choice
   `+ [Back to the game: name] // note` followed by a gather `-`: a game (Unity's `NarrativeController`) stops there, raises

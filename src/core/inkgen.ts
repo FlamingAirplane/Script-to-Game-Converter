@@ -14,6 +14,7 @@ import { CONTINUE_TEXT, cueTag, EXIT_PREFIX, exitName, isActive, itemVar, type C
 //    "NAME (V.O.): text", and tagged #ext:V.O.; parentheticals add #paren:<text>, and
 //    a recorded clip adds #audio:<file> (the file ships with the export).
 //  - Transitions carry a #transition tag; scene headings are a #scene tag on the first line.
+//  - A cutscene's dialogue lines carry #cutscene: readers show them one at a time, going on by themselves.
 //  - Notes and unsupported constructs are preserved as Ink comments. So is everything but dialogue when players
 //    see only the dialogue (presentation.dialogueOnly; see players.ts).
 //  - A Continue break is "+ [Continue]" followed by a gather "-": what follows waits for the reader.
@@ -151,8 +152,9 @@ export function generateInk(story: StoryProject): GeneratedInk {
           const ext = b.extension ? ` #ext:${escapeTagValue(b.extension)}` : '';
           const paren = b.parenthetical ? ` #paren:${escapeTagValue(b.parenthetical)}` : '';
           const audio = b.audio ? ` #audio:${audioFileName(b.audio)}` : '';
+          const cut = p.cutscene ? ' #cutscene' : '';
           // A labelled gather, so a game can start the story here (see lines.ts).
-          emit(`- (${labels[lineIndex++]}) ${escapeInk(`${name}${b.extension ? ` (${b.extension})` : ''}: ${b.text}`)} #speaker:${b.speakerId}${ext}${paren}${audio}${sceneTag()}`, p.id);
+          emit(`- (${labels[lineIndex++]}) ${escapeInk(`${name}${b.extension ? ` (${b.extension})` : ''}: ${b.text}`)} #speaker:${b.speakerId}${ext}${paren}${audio}${cut}${sceneTag()}`, p.id);
           break;
         }
         case 'transition':

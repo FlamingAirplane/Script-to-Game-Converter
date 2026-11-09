@@ -178,6 +178,7 @@
         "choices": { "type": "array", "items": { "$ref": "#/$defs/choice" } },
         "divert": { "type": "string" },
         "isEnding": { "type": "boolean" },
+        "cutscene": { "type": "boolean", "description": "A cutscene: players see only its dialogue, one line at a time, going on by itself." },
         "origin": { "$ref": "#/$defs/provenance" },
         "review": { "$ref": "#/$defs/review" },
         "source": { "$ref": "#/$defs/sourceRef" }

@@ -12,7 +12,7 @@ import { CONTINUE_TEXT, exitOf, itemVar } from '../core/isr';
 import type { ProcessedStory } from '../core/pipeline';
 import { audioFileName, referencedAudio } from '../core/audio';
 import { Badge, Empty } from './common';
-import { dialogueOnly as playersSeeDialogueOnly } from '../core/players';
+import { cutsceneSeconds, dialogueOnly as playersSeeDialogueOnly } from '../core/players';
 import { sfx } from './sfx';
 import { plainKey } from './Shortcuts';
 import { VoiceQueue, type VoiceItem } from './voice';
@@ -53,6 +53,18 @@ interface Snapshot {
   state: string;
   lines: Line[];
   segment: Segment | null;
+}
+
+/** A cutscene line (#cutscene): shown one at a time, going on by itself. */
+const isCutscene = (l: Line | undefined) => !!l && l.kind === 'text' && l.tags.includes('cutscene');
+/**
+ * How many lines show once the cutscene line at `n - 1` has been read: up to the next cutscene line (and any cues
+ * before it), or 0 when the cutscene is over.
+ */
+function nextShown(ls: Line[], n: number): number {
+  let i = n;
+  while (i < ls.length && ls[i].kind === 'cue') i++;
+  return isCutscene(ls[i]) ? i + 1 : 0;
 }
 
 /** The cues among these lines, in order. */
@@ -237,6 +249,11 @@ export function PlaytestView({
   };
   const T = (text: string) => translate(processed.project, lang, text);
   const segment = useRef<Segment | null>(null);
+  // A cutscene plays its lines one at a time: how many of `lines` are shown so far (all, unless one is playing).
+  const [shown, setShown] = useState<{ lines: Line[]; n: number } | null>(null);
+  // (Still playing while its last line is read, so the choices wait for it.)
+  const playing = !!shown && shown.lines === lines;
+  const visible = playing ? Math.min(shown.n, lines.length) : lines.length;
 
   const varNames = [...processed.project.items.map((i) => itemVar(i.id)), ...processed.project.variables.map((v) => v.id)].filter((n) =>
     new RegExp(`^VAR ${n} `, 'm').test(processed.generated.ink),
@@ -257,6 +274,8 @@ export function PlaytestView({
       segment.current = { state: s.state.toJson(), prefix, overrides };
       for (const [n, v] of Object.entries(overrides)) s.variablesState.$(n, v);
       const out = readOn(s, prefix);
+      const cut = out.findIndex((l, i) => i >= prefix.length && isCutscene(l));
+      setShown(cut >= 0 ? { lines: out, n: cut + 1 } : null);
       setLines(out);
       speakRef.current(out.slice(prefix.length));
       if (cueSoundsRef.current) cuePlayer.current.play(cuesOf(out.slice(prefix.length)));
@@ -295,13 +314,20 @@ export function PlaytestView({
 
   useEffect(() => {
     bottom.current?.scrollIntoView({ behavior: 'smooth', block: 'end' });
-  }, [lines.length]);
+  }, [lines.length, visible]);
+  // A cutscene goes on by itself once there's been time to read the line.
+  useEffect(() => {
+    if (!playing) return;
+    const t = setTimeout(() => setShown((s) => (s && s.lines === lines ? (nextShown(lines, s.n) ? { lines, n: nextShown(lines, s.n) } : null) : s)), cutsceneSeconds(lines[visible - 1]?.text ?? '') * 1000);
+    return () => clearTimeout(t);
+  }, [playing, visible, lines]);
+  const skipCutscene = () => setShown(null);
   useEffect(() => {
     if (cueSoundsOn && sounds.size) cuePlayer.current.sync(cuesOf(lines));
     else cuePlayer.current.stop();
   }, [lines, cueSoundsOn, sounds]);
   // A small bell when the story reaches an ending.
-  const isEnd = choices.length === 0 && lines.length > 0;
+  const isEnd = choices.length === 0 && lines.length > 0 && !playing;
   useEffect(() => {
     if (isEnd) sfx.chime();
   }, [isEnd]);
@@ -383,7 +409,7 @@ export function PlaytestView({
     }
   };
   actions.current = {
-    choose: (n) => choices[n] && choose(choices[n].index, choices[n].text),
+    choose: (n) => (playing ? n === 0 && skipCutscene() : choices[n] && choose(choices[n].index, choices[n].text)),
     undo,
     restart,
     voices: toggleVoices,
@@ -397,7 +423,7 @@ export function PlaytestView({
     const file = l.tags.find((t) => t.startsWith('image:'))?.slice(6);
     return file ? pictures.get(file) : undefined;
   };
-  const ended = choices.length === 0;
+  const ended = choices.length === 0 && !playing;
   // The last passage read, still known once the story has ended (to add a scene after it).
   const lastWhere = where || ([...lines].reverse().find((l) => l.passage)?.passage ?? '');
   // Choices the reader can't take yet. Not at a Continue break: a passage's choices come after its last break.
@@ -489,7 +515,7 @@ export function PlaytestView({
           </div>
         </div>
         <div className="transcript" tabIndex={0} aria-label="Story text">
-          {lines.map((l, i) =>
+          {lines.slice(0, visible).map((l, i) =>
             dialogueOnly && ((l.kind === 'text' && !l.speaker) || l.kind === 'cue') ? null :
             l.pause ? null :
             l.kind === 'cue' ? (
@@ -507,7 +533,7 @@ export function PlaytestView({
                 › <Rich text={T(l.text)} />
               </p>
             ) : l.speaker ? (
-              <p key={i} className={`t-dialogue${portraitOf(l) ? ' with-portrait' : ''}`}>
+              <p key={i} className={`t-dialogue${portraitOf(l) ? ' with-portrait' : ''}${isCutscene(l) ? ' t-cutscene' : ''}${isCutscene(l) && i === visible - 1 && playing ? ' now' : ''}`}>
                 {portraitOf(l) && <img className="t-portrait" src={portraitOf(l)!.url} alt="" />}
                 <span className="t-speaker">{T(l.speaker)}</span>
                 {l.tags.find((t) => t.startsWith('paren:')) && <span className="t-paren">({T(l.tags.find((t) => t.startsWith('paren:'))!.slice(6))})</span>}
@@ -529,7 +555,11 @@ export function PlaytestView({
           <div ref={bottom} />
         </div>
         <div className="choices">
-          {choices.length === 1 && exitOf(choices[0].text) ? (
+          {playing ? (
+            <button className="choice-btn continue cutscene-skip" onClick={skipCutscene} title="Show the rest of the cutscene now (1)">
+              🎬 Cutscene · Skip
+            </button>
+          ) : choices.length === 1 && exitOf(choices[0].text) ? (
             // An exit to the game: in the game, gameplay happens here until it resumes the story.
             <div className="game-exit" role="group" aria-label="Exit to the game">
               <p>
@@ -548,7 +578,7 @@ export function PlaytestView({
               </button>
             ))
           )}
-          {locked.map((l) => (
+          {!playing && locked.map((l) => (
             <p key={l.choice.id} className="choice-btn locked" aria-disabled="true">
               <span className="locked-text"><Rich text={T(l.choice.text)} /></span>
               <span className="locked-needs">needs {l.needs.map(T).join(', ')}</span>

@@ -437,6 +437,9 @@ the story panel and the cue player). It plays \`Content/NarrativeBridge/MainStor
 - **Locked choices**: a choice that needs an item or a value the player doesn't have is left out by Ink. \`GetLockedChoices\` lists the ones in
   the current passage with what they need in words (the story panel shows them greyed out), and \`GetCurrentPassage\` says where the reader is.
 - **Forced choices**: while a forced choice's condition holds, Ink offers only that choice in its passage, and \`GetLockedChoices\` stays empty.
+- **Cutscenes**: only a cutscene's dialogue reaches the game, each line with \`bIsCutscene\` set (and a \`cutscene\` tag in \`OnLine\`'s Tags). The story
+  panel shows its lines one at a time, each for long enough to read (1.2 s + 0.055 s a letter, 2 to 9 s), with a Skip button; a player who
+  set *Go on by itself* to Off skips each line themselves.
 - **Pictures and portraits**: \`LoadPicture(file)\`, \`LoadPortrait(speakerId)\` and \`GetCurrentPicture\` give textures for your own UI.
 - **Voice**: lines with a recorded clip play it (in order, scaled by the player's *Voice volume*); \`LoadVoiceClip\` gives the Sound Wave.
 

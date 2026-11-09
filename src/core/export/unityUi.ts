@@ -916,7 +916,7 @@ namespace __NAMESPACE__
             if (line.IsChoice && !theme.showChoiceHistory) return;
             var entry = MakeEntry(line);
             // Line mode always goes through the queue, so lines arriving together are shown one at a time.
-            if (animate && (CharactersPerSecond > 0f || theme.transcript == NarrativeTheme.TranscriptMode.Line || theme.lineFade > 0f))
+            if (animate && (CharactersPerSecond > 0f || theme.transcript == NarrativeTheme.TranscriptMode.Line || theme.lineFade > 0f || line.IsCutscene))
             {
                 entry.Root.SetActive(false);
                 typing.Enqueue(entry);
@@ -971,7 +971,8 @@ namespace __NAMESPACE__
         void Begin(Entry e)
         {
             var line = e.Line;
-            var clear = theme.transcript == NarrativeTheme.TranscriptMode.Line || (theme.transcript == NarrativeTheme.TranscriptMode.Scene && !string.IsNullOrEmpty(line.Scene));
+            // A cutscene shows one line at a time, like subtitles.
+            var clear = line.IsCutscene || theme.transcript == NarrativeTheme.TranscriptMode.Line || (theme.transcript == NarrativeTheme.TranscriptMode.Scene && !string.IsNullOrEmpty(line.Scene));
             if (clear && !line.IsChoice)
             {
                 foreach (var old in entries) Discard(old.Root);
@@ -1032,16 +1033,20 @@ namespace __NAMESPACE__
                 typing.Dequeue();
                 ScrollToEnd();
                 // Line mode: one line at a time. The reader goes on (or it goes on by itself).
-                if (theme.transcript == NarrativeTheme.TranscriptMode.Line && typing.Count > 0)
+                // A cutscene goes on by itself after time to read the line (unless the player turned that Off); Skip goes on now.
+                var cutscene = next.Line.IsCutscene;
+                if ((cutscene || theme.transcript == NarrativeTheme.TranscriptMode.Line) && typing.Count > 0)
                 {
                     waitingForNextLine = true;
                     ClearChoices();
-                    AddButton(ContinueText(), NextLine, TextAnchor.MiddleCenter);
+                    AddButton(cutscene ? T("Skip") + "  ›" : ContinueText(), NextLine, TextAnchor.MiddleCenter);
                     var waited = 0f;
+                    var hold = cutscene ? CutsceneSeconds(visible) : theme.autoAdvanceDelay;
+                    var auto = cutscene ? NarrativeSettings.AutoAdvance != NarrativeSettings.AutoAdvanceMode.Off : AutoAdvance;
                     while (waitingForNextLine)
                     {
                         waited += Time.unscaledDeltaTime;
-                        if (AutoAdvance && waited >= theme.autoAdvanceDelay) waitingForNextLine = false;
+                        if (auto && waited >= hold) waitingForNextLine = false;
                         yield return null;
                     }
                     ClearChoices();
@@ -1051,6 +1056,9 @@ namespace __NAMESPACE__
             ScrollToEnd();
             if (choicesWaiting) ShowChoices();
         }
+
+        /// <summary>How long a cutscene line stays: time to read it, 2 to 9 seconds (as in Playtest).</summary>
+        static float CutsceneSeconds(string s) => Mathf.Clamp(1.2f + s.Length * 0.055f, 2f, 9f);
 
         static bool IsSentenceEnd(string s, int i)
         {

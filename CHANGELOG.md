@@ -9,7 +9,10 @@
   `StartAt("passage.line_…")` or `EnterAt(…)`, and the lines are listed in `StoryInfo.Lines`. The Unity Story Debugger
   can jump to a line, and the smoke test and Unreal automation tests start at every line.
 - **Fixed:** an exit's note came back twice (as a note too) when Narrative Bridge's own Ink was brought back in.
-
+- **Cutscenes:** tick **🎬 Cutscene** on a passage in Review, or put `@cutscene` in it in a script. Players then see
+  only its dialogue, one line at a time and centred like subtitles, with each line moving on by itself once there's
+  been time to read it. **Skip** shows the rest at once, and the passage's choices come after. It works in Playtest,
+  the playable story, Twine (SugarCube), and the Unity and Unreal story panels.
 - **The Unreal export catches up with Unity:** the Unreal project now has a themed **story panel** (the Story UI look
   on the Export page, with typing, portraits, scene pictures, locked choices greyed out, and Settings and save-slot
   menus). It also gets **save slots and an autosave** that carry over to a revised story, **translations** from the
@@ -18,7 +21,6 @@
   in by itself; press Play to see it. **Automation tests** replay every ending.
 - **Fixed:** the Unreal export didn't build against the real Inkpot plugin (a wrong `SetBool` call). It's now built and
   tested with Unreal Engine 5.7 and Inkpot (`npm run test:unreal:build`).
-
 - **Players see only the dialogue:** a new box in Story settings (and on the Export page). When it's ticked, players
   get only the spoken lines and the choices. Narration, transitions, scene headings and parentheticals are left out of
   Playtest, the playable story, Twine, Unity, Unreal and the translation sheet, and the Ink keeps them as comments.
