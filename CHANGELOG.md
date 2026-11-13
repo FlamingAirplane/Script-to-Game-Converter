@@ -6,6 +6,15 @@
   back to, players see which ways they've already tried (still clickable, with a ✓). It's remembered through Restart,
   in Playtest, the playable story, and the Unity and Unreal story panels. Playtest's **Forget chosen** clears it.
 - **Rename a story from the top bar:** click its title, type, and press Enter (Escape keeps the old one).
+- **Structured import is now the default.** The Import page starts on *Structured import* (marked recommended), and the
+  command line uses `--mode structured` unless told otherwise. Markers you type into the script (`@passage`, choices like
+  `+ [Open the door] -> vault`, `@item`, `@exit`…) build the story as you mark it, and a script without any markers still
+  converts scene by scene, exactly as before. Faithful conversion and Interactive adaptation are one click away.
+- **A full guide to the markers:** [docs/STRUCTURED_MARKERS.md](docs/STRUCTURED_MARKERS.md) covers every marker with an
+  example, how passages end and flow on, conditions, `@cue` (which wasn't documented before), a worked example with the
+  exact Ink it becomes, and what each export does with each marker. Diagrams show the path from script to Ink to Unity,
+  Unreal and Twine, how passages, choices and exits connect, and how items unlock choices. The README and the user
+  guide now lead with the markers.
 - **Cutscenes:** tick **🎬 Cutscene** on a passage in Review, or put `@cutscene` in it in a script. Players then see
   only its dialogue, one line at a time and centred like subtitles, with each line moving on by itself once there's
   been time to read it. **Skip** shows the rest at once, and the passage's choices come after. It works in Playtest,

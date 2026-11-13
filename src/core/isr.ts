@@ -12,6 +12,12 @@ export type Provenance = 'source' | 'transformed' | 'generated' | 'user_authored
 export type ReviewStatus = 'approved' | 'pending' | 'rejected';
 export type ConversionMode = 'faithful' | 'adaptation' | 'structured';
 
+/**
+ * The mode a conversion uses unless told otherwise (Import page and CLI). Structured: markers like @passage and
+ * choices build the story as the writer marks it, and a script without markers still converts scene by scene.
+ */
+export const DEFAULT_MODE: ConversionMode = 'structured';
+
 export interface SourceRef {
   documentId: string;
   line: number; // 1-based
