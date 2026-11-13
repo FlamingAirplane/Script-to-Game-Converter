@@ -612,9 +612,7 @@ export function App() {
         </div>
         {project && (
           <>
-            <span className="project-name" title={project.project.title}>
-              {project.project.title}
-            </span>
+            <ProjectTitle title={project.project.title} onRename={(t) => update((d) => (d.project.title = t))} />
             <ol className="stages" aria-label={`Conversion state: ${STATE_WORDS[state]}`}>
               {STAGES.map((s, i) => (
                 <li key={s.state} className={i < stageIndex ? 'done' : i === stageIndex ? (processed?.exportBlocked || exportState === 'Failed' ? 'failed' : 'current') : ''}>
@@ -921,5 +919,37 @@ function ImportSummary(props: {
         </button>
       </div>
     </section>
+  );
+}
+
+/** The story's title in the top bar: click it (or Enter on it) to rename the story. Enter or leaving keeps the new title, Escape doesn't. */
+function ProjectTitle({ title, onRename }: { title: string; onRename: (title: string) => void }) {
+  const [draft, setDraft] = useState<string | null>(null);
+  const done = (keep: boolean) => {
+    const t = draft?.trim();
+    if (keep && t && t !== title) onRename(t);
+    setDraft(null);
+  };
+  if (draft === null)
+    return (
+      <button type="button" className="project-name" title={`${title}: click to rename the story`} onClick={() => setDraft(title)}>
+        {title || 'Untitled'}
+      </button>
+    );
+  return (
+    <input
+      className="project-name editing"
+      aria-label="Story title"
+      autoFocus
+      value={draft}
+      onFocus={(e) => e.target.select()}
+      onChange={(e) => setDraft(e.target.value)}
+      onBlur={() => done(true)}
+      onKeyDown={(e) => {
+        if (e.key === 'Enter') done(true);
+        else if (e.key === 'Escape') done(false);
+        e.stopPropagation();
+      }}
+    />
   );
 }

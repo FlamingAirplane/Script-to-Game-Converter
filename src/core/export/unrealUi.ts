@@ -318,7 +318,7 @@ private:
     UDataTable* Styles(int32 Size, const FLinearColor& Colour);
     UTextBlock* Text(const FString& Content, int32 Size, const FLinearColor& Colour, const TCHAR* Typeface = TEXT("Regular"));
     URichTextBlock* Rich(const FString& Markup, int32 Size, const FLinearColor& Colour);
-    UNarrativePanelButton* Button(UVerticalBox* Into, const FString& Label, TFunction<void()> Action, bool bEnabled = true, float Scale = 1.f);
+    UNarrativePanelButton* Button(UVerticalBox* Into, const FString& Label, TFunction<void()> Action, bool bEnabled = true, float Scale = 1.f, bool bChosen = false);
     UNarrativePanelButton* ToolButton(const FString& Label, TFunction<void()> Action);
     FLinearColor Faded(const FLinearColor& Colour, float Alpha) const { return FLinearColor(Colour.R, Colour.G, Colour.B, Alpha); }
 
@@ -646,7 +646,7 @@ URichTextBlock* UNarrativeStoryWidget::Rich(const FString& Markup, int32 Size, c
     return Block;
 }
 
-UNarrativePanelButton* UNarrativeStoryWidget::Button(UVerticalBox* Into, const FString& Label, TFunction<void()> Action, bool bEnabled, float Scale)
+UNarrativePanelButton* UNarrativeStoryWidget::Button(UVerticalBox* Into, const FString& Label, TFunction<void()> Action, bool bEnabled, float Scale, bool bChosen)
 {
     UNarrativePanelButton* B = WidgetTree->ConstructWidget<UNarrativePanelButton>();
     FButtonStyle Style;
@@ -658,7 +658,7 @@ UNarrativePanelButton* UNarrativeStoryWidget::Button(UVerticalBox* Into, const F
     Style.SetPressedPadding(FMargin(0));
     B->SetStyle(Style);
     const int32 Size = FontSize(Theme.ChoiceScale * Scale);
-    URichTextBlock* Caption = Rich(ToRichMarkup(Label), Size, bEnabled ? Theme.ChoiceTextColour : Faded(Theme.Muted, 0.8f));
+    URichTextBlock* Caption = Rich(ToRichMarkup(Label), Size, !bEnabled ? Faded(Theme.Muted, 0.8f) : bChosen ? Theme.Muted : Theme.ChoiceTextColour);
     Caption->SetJustification(Theme.ChoiceAlign == TEXT("center") ? ETextJustify::Center : ETextJustify::Left);
     UButtonSlot* Content = Cast<UButtonSlot>(B->AddChild(Caption));
     const float Vertical = FMath::Max(2.f, (Theme.ChoiceHeight - 1.f) * Size * 0.6f);
@@ -964,7 +964,8 @@ void UNarrativeStoryWidget::ShowPrompt()
         for (int32 i = 0; i < Labels.Num(); ++i)
         {
             const FString Label = Theme.bShowChoiceNumbers && i < 9 ? FString::Printf(TEXT("%d.  %s"), i + 1, *Labels[i]) : Labels[i];
-            ChoiceButtons.Add(Button(Choices, Label, [this, i] { Pick(i); }));
+            // A choice taken before (in this read or an earlier one) is greyed out, still clickable.
+            ChoiceButtons.Add(Button(Choices, Label, [this, i] { Pick(i); }, true, 1.f, Story->WasChosen(i)));
         }
         if (Theme.bShowLockedChoices)
             for (const FNarrativeLockedChoice& L : Story->GetLockedChoices())

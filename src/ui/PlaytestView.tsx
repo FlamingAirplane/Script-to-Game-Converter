@@ -20,6 +20,7 @@ import { cueSounds, cuesIn, cueWantsSound, type ParsedCue } from '../core/cues';
 import { CuePlayer } from './cueAudio';
 import { translate } from '../core/export/translations';
 import { languageName } from './language';
+import { chosenKey } from '../core/chosen';
 
 const VOICES_KEY = 'narrative-bridge.voices';
 const CUE_SOUNDS_KEY = 'narrative-bridge.cue-sounds';
@@ -66,6 +67,9 @@ function nextShown(ls: Line[], n: number): number {
   while (i < ls.length && ls[i].kind === 'cue') i++;
   return isCutscene(ls[i]) ? i + 1 : 0;
 }
+
+/** The choices on offer, each with how it's remembered once taken (see core/chosen.ts). */
+const offered = (s: Story) => s.currentChoices.map((c) => ({ text: c.text, index: c.index, key: chosenKey(c.sourcePath, c.text) }));
 
 /** The cues among these lines, in order. */
 const cuesOf = (lines: Line[]): ParsedCue[] => lines.filter((l) => l.kind === 'cue').flatMap((l) => cuesIn(l.tags));
@@ -149,7 +153,7 @@ export function PlaytestView({
   const version = fnv1a(processed.generated.ink);
   const story = useRef<Story | null>(null);
   const [lines, setLines] = useState<Line[]>([]);
-  const [choices, setChoices] = useState<{ text: string; index: number }[]>([]);
+  const [choices, setChoices] = useState<{ text: string; index: number; key: string }[]>([]);
   const [vars, setVars] = useState<Record<string, unknown>>({});
   const [history, setHistory] = useState<Snapshot[]>([]);
   // The save slot is kept per story, so it survives going to Review to edit and coming back.
@@ -165,6 +169,24 @@ export function PlaytestView({
     setSlotState(v);
     try {
       localStorage.setItem(slotKey, JSON.stringify(v));
+    } catch {
+      /* kept for this visit only */
+    }
+  };
+  // Choices taken before, in this read or an earlier one: greyed out (still clickable). Kept per story, through Restart.
+  const chosenStoreKey = `narrative-bridge.playtest-chosen.${processed.project.project.id}`;
+  const [chosenBefore, setChosenBefore] = useState<Set<string>>(() => {
+    try {
+      return new Set(JSON.parse(localStorage.getItem(chosenStoreKey) ?? '[]'));
+    } catch {
+      return new Set();
+    }
+  });
+  const keepChosen = (next: Set<string>) => {
+    setChosenBefore(next);
+    try {
+      if (next.size) localStorage.setItem(chosenStoreKey, JSON.stringify([...next]));
+      else localStorage.removeItem(chosenStoreKey);
     } catch {
       /* kept for this visit only */
     }
@@ -279,7 +301,7 @@ export function PlaytestView({
       setLines(out);
       speakRef.current(out.slice(prefix.length));
       if (cueSoundsRef.current) cuePlayer.current.play(cuesOf(out.slice(prefix.length)));
-      setChoices(s.currentChoices.map((c) => ({ text: c.text, index: c.index })));
+      setChoices(offered(s));
       setWhere(knotOf(s));
       readVars();
     },
@@ -367,6 +389,8 @@ export function PlaytestView({
     setHistory((h) => [...h, { state: s.state.toJson(), lines, segment: segment.current }]);
     sfx.choice();
     const pause = isPause(s);
+    const taken = choices.find((c) => c.index === i);
+    if (taken && !pause && !exitOf(taken.text) && !chosenBefore.has(taken.key)) keepChosen(new Set([...chosenBefore, taken.key]));
     s.ChooseChoiceIndex(i);
     advance([...lines, { text, tags: [], kind: 'choice', pause }]);
   };
@@ -379,7 +403,7 @@ export function PlaytestView({
     segment.current = last.segment;
     setHistory(history.slice(0, -1));
     setLines(last.lines);
-    setChoices(story.current.currentChoices.map((c) => ({ text: c.text, index: c.index })));
+    setChoices(offered(story.current));
     readVars();
   };
 
@@ -512,6 +536,15 @@ export function PlaytestView({
             <button className="btn tiny" onClick={restart}>
               Restart
             </button>
+            {chosenBefore.size > 0 && (
+              <button
+                className="btn tiny"
+                onClick={() => keepChosen(new Set())}
+                title="Choices you’ve taken before are greyed out, as players see them. This forgets them, so every choice looks new again."
+              >
+                Forget chosen ({chosenBefore.size})
+              </button>
+            )}
           </div>
         </div>
         <div className="transcript" tabIndex={0} aria-label="Story text">
@@ -572,11 +605,21 @@ export function PlaytestView({
               </button>
             </div>
           ) : (
-            choices.map((c) => (
-              <button key={c.index} className={`choice-btn${choices.length === 1 && c.text === CONTINUE_TEXT ? ' continue' : ''}`} onClick={() => choose(c.index, c.text)}>
+            choices.map((c) => {
+              const goOn = choices.length === 1 && c.text === CONTINUE_TEXT;
+              const before = !goOn && chosenBefore.has(c.key);
+              return (
+              <button
+                key={c.index}
+                className={`choice-btn${goOn ? ' continue' : ''}${before ? ' chosen' : ''}`}
+                onClick={() => choose(c.index, c.text)}
+                title={before ? 'You’ve chosen this before' : undefined}
+              >
                 <Rich text={T(c.text)} />
+                {before && <span className="sr-only"> (chosen before)</span>}
               </button>
-            ))
+              );
+            })
           )}
           {!playing && locked.map((l) => (
             <p key={l.choice.id} className="choice-btn locked" aria-disabled="true">
@@ -667,7 +710,7 @@ export function PlaytestView({
                   segment.current = r.segment;
                   setHistory(r.history);
                   setLines(r.lines);
-                  setChoices(s.currentChoices.map((c) => ({ text: c.text, index: c.index })));
+                  setChoices(offered(s));
                   setWhere(knotOf(s));
                   readVars();
                   const n = (k: number) => `${k} choice${k === 1 ? '' : 's'}`;
@@ -684,7 +727,7 @@ export function PlaytestView({
                 }
                 story.current!.state.LoadJson(slot.state);
                 setLines(slot.lines);
-                setChoices(story.current!.currentChoices.map((c) => ({ text: c.text, index: c.index })));
+                setChoices(offered(story.current!));
                 readVars();
                 setNotice('Loaded.');
               }}

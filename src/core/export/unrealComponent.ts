@@ -188,6 +188,18 @@ public:
     UFUNCTION(BlueprintPure, Category = "Narrative Bridge")
     FString GetCurrentPassage() const;
 
+    /**
+     * True if the player has taken choice Index (as in OnChoices) before, in this read or an earlier one: the story panel
+     * greys these out but keeps them clickable. Kept in Saved/SaveGames/NarrativeBridge through Restart; a choice is
+     * known by its passage and its text.
+     */
+    UFUNCTION(BlueprintPure, Category = "Narrative Bridge")
+    bool WasChosen(int32 Index) const;
+
+    /** Forgets which choices were taken before, so every choice looks new again. */
+    UFUNCTION(BlueprintCallable, Category = "Narrative Bridge")
+    void ForgetChosen();
+
     /** The passage the story was started at (StartAt), or empty when it started from the beginning. */
     UFUNCTION(BlueprintPure, Category = "Narrative Bridge")
     FString GetStartPassage() const { return StartPassage; }
@@ -339,6 +351,11 @@ private:
 
     UPROPERTY(Transient)
     TArray<TObjectPtr<USoundBase>> VoiceQueue;
+
+    /** Choices taken before ("passage|text"), loaded from disk the first time they're needed. */
+    mutable TSet<FString> ChosenBefore;
+    mutable bool bChosenLoaded = false;
+    const TSet<FString>& Chosen() const;
 
     TArray<FNarrativeLine> Transcript;
     /** The text of every choice made since the start (and the jumps, as "→passage"), so a save carries over to a revised story. */
@@ -526,6 +543,16 @@ namespace
 
     FString SlotKey(int32 Slot) { return Slot == UNarrativeBridgeComponent::AutosaveSlot ? FString(TEXT("autosave")) : Slot < 0 ? FString(TEXT("quicksave")) : FString::Printf(TEXT("slot-%d"), Slot); }
     FString SaveFile(const FString& Key) { return FPaths::ProjectSavedDir() / TEXT("SaveGames/NarrativeBridge") / NarrativeBridgeStoryInfo::SaveFolder / Key + TEXT(".json"); }
+    FString ChosenFile() { return FPaths::ProjectSavedDir() / TEXT("SaveGames/NarrativeBridge") / NarrativeBridgeStoryInfo::SaveFolder / TEXT("chosen.txt"); }
+
+    /** How a choice is remembered once taken: its knot and its text as written ("harbour|Take the boat"). */
+    FString ChosenKeyOf(const TSharedPtr<Ink::FChoice>& Choice)
+    {
+        FString Knot = Choice->GetSourcePath();
+        int32 Dot = INDEX_NONE;
+        if (Knot.FindChar(TEXT('.'), Dot)) Knot = Knot.Left(Dot);
+        return Knot + TEXT("|") + Choice->GetText().TrimStartAndEnd();
+    }
 }
 
 UNarrativeBridgeComponent::UNarrativeBridgeComponent()
@@ -671,6 +698,33 @@ TArray<FNarrativeLockedChoice> UNarrativeBridgeComponent::GetLockedChoices() con
     return Locked;
 }
 
+const TSet<FString>& UNarrativeBridgeComponent::Chosen() const
+{
+    if (!bChosenLoaded)
+    {
+        bChosenLoaded = true;
+        TArray<FString> Keys;
+        if (FFileHelper::LoadFileToStringArray(Keys, *ChosenFile()))
+            for (const FString& K : Keys)
+                if (!K.IsEmpty()) ChosenBefore.Add(K);
+    }
+    return ChosenBefore;
+}
+
+bool UNarrativeBridgeComponent::WasChosen(int32 Index) const
+{
+    const TArray<TSharedPtr<Ink::FChoice>> Choices = InkChoices(InkStory);
+    if (!Choices.IsValidIndex(Index) || IsWaitingForContinue() || IsAtExit()) return false;
+    return Chosen().Contains(ChosenKeyOf(Choices[Index]));
+}
+
+void UNarrativeBridgeComponent::ForgetChosen()
+{
+    Chosen();
+    ChosenBefore.Reset();
+    IFileManager::Get().Delete(*ChosenFile(), false, false, true);
+}
+
 void UNarrativeBridgeComponent::Choose(int32 Index)
 {
     const TArray<TSharedPtr<Ink::FChoice>> Choices = InkChoices(InkStory);
@@ -679,6 +733,12 @@ void UNarrativeBridgeComponent::Choose(int32 Index)
     // A Continue break or an exit leaves no trace in the transcript: the page simply goes on.
     if (!IsWaitingForContinue() && !IsAtExit())
     {
+        const FString Key = ChosenKeyOf(Choices[Index]);
+        if (!Chosen().Contains(Key))
+        {
+            ChosenBefore.Add(Key);
+            FFileHelper::SaveStringArrayToFile(ChosenBefore.Array(), *ChosenFile());
+        }
         FNarrativeLine Line;
         Line.Text = Line.SourceText = Text;
         Line.Tags.Add(TEXT("choice"));

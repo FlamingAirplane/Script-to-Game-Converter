@@ -157,7 +157,7 @@ Click **Story settings** at the top of the contents.
 
 ![Story settings: the bookplate, At a glance and lines per character](images/story-settings.jpg)
 
-- **Title, Author, Start passage.**
+- **Title, Author, Start passage.** (You can also rename the story by clicking its title in the top bar.)
 - **Players see only the dialogue:** tick it and players get just the spoken lines, plus the choices. Narration,
   transitions, scene headings and parentheticals are left out of Playtest, the playable story, Twine, Unity, Unreal
   and the translation sheet. Pictures, music, sounds and portraits stay. Your script isn't changed: untick it and
@@ -253,6 +253,10 @@ chapter.
 Click a choice (or press 1–9) to play. **Undo choice** (Backspace) steps back; **Restart** (R) begins again. **Voices**
 (V) reads the dialogue aloud; **All text / Dialogue only** (D) hides narration while you test. To hide it from players too, tick **Players see only
 the dialogue** in Story settings; Playtest then shows *players see dialogue only*.
+
+Choices you've taken before, in this read or an earlier one, are greyed out with a ✓ (you can still pick them), as
+players see them in the playable story and the Unity and Unreal story panels. They're remembered through Restart;
+**Forget chosen** makes every choice look new again.
 
 **Locked shown / Locked hidden** (G) controls the choices you can't take yet because they need an item or value. When
 shown, each sits greyed out under the real choices with a 🔒 and what it needs, such as *needs Archive Key*, so you can
