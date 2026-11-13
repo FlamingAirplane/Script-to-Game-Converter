@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- **Choices you've taken before are greyed out:** coming back to a choice, on a later read or a passage you loop
+  back to, players see which ways they've already tried (still clickable, with a ✓). It's remembered through Restart,
+  in Playtest, the playable story, and the Unity and Unreal story panels. Playtest's **Forget chosen** clears it.
+- **Rename a story from the top bar:** click its title, type, and press Enter (Escape keeps the old one).
 - **Cutscenes:** tick **🎬 Cutscene** on a passage in Review, or put `@cutscene` in it in a script. Players then see
   only its dialogue, one line at a time and centred like subtitles, with each line moving on by itself once there's
   been time to read it. **Skip** shows the rest at once, and the passage's choices come after. It works in Playtest,

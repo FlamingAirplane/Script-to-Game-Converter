@@ -431,6 +431,8 @@ stories) without clashing, and it never changes your scenes, build settings or p
 - **Locked choices:** a choice that needs an item or a value the player doesn't have is left out by ink. The story panel
   shows it greyed out with what it needs (\`Use the brass key · Needs Brass Key\`; *Show Locked Choices* on the theme), and
   \`LockedChoices\` lists them for your own UI. \`CurrentPassage\` says which passage the reader is in.
+- **Choices taken before:** the story panel greys out a choice the player has taken before (in this read or an earlier one;
+  still clickable). \`WasChosen(choice)\` says so for your own UI and \`ForgetChosen()\` clears it; it's kept in PlayerPrefs.
 - **Forced choices:** while a forced choice's condition holds, ink offers only that choice in its passage (the others carry
   an extra condition), and \`LockedChoices\` stays empty. \`StoryInfo.ForcedChoices\` lists them.
 - **Your own UI:** remove the NarrativeView and draw the story from the events above.
@@ -1492,6 +1494,48 @@ namespace __NAMESPACE__
         }
 
         const string SaveKey = "NarrativeBridge.Save." + StoryInfo.ProjectId;
+        const string ChosenKey = "NarrativeBridge.Chosen." + StoryInfo.ProjectId;
+        HashSet<string> chosenBefore;
+
+        static string ChosenKeyOf(Choice choice)
+        {
+            var path = choice.sourcePath ?? "";
+            var dot = path.IndexOf('.');
+            return (dot < 0 ? path : path.Substring(0, dot)) + "|" + choice.text.Trim();
+        }
+
+        HashSet<string> ChosenBefore
+        {
+            get
+            {
+                if (chosenBefore == null)
+                {
+                    chosenBefore = new HashSet<string>();
+                    foreach (var k in PlayerPrefs.GetString(ChosenKey, "").Split('\\n'))
+                        if (k.Length > 0) chosenBefore.Add(k);
+                }
+                return chosenBefore;
+            }
+        }
+
+        /// <summary>
+        /// True if the player has taken this choice before, in this read or an earlier one (kept in PlayerPrefs, through
+        /// Restart). The demo UI greys these out but keeps them clickable. A choice is known by its passage and its text.
+        /// </summary>
+        public bool WasChosen(Choice choice) => choice != null && ChosenBefore.Contains(ChosenKeyOf(choice));
+
+        /// <summary>Forgets which choices were taken before, so every choice looks new again.</summary>
+        public void ForgetChosen()
+        {
+            ChosenBefore.Clear();
+            PlayerPrefs.DeleteKey(ChosenKey);
+        }
+
+        void RememberChosen(Choice choice)
+        {
+            if (!ChosenBefore.Add(ChosenKeyOf(choice))) return;
+            PlayerPrefs.SetString(ChosenKey, string.Join("\\n", ChosenBefore));
+        }
         readonly List<Line> transcript = new List<Line>();
         IInventoryAuthority authority;
         AudioSource voice;
@@ -1644,6 +1688,8 @@ namespace __NAMESPACE__
         {
             if (Story == null || index < 0 || index >= Story.currentChoices.Count) return;
             // A Continue break or an exit leaves no trace in the transcript: the page simply goes on.
+            if (!IsWaitingForContinue && !IsAtExit)
+                RememberChosen(Story.currentChoices[index]);
             if (!IsWaitingForContinue && !IsAtExit)
                 transcript.Add(Localize(new Line { Speaker = null, Text = Story.currentChoices[index].text, SourceText = Story.currentChoices[index].text, Tags = new List<string> { "choice" }, IsChoice = true }));
             choicePath.Add(Story.currentChoices[index].text);

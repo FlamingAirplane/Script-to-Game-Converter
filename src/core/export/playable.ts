@@ -68,6 +68,7 @@ export function buildPlayableHtml(story: ProcessedStory, inkRuntimeJs: string, a
       title,
       author: author ?? '',
       saveKey: `narrative-bridge.play.${id}`,
+      chosenKey: `narrative-bridge.chosen.${id}`,
       version: storyVersion(story),
       voices,
       hasClips: hasVoiceClips,
@@ -161,6 +162,7 @@ padding:10px 8px 10px 30px;cursor:pointer}.choice:before{content:'❧';position:
 .choice:hover,.choice:focus-visible{color:var(--pen);background:rgba(96,108,56,.1);outline:none}
 .choice.continue{align-self:center;text-align:center;border:0;padding:8px 20px;font-style:normal;font-variant:small-caps;text-transform:lowercase;letter-spacing:.14em;color:var(--pen)}
 .choice.continue:before{content:none}.choice.continue:after{content:' ›'}
+.choice.chosen{color:var(--faded,#8a8a6a)}.choice.chosen:before{content:'✓';color:var(--faded,#8a8a6a);font-size:13px;top:12px}
 .choice.locked{cursor:default;color:var(--faded,#8a8a6a);opacity:.75}.choice.locked:hover{background:none;color:var(--faded,#8a8a6a)}.choice.locked:before{content:'🔒';font-size:13px;top:12px}
 .choice .needs{display:block;font-size:13px;font-style:normal;letter-spacing:.03em}
 #language{font:inherit;font-size:inherit;background:none;border:0;color:inherit;letter-spacing:inherit;cursor:pointer}
@@ -219,6 +221,18 @@ const PLAYER_JS = `
       if (value === null) localStorage.removeItem(meta.saveKey);
       else localStorage.setItem(meta.saveKey, JSON.stringify(value));
     } catch (e) { return null; }
+  }
+
+  // ---- Choices taken before (in this read or an earlier one): greyed out, still clickable. A choice is known by
+  // its passage and its text as written (see core/chosen.ts); Read again keeps them. ----
+  var chosenBefore = {};
+  try { (JSON.parse(localStorage.getItem(meta.chosenKey) || '[]') || []).forEach(function (k) { chosenBefore[k] = 1; }); } catch (e) {}
+  function choiceKey(c) { return String(c.sourcePath || '').split('.')[0] + '|' + String(c.text).trim(); }
+  function rememberChosen(c) {
+    var k = choiceKey(c);
+    if (chosenBefore[k]) return;
+    chosenBefore[k] = 1;
+    try { localStorage.setItem(meta.chosenKey, JSON.stringify(Object.keys(chosenBefore))); } catch (e) {}
   }
 
   function newStory() {
@@ -521,7 +535,9 @@ const PLAYER_JS = `
       return;
     }
     choices.forEach(function (c) {
-      var b = el('button', pause ? 'choice continue' : 'choice', tr(c.text));
+      var before = !pause && chosenBefore[choiceKey(c)];
+      var b = el('button', pause ? 'choice continue' : before ? 'choice chosen' : 'choice', tr(c.text));
+      if (before) { b.title = 'You’ve chosen this before'; b.setAttribute('aria-label', tr(c.text) + ' (chosen before)'); }
       b.onclick = function () { choose(c.index, c.text); };
       nav.appendChild(b);
     });
@@ -588,6 +604,7 @@ const PLAYER_JS = `
     notice('');
     pageTurn();
     var pause = isPause();
+    if (!pause && !exitName()) story.currentChoices.forEach(function (c) { if (c.index === index) rememberChosen(c); });
     story.ChooseChoiceIndex(index);
     lines.push(pause ? { chosen: text, pause: true } : { chosen: text });
     continueStory();

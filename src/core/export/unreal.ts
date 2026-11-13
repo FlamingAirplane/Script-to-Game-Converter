@@ -427,6 +427,8 @@ the story panel and the cue player). It plays \`Content/NarrativeBridge/MainStor
 - **Cutscenes**: only a cutscene's dialogue reaches the game, each line with \`bIsCutscene\` set (and a \`cutscene\` tag in \`OnLine\`'s Tags). The story
   panel shows its lines one at a time, each for long enough to read (1.2 s + 0.055 s a letter, 2 to 9 s), with a Skip button; a player who
   set *Go on by itself* to Off skips each line themselves.
+- **Choices taken before**: the story panel greys out a choice the player has taken before (in this read or an earlier one; still
+  clickable). \`WasChosen(Index)\` says so for your own UI and \`ForgetChosen\` clears it; it's kept in Saved/SaveGames/NarrativeBridge.
 - **Pictures and portraits**: \`LoadPicture(file)\`, \`LoadPortrait(speakerId)\` and \`GetCurrentPicture\` give textures for your own UI.
 - **Voice**: lines with a recorded clip play it (in order, scaled by the player's *Voice volume*); \`LoadVoiceClip\` gives the Sound Wave.
 

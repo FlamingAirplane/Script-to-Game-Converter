@@ -1119,7 +1119,8 @@ namespace __NAMESPACE__
             for (int i = 0; i < choices.Count; i++)
             {
                 var index = i;
-                AddButton((theme.showChoiceNumbers ? (i + 1) + ".  " : "") + NarrativeController.ChoiceText(choices[i]), () => controller.Choose(index), anchor);
+                // A choice taken before (in this read or an earlier one) is greyed out, still clickable.
+                AddButton((theme.showChoiceNumbers ? (i + 1) + ".  " : "") + NarrativeController.ChoiceText(choices[i]), () => controller.Choose(index), anchor, false, controller.WasChosen(choices[i]));
             }
             // Choices that need something the reader doesn't have yet: greyed out, saying what they need.
             if (theme.showLockedChoices)
@@ -1350,7 +1351,7 @@ namespace __NAMESPACE__
         }
 #endif
 
-        Button AddButton(string label, UnityEngine.Events.UnityAction onClick, TextAnchor anchor, bool locked = false)
+        Button AddButton(string label, UnityEngine.Events.UnityAction onClick, TextAnchor anchor, bool locked = false, bool chosen = false)
         {
             var rect = Child("Choice", choiceArea);
             var image = rect.gameObject.AddComponent<Image>();
@@ -1364,7 +1365,7 @@ namespace __NAMESPACE__
             tint.disabledColor = WithAlpha(ButtonColour, ButtonOpacity * 0.4f);
             button.colors = tint;
             rect.gameObject.AddComponent<LayoutElement>().minHeight = FontSize * theme.choiceHeight;
-            var text = AddText(rect, label, Mathf.RoundToInt(FontSize * theme.choiceScale), locked ? Muted : ChoiceTextColour, locked ? FontStyle.Italic : FontStyle.Normal, anchor);
+            var text = AddText(rect, label, Mathf.RoundToInt(FontSize * theme.choiceScale), locked || chosen ? Muted : ChoiceTextColour, locked ? FontStyle.Italic : FontStyle.Normal, anchor);
             var tr = text.rectTransform;
             tr.anchorMin = Vector2.zero;
             tr.anchorMax = Vector2.one;

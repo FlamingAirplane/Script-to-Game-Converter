@@ -2467,3 +2467,36 @@ Look.
     expect(cpp).toMatch(/ReservedTags[^;]*"cutscene"/);
   });
 });
+
+describe('choices taken before', () => {
+  it('are known by their passage and text, and every reader greys them out', async () => {
+    const { Story } = await import('inkjs');
+    const { chosenKey, knotOfPath } = await import('../src/core/chosen');
+    const { buildPlayableHtml } = await import('../src/core/export');
+    expect(knotOfPath('harbour.0.c-1')).toBe('harbour');
+    expect(chosenKey('harbour.0.c-1', ' Take the boat ')).toBe('harbour|Take the boat');
+    const sample = SAMPLES.find((x) => x.id === 'archive')!;
+    const { project } = await buildStory([{ fileName: sample.fileName, text: sample.text }], { mode: sample.mode });
+    const s = processProject(project);
+    const st = new Story(s.compile.json!);
+    while (st.canContinue || (st.currentChoices.length === 1 && st.currentChoices[0].text === 'Continue')) {
+      if (st.canContinue) st.ContinueMaximally();
+      else st.ChooseChoiceIndex(0);
+    }
+    const c = st.currentChoices[0];
+    const knot = chosenKey(c.sourcePath, c.text).split('|')[0];
+    expect(project.passages.map((p) => p.id)).toContain(knot);
+    const html = buildPlayableHtml(s, '/* runtime */');
+    expect(html).toContain(`"chosenKey":"narrative-bridge.chosen.${project.project.id}"`);
+    expect(html).toContain("'choice chosen'");
+    const unity = await ADAPTERS.unity.export(s, { engine: 'unity', projectName: 'P', engineVersion: '6000.3', integrationRef: 'v1.21.0', includeDemo: true });
+    const cs = unity.files.map((f) => f.content).join('\n');
+    expect(cs).toContain('public bool WasChosen(Choice choice)');
+    expect(cs).toContain('controller.WasChosen(choices[i])');
+    expect(cs).toContain(".Split('\\n')");
+    const unreal = await ADAPTERS.unreal.export(s, { engine: 'unreal', projectName: 'P', engineVersion: '5.7', integrationRef: 'v1.21.0', includeDemo: true });
+    const cpp = unreal.files.map((f) => f.content).join('\n');
+    expect(cpp).toContain('bool WasChosen(int32 Index) const;');
+    expect(cpp).toContain('Story->WasChosen(i)');
+  });
+});
