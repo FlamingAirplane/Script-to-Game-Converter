@@ -665,6 +665,20 @@ describe('dialogue audio', () => {
   });
 });
 
+describe('playable story reading', () => {
+  it('parses, scrolls to where a choice led, and takes choices from the keyboard', async () => {
+    const { buildPlayableHtml } = await import('../src/core/export');
+    const { project } = await build('INT. A - DAY\n\nMIRA\nHello.\n', 'x.fountain');
+    const html = buildPlayableHtml(processProject(project), 'window.inkjs={};');
+    const scripts = [...html.matchAll(/<script>([\s\S]*?)<\/script>/g)].map((m) => m[1]);
+    const player = scripts[scripts.length - 1];
+    expect(() => new Function(player)).not.toThrow();
+    expect(player).toContain("first.scrollIntoView({ behavior: reducedMotion() ? 'auto' : 'smooth', block: 'start' })");
+    expect(player).toContain("document.addEventListener('keydown'");
+    expect(html).toContain('prefers-reduced-motion:reduce){.text .fresh{animation:none}}');
+  });
+});
+
 describe('recording script', () => {
   it('lists every line of dialogue with character, direction and clip file, CSV-escaped', async () => {
     const { buildRecordingScript } = await import('../src/core/export');

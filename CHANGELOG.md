@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- **Reading on after a choice.** In Playtest and the playable story, a choice now scrolls to the first line of the
+  text it led to (not the end of it), and that text fades in gently (not at all if the reader's system asks for less
+  motion). Choices show the number key that takes them; Enter or Space goes on at a *Continue*, an exit or a cutscene.
+  The playable story learns the keys too (1–9, Enter, Backspace to undo), keeps keyboard focus on the choices, shows
+  the choices again after an undo, and *Continue* reopens at the reader's last choice rather than the top of the page.
+- **Fixed:** Undo choice in Playtest could bring back the text from before the choice but the choices from after it.
+
 - **Suggestions as data, and an on-device model on the command line.** Interactive adaptation's rules now return
   *proposals* (a group of choices for one passage, pointing at the line that prompted it) that pass six checks before
   they're written: shape, references, evidence, fit, one group per passage, and the story still completable with

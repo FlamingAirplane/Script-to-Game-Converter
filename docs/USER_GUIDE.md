@@ -250,7 +250,9 @@ chapter.
 
 ![Playtest, with the story on the left and the state panel on the right](images/playtest.jpg)
 
-Click a choice (or press 1–9) to play. **Undo choice** (Backspace) steps back; **Restart** (R) begins again. **Voices**
+Click a choice (or press the number beside it, 1–9; Enter or Space goes on at a *Continue*) to play. After a choice the
+text scrolls to where the new part begins, so you read on from its first line. **Undo choice** (Backspace) steps back;
+**Restart** (R) begins again. **Voices**
 (V) reads the dialogue aloud; **All text / Dialogue only** (D) hides narration while you test. To hide it from players too, tick **Players see only
 the dialogue** in Story settings; Playtest then shows *players see dialogue only*.
 
@@ -283,7 +285,8 @@ The panel beside the story shows:
 - **Download playable story (.html):** one web page that anyone can open on a computer or phone to read and play your
   story. Email it or put it on any website. It saves each reader's progress, offers undo and *Start over*, and plays your
   recordings or voices. If you send a revised copy, readers keep their place; if you cut a choice they made, they pick up
-  just before it.
+  just before it. After each choice the page scrolls to the start of the new text, which fades in, and *Continue* opens
+  where they left off. On a computer, readers can press 1–9 to choose, Enter or Space to go on, and Backspace to undo.
 
   ![The playable story as a reader sees it](images/playable.jpg)
 

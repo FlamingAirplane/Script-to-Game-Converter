@@ -1334,3 +1334,11 @@ section.drafts > h2 { margin-top: 26px; }
 .choice-btn.chosen { color: var(--faded); }
 .choice-btn.chosen::before { content: '✓'; color: var(--faded); font-size: 13px; top: 10px; }
 .choice-btn.chosen:hover { color: var(--pen); }
+
+/* Playtest: the text a choice led to fades in; choices show the number key that takes them. */
+.transcript .t-fresh { animation: t-fresh 0.5s ease-out both; }
+@keyframes t-fresh { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+@media (prefers-reduced-motion: reduce) { .transcript .t-fresh { animation: none; } }
+.choice-btn .choice-key { position: absolute; right: 8px; top: 50%; transform: translateY(-50%); font: 600 11px var(--mono, ui-monospace, monospace); font-style: normal; color: var(--faded); border: 1px solid var(--rule-2); border-radius: 3px; padding: 0 5px; line-height: 16px; opacity: 0.7; }
+.choice-btn:has(.choice-key) { padding-right: 34px; }
+.choice-btn:hover .choice-key { opacity: 1; color: var(--pen); }
