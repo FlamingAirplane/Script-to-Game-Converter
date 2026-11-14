@@ -1,0 +1,31 @@
+{
+  "script": "tests/adaptation-eval/plays/trifles.fountain",
+  "heldOut": true,
+  "notes": "Marked from the numbered dump before any suggester was run on this script. Held out.",
+  "moments": [
+    {
+      "passage": "scene_01",
+      "line": 8,
+      "kind": "pickup",
+      "note": "the bird-cage"
+    },
+    {
+      "passage": "scene_05",
+      "line": 7,
+      "kind": "pickup",
+      "note": "the fancy box"
+    },
+    {
+      "passage": "scene_07",
+      "line": 1,
+      "kind": "decision",
+      "note": "the men are coming: hide the box or show it"
+    },
+    {
+      "passage": "scene_07",
+      "line": 5,
+      "kind": "reply",
+      "note": "Has the bird flown?"
+    }
+  ]
+}

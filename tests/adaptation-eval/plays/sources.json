@@ -1,0 +1,18 @@
+[
+  {"id": "dolls-house", "title": "A Doll's House, Act 1 (opening)", "author": "Henrik Ibsen", "translator": "R. Farquharson Sharp", "language": "en", "ebook": 2542, "lines": [88, 200], "setting": "Helmer's flat"},
+  {"id": "earnest", "title": "The Importance of Being Earnest, Act 1 (the cigarette case)", "author": "Oscar Wilde", "language": "en", "ebook": 844, "lines": [296, 400], "setting": "Algernon's flat"},
+  {"id": "pygmalion", "title": "Pygmalion, Act 2 (Doolittle)", "author": "Bernard Shaw", "language": "en", "ebook": 3825, "lines": [1459, 1690], "setting": "Higgins's laboratory"},
+  {"id": "hedda-gabler", "title": "Hedda Gabler, Act 3 (the manuscript)", "author": "Henrik Ibsen", "translator": "William Archer", "language": "en", "ebook": 4093, "lines": [7900, 8080], "setting": "Tesman's drawing room"},
+  {"id": "trifles", "title": "Trifles (the bird-cage)", "author": "Susan Glaspell", "language": "en", "ebook": 10623, "lines": [440, 640], "setting": "Wright's kitchen"},
+  {"id": "riders-to-the-sea", "title": "Riders to the Sea (the bundle)", "author": "J. M. Synge", "language": "en", "ebook": 994, "lines": [165, 260], "setting": "Cottage kitchen", "continuation": true},
+  {"id": "arms-and-the-man", "title": "Arms and the Man, Act 1 (the fugitive)", "author": "Bernard Shaw", "language": "en", "ebook": 3618, "lines": [440, 600], "setting": "Raina's bedroom"},
+  {"id": "macbeth", "title": "Macbeth, Act 2 scenes 1 and 2 (the daggers)", "author": "William Shakespeare", "language": "en", "ebook": 1533, "lines": [1060, 1262], "setting": "Inverness castle", "continuation": true},
+  {"id": "uncle-vanya", "title": "Uncle Vanya, Act 4 (the morphine)", "author": "Anton Chekhov", "translator": "Marian Fell", "language": "en", "ebook": 1756, "lines": [1930, 2010], "setting": "Voitski's room"},
+  {"id": "sea-gull", "title": "The Sea-Gull, Act 2 (the dead gull)", "author": "Anton Chekhov", "translator": "Marian Fell", "language": "en", "ebook": 1754, "lines": [1095, 1160], "setting": "Sorin's lawn"},
+  {"id": "the-bear", "title": "The Bear (the duel)", "author": "Anton Chekhov", "translator": "Julius West", "language": "en", "ebook": 7986, "lines": [2940, 3040], "setting": "Popova's drawing room"},
+  {"id": "lady-windermere", "title": "Lady Windermere's Fan, Act 1 (the bank book)", "author": "Oscar Wilde", "language": "en", "ebook": 790, "lines": [664, 760], "setting": "Morning room"},
+  {"id": "l-avare", "title": "L'Avare, acte 4 scènes 6 et 7 (la cassette)", "author": "Molière", "language": "fr", "ebook": 6318, "lines": [5305, 5412], "setting": "Maison d'Harpagon", "continuation": true},
+  {"id": "hamlet", "title": "Hamlet, Act 5 scene 2 (the foils and the cup)", "author": "William Shakespeare", "language": "en", "ebook": 1524, "lines": [6341, 6470], "setting": "Hall in the castle", "continuation": true},
+  {"id": "ideal-husband", "title": "An Ideal Husband, Act 1 (the brooch)", "author": "Oscar Wilde", "language": "en", "ebook": 885, "lines": [1180, 1232], "setting": "Chiltern's house"},
+  {"id": "playboy", "title": "The Playboy of the Western World, Act 2 (the looking-glass)", "author": "J. M. Synge", "language": "en", "ebook": 1240, "lines": [1160, 1300], "setting": "Shebeen", "continuation": true}
+]

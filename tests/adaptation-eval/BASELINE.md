@@ -1,4 +1,43 @@
-# Baseline: the heuristics on the evaluation set
+# Baseline: suggesters on the evaluation set
+
+## Current baseline: the grown set (14 November 2026)
+
+`npm run eval:adapt` after sixteen public-domain play excerpts joined the set. Default run: 17 scripts, 11,721 words,
+36 marked moments; five more scripts (15 moments) are held out. Re-run and replace this section whenever a suggester
+or the set changes. The sections below it are the earlier, six-script measurements, kept as history.
+
+| Suggester                  | Raw | Valid | Valid % | Accepted | Accept % | Recall | Per script | Completable |   Time |
+| -------------------------- | --: | ----: | ------: | -------: | -------: | -----: | ---------: | ----------: | -----: |
+| heuristic                  |   8 |     8 |    100% |        4 |      50% |    11% |        0.2 |       17/17 |   0.0s |
+| heuristic + rules          |  47 |    47 |    100% |        6 |      13% |    17% |        0.4 |       17/17 |   0.0s |
+| LFM2.5 350M alone          |  62 |    58 |     94% |        5 |       9% |    14% |        0.3 |       17/17 | 335.4s |
+| LFM2.5 350M with heuristics |  62 |    56 |     90% |        9 |      16% |    25% |        0.5 |       17/17 | 331.4s |
+
+With the held-out scripts included (22 scripts, 15,732 words, 51 moments), the heuristics find 5 of 51 (accept 50%)
+and the heuristics plus rules 7 of 51 (accept 11%). Only LFM2.5 350M, the closest candidate on the small set, was
+re-run; Qwen3 0.6B and Gemma 3 1B were not (at their earlier speed, each would take about an hour here).
+
+What the larger set shows:
+
+- **The small set flattered everything.** On six scripts the rules looked like a free gain (75% accept rate). On
+  dialogue-heavy plays the question rule fires in almost every scene (39 replies, 2 accepted) and the accept rate
+  falls to 13%. It needs a stricter trigger before it is worth turning on by default.
+- **The heuristics are accurate but rare**: 4 of 8 right, 4 of 36 moments found. One miss is a parsing slip the plays
+  exposed: "takes her playfully by the ear" becomes "Take the playfully by the" ("by" is not a stop word in
+  `trimPhrase`).
+- **Most moments are replies and decisions nothing finds.** Of 36 moments, 14 are decisions and 13 replies; no rule
+  proposes a decision at all.
+- **LFM2.5 350M still does not pass**, and by a wider margin: 16% accept rate against a 60% target, 0.5 per script
+  against 1.0. It proposes something in nearly every scene (62 proposals for 36 moments), copies the prompt's worked
+  example ("Take the silver locket", twice in Pygmalion; "Leave it sealed"), and writes labels such as "Offer / Offer"
+  and "Mira / Tomás". It does add four moments to what the heuristics find.
+- **Speed**: 335 seconds for 11,721 words on CPU in Node, against a target of under 2 minutes for 10,000 words.
+- **Completable 17/17** in every row.
+
+Caveat: the play moments were marked by Claude and have not been reviewed by a person (see README.md). The
+comparisons between rows are sound; the absolute percentages depend on those marks.
+
+## History: the first, six-script baseline (13 November 2026)
 
 Produced by `npm run eval:adapt` on 13 November 2026, at the start of the model-assisted adaptation work
 (commit after 4ea90d7, version 0.4.0). Re-run it and replace this table whenever a suggester or the set changes.

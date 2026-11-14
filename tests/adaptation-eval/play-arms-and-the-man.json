@@ -1,0 +1,31 @@
+{
+  "script": "tests/adaptation-eval/plays/arms-and-the-man.fountain",
+  "heldOut": false,
+  "notes": "Marked from the numbered dump before any suggester was run on this script. The last scene is the ending. The pistol he throws down is his own; the cloak is the object taken.",
+  "moments": [
+    {
+      "passage": "scene_01",
+      "line": 5,
+      "kind": "decision",
+      "note": "a voice in the dark says not to call out: call out or keep quiet"
+    },
+    {
+      "passage": "scene_02",
+      "line": 11,
+      "kind": "pickup",
+      "note": "he snatches the cloak"
+    },
+    {
+      "passage": "scene_03",
+      "line": 10,
+      "kind": "decision",
+      "note": "the soldiers are at the door: hide him or give him up"
+    },
+    {
+      "passage": "scene_04",
+      "line": 4,
+      "kind": "reply",
+      "note": "Have you seen anyone or heard anything?"
+    }
+  ]
+}

@@ -41,9 +41,29 @@ quality** measure in the plan). The report has one row per suggester set, with t
 six checks in `applyProposals` (valid), how many of those matched a moment (accepted), how many marked moments were
 found (recall), suggestions per script (coverage) and the time taken.
 
+## What is in the set
+
+22 scripts, 51 marked moments:
+
+- the three built-in samples and three test fixtures (two of them negative controls with nothing to find);
+- sixteen excerpts from public-domain plays in `plays/`, one of them in French (see `plays/README.md` for sources
+  and rights).
+
+Five play excerpts are held out (`ideal-husband`, `sea-gull`, `the-bear`, `trifles`, `uncle-vanya`): the default run
+uses the other 17 scripts and 36 moments.
+
+## Who marked the moments
+
+The moments in the play excerpts were marked by Claude, reading each script's numbered dump before any suggester was
+run on it, to one standard: a pickup is an object a character takes that the reader could leave; a reply is a
+question or demand that could be answered in more than one way and that the scene turns on; a decision is a point
+where a character chooses and the story could go differently. Two to four moments are marked per script, not every
+question. No person has reviewed them yet. Until one has, treat the numbers as a consistent yardstick between
+suggesters, not as ground truth; where you disagree with a mark, change the file and say why in its `notes`.
+
 ## Growing the set
 
-The plan calls for 20 to 30 linear scripts the project may redistribute: the built-in samples, the test fixtures,
-and public-domain plays and screenplays, including at least one not in English. Add the script under
-`tests/fixtures/` (or point `script` at it), write its file here, and re-run `npm run eval:adapt` to refresh
-`BASELINE.md`.
+Add a play to `plays/sources.json` and run `node scripts/play-excerpts.mjs`, or put any other script the project may
+redistribute under `tests/fixtures/` and point `script` at it. Write its file here from
+`npm run eval:adapt -- --dump`, before running any suggester on it, then re-run `npm run eval:adapt` and refresh
+`BASELINE.md`. Still missing: screenplays (every addition so far is a stage play), prose, and more languages.
