@@ -164,6 +164,8 @@ export interface Choice {
   origin: Provenance;
   review: ReviewStatus;
   source?: SourceRef;
+  /** For a generated choice: who suggested it ('heuristic', 'rule:<name>' or 'model:<name>@<revision>', see proposals.ts). */
+  suggester?: string;
 }
 
 export interface Passage {

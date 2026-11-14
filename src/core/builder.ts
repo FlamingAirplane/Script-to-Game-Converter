@@ -25,7 +25,8 @@ import {
   type StoryProject,
   type Variable,
 } from './isr';
-import { proposeAdaptations } from './adapt';
+import { heuristicSuggester } from './adapt';
+import { applyProposals } from './proposals';
 import { inkUnsupported } from './parsing/ink';
 import { detectFormat, parserFor } from './parsing/registry';
 import type { ParsedBlock } from './parsing/types';
@@ -55,6 +56,8 @@ const CONVERTED_LABEL = { fdx: 'Final Draft', docx: 'Word', pdf: 'PDF', twine: "
 export interface BuildOptions {
   mode: ConversionMode;
   title?: string;
+  /** Interactive adaptation: run the built-in heuristic suggester (default true). The CLI's --suggest model turns it off. */
+  heuristics?: boolean;
 }
 
 export interface BuildResult {
@@ -155,7 +158,7 @@ export async function buildStory(inputs: SourceInput[], options: BuildOptions): 
 
   const project = assemble(parsed, options, diagnostics);
   project.sources = sources;
-  if (options.mode === 'adaptation') proposeAdaptations(project);
+  if (options.mode === 'adaptation' && options.heuristics !== false) diagnostics.push(...applyProposals(project, await heuristicSuggester.suggest(project)));
   done({
     mode: options.mode,
     documents: sources.length,

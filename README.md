@@ -16,7 +16,9 @@ converts scene by scene.
 
 Everything runs locally. Scripts never leave your machine unless you choose to move a project through your own
 private GitHub Gist ("Move to another browser" → the cloud, with your own token). The app also asks GitHub whether a newer
-release is out and fetches the site's current look from a public Gist; neither request carries any of your writing.
+release is out and fetches the site's current look from a public Gist; neither request carries any of your writing. The
+command line's `--suggest model` downloads a small language model from Hugging Face once (hundreds of MB) and runs it on
+your machine; that download carries none of your writing either, and `--model-dir` uses a copy you already have.
 
 **Try it online:** https://flamingairplane.github.io/Script-to-Game-Converter/ (the page runs entirely in your browser;
 nothing is uploaded unless you choose cloud sync). After one visit it also works with no connection, and browsers offer to install it as an app
@@ -54,6 +56,7 @@ npm run cli -- convert script.fountain --out story.ink      # structured by defa
 npm run cli -- convert my-story.twee --out story.ink        # open a Twine story (also .html) or Ink (.ink)
 npm run cli -- validate story.md
 npm run cli -- export script.fountain --mode adaptation --approve-all --engine unity --out ./build
+npm run cli -- convert script.fountain --mode adaptation --suggest model --out story.ink   # an on-device model suggests more choices (downloads it once)
 npm run cli -- export story.nbproj.json --engine unreal --out ./build --ref <inkpot-tag-or-sha>
 npm run cli -- export story.md --engine web --out ./share      # one playable .html page for readers
 npm run cli -- export script.fountain --engine twine --out ./share   # Twee 3 / SugarCube for Twine 2
@@ -205,6 +208,16 @@ markers throughout).
 
 CLI: `--mode structured|faithful|adaptation` (default `structured`).
 
+Every suggester (the heuristics, the cheap rules in `src/core/rules.ts`, a model) returns the same data, a *proposal*:
+a group of choices for one passage, pointing at the line of the script that prompted it (see
+[`src/core/proposals.ts`](src/core/proposals.ts)). Six deterministic checks run before anything is written (shape,
+references, evidence, fit, one group per passage, and the story still completable with everything approved); what fails
+is set aside as a `SUGGESTION_DROPPED` note, and what passes arrives pending, exactly as today. On the command line,
+`--suggest model` adds a small on-device model as a suggester (`--suggest all` runs it after the heuristics); a model's
+suggestions stay pending even with `--approve-all` unless you also pass `--approve-model`. `npm run eval:adapt` scores
+every suggester against hand-marked scripts in [`tests/adaptation-eval/`](tests/adaptation-eval/README.md); the model
+ships in the web app only once it beats the heuristics there.
+
 ## Ink conventions
 
 - Items are Booleans: `VAR has_<item> = false`. Conditions compile from an expression tree (never raw strings).
@@ -340,20 +353,24 @@ src/core/            engine-independent pipeline (no UI or Node dependencies)
   isr.ts             Intermediate Story Representation (schema 1.0)
   parsing/           independent parsers: fountain, plaintext, markdown, ink + shared markers
   builder.ts         parsed documents → ISR (passage boundaries, characters, items, provenance)
-  adapt.ts           interactive-adaptation proposals
+  adapt.ts           interactive-adaptation heuristics (the first suggester)
+  proposals.ts       suggestions as data: Proposal, Suggester, applyProposals and its six checks
+  rules.ts           two cheap rule suggesters (questions, wider pickup verbs), the bar a model has to clear
   analyzer.ts        graph + semantic diagnostics
   inkgen.ts          deterministic Ink generator + source map
   validate.ts        inkjs compile + seeded runtime smoke tests
   export/            IEngineAdapter, Unity (UPM package) and Unreal adapters, manifest, verifier, zip, tar
   pipeline.ts        conversion states and orchestration
+src/suggest/         the on-device model suggester (prompt.ts, model.ts); loaded only on demand
 src/ui/              React web app (design/: the app's design variables and published design; admin/: the #admin editor)
 src/cli/             command-line interface
 schemas/             JSON Schema for the ISR
 docs/                user guide (USER_GUIDE.md) and its screenshots (npm run guide:screenshots)
 tests/               unit, golden-file, compiler, runtime and export tests
+  adaptation-eval/   hand-marked choice moments and the heuristics' baseline (npm run eval:adapt)
   e2e/               browser tests (WebKit and Chromium)
   unreal-stubs/      a stand-in CoreMinimal.h for npm run test:unreal
-scripts/             build helpers, npm run test:unity, test:unreal and test:unreal:build
+scripts/             build helpers, npm run test:unity, test:unreal, test:unreal:build and eval:adapt
 ```
 
 Contributions are welcome: see [CONTRIBUTING.md](CONTRIBUTING.md), and [SECURITY.md](SECURITY.md) for reporting a
@@ -361,6 +378,7 @@ security problem privately.
 
 ## Not yet supported
 
-scanned PDFs (PDF import reads the text layer) and dual dialogue in PDFs; AI-assisted adaptation (would require explicit
-consent before sending scripts anywhere); in Unreal, an in-editor story debugger and Unreal String Tables (the Unity package
+scanned PDFs (PDF import reads the text layer) and dual dialogue in PDFs; on-device model suggestions in the web app (the
+command line has them, `--suggest model`; the Review button, download and caching follow once a model beats the heuristics
+on `npm run eval:adapt`); cloud models (would require explicit consent before sending scripts anywhere); in Unreal, an in-editor story debugger and Unreal String Tables (the Unity package
 has a Story Debugger window and Localization-package tables).

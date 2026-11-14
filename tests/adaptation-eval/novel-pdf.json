@@ -1,0 +1,6 @@
+{
+  "script": "tests/fixtures/novel.pdf",
+  "heldOut": false,
+  "notes": "A negative control: prose with no spoken lines and nothing taken. A good suggester adds nothing here.",
+  "moments": []
+}

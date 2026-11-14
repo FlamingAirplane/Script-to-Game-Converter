@@ -1,0 +1,8 @@
+{
+  "script": "tests/fixtures/lighthouse.pdf",
+  "heldOut": false,
+  "notes": "PDF fixture (text layer). 'She tries the door. Locked.' has no key anywhere in the script, so it is not a gate.",
+  "moments": [
+    { "passage": "scene_01", "line": 2, "kind": "reply", "note": "Is anyone up there? / Go home, Mara." }
+  ]
+}
