@@ -2,6 +2,17 @@
 
 ## Unreleased
 
+- **Suggestions as data, and an on-device model on the command line.** Interactive adaptation's rules now return
+  *proposals* (a group of choices for one passage, pointing at the line that prompted it) that pass six checks before
+  they're written: shape, references, evidence, fit, one group per passage, and the story still completable with
+  everything approved. What's set aside shows in Diagnostics as a note (*A suggestion was set aside because it wouldn't
+  fit the story*); what passes arrives pending, exactly as before, and now says who suggested it and which line. Two
+  cheap rules join the heuristics (a question another character answers becomes a reply; more ways of picking
+  something up), and `--suggest model` on the command line adds a small language model that runs on your machine and
+  suggests replies, decisions and pickups the rules miss. `--approve-all` leaves a model's suggestions pending unless
+  you also pass `--approve-model`. `npm run eval:adapt` scores every suggester against hand-marked scripts
+  (`tests/adaptation-eval/`); the model comes to the web app only once it beats the heuristics there.
+
 - **Choices you've taken before are greyed out:** coming back to a choice, on a later read or a passage you loop
   back to, players see which ways they've already tried (still clickable, with a ✓). It's remembered through Restart,
   in Playtest, the playable story, and the Unity and Unreal story panels. Playtest's **Forget chosen** clears it.

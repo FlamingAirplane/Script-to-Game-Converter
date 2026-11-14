@@ -5,6 +5,7 @@ import { homedir } from 'node:os';
 import { basename, dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { reviewAll } from '../core/adapt';
+import { applyProposals } from '../core/proposals';
 import { buildStory } from '../core/builder';
 import { sortDiagnostics, type Diagnostic } from '../core/diagnostics';
 import { ADAPTERS, buildPlayableHtml, buildRecordingScript, recordingScriptFileName, buildTwee, ExportBlockedError, playableFileName, twineFileName, type EngineTarget } from '../core/export';
@@ -19,6 +20,9 @@ const HELP = `Narrative Bridge — screenplays and prose → Ink → Unity / Unr
 Usage:
   narrative-bridge convert <files...>          (.fountain .txt .md .fdx .docx .pdf, or a story: .ink .twee .tw .html) [--mode structured|faithful|adaptation] [--approve-all]
                                       (default: structured; markers such as @passage build the story, a script without them converts scene by scene)
+                                      [--suggest heuristic|model|all]  (adaptation: who suggests choices; default heuristic, today's rules.
+                                       model: a small on-device model, downloaded once from Hugging Face; --model <repo>, --model-dir <folder> for a local copy)
+                                      [--approve-model]  (--approve-all approves the rules' suggestions only; a model's need this too)
                                       [--edit-ink | --keep-ink]  (Ink: make it editable, or keep it exactly as written;
                                        default: editable unless it uses Ink the editor can't show)
                                       [--out story.ink] [--project story.nbproj.json] [--title "Title"]
@@ -27,6 +31,7 @@ Usage:
                                       [--name ProjectName] [--engine-version 2022.3.62f1] [--ref <tag|sha>] [--no-demo]
                                       Unity: a package for an existing game; [--unity-project] for a new project, [--package-version 1.0.0]
                                       [--story-only]  (twine: just passages, text and links; no code, styling or variables)
+                                      [--suggest …] [--approve-all] [--approve-model]  as for convert
   narrative-bridge doctor [--engine unity|unreal]
 
 Logging (to stderr): --verbose shows everything, --quiet only errors, --log-file <path> writes JSON lines.
@@ -73,12 +78,16 @@ const audioAssets: AudioAssets = {};
 async function load(args: Args) {
   const files = args._.slice(1);
   if (!files.length) usage('No input files given.');
+  const suggest = suggestOption(args);
   if (files.length === 1 && files[0].endsWith('.nbproj.json')) {
     const data = JSON.parse(readFileSync(files[0], 'utf8'));
     const project = (data.project?.schemaVersion ? data.project : data) as StoryProject;
     // Voice clips saved inside the project file travel into exports.
     for (const [id, c] of Object.entries((data.audio ?? {}) as Record<string, { mime: string; data: string }>)) audioAssets[id] = { mime: c.mime, bytes: base64ToBytes(c.data) };
-    return processProject(project, data.parseDiagnostics ?? []);
+    const diagnostics: Diagnostic[] = data.parseDiagnostics ?? [];
+    if (suggest !== 'heuristic') await suggestWithModel(project, diagnostics, args);
+    approve(project, args);
+    return processProject(project, diagnostics);
   }
   const inputs = await Promise.all(
     files.map(async (f) => {
@@ -95,9 +104,67 @@ async function load(args: Args) {
   if (inkMode) for (const i of inputs) if (/\.ink$/i.test(i.fileName)) i.inkMode = inkMode;
   const mode = (args.mode as ConversionMode) ?? DEFAULT_MODE;
   if (!['faithful', 'adaptation', 'structured'].includes(mode)) usage(`Unknown mode ${mode}`);
-  const { project, diagnostics } = await buildStory(inputs, { mode, title: typeof args.title === 'string' ? args.title : undefined });
-  if (args['approve-all']) reviewAll(project, 'approved');
+  if (suggest !== 'heuristic' && mode !== 'adaptation') usage(`--suggest ${suggest} needs --mode adaptation`);
+  // --suggest model: the model alone, without today's rules.
+  const { project, diagnostics } = await buildStory(inputs, { mode, title: typeof args.title === 'string' ? args.title : undefined, heuristics: suggest !== 'model' });
+  if (suggest !== 'heuristic') await suggestWithModel(project, diagnostics, args);
+  approve(project, args);
   return processProject(project, diagnostics);
+}
+
+type SuggestOption = 'heuristic' | 'model' | 'all';
+
+function suggestOption(args: Args): SuggestOption {
+  const s = typeof args.suggest === 'string' ? args.suggest : 'heuristic';
+  if (!['heuristic', 'model', 'all'].includes(s)) usage(`--suggest must be heuristic, model or all, not ${s}`);
+  return s as SuggestOption;
+}
+
+/** Runs the on-device model over the story and adds what passes the checks as pending suggestions. */
+async function suggestWithModel(project: StoryProject, diagnostics: Diagnostic[], args: Args) {
+  const str = (k: string) => (typeof args[k] === 'string' ? (args[k] as string) : undefined);
+  // Loaded only here, so convert, validate and export start as fast as before.
+  const { createModelSuggester } = await import('../suggest/model');
+  const suggester = createModelSuggester({
+    model: str('model'),
+    revision: str('revision'),
+    dtype: str('dtype'),
+    modelDir: str('model-dir'),
+    onDownload: (file, loaded, total) => process.stderr.write(`\r  downloading ${file}${total ? ` ${Math.round((100 * loaded) / total)}%` : ''}   `),
+  });
+  // Ctrl-C once keeps what was found so far; twice quits.
+  const controller = new AbortController();
+  process.once('SIGINT', () => {
+    controller.abort();
+    process.stderr.write('\n  stopping after this scene (press again to quit)\n');
+    process.once('SIGINT', () => process.exit(130));
+  });
+  let proposals;
+  try {
+    proposals = await suggester.suggest(project, {
+      signal: controller.signal,
+      onProgress: (done, total) => process.stderr.write(`\r  Reading scene ${done} of ${total}   `),
+    });
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    if (/not found locally|ModelFileNotFound/i.test(msg)) {
+      console.error(red(`\nThe model ${suggester.id.slice('model:'.length)} was not found in ${str('model-dir')}.`));
+      console.error(dim('--model-dir needs a folder holding the model\'s files under <repository>/, as Hugging Face lays them out; without it, the files are downloaded once.'));
+      process.exit(1);
+    }
+    throw e;
+  }
+  process.stderr.write('\n');
+  const dropped = applyProposals(project, proposals);
+  diagnostics.push(...dropped);
+  const added = proposals.length - dropped.length;
+  console.error(dim(`${suggester.id}: ${added} suggestion${added === 1 ? '' : 's'} added, ${dropped.length} set aside`));
+}
+
+/** --approve-all approves the rules' suggestions (and pending effects); a model's need --approve-model as well. */
+function approve(project: StoryProject, args: Args) {
+  if (args['approve-all']) reviewAll(project, 'approved', 'not_model');
+  if (args['approve-model']) reviewAll(project, 'approved', 'model');
 }
 
 function usage(msg?: string): never {

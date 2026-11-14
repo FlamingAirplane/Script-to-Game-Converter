@@ -41,6 +41,7 @@ const TITLES: Record<string, string> = {
   FORCED_WITHOUT_CONDITION: 'A forced choice has no condition, so it changes nothing.',
   MULTIPLE_DIVERTS: 'This passage says where to go next more than once.',
   UNAPPROVED_GENERATED: 'A suggestion is waiting for your OK.',
+  SUGGESTION_DROPPED: 'A suggestion was set aside because it wouldn’t fit the story.',
   UNSUPPORTED_CONSTRUCT: 'Part of your script couldn’t be converted, so it was kept as a note.',
   PARSE_AMBIGUOUS_CUE: 'We weren’t sure whether this line is a character’s name.',
   ITEM_AUTO_DECLARED: 'An item was created for you because the script uses it.',
