@@ -27,46 +27,70 @@ export interface Moment {
 /** Characters of prompt lines per call; about 1,000 tokens. Longer passages are cut into windows. */
 export const PROMPT_CHAR_BUDGET = 3500;
 
-export const SYSTEM_PROMPT = `You help turn a linear screenplay into an interactive story. You are shown one scene, its lines numbered, and the items the reader may already hold. Name at most one moment in the scene where the reader could choose what happens, or say there is none.
+export const SYSTEM_PROMPT = `You help turn a linear screenplay into an interactive story. You are shown one scene, its lines numbered, and the items the reader may already hold. Name at most one moment in the scene where the reader could choose what happens. Most scenes have none: then answer {"moment": null}.
 
 Kinds of moment:
 - pickup: a character takes an object the reader could choose to leave. Give "item": the object, in a few words.
-- gate: a character uses one of the listed items, so a reader without it could not go on. Give "item": the item as listed.
-- reply: a character could answer in more than one way. Give "labels": two short things the reader could say.
-- decision: a character decides something the story could remember later. Give "labels": the two ways to decide, and "flag": a short name for the first.
+- gate: a character uses one of the listed items, so a reader without it could not go on. Give "item": the item's id as listed.
+- reply: a character is asked or told something they could answer in more than one way. Give "labels": two short things the reader could say or do.
+- decision: a character faces a choice the story could remember later. Give "labels": the two ways to decide, and "flag": a short name for the first.
 
-Reply with JSON only, nothing else:
-{"moment": null}
-or
-{"moment": {"line": <line number>, "kind": "pickup" | "gate" | "reply" | "decision", "item": "...", "labels": ["...", "..."], "flag": "..."}}
+Answer with one JSON object and nothing else. Labels are at most eight words. Name only what is in the lines shown.`;
 
-Labels are at most eight words. Name only what is in the lines shown.`;
-
-/** The JSON schema a reply is held to (StructuredOutputProcessor) and checked against (parseReply). */
-export const MOMENT_SCHEMA = {
-  type: 'object',
-  properties: {
-    moment: {
-      anyOf: [
-        { type: 'null' },
-        {
-          type: 'object',
-          properties: {
-            line: { type: 'integer', minimum: 1 },
-            kind: { enum: ['pickup', 'gate', 'reply', 'decision'] },
-            item: { type: 'string', maxLength: 60 },
-            labels: { type: 'array', items: { type: 'string', maxLength: 80 }, minItems: 2, maxItems: 2 },
-            flag: { type: 'string', maxLength: 40 },
-          },
-          required: ['line', 'kind'],
-          additionalProperties: false,
-        },
-      ],
-    },
+/** Worked examples shown before the real scene (none of them from the evaluation set). */
+export const EXAMPLES: { prompt: string; reply: string }[] = [
+  {
+    prompt: 'Scene 2 of 6: INT. STUDY - NIGHT\n1 [action] Dust on every shelf. Anna takes the silver locket from the desk.\n2 [ANNA] She kept it all these years.\nItems the reader may already hold: none\nName at most one moment where the reader could choose what happens.',
+    reply: '{"moment": {"line": 1, "kind": "pickup", "item": "silver locket"}}',
   },
-  required: ['moment'],
-  additionalProperties: false,
-} as const;
+  {
+    prompt: 'Scene 3 of 6: EXT. HARBOUR - DAY\n1 [action] Gulls wheel over the boats.\n2 [OFFICER] Where were you last night?\n3 [ANNA] At home.\nItems the reader may already hold: Silver Locket (silver_locket)\nName at most one moment where the reader could choose what happens.',
+    reply: '{"moment": {"line": 2, "kind": "reply", "labels": ["Tell him the truth", "Lie to him"]}}',
+  },
+  {
+    prompt: 'Scene 4 of 6: INT. KITCHEN - NIGHT\n1 [action] A sealed letter lies on the table. Anna stares at it.\n2 [ANNA] Not tonight.\nItems the reader may already hold: Silver Locket (silver_locket)\nName at most one moment where the reader could choose what happens.',
+    reply: '{"moment": {"line": 1, "kind": "decision", "labels": ["Open the letter", "Leave it sealed"], "flag": "opened the letter"}}',
+  },
+  {
+    prompt: 'Scene 1 of 6: EXT. ROAD - DAWN\n1 [action] Mist over the fields. A cart rolls by.\nItems the reader may already hold: none\nName at most one moment where the reader could choose what happens.',
+    reply: '{"moment": null}',
+  },
+];
+
+const LABELS = { type: 'array', items: { type: 'string', maxLength: 80 }, minItems: 2, maxItems: 2 } as const;
+
+/**
+ * The JSON schema a reply is held to while generating: null, or one moment with everything its kind needs.
+ * Line numbers are limited to the lines shown and a gate's item to the items listed, so neither can be invented.
+ */
+export function momentSchema(lineNumbers: number[], itemIds: string[]) {
+  const line = lineNumbers.length ? { enum: lineNumbers } : { type: 'integer', minimum: 1 };
+  const kind = (k: string, properties: Record<string, unknown>) => ({
+    type: 'object',
+    properties: { line, kind: { const: k }, ...properties },
+    required: ['line', 'kind', ...Object.keys(properties)],
+    additionalProperties: false,
+  });
+  return {
+    type: 'object',
+    properties: {
+      moment: {
+        anyOf: [
+          { type: 'null' },
+          kind('pickup', { item: { type: 'string', minLength: 2, maxLength: 60 } }),
+          ...(itemIds.length ? [kind('gate', { item: { enum: itemIds } })] : []),
+          kind('reply', { labels: LABELS }),
+          kind('decision', { labels: LABELS, flag: { type: 'string', minLength: 2, maxLength: 40 } }),
+        ],
+      },
+    },
+    required: ['moment'],
+    additionalProperties: false,
+  };
+}
+
+/** The schema with nothing known about the scene (any line, no gate). */
+export const MOMENT_SCHEMA = momentSchema([], []);
 
 /** The passage's action and dialogue lines, numbered from 1, as the prompt shows them. */
 export function promptLines(p: Passage, speakers: Map<string, string>): PromptLine[] {

@@ -7,7 +7,7 @@ import { log } from '../core/log';
 import type { FoundItem } from '../core/adapt';
 import type { Item, StoryProject } from '../core/isr';
 import type { Proposal, Suggester, SuggestOptions } from '../core/proposals';
-import { buildPrompt, gatesForFound, MOMENT_SCHEMA, momentToProposal, parseReply, promptLines, SYSTEM_PROMPT, windows, type Moment } from './prompt';
+import { buildPrompt, EXAMPLES, gatesForFound, momentSchema, momentToProposal, parseReply, promptLines, SYSTEM_PROMPT, windows, type Moment } from './prompt';
 
 /** The model the CLI uses unless told otherwise. Chosen by measurement (npm run eval:adapt), not by name. */
 export const DEFAULT_MODEL = 'HuggingFaceTB/SmolLM2-360M-Instruct';
@@ -21,7 +21,7 @@ export const CANDIDATE_MODELS = [
 ];
 
 export interface ChatMessage {
-  role: 'system' | 'user';
+  role: 'system' | 'user' | 'assistant';
   content: string;
 }
 
@@ -37,6 +37,8 @@ export interface ModelSuggesterOptions {
   /** A folder holding a local copy of the model files (no network). */
   modelDir?: string;
   maxNewTokens?: number;
+  /** Hold replies to the JSON schema while generating (default true); false parses free text instead. */
+  structured?: boolean;
   /** Download progress, per file. */
   onDownload?: (file: string, loaded: number, total: number) => void;
   /** The text generator to use instead of Transformers.js (tests, and the browser worker later). */
@@ -73,12 +75,14 @@ export function createModelSuggester(opts: ModelSuggesterOptions = {}): Suggeste
         let moment: Moment | null | undefined = null;
         for (const window of windows(lines)) {
           if (!window.length || o.signal?.aborted) break;
-          const prompt = buildPrompt({ passage, index: i + 1, total: eligible.length, lines: window, knownItems: knownItems(project, found) });
-          moment = await ask(gen, prompt, o.signal);
+          const items = knownItems(project, found);
+          const prompt = buildPrompt({ passage, index: i + 1, total: eligible.length, lines: window, knownItems: items });
+          const schema = momentSchema(window.map((l) => l.n), items.map((it) => it.id));
+          moment = await ask(gen, prompt, schema, o.signal);
           calls++;
           if (moment === undefined) {
             // One retry with a firmer instruction, then give the passage up.
-            moment = await ask(gen, `${prompt}\nReply with the JSON object only.`, o.signal);
+            moment = await ask(gen, `${prompt}\nReply with the JSON object only.`, schema, o.signal);
             calls++;
             if (moment === undefined) unreadable++;
           }
@@ -101,9 +105,13 @@ export function createModelSuggester(opts: ModelSuggesterOptions = {}): Suggeste
   };
 }
 
-async function ask(gen: Generator, prompt: string, signal?: AbortSignal): Promise<Moment | null | undefined> {
-  const text = await gen([{ role: 'system', content: SYSTEM_PROMPT }, { role: 'user', content: prompt }], { schema: MOMENT_SCHEMA, signal });
-  return parseReply(text);
+async function ask(gen: Generator, prompt: string, schema: object, signal?: AbortSignal): Promise<Moment | null | undefined> {
+  const messages: ChatMessage[] = [
+    { role: 'system', content: SYSTEM_PROMPT },
+    ...EXAMPLES.flatMap((e): ChatMessage[] => [{ role: 'user', content: e.prompt }, { role: 'assistant', content: e.reply }]),
+    { role: 'user', content: prompt },
+  ];
+  return parseReply(await gen(messages, { schema, signal }));
 }
 
 function knownItems(project: StoryProject, found: FoundItem[]): Item[] {
@@ -141,7 +149,7 @@ export async function transformersGenerator(opts: ModelSuggesterOptions & { mode
     },
   });
   let structured: StructuredOutputModule['StructuredOutputProcessor'] | null = null;
-  try {
+  if (opts.structured !== false) try {
     const name = '@huggingface/transformers-structured-output';
     structured = ((await import(/* @vite-ignore */ name)) as StructuredOutputModule).StructuredOutputProcessor;
   } catch (e) {
@@ -158,7 +166,16 @@ export async function transformersGenerator(opts: ModelSuggesterOptions & { mode
         logger.warn('Structured output failed for this call; the reply is parsed instead', { error: e instanceof Error ? e.message : String(e) });
       }
     }
-    const out = await pipe(messages, { max_new_tokens: opts.maxNewTokens ?? 96, do_sample: false, return_full_text: false, ...(logits_processor ? { logits_processor } : {}) });
+    const base = { max_new_tokens: opts.maxNewTokens ?? 96, do_sample: false, return_full_text: false };
+    let out;
+    try {
+      out = await pipe(messages, { ...base, ...(logits_processor ? { logits_processor } : {}) });
+    } catch (e) {
+      if (!logits_processor) throw e;
+      // The experimental constraint can reject a token mid-generation; fall back to free text for this call.
+      logger.warn('Structured output failed mid-generation; the reply is parsed instead', { error: e instanceof Error ? e.message : String(e) });
+      out = await pipe(messages, base);
+    }
     const g = out?.[0]?.generated_text;
     if (typeof g === 'string') return g;
     if (Array.isArray(g)) return String(g.at(-1)?.content ?? '');
