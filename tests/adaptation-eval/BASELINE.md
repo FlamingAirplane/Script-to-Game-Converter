@@ -61,4 +61,41 @@ What it did:
   no item; unconstrained, the model copied the reply template. The structured-output processor also threw once
   mid-generation ("Token 0 does not satisfy the constraint"); the suggester now falls back to free text for that call.
 
-The other candidates (Qwen3 0.6B, LFM2.5 350M, Gemma 3 1B) have not been measured.
+## Phase 2: all four candidates (none passes)
+
+The other three candidates, measured the same way on the same day (`q4`, Node, CPU, model downloaded from
+`onnx-community`). "Alone" is the model with no heuristics; "with heuristics" runs it after them, as `--suggest all`.
+
+| Suggester                     | Raw | Valid | Valid % | Accepted | Accept % | Recall | Per script | Completable |   Time |
+| ----------------------------- | --: | ----: | ------: | -------: | -------: | -----: | ---------: | ----------: | -----: |
+| heuristic                     |   3 |     3 |    100% |        2 |      67% |    29% |        0.3 |         6/6 |   0.0s |
+| heuristic + rules             |   4 |     4 |    100% |        3 |      75% |    43% |        0.5 |         6/6 |   0.0s |
+| SmolLM2 360M alone            |  10 |     8 |     80% |        0 |       0% |     0% |        0.0 |         6/6 |  60.3s |
+| SmolLM2 360M with heuristics  |  11 |     8 |     73% |        2 |      25% |    29% |        0.3 |         6/6 |  54.0s |
+| Qwen3 0.6B alone              |   9 |     8 |     89% |        2 |      25% |    29% |        0.3 |         6/6 | 343.0s |
+| Qwen3 0.6B with heuristics    |  10 |     7 |     70% |        3 |      43% |    43% |        0.5 |         6/6 | 329.6s |
+| LFM2.5 350M alone             |  11 |    11 |    100% |        3 |      27% |    43% |        0.5 |         6/6 |  71.0s |
+| LFM2.5 350M with heuristics   |  11 |    10 |     91% |        5 |      50% |    71% |        0.8 |         6/6 |  34.1s |
+| Gemma 3 1B alone              |  11 |    11 |    100% |        0 |       0% |     0% |        0.0 |         6/6 | 520.3s |
+| Gemma 3 1B with heuristics    |  11 |    11 |    100% |        2 |      18% |    29% |        0.3 |         6/6 | 272.7s |
+
+Targets: valid 90% or more; accept 60% or more and not below the heuristics (75% with the rules); coverage at least
+double the heuristics (1.0 per script against 0.5); under 2 minutes for a 10,000-word script (this set is 1,414 words).
+
+- **LFM2.5 350M** comes closest and is the only one that adds to the heuristics: with them it finds 5 of the 7 moments
+  (the rules find 3), at a 91% valid rate. It still misses on accept rate (50%) and coverage (0.8), and it suggests a
+  choice in nearly every scene, both negative controls included. Its labels are poor even where the moment is right:
+  "Mira / Tomás", "Wave / Metal", and "Call for room six / Leave it sealed", whose second half is copied from the
+  prompt's worked example. It would not meet the 80% label-quality target.
+- **Qwen3 0.6B** found the brass key and one reply, but invented objects ("Take the mistletoe", "Take the fade", from
+  FADE IN) and took almost six minutes for 1,414 words.
+- **Gemma 3 1B** wrote the most sensible labels ("Take the phone / Ignore it", "Investigate the noise / Stay away") and
+  every proposal passed the checks, but it called everything a decision on line 1, so nothing matched a marked moment,
+  and it was the slowest at nearly nine minutes. Its result says as much about the scoring as the model: a decision
+  cited two lines from the marked one does not count.
+- **Every model over-suggests.** None answered "no moment" for the prose fixture or the already-structured sample.
+- **Completable 6/6 throughout**: the six checks did their job whatever the model said.
+
+By the plan's Phase 2 gate, no candidate proceeds to Phase 3. The plan's choice is to stop with Phases 0 and 1 kept
+(the cheap rules already lift recall from 29% to 43% for free), or to go to Phase 4 and fine-tune. Before either, the
+set needs to grow: seven moments in six scripts is too few to separate a 50% accept rate from a 60% one.
