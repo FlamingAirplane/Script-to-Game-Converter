@@ -6,7 +6,7 @@ import { processProject } from '../src/core/pipeline';
 import { applyProposals, cleanLabel, firstSentence, SUGGESTION_DROPPED } from '../src/core/proposals';
 import { cheapRules, questionSuggester, widerPickupSuggester } from '../src/core/rules';
 import { createModelSuggester, type ChatMessage, type Generator } from '../src/suggest/model';
-import { buildPrompt, itemPhrase, MOMENT_SCHEMA, parseReply, promptLines, windows } from '../src/suggest/prompt';
+import { buildPrompt, EXAMPLES, itemPhrase, MOMENT_SCHEMA, momentSchema, parseReply, promptLines, windows } from '../src/suggest/prompt';
 import { SAMPLES } from '../src/samples';
 
 const sample = (id: string) => SAMPLES.find((s) => s.id === id)!;
@@ -59,6 +59,29 @@ describe('the model prompt', () => {
     expect(parseReply('{"answer": 1}')).toBeUndefined();
     expect(parseReply('{"moment": {"kind": "song"}}')).toEqual({ line: Number.NaN, kind: 'song' });
     expect(MOMENT_SCHEMA.required).toEqual(['moment']);
+  });
+
+  it('holds a reply to the lines shown and the items listed, with everything its kind needs', () => {
+    const schema = momentSchema([4, 5], ['brass_key']);
+    const kinds = schema.properties.moment.anyOf as { properties?: Record<string, any>; required?: string[] }[];
+    expect(kinds.map((k) => k.properties?.kind.const ?? null)).toEqual([null, 'pickup', 'gate', 'reply', 'decision']);
+    expect(kinds[1].properties!.line).toEqual({ enum: [4, 5] });
+    expect(kinds[1].required).toEqual(['line', 'kind', 'item']);
+    expect(kinds[2].properties!.item).toEqual({ enum: ['brass_key'] });
+    expect(kinds[4].required).toEqual(['line', 'kind', 'labels', 'flag']);
+    // With no items listed there is no gate to name.
+    expect((momentSchema([1], []).properties.moment.anyOf as { properties?: Record<string, any> }[]).map((k) => k.properties?.kind.const ?? null)).toEqual([null, 'pickup', 'reply', 'decision']);
+    // Every worked example is itself a readable reply, and the last one says there is no moment.
+    for (const e of EXAMPLES) expect(parseReply(e.reply)).not.toBeUndefined();
+    expect(parseReply(EXAMPLES.at(-1)!.reply)).toBeNull();
+  });
+
+  it('shows the worked examples before the scene', async () => {
+    const seen: ChatMessage[][] = [];
+    const project = await bare('motel');
+    await createModelSuggester({ model: 'fake', revision: 'test', generate: async (m) => (seen.push(m), '{"moment": null}') }).suggest(project);
+    expect(seen[0].map((m) => m.role)).toEqual(['system', ...EXAMPLES.flatMap(() => ['user', 'assistant']), 'user']);
+    expect(seen[0].at(-1)!.content.startsWith('Scene 1 of 2: INT. ROADSIDE MOTEL - NIGHT')).toBe(true);
   });
 
   it('cleans labels and item phrases', () => {
