@@ -43,7 +43,7 @@
     "@huggingface/transformers-structured-output": "^4.3.2",
     "inkjs": "^2.4.0",
     "jszip": "^3.10.2",
-    "pdfjs-dist": "6.4.299",
+    "pdfjs-dist": "6.5.438",
     "react": "^18.3.1",
     "react-dom": "^18.3.1"
   },
