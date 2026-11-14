@@ -12,6 +12,9 @@
   suggests replies, decisions and pickups the rules miss. `--approve-all` leaves a model's suggestions pending unless
   you also pass `--approve-model`. `npm run eval:adapt` scores every suggester against hand-marked scripts
   (`tests/adaptation-eval/`); the model comes to the web app only once it beats the heuristics there.
+- **A larger evaluation set for suggestions:** sixteen scene-length excerpts from public-domain plays (Ibsen, Wilde,
+  Shaw, Chekhov, Synge, Glaspell, Shakespeare, and Molière in French) join the samples, with their choice moments
+  marked; five are held out. `node scripts/play-excerpts.mjs` rebuilds them from Project Gutenberg's texts.
 
 - **Choices you've taken before are greyed out:** coming back to a choice, on a later read or a passage you loop
   back to, players see which ways they've already tried (still clickable, with a ✓). It's remembered through Restart,

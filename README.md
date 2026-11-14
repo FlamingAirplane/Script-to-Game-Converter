@@ -367,7 +367,7 @@ src/cli/             command-line interface
 schemas/             JSON Schema for the ISR
 docs/                user guide (USER_GUIDE.md) and its screenshots (npm run guide:screenshots)
 tests/               unit, golden-file, compiler, runtime and export tests
-  adaptation-eval/   hand-marked choice moments and the heuristics' baseline (npm run eval:adapt)
+  adaptation-eval/   marked choice moments, public-domain play excerpts (plays/) and the baseline (npm run eval:adapt)
   e2e/               browser tests (WebKit and Chromium)
   unreal-stubs/      a stand-in CoreMinimal.h for npm run test:unreal
 scripts/             build helpers, npm run test:unity, test:unreal, test:unreal:build and eval:adapt

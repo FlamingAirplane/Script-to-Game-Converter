@@ -1,0 +1,19 @@
+{
+  "script": "tests/adaptation-eval/plays/hamlet.fountain",
+  "heldOut": false,
+  "notes": "Marked from the numbered dump before any suggester was run on this script. Verse. The cup is offered at the end of scene 4; Hamlet's answer opens the ending.",
+  "moments": [
+    {
+      "passage": "scene_02",
+      "line": 6,
+      "kind": "pickup",
+      "note": "choosing a foil"
+    },
+    {
+      "passage": "scene_04",
+      "line": 7,
+      "kind": "decision",
+      "note": "the King offers the cup: drink now or set it by"
+    }
+  ]
+}

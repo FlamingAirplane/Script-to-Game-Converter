@@ -1,0 +1,19 @@
+{
+  "script": "tests/adaptation-eval/plays/ideal-husband.fountain",
+  "heldOut": true,
+  "notes": "Marked from the numbered dump before any suggester was run on this script. Held out.",
+  "moments": [
+    {
+      "passage": "scene_01",
+      "line": 10,
+      "kind": "pickup",
+      "note": "Lord Goring takes the brooch"
+    },
+    {
+      "passage": "scene_02",
+      "line": 5,
+      "kind": "reply",
+      "note": "he asks her to tell no one about the brooch"
+    }
+  ]
+}

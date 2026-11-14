@@ -1,0 +1,19 @@
+{
+  "script": "tests/adaptation-eval/plays/sea-gull.fountain",
+  "heldOut": true,
+  "notes": "Marked from the numbered dump before any suggester was run on this script. Held out.",
+  "moments": [
+    {
+      "passage": "scene_01",
+      "line": 10,
+      "kind": "pickup",
+      "note": "she picks up the gull"
+    },
+    {
+      "passage": "scene_02",
+      "line": 1,
+      "kind": "reply",
+      "note": "So shall I soon end my own life"
+    }
+  ]
+}
