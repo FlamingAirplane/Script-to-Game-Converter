@@ -68,6 +68,9 @@ function nextShown(ls: Line[], n: number): number {
   return isCutscene(ls[i]) ? i + 1 : 0;
 }
 
+/** The reader asked their system for less motion: scroll and show new text without animating it. */
+const reducedMotion = () => typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches;
+
 /** The choices on offer, each with how it's remembered once taken (see core/chosen.ts). */
 const offered = (s: Story) => s.currentChoices.map((c) => ({ text: c.text, index: c.index, key: chosenKey(c.sourcePath, c.text) }));
 
@@ -195,6 +198,13 @@ export function PlaytestView({
   const [errors, setErrors] = useState<string[]>([]);
   const [where, setWhere] = useState('');
   const bottom = useRef<HTMLDivElement>(null);
+  const transcript = useRef<HTMLDivElement>(null);
+  /**
+   * Where the text a choice led to begins (an index into the lines). Set by a choice, so the next render scrolls
+   * there, to the start of the new text, rather than to its end; and the lines from there on fade in.
+   */
+  const newFrom = useRef<number | null>(null);
+  const [freshFrom, setFreshFrom] = useState<number | null>(null);
   const voiceQueue = useRef(new VoiceQueue());
   const [voicesOn, setVoicesOn] = useState(() => {
     try {
@@ -327,6 +337,8 @@ export function PlaytestView({
     freshStory();
     setHistory([]);
     setNotice('');
+    setFreshFrom(null);
+    newFrom.current = 0; // the top
     advance([]);
   }, [json, freshStory, advance]);
 
@@ -335,8 +347,17 @@ export function PlaytestView({
   }, [restart]);
 
   useEffect(() => {
-    bottom.current?.scrollIntoView({ behavior: 'smooth', block: 'end' });
-  }, [lines.length, visible]);
+    const box = transcript.current;
+    const at = newFrom.current;
+    newFrom.current = null;
+    const behavior: ScrollBehavior = reducedMotion() ? 'auto' : 'smooth';
+    // After a choice: the start of what it led to, at the top, so the reader reads on from its first line.
+    const first = box && at !== null ? [...box.querySelectorAll<HTMLElement>('[data-at]')].find((e) => +e.dataset.at! >= at) : undefined;
+    if (box && first) box.scrollTo({ top: box.scrollTop + first.getBoundingClientRect().top - box.getBoundingClientRect().top - 8, behavior: at ? behavior : 'auto' });
+    // Otherwise (a cutscene's next line, a loaded save, a changed value) the end, where the story is now.
+    else if (at === null) bottom.current?.scrollIntoView({ behavior, block: 'end' });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [lines, visible]);
   // A cutscene goes on by itself once there's been time to read the line.
   useEffect(() => {
     if (!playing) return;
@@ -355,12 +376,16 @@ export function PlaytestView({
   }, [isEnd]);
 
   // Playtest keys: 1–9 choose, Backspace undoes, R restarts, V toggles voices.
-  const actions = useRef<{ choose: (n: number) => void; undo: () => void; restart: () => void; voices: () => void } | null>(null);
+  const actions = useRef<{ choose: (n: number) => void; goOn: () => boolean; undo: () => void; restart: () => void; voices: () => void } | null>(null);
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       const a = actions.current;
       if (!a || !plainKey(e)) return;
       if (/^[1-9]$/.test(e.key)) a.choose(+e.key - 1);
+      // Enter or Space goes on at a Continue break (or a cutscene, or a lone choice), unless a button has focus.
+      else if ((e.key === 'Enter' || e.key === ' ') && !(e.target instanceof HTMLButtonElement || e.target instanceof HTMLSelectElement)) {
+        if (!a.goOn()) return;
+      }
       else if (e.key === 'Backspace') a.undo();
       else if (e.key.toLowerCase() === 'r') a.restart();
       else if (e.key.toLowerCase() === 'v') a.voices();
@@ -386,12 +411,16 @@ export function PlaytestView({
   const choose = (i: number, text: string) => {
     voiceQueue.current.stop();
     const s = story.current!;
-    setHistory((h) => [...h, { state: s.state.toJson(), lines, segment: segment.current }]);
+    // Taken now, before the choice: an updater function may run later, once the story has moved on.
+    const before: Snapshot = { state: s.state.toJson(), lines, segment: segment.current };
+    setHistory((h) => [...h, before]);
     sfx.choice();
     const pause = isPause(s);
     const taken = choices.find((c) => c.index === i);
     if (taken && !pause && !exitOf(taken.text) && !chosenBefore.has(taken.key)) keepChosen(new Set([...chosenBefore, taken.key]));
     s.ChooseChoiceIndex(i);
+    newFrom.current = lines.length;
+    setFreshFrom(lines.length);
     advance([...lines, { text, tags: [], kind: 'choice', pause }]);
   };
 
@@ -404,7 +433,10 @@ export function PlaytestView({
     setHistory(history.slice(0, -1));
     setLines(last.lines);
     setChoices(offered(story.current));
+    setFreshFrom(null);
     readVars();
+    // Back at the choice: show the end of the text before it, where the choices are.
+    requestAnimationFrame(() => bottom.current?.scrollIntoView({ block: 'end' }));
   };
 
   // Like a host game changing its inventory: replay the current stretch of text from its start with
@@ -434,6 +466,12 @@ export function PlaytestView({
   };
   actions.current = {
     choose: (n) => (playing ? n === 0 && skipCutscene() : choices[n] && choose(choices[n].index, choices[n].text)),
+    goOn: () => {
+      if (playing) skipCutscene();
+      else if (choices.length === 1) choose(choices[0].index, choices[0].text);
+      else return false;
+      return true;
+    },
     undo,
     restart,
     voices: toggleVoices,
@@ -457,6 +495,8 @@ export function PlaytestView({
       : [];
   // The drop cap opens the first real paragraph of prose, not a short line like "FADE IN:".
   const dropCapAt = lines.findIndex((l) => l.kind === 'text' && !l.speaker && !l.tags.includes('transition') && l.text.length >= 40);
+  /** The lines a choice just led to fade in. */
+  const fresh = (i: number) => (freshFrom !== null && i >= freshFrom ? ' t-fresh' : '');
   const smoke = processed.smoke;
   const pending = pendingSuggestions(processed.project);
 
@@ -547,26 +587,26 @@ export function PlaytestView({
             )}
           </div>
         </div>
-        <div className="transcript" tabIndex={0} aria-label="Story text">
+        <div className="transcript" ref={transcript} tabIndex={0} aria-label="Story text">
           {lines.slice(0, visible).map((l, i) =>
             dialogueOnly && ((l.kind === 'text' && !l.speaker) || l.kind === 'cue') ? null :
             l.pause ? null :
             l.kind === 'cue' ? (
-              <p key={i} className="t-cue" title="A cue for the game (Review → + Cue)">
+              <p key={i} data-at={i} className={`t-cue${fresh(i)}`} title="A cue for the game (Review → + Cue)">
                 ♪ {l.text.replace(':', ': ')}
                 {cuesIn(l.tags).some((c) => cueWantsSound(c.name, c.value) && !sounds.has(c.tag)) ? ' · no sound attached' : ''}
               </p>
             ) :
             l.kind === 'choice' && exitOf(l.text) ? (
-              <p key={i} className="t-exit">
+              <p key={i} data-at={i} className={`t-exit${fresh(i)}`}>
                 ⇥ the game played here ({exitOf(l.text)}) ⇤
               </p>
             ) : l.kind === 'choice' ? (
-              <p key={i} className="t-choice">
+              <p key={i} data-at={i} className={`t-choice${fresh(i)}`}>
                 › <Rich text={T(l.text)} />
               </p>
             ) : l.speaker ? (
-              <p key={i} className={`t-dialogue${portraitOf(l) ? ' with-portrait' : ''}${isCutscene(l) ? ' t-cutscene' : ''}${isCutscene(l) && i === visible - 1 && playing ? ' now' : ''}`}>
+              <p key={i} data-at={i} className={`t-dialogue${fresh(i)}${portraitOf(l) ? ' with-portrait' : ''}${isCutscene(l) ? ' t-cutscene' : ''}${isCutscene(l) && i === visible - 1 && playing ? ' now' : ''}`}>
                 {portraitOf(l) && <img className="t-portrait" src={portraitOf(l)!.url} alt="" />}
                 <span className="t-speaker">{T(l.speaker)}</span>
                 {l.tags.find((t) => t.startsWith('paren:')) && <span className="t-paren">({T(l.tags.find((t) => t.startsWith('paren:'))!.slice(6))})</span>}
@@ -574,13 +614,13 @@ export function PlaytestView({
               </p>
             ) : (
               <Fragment key={i}>
-                {l.tags.find((t) => t.startsWith('scene:')) && <span className="t-scene">{T(l.tags.find((t) => t.startsWith('scene:'))!.slice(6))}</span>}
+                {l.tags.find((t) => t.startsWith('scene:')) && <span data-at={i} className={`t-scene${fresh(i)}`}>{T(l.tags.find((t) => t.startsWith('scene:'))!.slice(6))}</span>}
                 {pictureFor(l) && (
-                  <figure className="t-picture">
+                  <figure data-at={i} className={`t-picture${fresh(i)}`}>
                     <img src={pictureFor(l)!.url} alt={pictureFor(l)!.alt} />
                   </figure>
                 )}
-                <p className={l.tags.includes('transition') ? 't-transition' : `t-action${i === dropCapAt ? ' drop' : ''}`}><Rich text={T(l.text)} /></p>
+                <p data-at={i} className={(l.tags.includes('transition') ? 't-transition' : `t-action${i === dropCapAt ? ' drop' : ''}`) + fresh(i)}><Rich text={T(l.text)} /></p>
               </Fragment>
             ),
           )}
@@ -605,7 +645,7 @@ export function PlaytestView({
               </button>
             </div>
           ) : (
-            choices.map((c) => {
+            choices.map((c, n) => {
               const goOn = choices.length === 1 && c.text === CONTINUE_TEXT;
               const before = !goOn && chosenBefore.has(c.key);
               return (
@@ -613,8 +653,13 @@ export function PlaytestView({
                 key={c.index}
                 className={`choice-btn${goOn ? ' continue' : ''}${before ? ' chosen' : ''}`}
                 onClick={() => choose(c.index, c.text)}
-                title={before ? 'You’ve chosen this before' : undefined}
+                title={before ? `You’ve chosen this before${n < 9 ? ` (${n + 1})` : ''}` : goOn ? 'Go on (Enter, Space or 1)' : n < 9 ? `Press ${n + 1}` : undefined}
               >
+                {!goOn && choices.length > 1 && n < 9 && (
+                  <kbd className="choice-key" aria-hidden="true">
+                    {n + 1}
+                  </kbd>
+                )}
                 <Rich text={T(c.text)} />
                 {before && <span className="sr-only"> (chosen before)</span>}
               </button>

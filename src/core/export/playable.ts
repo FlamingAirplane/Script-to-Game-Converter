@@ -165,6 +165,8 @@ padding:10px 8px 10px 30px;cursor:pointer}.choice:before{content:'❧';position:
 .choice.chosen{color:var(--faded,#8a8a6a)}.choice.chosen:before{content:'✓';color:var(--faded,#8a8a6a);font-size:13px;top:12px}
 .choice.locked{cursor:default;color:var(--faded,#8a8a6a);opacity:.75}.choice.locked:hover{background:none;color:var(--faded,#8a8a6a)}.choice.locked:before{content:'🔒';font-size:13px;top:12px}
 .choice .needs{display:block;font-size:13px;font-style:normal;letter-spacing:.03em}
+.choice .key{position:absolute;right:8px;top:50%;transform:translateY(-50%);font:600 11px ui-monospace,monospace;font-style:normal;color:var(--faded);border:1px solid var(--rule);border-radius:3px;padding:0 5px;line-height:16px;opacity:.75}.choice:has(.key){padding-right:36px}@media (hover:none){.choice .key{display:none}.choice:has(.key){padding-right:8px}}
+.text [data-at]{scroll-margin-top:24px}.text .fresh{animation:fresh .5s ease-out both}@keyframes fresh{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}@media (prefers-reduced-motion:reduce){.text .fresh{animation:none}}
 #language{font:inherit;font-size:inherit;background:none;border:0;color:inherit;letter-spacing:inherit;cursor:pointer}
 .end{text-align:center;color:var(--rubric);font-style:italic;font-size:22px;margin:30px 0 10px;letter-spacing:.1em}
 .end-actions{text-align:center}
@@ -178,6 +180,16 @@ const PLAYER_JS = `
   var json = document.getElementById('story-json').textContent;
   var $ = function (id) { return document.getElementById(id); };
   var story, lines = [], history = [];
+  // Where the text the last choice led to begins (an index into lines): the next render fades it in and the page
+  // scrolls to it, so the reader goes on from its first line rather than landing at its end.
+  var freshFrom = null;
+  function reducedMotion() { return !!(window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches); }
+  // The first shown element of the text from line number at on.
+  function shownFrom(at) {
+    var all = $('text').querySelectorAll('[data-at]');
+    for (var i = 0; i < all.length; i++) if (+all[i].getAttribute('data-at') >= at) return all[i];
+    return null;
+  }
   // A cutscene (lines tagged #cutscene) plays one line at a time, going on by itself: how many lines show so far
   // (null: all of them), and the timer for the next. Times as in players.ts: 1.2 s + 0.055 s a letter, 2 to 9 s.
   var reveal = null, cutTimer = null;
@@ -472,7 +484,15 @@ const PLAYER_JS = `
     var box = $('text');
     box.textContent = '';
     syncBackground();
+    var fresh = freshFrom;
+    freshFrom = null; // once: a later render (a cutscene's next line, a language change) doesn't fade it in again
+    var put = box.appendChild.bind(box), add = function (e, at) {
+      e.setAttribute('data-at', at);
+      if (fresh !== null && at >= fresh && !reducedMotion()) e.classList.add('fresh');
+      return put(e);
+    };
     lines.forEach(function (l, at) {
+      var box = { appendChild: function (e) { return add(e, at); } };
       if (reveal !== null && at >= reveal) return; // a cutscene line still to come
       if (l.pause || l.cue) return; // a Continue break: the page simply goes on; a cue plays, it isn't read
       if (l.chosen && l.chosen.indexOf('${EXIT_PREFIX}') === 0) { box.appendChild(el('p', 'chosen game-played', '⇥ the game played here ⇤')); return; }
@@ -528,17 +548,18 @@ const PLAYER_JS = `
       var box2 = el('div', 'game-exit');
       box2.appendChild(el('p', '', 'The game takes over here (' + exit + '). In the game, the player plays until it resumes the story.'));
       var r = el('button', 'choice continue', 'Resume the story');
-      r.onclick = function () { choose(choices[0].index, choices[0].text); };
+      r.onclick = function (e) { choose(choices[0].index, choices[0].text, e && e.detail === 0); };
       box2.appendChild(r);
       nav.appendChild(box2);
       $('undo').disabled = !history.length;
       return;
     }
-    choices.forEach(function (c) {
+    choices.forEach(function (c, n) {
       var before = !pause && chosenBefore[choiceKey(c)];
       var b = el('button', pause ? 'choice continue' : before ? 'choice chosen' : 'choice', tr(c.text));
       if (before) { b.title = 'You’ve chosen this before'; b.setAttribute('aria-label', tr(c.text) + ' (chosen before)'); }
-      b.onclick = function () { choose(c.index, c.text); };
+      if (!pause && choices.length > 1 && n < 9) { var k = el('span', 'key', String(n + 1)); k.setAttribute('aria-hidden', 'true'); b.appendChild(k); }
+      b.onclick = function (e) { choose(c.index, c.text, e && e.detail === 0); };
       nav.appendChild(b);
     });
     lockedNow().forEach(function (g) {
@@ -597,7 +618,8 @@ const PLAYER_JS = `
     $('notice').hidden = !text;
   }
 
-  function choose(index, text) {
+  // byKey: chosen from the keyboard, so the keyboard focus moves on to the next choices.
+  function choose(index, text, byKey) {
     history.push({ state: story.state.toJson(), lines: lines.slice() });
     if (history.length > 50) history.shift();
     stopVoices();
@@ -606,12 +628,16 @@ const PLAYER_JS = `
     var pause = isPause();
     if (!pause && !exitName()) story.currentChoices.forEach(function (c) { if (c.index === index) rememberChosen(c); });
     story.ChooseChoiceIndex(index);
+    var from = lines.length;
     lines.push(pause ? { chosen: text, pause: true } : { chosen: text });
+    freshFrom = from;
     continueStory();
     render();
     save();
-    var last = $('text').lastElementChild;
-    if (last) last.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    // The start of what the choice led to, at the top of the page, to read on from its first line.
+    var first = shownFrom(from);
+    if (first) first.scrollIntoView({ behavior: reducedMotion() ? 'auto' : 'smooth', block: 'start' });
+    if (byKey) { var next = $('choices').querySelector('button'); if (next) next.focus({ preventScroll: true }); }
   }
 
   function undo() {
@@ -622,6 +648,8 @@ const PLAYER_JS = `
     stopCutscene();
     render();
     save();
+    // Back at the choice: the choices, with the text just before them.
+    $('choices').scrollIntoView({ block: 'end' });
   }
 
   function open() { $('cover').hidden = true; $('reader').hidden = false; window.scrollTo(0, 0); }
@@ -656,9 +684,21 @@ const PLAYER_JS = `
           save();
         }
         render(); open();
+        // Back where the reader left off: their last choice, and the text it led to.
+        for (var at = lines.length - 1; at >= 0; at--) if (lines[at].chosen) { var mark = shownFrom(at); if (mark) mark.scrollIntoView({ block: 'start' }); break; }
       } catch (e) { begin(); }
     };
   }
+  // Keys: 1–9 take a choice; Enter or Space goes on at a Continue (or skips a cutscene); Backspace undoes.
+  document.addEventListener('keydown', function (e) {
+    if (e.metaKey || e.ctrlKey || e.altKey || !story || $('reader').hidden) return;
+    var t = e.target, tagName = t && t.tagName;
+    if (tagName === 'INPUT' || tagName === 'TEXTAREA' || tagName === 'SELECT' || (t && t.isContentEditable)) return;
+    var buttons = $('choices').querySelectorAll('button.choice:not([disabled])');
+    if (/^[1-9]$/.test(e.key) && buttons[+e.key - 1]) { e.preventDefault(); buttons[+e.key - 1].click(); return; }
+    if ((e.key === 'Enter' || e.key === ' ') && tagName !== 'BUTTON' && buttons.length === 1) { e.preventDefault(); buttons[0].click(); return; }
+    if (e.key === 'Backspace' && !$('undo').disabled) { e.preventDefault(); undo(); }
+  });
   $('begin').onclick = begin;
   $('undo').onclick = undo;
   $('restart').onclick = startOver;
