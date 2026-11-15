@@ -306,6 +306,10 @@ The panel beside the story shows:
 
   ![The playable story as a reader sees it](images/playable.jpg)
 
+- **For itch.io (.zip):** the same playable story as a .zip with an `index.html`, the way itch.io and other game
+  sites take an HTML game. On itch.io, make a new project, set its kind to *HTML*, upload the .zip and tick *This file
+  will be played in the browser*. Readers see how many of the story's endings they've found (*Endings found: 1 of 2*,
+  on the last page and the cover), and **A−** / **A+** change the text size, remembered in their browser.
 - **Sharing for feedback:** tick **For feedback** under the download button and readers get a **✎ Note** button: they
   write what they think of what's on the page as they read, and **Notes** → **Download notes for the writer** gives
   them a small file to send you. **Share for feedback with a link** has two more things:

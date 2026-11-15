@@ -38,23 +38,27 @@ Tick items off here in the same pull request that does them.
   - [x] Split `tests/pipeline.test.ts` (about 160 KB) by area (#65)
   - [x] Keep the C# and C++ in real template files that tools can check (#64): `unity.ts` went from 3,700 lines to
         600
-  - [ ] Split the largest UI files (`ReviewView.tsx`, `App.tsx`, `GraphView.tsx`)
+  - [ ] Split the largest UI files: `ReviewView.tsx` is done (#68, 1,370 → 570 lines); `App.tsx` and
+        `GraphView.tsx` are left
 - [x] Easier moving between devices: a small story as a link (#62)
 - [ ] Prove the engine packages automatically: add a Unity licence secret so `.github/workflows/unity.yml` runs
       (owner only); a short clip of a story running in each engine
 - [x] Feedback button (#62). **Not done:** watching five writers use it (owner).
-- [ ] Help search engines: one name, a fuller About page, repository description and topics. The sitemap is done
-      (#61).
+- [x] Help search engines: both names in the title, description and structured data, a canonical link (#69); the
+      sitemap (#61). **Owner only:** the repository description and topics, and submitting the sitemap to Google
+      Search Console.
 
 ## Bigger bets
 
 - [ ] Optional AI suggestions with consent (an on-device model is on the command line already; see
       `src/suggest/`)
-- [ ] A complete mini-game web export (pictures, sound and saved progress are partly there in the playable story)
+- [x] A complete mini-game web export (#71): the playable story has pictures, sound, saved progress, an "Endings
+      found" tally and a text size setting, and downloads as a .zip ready for itch.io or any web host.
 - [x] More engines: Ren'Py (#62). **Still open:** Godot. It needs a Godot install to test against (there was none on
       the development machine); `src/core/export/renpy.ts` is the model to follow.
 - [ ] Reading scanned PDFs (OCR in the browser)
-- [ ] Sharing for feedback: a read-only link where an editor can play and comment
+- [x] Sharing for feedback (#70): a play link opens just the story with a Note button; readers download their notes,
+      and the writer brings them into Review beside the lines they are about.
 - [ ] A desktop edition
 - [ ] Translate the tool's own screens
 

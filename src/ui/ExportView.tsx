@@ -464,7 +464,29 @@ function ShareSection({ processed, stale, project, update }: { processed: Proces
             }
           >
             Download playable story (.html)
+          </button>{' '}
+          <button
+            className="btn"
+            disabled={blocked}
+            title="The same story as a .zip with an index.html, the way itch.io and similar game sites take an HTML game"
+            onClick={() =>
+              run(async () => {
+                const audio = await renderClips(referencedAudio(processed.project));
+                const images = await collectClips(referencedImages(processed.project));
+                const { default: JSZip } = await import('jszip');
+                const zip = new JSZip();
+                zip.file('index.html', buildPlayableHtml(processed, inkRuntime, audio, images, { feedback }));
+                const bytes = await zip.generateAsync({ type: 'uint8array', compression: 'DEFLATE', compressionOptions: { level: 6 } });
+                download(playableFileName(processed).replace(/\.html$/, '-web.zip'), bytes, 'application/zip');
+              })
+            }
+          >
+            For itch.io (.zip)
           </button>
+          <p className="muted small">
+            To publish it as a game: on <a href="https://itch.io/game/new" target="_blank" rel="noopener noreferrer">itch.io</a>, make a new project, set
+            its kind to <em>HTML</em>, upload the .zip and tick <em>This file will be played in the browser</em>. Any web host works the same way.
+          </p>
           <label className="check small feedback-check">
             <input type="checkbox" checked={feedback} onChange={(e) => setFeedback(e.target.checked)} /> For feedback: readers can leave notes as they read, and
             download them to send back to you

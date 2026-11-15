@@ -78,3 +78,28 @@ describe('sharing for feedback', () => {
     expect(await readStoryLink(hash, LINK_PREFIX)).toBeNull();
   });
 });
+
+describe('the playable story as a small web game', () => {
+  it('knows each ending by the last line read in it', async () => {
+    const { endingKey, endingLines } = await import('../src/core/export/playable');
+    const story = processProject(await archive());
+    const e = endingLines(story);
+    expect(e.total).toBe(2);
+    expect(Object.values(e.byLine).sort()).toEqual(['archive_inside', 'outside']);
+    expect(e.byLine[endingKey('You step back into the rain. Some doors are better left closed.')]).toBe('outside');
+    expect(endingKey('“Every <i>story</i> we ever lost.”')).toBe('every story we ever lost');
+    expect(endingKey('Où est-il ?')).toBe('où est il');
+  });
+
+  it('ships the tally, the text size control and a working ending key in the page', async () => {
+    const story = processProject(await archive());
+    const html = buildPlayableHtml(story, runtime);
+    expect(meta(html).endings.total).toBe(2);
+    expect(html).toContain('id="larger"');
+    // The page's own endingKey matches the export's (the regex survives being written into the page).
+    const fn = /function endingKey\(text\) \{ ([^\n]*) \}/.exec(html)![1];
+    const pageKey = new Function('text', fn) as (t: string) => string;
+    const { endingKey } = await import('../src/core/export/playable');
+    for (const t of ['You step back into the rain.', '“Every <i>story</i> we ever lost.”', 'Où est-il ?']) expect(pageKey(t)).toBe(endingKey(t));
+  });
+});
