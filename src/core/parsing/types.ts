@@ -1,7 +1,7 @@
 import type { Diagnostic } from '../diagnostics';
 import type { Condition, Effect, SourceFormat } from '../isr';
 
-/** Explicit narrative markers recognised in every text format (see docs/StructuredMarkers.md). */
+/** Explicit narrative markers recognised in every text format (see docs/STRUCTURED_MARKERS.md). */
 export type Marker =
   | { type: 'passage'; id: string; title?: string }
   | { type: 'start'; id: string }

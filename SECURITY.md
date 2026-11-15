@@ -10,7 +10,7 @@ someone could do with it. You'll get a reply within a week.
 
 - The web app at https://flamingairplane.github.io/Script-to-Game-Converter/ and the offline single-file edition.
 - The files it exports: the playable web page, and the Unity and Unreal packages.
-- The command-line tool.
+- The command-line tool, including the model files its `--suggest model` option downloads from Hugging Face.
 
 ## How the app handles your work
 
@@ -18,6 +18,9 @@ someone could do with it. You'll get a reply within a week.
   through their own private GitHub Gist, using their own GitHub token (kept in that browser only).
 - The app asks GitHub's API for the latest release, and fetches the site's design from a public Gist. Neither
   request carries any of the user's writing.
+- The command-line tool's `--suggest model` downloads a small language model from Hugging Face once and runs it on
+  the user's machine; the script goes to that process and nowhere else. The model's output is treated as data: it
+  names a line and a kind of choice, code builds the choice, and it stays pending until a person approves it.
 - The exported playable page embeds the story as escaped data and writes text with `textContent`, so markup in a
   script is shown, not run.
 - The design editor (`#admin`) is locked with a password stretched with PBKDF2, but its salt and hash ship in the

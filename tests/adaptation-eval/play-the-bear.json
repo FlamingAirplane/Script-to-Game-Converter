@@ -1,0 +1,31 @@
+{
+  "script": "tests/adaptation-eval/plays/the-bear.fountain",
+  "heldOut": true,
+  "notes": "Marked from the numbered dump before any suggester was run on this script. Held out.",
+  "moments": [
+    {
+      "passage": "scene_01",
+      "line": 5,
+      "kind": "decision",
+      "note": "he challenges her to a duel: accept or refuse"
+    },
+    {
+      "passage": "scene_03",
+      "line": 2,
+      "kind": "pickup",
+      "note": "the pistols"
+    },
+    {
+      "passage": "scene_04",
+      "line": 2,
+      "kind": "decision",
+      "note": "he will fire in the air: fight or call it off"
+    },
+    {
+      "passage": "scene_04",
+      "line": 5,
+      "kind": "reply",
+      "note": "Are you afraid?"
+    }
+  ]
+}

@@ -1,0 +1,25 @@
+{
+  "script": "tests/adaptation-eval/plays/earnest.fountain",
+  "heldOut": false,
+  "notes": "Marked from the numbered dump before any suggester was run on this script. The card he pockets is in the last scene, which is the ending.",
+  "moments": [
+    {
+      "passage": "scene_02",
+      "line": 1,
+      "kind": "pickup",
+      "note": "Algernon takes the cigarette case"
+    },
+    {
+      "passage": "scene_02",
+      "line": 8,
+      "kind": "reply",
+      "note": "the case is a present from Cecily: who is she"
+    },
+    {
+      "passage": "scene_03",
+      "line": 9,
+      "kind": "reply",
+      "note": "why does your aunt call you her uncle"
+    }
+  ]
+}

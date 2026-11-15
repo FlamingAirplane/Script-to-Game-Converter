@@ -1,0 +1,19 @@
+{
+  "script": "tests/adaptation-eval/plays/l-avare.fountain",
+  "heldOut": false,
+  "notes": "Marked from the numbered dump before any suggester was run on this script. French. La Flèche comes out of the garden with the cash-box; Harpagon's monologue is the ending.",
+  "moments": [
+    {
+      "passage": "scene_01",
+      "line": 2,
+      "kind": "pickup",
+      "note": "la cassette"
+    },
+    {
+      "passage": "scene_02",
+      "line": 5,
+      "kind": "decision",
+      "note": "Sauvons-nous: run with it or put it back"
+    }
+  ]
+}

@@ -1,0 +1,8 @@
+{
+  "script": "tests/fixtures/archive.fdx",
+  "heldOut": false,
+  "notes": "Final Draft fixture. Line 1 of scene 1 ('lifts a lantern & squints') is not a pickup: she is looking, not taking.",
+  "moments": [
+    { "passage": "scene_01", "line": 4, "kind": "reply", "note": "Who's there? / Only me." }
+  ]
+}

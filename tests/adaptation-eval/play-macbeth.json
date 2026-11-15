@@ -1,0 +1,19 @@
+{
+  "script": "tests/adaptation-eval/plays/macbeth.fountain",
+  "heldOut": false,
+  "notes": "Marked from the numbered dump before any suggester was run on this script. Verse. No pickup is marked: the daggers are already in his hands when the excerpt begins.",
+  "moments": [
+    {
+      "passage": "scene_02",
+      "line": 1,
+      "kind": "decision",
+      "note": "the dagger soliloquy: go to Duncan or turn back"
+    },
+    {
+      "passage": "scene_07",
+      "line": 3,
+      "kind": "decision",
+      "note": "I’ll go no more: take the daggers back or refuse"
+    }
+  ]
+}

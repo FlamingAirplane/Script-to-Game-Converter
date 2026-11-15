@@ -1,0 +1,6 @@
+{
+  "script": "src/samples.ts#archive",
+  "heldOut": false,
+  "notes": "A negative control: a structured story that already has its choices. A good suggester adds nothing here.",
+  "moments": []
+}

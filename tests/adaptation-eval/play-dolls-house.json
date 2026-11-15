@@ -1,0 +1,25 @@
+{
+  "script": "tests/adaptation-eval/plays/dolls-house.fountain",
+  "heldOut": false,
+  "notes": "Marked from the numbered dump before any suggester was run on this script. Paying the porter is not marked: nothing turns on it.",
+  "moments": [
+    {
+      "passage": "scene_02",
+      "line": 4,
+      "kind": "decision",
+      "note": "she hides the macaroons: hide them or own up"
+    },
+    {
+      "passage": "scene_02",
+      "line": 5,
+      "kind": "reply",
+      "note": "Has my little spendthrift been wasting money again?"
+    },
+    {
+      "passage": "scene_03",
+      "line": 8,
+      "kind": "reply",
+      "note": "Suppose that happened, what then?"
+    }
+  ]
+}

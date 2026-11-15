@@ -25,10 +25,12 @@ import {
   type StoryProject,
   type Variable,
 } from './isr';
-import { proposeAdaptations } from './adapt';
+import { heuristicSuggester } from './adapt';
+import { applyProposals } from './proposals';
 import { inkUnsupported } from './parsing/ink';
 import { detectFormat, parserFor } from './parsing/registry';
 import type { ParsedBlock } from './parsing/types';
+import { readProse } from './parsing/prose';
 
 export interface SourceInput {
   fileName: string;
@@ -55,6 +57,8 @@ const CONVERTED_LABEL = { fdx: 'Final Draft', docx: 'Word', pdf: 'PDF', twine: "
 export interface BuildOptions {
   mode: ConversionMode;
   title?: string;
+  /** Interactive adaptation: run the built-in heuristic suggester (default true). The CLI's --suggest model turns it off. */
+  heuristics?: boolean;
 }
 
 export interface BuildResult {
@@ -125,7 +129,14 @@ export async function buildStory(inputs: SourceInput[], options: BuildOptions): 
     };
     sources.push(doc);
     const parsed1 = logger.time('Parsed document');
-    const result = parserFor(doc.format).parse(input.text, docId);
+    const parsedAsWritten = parserFor(doc.format).parse(input.text, docId);
+    // Prose (plain text, Markdown, or a "screenplay" in which nobody has a cue) is read again for quoted speech
+    // and section breaks. A script with structured markers is taken exactly as marked.
+    const proseLike = doc.format === 'txt' || doc.format === 'md' || (doc.format === 'fountain' && !parsedAsWritten.blocks.some((b) => b.kind === 'dialogue'));
+    const marked = parsedAsWritten.blocks.some((b) => b.kind === 'marker');
+    const result = proseLike
+      ? readProse(parsedAsWritten, docId, { speech: true, breaks: !marked && !parsedAsWritten.blocks.some((b) => b.kind === 'section') })
+      : parsedAsWritten;
     parsed1({ document: docId, format: doc.format, detectedBy: detected.by, converted: input.convertedFrom, bytes: byteLength, lines: input.text.split('\n').length, blocks: result.blocks.length, warnings: result.diagnostics.length });
     diagnostics.push(...result.diagnostics);
     let keepInk: boolean | undefined;
@@ -155,7 +166,7 @@ export async function buildStory(inputs: SourceInput[], options: BuildOptions): 
 
   const project = assemble(parsed, options, diagnostics);
   project.sources = sources;
-  if (options.mode === 'adaptation') proposeAdaptations(project);
+  if (options.mode === 'adaptation' && options.heuristics !== false) diagnostics.push(...applyProposals(project, await heuristicSuggester.suggest(project)));
   done({
     mode: options.mode,
     documents: sources.length,

@@ -1,0 +1,9 @@
+{
+  "script": "src/samples.ts#motel",
+  "heldOut": false,
+  "notes": "The built-in plain-text sample. No items; the moments are a decision and a reply. Scene 3 is the ending.",
+  "moments": [
+    { "passage": "scene_01", "line": 3, "kind": "decision", "note": "the phone rings: answer it or not" },
+    { "passage": "scene_02", "line": 2, "kind": "reply", "note": "what June tells the clerk about the call" }
+  ]
+}

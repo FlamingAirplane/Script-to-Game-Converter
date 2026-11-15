@@ -1,0 +1,10 @@
+{
+  "script": "src/samples.ts#lighthouse",
+  "heldOut": false,
+  "notes": "The built-in Fountain sample. Scene 5 is the ending, so nothing there can take a choice.",
+  "moments": [
+    { "passage": "scene_02", "line": 1, "kind": "pickup", "note": "brass key" },
+    { "passage": "scene_04", "line": 1, "kind": "gate", "note": "the iron door needs the key" },
+    { "passage": "scene_04", "line": 2, "kind": "reply", "note": "Who's there? (the last line of the scene; no answer follows)" }
+  ]
+}

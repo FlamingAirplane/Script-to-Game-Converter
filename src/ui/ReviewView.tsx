@@ -16,7 +16,7 @@ import { formatMinutes, storyStats } from '../core/stats';
 import { DraftShelf } from './Drafts';
 import { DialogueOnlySetting } from './DialogueOnlySetting';
 import type { SceneRequest } from './NewScene';
-import { describeCondition } from '../core/gating';
+import { conditionInWords, describeCondition, effectInWords } from '../core/gating';
 import { type Update, addChoice, deletePassage, findText, mergeCharacter, movePassage, renamePassage, replaceText } from './projectOps';
 
 /** Cues the game is likely to know, with what their value means (see NarrativeCuePlayer in the Unity package). */
@@ -31,6 +31,9 @@ const CUE_SUGGESTIONS: [string, string][] = [
 
 
 export const STORY_SETTINGS = '__story__';
+
+/** Whether Passage settings is unfolded: remembered from passage to passage while the app is open. */
+let passageSettingsOpen = false;
 
 export function ReviewView({
   processed,
@@ -175,7 +178,7 @@ export function ReviewView({
           <dl>
             <dt>source</dt>
             <dd>Taken word for word from your script.</dd>
-            <dt>transformed</dt>
+            <dt>from your script</dt>
             <dd>From your script, reshaped to fit a game (a scene became a passage, a line became a choice).</dd>
             <dt>generated</dt>
             <dd>Suggested by Narrative Bridge; not in your script.</dd>
@@ -284,6 +287,7 @@ function PassageEditor({
   const project = processed.project;
   const [idDraft, setIdDraft] = useState(passage.id);
   const [idError, setIdError] = useState('');
+  const [settingsOpen, setSettingsOpen] = useState(passageSettingsOpen);
   const pid = passage.id;
   const edit = (fn: (p: Passage, d: StoryProject) => void, group?: string) =>
     update((d) => {
@@ -301,23 +305,6 @@ function PassageEditor({
       <header className="editor-head">
         <input className="title-input" value={passage.title} onChange={(e) => edit((p) => ((p.title = e.target.value), (p.origin = p.origin === 'source' ? 'user_authored' : p.origin)), `title:${pid}`)} aria-label="Passage title" />
         <div className="row wrap">
-          <label className="id-field">
-            <span className="muted small">id</span>
-            <input
-              className={`input mono small ${idError ? 'invalid' : ''}`}
-              value={idDraft}
-              onChange={(e) => setIdDraft(e.target.value)}
-              onBlur={() => {
-                if (idDraft === pid) return setIdError('');
-                let err: string | null = null;
-                update((d) => {
-                  err = renamePassage(d, pid, idDraft);
-                });
-                if (err) setIdError(err);
-                else onSelect(idDraft);
-              }}
-            />
-          </label>
           <ProvenanceBadge origin={passage.origin} />
           {passage.sceneHeading && <span className="mono muted small">{passage.sceneHeading}</span>}
           <span className="spacer" />
@@ -329,27 +316,7 @@ function PassageEditor({
               {showSource ? 'Hide source' : 'Show source'}
             </button>
           )}
-          <button className="icon" title="Move up in the contents" aria-label="Move passage up" disabled={project.passages[0]?.id === pid} onClick={() => update((d) => movePassage(d, pid, -1))}>
-            ↑
-          </button>
-          <button className="icon" title="Move down in the contents" aria-label="Move passage down" disabled={project.passages[project.passages.length - 1]?.id === pid} onClick={() => update((d) => movePassage(d, pid, 1))}>
-            ↓
-          </button>
-          <button className="btn tiny" disabled={isStart} onClick={() => update((d) => (d.project.startPassage = pid))}>
-            {isStart ? 'Start passage' : 'Make start'}
-          </button>
-          <button
-            className="btn tiny danger"
-            onClick={() => {
-              if (!confirm(`Delete passage "${passage.title}"? Choices that point here will be flagged.`)) return;
-              update((d) => deletePassage(d, pid));
-              onSelect(project.passages.find((p) => p.id !== pid)?.id ?? STORY_SETTINGS);
-            }}
-          >
-            Delete
-          </button>
         </div>
-        {idError && <p className="error-text small">{idError}</p>}
       </header>
 
       {diags.length > 0 && (
@@ -363,19 +330,74 @@ function PassageEditor({
         </ul>
       )}
 
-      <ScenePicture passage={passage} update={update} />
+      {/* Everything about the passage that isn't its words: folded away, so the story text comes first. */}
+      <details
+        className="passage-settings"
+        open={settingsOpen}
+        onToggle={(e) => {
+          passageSettingsOpen = (e.target as HTMLDetailsElement).open;
+          setSettingsOpen(passageSettingsOpen);
+        }}
+      >
+        <summary>
+          <span className="passage-settings-title">Passage settings</span>
+          <span className="muted small">
+            {[passage.image ? '🖼 has a picture' : 'picture', passage.cutscene ? '🎬 plays as a cutscene' : 'cutscene', isStart ? 'the story starts here' : 'start', 'order', 'id', 'delete'].join(' · ')}
+          </span>
+        </summary>
+        <div className="row wrap passage-settings-row">
+            <label className="id-field">
+              <span className="muted small" title="The name choices and the game use for this passage. Changing it updates every choice that leads here.">id (for developers)</span>
+              <input
+                className={`input mono small ${idError ? 'invalid' : ''}`}
+                value={idDraft}
+                onChange={(e) => setIdDraft(e.target.value)}
+                onBlur={() => {
+                  if (idDraft === pid) return setIdError('');
+                  let err: string | null = null;
+                  update((d) => {
+                    err = renamePassage(d, pid, idDraft);
+                  });
+                  if (err) setIdError(err);
+                  else onSelect(idDraft);
+                }}
+              />
+            </label>
+            <button className="icon" title="Move up in the contents" aria-label="Move passage up" disabled={project.passages[0]?.id === pid} onClick={() => update((d) => movePassage(d, pid, -1))}>
+              ↑
+            </button>
+            <button className="icon" title="Move down in the contents" aria-label="Move passage down" disabled={project.passages[project.passages.length - 1]?.id === pid} onClick={() => update((d) => movePassage(d, pid, 1))}>
+              ↓
+            </button>
+            <button className="btn tiny" disabled={isStart} onClick={() => update((d) => (d.project.startPassage = pid))}>
+              {isStart ? 'Start passage' : 'Make start'}
+            </button>
+            <button
+              className="btn tiny danger"
+              onClick={() => {
+                if (!confirm(`Delete passage "${passage.title}"? Choices that point here will be flagged.`)) return;
+                update((d) => deletePassage(d, pid));
+                onSelect(project.passages.find((p) => p.id !== pid)?.id ?? STORY_SETTINGS);
+              }}
+            >
+              Delete
+            </button>
+        </div>
+        {idError && <p className="error-text small">{idError}</p>}
+        <ScenePicture passage={passage} update={update} />
 
-      <div className="cutscene-setting">
-        <label>
-          <input type="checkbox" checked={!!passage.cutscene} onChange={(e) => edit((p) => (e.target.checked ? (p.cutscene = true) : delete p.cutscene))} />{' '}
-          <strong>🎬 Cutscene</strong>
-        </label>
-        <span className="muted small">
-          {passage.cutscene
-            ? `Players see only its dialogue${passage.content.some((b) => b.type === 'action' || b.type === 'transition') || passage.sceneHeading ? ' (narration, transitions and the scene heading are left out)' : ''}, one line at a time, going on by itself; they can skip it.${passage.choices.length ? ' Its choices come once it’s over.' : ''}`
-            : 'Play this passage as a cutscene: only the dialogue, one line at a time, going on by itself.'}
-        </span>
-      </div>
+        <div className="cutscene-setting">
+          <label>
+            <input type="checkbox" checked={!!passage.cutscene} onChange={(e) => edit((p) => (e.target.checked ? (p.cutscene = true) : delete p.cutscene))} />{' '}
+            <strong>🎬 Cutscene</strong>
+          </label>
+          <span className="muted small">
+            {passage.cutscene
+              ? `Players see only its dialogue${passage.content.some((b) => b.type === 'action' || b.type === 'transition') || passage.sceneHeading ? ' (narration, transitions and the scene heading are left out)' : ''}, one line at a time, going on by itself; they can skip it.${passage.choices.length ? ' Its choices come once it’s over.' : ''}`
+              : 'Play this passage as a cutscene: only the dialogue, one line at a time, going on by itself.'}
+          </span>
+        </div>
+      </details>
 
       <section className="blocks">
         <h3>Content</h3>
@@ -520,7 +542,7 @@ function PassageEditor({
                 .filter((p) => p.id !== pid)
                 .map((p) => (
                   <option key={p.id} value={p.id}>
-                    Continue to {p.title} ({p.id})
+                    Continue to {p.title}{project.passages.some((x) => x !== p && x.title === p.title) ? ` (${p.id})` : ''}
                   </option>
                 ))}
             </select>
@@ -769,16 +791,16 @@ function ChoiceEditor({
           </Badge>
         )}
         {choice.conditions.map((cond, i) => (
-          <span key={`c${i}`} className="chip cond" title="Condition: the choice only appears when this is true (for example, the player has the key)">
-            if <code>{conditionToInk(cond)}</code>
+          <span key={`c${i}`} className="chip cond" title={`Condition: the choice only appears when this is true. In Ink: ${conditionToInk(cond)}`}>
+            if {conditionInWords(cond, project)}
             <button className="chip-x" onClick={() => onChange((c) => c.conditions.splice(i, 1))}>
               ×
             </button>
           </span>
         ))}
         {choice.effects.map((e, i) => (
-          <span key={`e${i}`} className="chip effect" title="Effect: what happens when the player picks this choice (for example, they get an item)">
-            <code>{effectToInk(e).replace(/^~ /, '')}</code>
+          <span key={`e${i}`} className="chip effect" title={`Effect: what happens when the player picks this choice. In Ink: ${effectToInk(e).replace(/^~ /, '')}`}>
+            {effectInWords(e, project)}
             <button className="chip-x" onClick={() => onChange((c) => c.effects.splice(i, 1))}>
               ×
             </button>
@@ -828,11 +850,11 @@ function ChoiceEditor({
 function AddCondition({ project, onAdd }: { project: StoryProject; onAdd: (c: Condition) => void }) {
   const options = [
     ...project.items.flatMap((i) => [
-      { label: `has ${i.displayName}`, cond: { type: 'has_item', itemId: i.id } as Condition },
-      { label: `lacks ${i.displayName}`, cond: { type: 'not', condition: { type: 'has_item', itemId: i.id } } as Condition },
+      { label: `the player has ${i.displayName}`, cond: { type: 'has_item', itemId: i.id } as Condition },
+      { label: `the player doesn’t have ${i.displayName}`, cond: { type: 'not', condition: { type: 'has_item', itemId: i.id } } as Condition },
     ]),
     ...project.variables.map((v) => ({
-      label: `${v.id} ${v.type === 'int' ? '>= 1' : '== true'}`,
+      label: v.type === 'int' ? `${v.id} is at least 1` : v.type === 'bool' ? `${v.id} is yes` : `${v.id} is set`,
       cond: { type: 'compare', variableId: v.id, op: (v.type === 'int' ? '>=' : '==') as CompareOp, value: v.type === 'int' ? 1 : v.type === 'bool' ? true : '' } as Condition,
     })),
   ];
@@ -852,11 +874,11 @@ function AddCondition({ project, onAdd }: { project: StoryProject; onAdd: (c: Co
 function AddEffect({ project, onAdd }: { project: StoryProject; onAdd: (e: Effect) => void }) {
   const options: { label: string; e: Effect }[] = [
     ...project.items.flatMap((i) => [
-      { label: `give ${i.displayName}`, e: { type: 'give_item', itemId: i.id } as Effect },
-      { label: `take ${i.displayName}`, e: { type: 'take_item', itemId: i.id } as Effect },
+      { label: `the player gets ${i.displayName}`, e: { type: 'give_item', itemId: i.id } as Effect },
+      { label: `the player loses ${i.displayName}`, e: { type: 'take_item', itemId: i.id } as Effect },
     ]),
     ...project.variables.map((v) =>
-      v.type === 'int' ? { label: `${v.id} += 1`, e: { type: 'add_var', variableId: v.id, amount: 1 } as Effect } : { label: `set ${v.id}`, e: { type: 'set_var', variableId: v.id, value: v.type === 'bool' ? true : '' } as Effect },
+      v.type === 'int' ? { label: `${v.id} goes up by 1`, e: { type: 'add_var', variableId: v.id, amount: 1 } as Effect } : { label: v.type === 'bool' ? `${v.id} becomes yes` : `set ${v.id}`, e: { type: 'set_var', variableId: v.id, value: v.type === 'bool' ? true : '' } as Effect },
     ),
   ];
   if (!options.length) return null;
@@ -877,8 +899,8 @@ function EffectEditor({ effect, project, onChange }: { effect: Effect; project: 
     return (
       <span className="row">
         <select className="input small" value={effect.type} onChange={(e) => onChange({ ...effect, type: e.target.value as 'give_item' | 'take_item' })}>
-          <option value="give_item">Give</option>
-          <option value="take_item">Take</option>
+          <option value="give_item">The player gets</option>
+          <option value="take_item">The player loses</option>
         </select>
         <select className="input small" value={effect.itemId} onChange={(e) => onChange({ ...effect, itemId: e.target.value })}>
           {project.items.map((i) => (
@@ -889,7 +911,11 @@ function EffectEditor({ effect, project, onChange }: { effect: Effect; project: 
         </select>
       </span>
     );
-  return <code className="small">{effectToInk(effect)}</code>;
+  return (
+    <span className="small" title={`In Ink: ${effectToInk(effect).replace(/^~ /, '')}`}>
+      {effectInWords(effect, project)}
+    </span>
+  );
 }
 
 function StorySettings({ project, update, onKeepDraft, onRestoreDraft }: { project: StoryProject; update: Update; onKeepDraft: (label: string) => Promise<void>; onRestoreDraft: (id: number) => void }) {

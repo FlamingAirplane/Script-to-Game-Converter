@@ -1,0 +1,25 @@
+{
+  "script": "tests/adaptation-eval/plays/pygmalion.fountain",
+  "heldOut": false,
+  "notes": "Marked from the numbered dump before any suggester was run on this script. The longest script: eleven scenes of talk with one real decision about money at the end.",
+  "moments": [
+    {
+      "passage": "scene_01",
+      "line": 9,
+      "kind": "reply",
+      "note": "I want my daughter"
+    },
+    {
+      "passage": "scene_03",
+      "line": 3,
+      "kind": "decision",
+      "note": "he goes to the telephone: call the police or hear the man out"
+    },
+    {
+      "passage": "scene_10",
+      "line": 4,
+      "kind": "decision",
+      "note": "I don’t know what to do, Pickering: give him the five pounds or not"
+    }
+  ]
+}

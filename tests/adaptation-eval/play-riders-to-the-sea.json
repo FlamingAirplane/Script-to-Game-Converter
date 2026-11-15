@@ -1,0 +1,25 @@
+{
+  "script": "tests/adaptation-eval/plays/riders-to-the-sea.fountain",
+  "heldOut": false,
+  "notes": "Marked from the numbered dump before any suggester was run on this script.",
+  "moments": [
+    {
+      "passage": "scene_01",
+      "line": 4,
+      "kind": "pickup",
+      "note": "the bundle of clothes"
+    },
+    {
+      "passage": "scene_02",
+      "line": 9,
+      "kind": "decision",
+      "note": "Shall I open it now?"
+    },
+    {
+      "passage": "scene_03",
+      "line": 8,
+      "kind": "reply",
+      "note": "Maurya asks about the turf while the bundle is being hidden"
+    }
+  ]
+}

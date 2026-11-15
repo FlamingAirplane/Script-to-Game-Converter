@@ -1,0 +1,19 @@
+{
+  "script": "tests/adaptation-eval/plays/hedda-gabler.fountain",
+  "heldOut": false,
+  "notes": "Marked from the numbered dump before any suggester was run on this script. The burning of the manuscript is in the last scene, which is the ending.",
+  "moments": [
+    {
+      "passage": "scene_01",
+      "line": 1,
+      "kind": "reply",
+      "note": "promise that Thea shall never know"
+    },
+    {
+      "passage": "scene_05",
+      "line": 8,
+      "kind": "pickup",
+      "note": "Lovborg takes the pistol"
+    }
+  ]
+}

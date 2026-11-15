@@ -573,7 +573,7 @@ function PackageContents({ engine, layout }: { engine: EngineTarget; layout: 'pa
               </>
             ) : (
               <>
-                <li>Unreal Engine {a.defaultEngineVersion} or later</li>
+                <li>Unreal Engine {a.defaultEngineVersion} (what it’s built and tested with) or 5.8; on 5.9 the Inkpot plugin needs a one-line fix, given in the export’s README</li>
                 <li>
                   {a.integration.name} {a.integration.defaultRef}, which the setup script fetches (changeable under Advanced)
                 </li>

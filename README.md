@@ -4,15 +4,23 @@
 
 # Narrative Bridge
 
+**Turn a script into a playable story, then hand it to a game developer.**
+
 Turn screenplays and prose into validated [Ink](https://github.com/inkle/ink) stories, then package them for **Unity**
 (via [Ink Unity Integration](https://github.com/inkle/ink-unity-integration)) or **Unreal Engine**
 (via [Inkpot](https://github.com/The-Chinese-Room/Inkpot)).
 
 One source-processing pipeline → one canonical story model (ISR) → one generated Ink story → engine-specific export adapters.
 
+Write the structure into the script itself with [structured markers](docs/STRUCTURED_MARKERS.md) (`@passage`, choices
+like `+ [Open the door] -> vault`, `@item`, `@exit`…), the default way to use the app; a script without them still
+converts scene by scene.
+
 Everything runs locally. Scripts never leave your machine unless you choose to move a project through your own
 private GitHub Gist ("Move to another browser" → the cloud, with your own token). The app also asks GitHub whether a newer
-release is out and fetches the site's current look from a public Gist; neither request carries any of your writing.
+release is out and fetches the site's current look from a public Gist; neither request carries any of your writing. The
+command line's `--suggest model` downloads a small language model from Hugging Face once (hundreds of MB) and runs it on
+your machine; that download carries none of your writing either, and `--model-dir` uses a copy you already have.
 
 **Try it online:** https://flamingairplane.github.io/Script-to-Game-Converter/ (the page runs entirely in your browser;
 nothing is uploaded unless you choose cloud sync). After one visit it also works with no connection, and browsers offer to install it as an app
@@ -46,10 +54,11 @@ whole app offline in any modern browser. Nothing is installed and nothing is upl
 CLI:
 
 ```bash
-npm run cli -- convert script.fountain --mode faithful --out story.ink
+npm run cli -- convert script.fountain --out story.ink      # structured by default; --mode faithful|adaptation
 npm run cli -- convert my-story.twee --out story.ink        # open a Twine story (also .html) or Ink (.ink)
 npm run cli -- validate story.md
 npm run cli -- export script.fountain --mode adaptation --approve-all --engine unity --out ./build
+npm run cli -- convert script.fountain --mode adaptation --suggest model --out story.ink   # an on-device model suggests more choices (downloads it once)
 npm run cli -- export story.nbproj.json --engine unreal --out ./build --ref <inkpot-tag-or-sha>
 npm run cli -- export story.md --engine web --out ./share      # one playable .html page for readers
 npm run cli -- export script.fountain --engine twine --out ./share   # Twee 3 / SugarCube for Twine 2
@@ -73,7 +82,7 @@ npm run test:offline    # the website opens, converts, plays and exports offline
 
 | Tab | What it does |
 | --- | --- |
-| **Import** | Drop Fountain, Final Draft (`.fdx`), Word (`.docx`), PDF, plain text or Markdown files (or paste), or open a Twine (`.twee`, `.html`) or Ink (`.ink`) story to keep working on it; choose a conversion mode, or start from a sample. |
+| **Import** | Drop Fountain, Final Draft (`.fdx`), Word (`.docx`), PDF, plain text or Markdown files (or paste), or open a Twine (`.twee`, `.html`) or Ink (`.ink`) story to keep working on it; choose a conversion mode (Structured, which follows [markers](docs/STRUCTURED_MARKERS.md), is the default), or start from a sample. |
 | **Review** | Every passage with its content, provenance (`source` / `transformed` / `generated` / `edited`) and the original source lines side by side. Edit text, choices, conditions, effects, items and variables; approve or reject proposed branches; find & replace, merge duplicate characters, reorder passages. Give characters voices, and record or attach a clip for any line. *Dialogue only* (D) hides everything but spoken lines. **Story settings** shows the story at a glance (words, reading time, choices, endings, spoken minutes and lines per character) and keeps **drafts**. |
 | **Graph** | The story as an old map (or an indented **Outline**): start, endings, unreachable passages, conditional and proposed routes. For large stories: focus on a passage, trace every way to an ending, faint straight-on routes, and fold scenes. Drag passages to arrange them (saved with the project), search, minimap; click a passage to edit it; *+ New scene* adds a scene after a passage, as a new choice, or on its own. *Save map* downloads the whole map as SVG or PNG. |
 | **Ink** | The deterministic generated Ink, compiled live with the pinned inkjs compiler; compile errors are mapped back to passages. |
@@ -119,19 +128,58 @@ Existing interactive stories can be opened and worked on like any other project.
   default: it plays and exports as before, but edits in Review don't change it. The Import page says which features
   decided that and lets you convert anyway, keeping those lines as notes. CLI: `--edit-ink` / `--keep-ink`.
 
-## Conversion modes
+## Structured markers (the default)
 
-- **Faithful conversion** — scenes become passages in source order; nothing is invented. Every dialogue line, action, parenthetical, transition and note is preserved (notes and unsupported constructs become Ink comments).
-- **Interactive adaptation** — deterministic, local heuristics propose branches grounded in the text (e.g. an optional item pickup and a later item-gated path with a way back). Proposals are marked `generated` and are **not emitted to Ink until approved**.
-- **Structured import** — explicit markers drive the structure. They also work in the other modes.
+**Structured import is the default mode** on the Import page and in the CLI. Write your script as usual and add markers on
+their own lines wherever you want to decide the structure: `@passage` starts a passage, `+ [Choice] -> target` offers a
+choice, `@item` / `@give` / `{has key}` gate a route behind an item, `@exit` hands over to the game. A script without
+markers still converts, one passage per scene or Markdown heading.
 
-### Structured markers
+```fountain
+@item gate_key "Gate Key"
+
+@passage yard The Yard
+
+GUARD
+Nobody passes without a key.
+
+* [Ask about the key] -> stables
++ {has gate_key} [Unlock the gate] -> gate @take gate_key
+
+@passage stables The Stables
+@exit wolf_fight The player fights the wolves.
+@give gate_key
+-> yard
+
+@passage gate The Gate
+@cutscene
+
+GUARD
+Go on, then.
+
+@end
+```
+
+```mermaid
+flowchart LR
+    S["Script + markers<br/>Fountain · Markdown · text<br/>Final Draft · Word · PDF"] --> P["Parsers<br/>shared marker grammar"]
+    P --> ISR[("Story model (ISR)")]
+    ISR --> R["Review · Graph"]
+    R --> ISR
+    ISR --> INK["Generated Ink<br/>compiled + smoke-tested"]
+    INK --> W["Playtest ·<br/>playable web page"]
+    INK --> U["Unity package"]
+    INK --> E["Unreal project"]
+    ISR --> T["Twine (.twee)"]
+```
+
+Cheat sheet (each marker on its own line):
 
 ```text
 @passage archive_entry Archive Entrance     start a passage (id + optional title)
 @start archive_entry                         choose the start passage
 @item archive_key "Archive Key" consumable   declare an inventory item
-@var trust = 0                               declare a variable (bool / int / "string")
+@var trust = 0                               declare a variable (true/false, a whole number or "text")
 @give archive_key   @take archive_key        item effects
 @set trust = 2      @add trust 1             variable effects
 * [Choice text] -> target                    once-only choice
@@ -144,11 +192,33 @@ Existing interactive stories can be opened and worked on like any other project.
 @pause                                       Continue break: the player clicks Continue to read on
 @cutscene                                    the passage is a cutscene: only its dialogue, playing by itself
 @exit wolf_fight The player fights wolves    exit to the game: the dialogue stops while the game plays
+@cue music calm                              a cue for the game (Ink tag #music:calm)
 ## Heading {#custom_id}                      Markdown heading as a passage
 ```
 
-See [`src/samples.ts`](src/samples.ts) for complete examples, and the
-[user guide](docs/USER_GUIDE.md#13-structured-markers) for what each marker does.
+**[The structured marker reference](docs/STRUCTURED_MARKERS.md)** covers every marker (syntax, what it does, an example),
+how passages end and flow on, conditions, a worked example with the exact Ink it produces, and diagrams of the pipeline,
+the story map and the item flow. [`src/samples.ts`](src/samples.ts) has complete examples (*The Locked Archive* uses
+markers throughout).
+
+## Conversion modes
+
+- **Structured import** (default) — explicit markers drive the structure, as above. Without markers, scenes (or Markdown
+  headings) become passages in source order, just as in Faithful conversion.
+- **Faithful conversion** — scenes become passages in source order; nothing is invented. Every dialogue line, action, parenthetical, transition and note is preserved (notes and unsupported constructs become Ink comments). Markers work here too.
+- **Interactive adaptation** — deterministic, local heuristics propose branches grounded in the text (e.g. an optional item pickup and a later item-gated path with a way back). Proposals are marked `generated` and are **not emitted to Ink until approved**. Markers work here too.
+
+CLI: `--mode structured|faithful|adaptation` (default `structured`).
+
+Every suggester (the heuristics, the cheap rules in `src/core/rules.ts`, a model) returns the same data, a *proposal*:
+a group of choices for one passage, pointing at the line of the script that prompted it (see
+[`src/core/proposals.ts`](src/core/proposals.ts)). Six deterministic checks run before anything is written (shape,
+references, evidence, fit, one group per passage, and the story still completable with everything approved); what fails
+is set aside as a `SUGGESTION_DROPPED` note, and what passes arrives pending, exactly as today. On the command line,
+`--suggest model` adds a small on-device model as a suggester (`--suggest all` runs it after the heuristics); a model's
+suggestions stay pending even with `--approve-all` unless you also pass `--approve-model`. `npm run eval:adapt` scores
+every suggester against hand-marked scripts in [`tests/adaptation-eval/`](tests/adaptation-eval/README.md); the model
+ships in the web app only once it beats the heuristics there.
 
 ## Ink conventions
 
@@ -252,7 +322,7 @@ carries a save over, starts at every passage and clicks through the story panel:
 *A complete new Unity project* (or `--unity-project` on the command line) wraps the same package in a project that creates a
 demo scene on first open.
 
-**Unreal** (5.7+): a C++ project with Inkpot enabled and `Scripts/setup_inkpot.sh|ps1` to clone Inkpot at the pinned ref,
+**Unreal** (built and tested with 5.7; Inkpot documents 5.7 and 5.8): a C++ project with Inkpot enabled and `Scripts/setup_inkpot.sh|ps1` to clone Inkpot at the pinned ref,
 with the same features as the Unity package. A Blueprint-friendly `UNarrativeBridgeComponent` starts at any passage, presents
 choices, Continue breaks and exits to the game (`Resume`, `ResumeAt`), exposes variables, keeps the game's inventory in step
 (`INarrativeInventoryAuthority`), lists locked choices with what they need, translates (`Translations.csv`), plays voice clips,
@@ -291,20 +361,24 @@ src/core/            engine-independent pipeline (no UI or Node dependencies)
   isr.ts             Intermediate Story Representation (schema 1.0)
   parsing/           independent parsers: fountain, plaintext, markdown, ink + shared markers
   builder.ts         parsed documents → ISR (passage boundaries, characters, items, provenance)
-  adapt.ts           interactive-adaptation proposals
+  adapt.ts           interactive-adaptation heuristics (the first suggester)
+  proposals.ts       suggestions as data: Proposal, Suggester, applyProposals and its six checks
+  rules.ts           two cheap rule suggesters (questions, wider pickup verbs), the bar a model has to clear
   analyzer.ts        graph + semantic diagnostics
   inkgen.ts          deterministic Ink generator + source map
   validate.ts        inkjs compile + seeded runtime smoke tests
   export/            IEngineAdapter, Unity (UPM package) and Unreal adapters, manifest, verifier, zip, tar
   pipeline.ts        conversion states and orchestration
+src/suggest/         the on-device model suggester (prompt.ts, model.ts); loaded only on demand
 src/ui/              React web app (design/: the app's design variables and published design; admin/: the #admin editor)
 src/cli/             command-line interface
 schemas/             JSON Schema for the ISR
 docs/                user guide (USER_GUIDE.md) and its screenshots (npm run guide:screenshots)
 tests/               unit, golden-file, compiler, runtime and export tests
+  adaptation-eval/   marked choice moments, public-domain play excerpts (plays/) and the baseline (npm run eval:adapt)
   e2e/               browser tests (WebKit and Chromium)
   unreal-stubs/      a stand-in CoreMinimal.h for npm run test:unreal
-scripts/             build helpers, npm run test:unity, test:unreal and test:unreal:build
+scripts/             build helpers, npm run test:unity, test:unreal, test:unreal:build and eval:adapt
 ```
 
 Contributions are welcome: see [CONTRIBUTING.md](CONTRIBUTING.md), and [SECURITY.md](SECURITY.md) for reporting a
@@ -312,6 +386,7 @@ security problem privately.
 
 ## Not yet supported
 
-scanned PDFs (PDF import reads the text layer) and dual dialogue in PDFs; AI-assisted adaptation (would require explicit
-consent before sending scripts anywhere); in Unreal, an in-editor story debugger and Unreal String Tables (the Unity package
+scanned PDFs (PDF import reads the text layer) and dual dialogue in PDFs; on-device model suggestions in the web app (the
+command line has them, `--suggest model`; the Review button, download and caching follow once a model beats the heuristics
+on `npm run eval:adapt`); cloud models (would require explicit consent before sending scripts anywhere); in Unreal, an in-editor story debugger and Unreal String Tables (the Unity package
 has a Story Debugger window and Localization-package tables).

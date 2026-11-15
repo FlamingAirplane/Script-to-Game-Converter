@@ -83,12 +83,16 @@ Not ready to use your own script? Scroll down to **Or start from a sample**.
 
 ### Step 2: Conversion mode
 
+- **Structured import** (the default, marked *recommended*) builds the story exactly as you mark it, from markers you
+  write into the script: `@passage` to start a passage, `+ [Choice] -> target` for a choice, `@item` and `{has key}` for
+  a route that needs an item, and so on. See [Structured markers](#13-structured-markers). A script without any markers
+  still converts, one passage per scene, so you can start without them and add them as you plan the branches.
 - **Faithful conversion** keeps your story exactly as written. Each scene becomes a passage, in order. Nothing is
   invented.
 - **Interactive adaptation** also suggests choices grounded in your text, such as picking up an item and a later path
   that needs it. Suggestions are marked *generated* and *pending*, and **nothing is added until you approve it**.
-- **Structured import** follows markers you write into the script (`@passage`, `@item`, choices and so on). See
-  [Structured markers](#13-structured-markers). Markers also work in the other two modes.
+
+Markers work in all three modes.
 
 Optionally type a **Story title** (otherwise it comes from the title page), then click **Convert**.
 
@@ -153,7 +157,7 @@ Click **Story settings** at the top of the contents.
 
 ![Story settings: the bookplate, At a glance and lines per character](images/story-settings.jpg)
 
-- **Title, Author, Start passage.**
+- **Title, Author, Start passage.** (You can also rename the story by clicking its title in the top bar.)
 - **Players see only the dialogue:** tick it and players get just the spoken lines, plus the choices. Narration,
   transitions, scene headings and parentheticals are left out of Playtest, the playable story, Twine, Unity, Unreal
   and the translation sheet. Pictures, music, sounds and portraits stay. Your script isn't changed: untick it and
@@ -246,9 +250,15 @@ chapter.
 
 ![Playtest, with the story on the left and the state panel on the right](images/playtest.jpg)
 
-Click a choice (or press 1–9) to play. **Undo choice** (Backspace) steps back; **Restart** (R) begins again. **Voices**
+Click a choice (or press the number beside it, 1–9; Enter or Space goes on at a *Continue*) to play. After a choice the
+text scrolls to where the new part begins, so you read on from its first line. **Undo choice** (Backspace) steps back;
+**Restart** (R) begins again. **Voices**
 (V) reads the dialogue aloud; **All text / Dialogue only** (D) hides narration while you test. To hide it from players too, tick **Players see only
 the dialogue** in Story settings; Playtest then shows *players see dialogue only*.
+
+Choices you've taken before, in this read or an earlier one, are greyed out with a ✓ (you can still pick them), as
+players see them in the playable story and the Unity and Unreal story panels. They're remembered through Restart;
+**Forget chosen** makes every choice look new again.
 
 **Locked shown / Locked hidden** (G) controls the choices you can't take yet because they need an item or value. When
 shown, each sits greyed out under the real choices with a 🔒 and what it needs, such as *needs Archive Key*, so you can
@@ -275,7 +285,8 @@ The panel beside the story shows:
 - **Download playable story (.html):** one web page that anyone can open on a computer or phone to read and play your
   story. Email it or put it on any website. It saves each reader's progress, offers undo and *Start over*, and plays your
   recordings or voices. If you send a revised copy, readers keep their place; if you cut a choice they made, they pick up
-  just before it.
+  just before it. After each choice the page scrolls to the start of the new text, which fades in, and *Continue* opens
+  where they left off. On a computer, readers can press 1–9 to choose, Enter or Space to go on, and Backspace to undo.
 
   ![The playable story as a reader sees it](images/playable.jpg)
 
@@ -468,14 +479,15 @@ Press **?** at any time to see them all. On Windows and Linux, use Ctrl instead 
 
 ## 13. Structured markers
 
-Write these on their own lines in any script to control the structure exactly (they work in every mode, and drive
-*Structured import*):
+Markers are short lines you write into any script (Fountain, plain text, Markdown, or a Final Draft, Word or PDF file) to
+decide the structure yourself. They drive *Structured import*, the default mode, and work in the other modes too. Each
+marker goes on a line of its own; ids are letters, digits and underscores.
 
 ```text
 @passage archive_entry Archive Entrance     start a passage (id + optional title)
 @start archive_entry                         choose the start passage
 @item archive_key "Archive Key" consumable   declare an item (consumable is a label for the game)
-@var trust = 0                               declare a variable (true/false, a number or "text")
+@var trust = 0                               declare a variable (true/false, a whole number or "text")
 @give archive_key   @take archive_key        give or take an item
 @set trust = 2      @add trust 1             change a variable
 * [Choice text] -> target                    a choice that disappears once picked
@@ -488,12 +500,37 @@ Write these on their own lines in any script to control the structure exactly (t
 @pause                                       a Continue break: the player clicks Continue to read on
 @cutscene                                    this passage is a cutscene: only its dialogue, playing by itself
 @exit wolf_fight The player fights wolves    an exit to the game: the dialogue stops while the game plays
+@cue music calm                              a cue for the game: music, ambience, a sound or a screen shake
 @end                                         end the story here
 ## Heading {#custom_id}                      a Markdown heading as a passage with a chosen id
 ```
 
-The **Structured marker reference** at the bottom of the Import page has the same list. *The Locked Archive* sample uses
-them throughout.
+A few rules worth knowing:
+
+- Once a script has a `@passage`, only `@passage` lines start passages; scene headings stay inside the passage they're in.
+  Anything before the first `@passage` (other than `@item`, `@var` and `@start`) goes into a passage called *Opening*.
+- A passage with no choices and no `-> target` goes on to the next passage in the script; the last one is an ending.
+- A passage can have choices **and** a `-> target`: the target is taken only when none of the choices is open.
+- Items and variables used by `@give`, `@take`, `@set` or `@add` are declared for you if you forget. An item that's only
+  used in a `{condition}` must be declared with `@item`.
+
+This is how the markers in a small script become a story map:
+
+```mermaid
+flowchart LR
+    yard["@passage yard"] -->|"* [Ask about the key] -> stables"| stables["@passage stables"]
+    stables -->|"@exit wolf_fight"| game[["The game plays"]]
+    game -->|"resumes the story"| stables
+    stables -->|"@give gate_key, then -> yard"| yard
+    yard -->|"+ {has gate_key} [Unlock the gate] -> gate"| gate["@passage gate<br/>@cutscene"]
+    yard -->|"+ [Walk away] -> END"| END(["END"])
+    gate -->|"@end"| END
+```
+
+**[The structured marker reference](STRUCTURED_MARKERS.md)** has every marker in detail with examples, the full rules
+for conditions, a worked example with the Ink it turns into, what each export does with each marker, and diagrams of the
+whole pipeline and of how items unlock choices. The **Structured marker reference** at the bottom of the Import page has
+the short list, and *The Locked Archive* sample uses markers throughout.
 
 ## 14. Troubleshooting
 

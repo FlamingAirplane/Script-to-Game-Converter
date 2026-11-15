@@ -21,11 +21,16 @@ npm run dev        # the app at http://localhost:5173
 
 ```bash
 npm run typecheck
-npm test               # unit tests (tests/pipeline.test.ts)
+npm test               # unit tests (tests/*.test.ts)
 npm run test:unreal    # the Unreal export's per-story C++ compiles (needs clang)
 npm run test:unreal:build -- --test   # if you changed the Unreal C++ and have Unreal 5.7: build it and run its tests
 npm run test:e2e       # the writer file in WebKit and Chromium (needs Playwright browsers)
 ```
+
+If you change a suggester (`src/core/adapt.ts`, `src/core/rules.ts`, `src/suggest/`), the checks in
+`src/core/proposals.ts`, or the evaluation set, also run `npm run eval:adapt` and refresh
+`tests/adaptation-eval/BASELINE.md` with its table; `--suggest model` adds the on-device model (a download of hundreds
+of megabytes, so it isn't run in CI).
 
 CI runs all of these, plus accessibility, sideways-scrolling, offline and design-editor checks
 (see `.github/workflows/ci.yml`). If you change the Unity export and have Unity installed, also run
@@ -34,10 +39,11 @@ CI runs all of these, plus accessibility, sideways-scrolling, offline and design
 ## How the code is laid out
 
 - `src/core`: everything that doesn't need a browser: parsers (`parsing/`), the story model (`isr.ts`), Ink
-  generation (`inkgen.ts`), checks (`analyzer.ts`, `validate.ts`) and the exports (`export/`). The command-line tool
-  uses the same code.
+  generation (`inkgen.ts`), checks (`analyzer.ts`, `validate.ts`), suggestions (`proposals.ts`, `adapt.ts`,
+  `rules.ts`) and the exports (`export/`). The command-line tool uses the same code.
+- `src/suggest`: the on-device model suggester, loaded only when asked for.
 - `src/ui`: the React app.
-- `tests/pipeline.test.ts`: unit tests; `tests/e2e`: browser tests.
+- `tests/*.test.ts`: unit tests; `tests/adaptation-eval`: the suggesters' evaluation set; `tests/e2e`: browser tests.
 
 The README's "Repository layout" section has more.
 

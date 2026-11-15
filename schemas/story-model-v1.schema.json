@@ -151,7 +151,8 @@
         "forced": { "type": "boolean" },
         "origin": { "$ref": "#/$defs/provenance" },
         "review": { "$ref": "#/$defs/review" },
-        "source": { "$ref": "#/$defs/sourceRef" }
+        "source": { "$ref": "#/$defs/sourceRef" },
+        "suggester": { "type": "string" }
       }
     },
     "passage": {

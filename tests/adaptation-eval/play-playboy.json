@@ -1,0 +1,25 @@
+{
+  "script": "tests/adaptation-eval/plays/playboy.fountain",
+  "heldOut": false,
+  "notes": "Marked from the numbered dump before any suggester was run on this script. Stage directions inside speeches come after them, so the looking-glass is taken at line 6 and carried off at line 3.",
+  "moments": [
+    {
+      "passage": "scene_01",
+      "line": 6,
+      "kind": "pickup",
+      "note": "the looking-glass"
+    },
+    {
+      "passage": "scene_02",
+      "line": 10,
+      "kind": "decision",
+      "note": "his boots fit her: keep them or put them back"
+    },
+    {
+      "passage": "scene_03",
+      "line": 5,
+      "kind": "reply",
+      "note": "is it you’s the man killed his father?"
+    }
+  ]
+}

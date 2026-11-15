@@ -9,6 +9,53 @@
   `StartAt("passage.line_…")` or `EnterAt(…)`, and the lines are listed in `StoryInfo.Lines`. The Unity Story Debugger
   can jump to a line, and the smoke test and Unreal automation tests start at every line.
 - **Fixed:** an exit's note came back twice (as a note too) when Narrative Bridge's own Ink was brought back in.
+
+### Added since 0.4.0 (to be tagged 0.5.0)
+
+- **The upload box is first.** The Import page now opens on the drop box and the conversion modes; the sample, the engine list and the offline notes come after. A one-line promise is used everywhere: *Turn a script into a playable story, then hand it to a game developer.*
+- **Review shows your words first.** A passage's id, picture, cutscene setting, order and Delete fold into one *Passage settings* row. Conditions and effects read as words (*the player gets Archive Key*), with the Ink in the tooltip; the *transformed* badge is now *from your script*.
+- **A slimmer top bar.** Undo, Redo and Save stay; everything else (theme, sounds, shortcuts, open, move to another browser, new) is behind one Menu. The ribbon bookmark tucks away while a page is scrolled, so it no longer covers a line's buttons.
+- **Prose reads better.** Quoted speech with a tag (*“Take it,” said Mira*) becomes a character speaking; *he/she said* and untagged replies are guessed and flagged for review. Section breaks (* * *) and chapter lines start new scenes.
+- **A decision rule** for adaptation suggestions: *Take it, or walk away. But decide now.* becomes a pending choice pair.
+- **Unity:** the TextMeshPro essentials are imported when the project opens, so the story panel is no longer blank on first Play; a locked choice that needs the player to be without an item reads *Needs to be without …*.
+- **Unreal:** the story panel keeps the newest line in view. The export, the Export page and the About page name the tested version (5.7) and the one-line Inkpot fix 5.9 needs.
+- **About page** now agrees with the app that Structured is the recommended mode; added a sitemap.
+
+
+- **Reading on after a choice.** In Playtest and the playable story, a choice now scrolls to the first line of the
+  text it led to (not the end of it), and that text fades in gently (not at all if the reader's system asks for less
+  motion). Choices show the number key that takes them; Enter or Space goes on at a *Continue*, an exit or a cutscene.
+  The playable story learns the keys too (1–9, Enter, Backspace to undo), keeps keyboard focus on the choices, shows
+  the choices again after an undo, and *Continue* reopens at the reader's last choice rather than the top of the page.
+- **Fixed:** Undo choice in Playtest could bring back the text from before the choice but the choices from after it.
+
+- **Suggestions as data, and an on-device model on the command line.** Interactive adaptation's rules now return
+  *proposals* (a group of choices for one passage, pointing at the line that prompted it) that pass six checks before
+  they're written: shape, references, evidence, fit, one group per passage, and the story still completable with
+  everything approved. What's set aside shows in Diagnostics as a note (*A suggestion was set aside because it wouldn't
+  fit the story*); what passes arrives pending, exactly as before, and now says who suggested it and which line. Two
+  cheap rules join the heuristics (a question another character answers becomes a reply; more ways of picking
+  something up), and `--suggest model` on the command line adds a small language model that runs on your machine and
+  suggests replies, decisions and pickups the rules miss. `--approve-all` leaves a model's suggestions pending unless
+  you also pass `--approve-model`. `npm run eval:adapt` scores every suggester against hand-marked scripts
+  (`tests/adaptation-eval/`); the model comes to the web app only once it beats the heuristics there.
+- **A larger evaluation set for suggestions:** sixteen scene-length excerpts from public-domain plays (Ibsen, Wilde,
+  Shaw, Chekhov, Synge, Glaspell, Shakespeare, and Molière in French) join the samples, with their choice moments
+  marked; five are held out. `node scripts/play-excerpts.mjs` rebuilds them from Project Gutenberg's texts.
+
+- **Choices you've taken before are greyed out:** coming back to a choice, on a later read or a passage you loop
+  back to, players see which ways they've already tried (still clickable, with a ✓). It's remembered through Restart,
+  in Playtest, the playable story, and the Unity and Unreal story panels. Playtest's **Forget chosen** clears it.
+- **Rename a story from the top bar:** click its title, type, and press Enter (Escape keeps the old one).
+- **Structured import is now the default.** The Import page starts on *Structured import* (marked recommended), and the
+  command line uses `--mode structured` unless told otherwise. Markers you type into the script (`@passage`, choices like
+  `+ [Open the door] -> vault`, `@item`, `@exit`…) build the story as you mark it, and a script without any markers still
+  converts scene by scene, exactly as before. Faithful conversion and Interactive adaptation are one click away.
+- **A full guide to the markers:** [docs/STRUCTURED_MARKERS.md](docs/STRUCTURED_MARKERS.md) covers every marker with an
+  example, how passages end and flow on, conditions, `@cue` (which wasn't documented before), a worked example with the
+  exact Ink it becomes, and what each export does with each marker. Diagrams show the path from script to Ink to Unity,
+  Unreal and Twine, how passages, choices and exits connect, and how items unlock choices. The README and the user
+  guide now lead with the markers.
 - **Cutscenes:** tick **🎬 Cutscene** on a passage in Review, or put `@cutscene` in it in a script. Players then see
   only its dialogue, one line at a time and centred like subtitles, with each line moving on by itself once there's
   been time to read it. **Skip** shows the rest at once, and the passage's choices come after. It works in Playtest,
