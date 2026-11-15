@@ -5,6 +5,8 @@ import type { StoryProject } from '../core/isr';
 // Pictures and recordings aren't included (a link that held them would be far too long); a project file carries those.
 
 export const LINK_PREFIX = '#story=';
+/** A play link: the same story, opened to read and leave notes on rather than to edit (see PlayLinkView.tsx). */
+export const PLAY_PREFIX = '#play=';
 /** Links longer than this are refused: chat apps and email cut them, and some browsers won't open them. */
 export const MAX_LINK_CHARS = 60_000;
 
@@ -37,19 +39,19 @@ function forLink(project: StoryProject): StoryProject {
 }
 
 /** A link that opens this story in the app at `base` (the app's address), or why there can't be one. */
-export async function storyLink(project: StoryProject, base: string): Promise<{ url: string } | { error: string }> {
+export async function storyLink(project: StoryProject, base: string, prefix: string = LINK_PREFIX): Promise<{ url: string } | { error: string }> {
   if (!canMakeLinks()) return { error: 'This browser can’t make story links. Save a project file instead.' };
   const json = JSON.stringify({ format: 'narrative-bridge-project', project: forLink(project) });
   const data = toBase64Url(await through(new TextEncoder().encode(json), new CompressionStream('deflate-raw')));
-  const url = `${base.replace(/#.*$/, '')}${LINK_PREFIX}${data}`;
+  const url = `${base.replace(/#.*$/, '')}${prefix}${data}`;
   if (url.length > MAX_LINK_CHARS)
     return { error: `This story is too long for a link (${Math.round(url.length / 1000)} thousand characters; links stop working past ${MAX_LINK_CHARS / 1000} thousand). Save a project file instead.` };
   return { url };
 }
 
 /** The project file text a link's # part holds, ready for unpackProject; null if it isn't a story link. */
-export async function readStoryLink(hash: string): Promise<string | null> {
-  if (!hash.startsWith(LINK_PREFIX)) return null;
-  const bytes = await through(fromBase64Url(hash.slice(LINK_PREFIX.length)), new DecompressionStream('deflate-raw'));
+export async function readStoryLink(hash: string, prefix: string = LINK_PREFIX): Promise<string | null> {
+  if (!hash.startsWith(prefix)) return null;
+  const bytes = await through(fromBase64Url(hash.slice(prefix.length)), new DecompressionStream('deflate-raw'));
   return new TextDecoder().decode(bytes);
 }

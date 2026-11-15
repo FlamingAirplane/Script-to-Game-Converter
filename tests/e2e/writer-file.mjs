@@ -160,6 +160,34 @@ for (const [name, type] of [['WebKit', webkit], ['Chromium', chromium]]) {
       if (only.name !== 'the-locked-archive-story-only.twee') throw new Error(`unexpected file name ${only.name}`);
       if (/<<|@@|\$|StoryInit|"format"/.test(only.text) || !only.text.includes('MIRA: The archive is locked.')) throw new Error('story-only file has extras or is missing text');
     });
+    await step('shared for feedback: a play link opens just the story, a reader’s note comes back into Review', async () => {
+      await page.getByRole('button', { name: /Export/ }).click();
+      await page.locator('.feedback-more summary').click();
+      await page.getByRole('button', { name: 'Copy a play link' }).click();
+      const link = await page.getByLabel('Play link').inputValue();
+      if (!link.includes('#play=')) throw new Error(`not a play link: ${link.slice(0, 60)}`);
+      // Someone else, in their own browser: the story only, with a Note button.
+      const reader = await browser.newPage({ acceptDownloads: true });
+      await reader.goto(link);
+      const story = reader.frameLocator('iframe.play-link-frame');
+      await story.getByRole('button', { name: 'Begin' }).click();
+      await story.getByText('The archive is locked.').waitFor();
+      if (await reader.locator('.tab, .topbar').count()) throw new Error('the play link opened the writing app');
+      await story.locator('#note').click();
+      await story.locator('#note-text').fill('Why is it locked?');
+      await story.getByRole('button', { name: 'Save note' }).click();
+      await story.locator('#notes').click();
+      const [notes] = await Promise.all([reader.waitForEvent('download'), story.getByRole('button', { name: 'Download notes for the writer' }).click()]);
+      const notesFile = readFileSync(await notes.path()); // before the reader's browser closes and takes it away
+      await reader.close();
+      // Back with the writer: the note goes in after the line it was written on.
+      await page.locator('input[aria-label="Readers’ notes file"], input[aria-label="Readers\' notes file"]').setInputFiles({ name: 'notes.json', mimeType: 'application/json', buffer: notesFile });
+      await page.getByText(/1 note from notes\.json went in/).waitFor({ timeout: 5000 });
+      await page.getByRole('button', { name: /Review/ }).click();
+      await page.locator('.passage-item', { hasText: 'Archive Entrance' }).click();
+      await page.waitForFunction(() => [...document.querySelectorAll('textarea')].some((t) => t.value === 'Reader note: Why is it locked?'), null, { timeout: 5000 });
+      await page.locator('button[title^="Undo"]').click(); // leave the sample as it was
+    });
     await step('restores the project after a reload', async () => {
       await page.reload();
       await page.getByRole('button', { name: /Archive Entrance/ }).waitFor({ timeout: 5000 });

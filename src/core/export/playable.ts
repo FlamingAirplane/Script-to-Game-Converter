@@ -33,7 +33,16 @@ export function playableFileName(story: ProcessedStory): string {
   return `${fileBase(story.project)}.html`;
 }
 
-export function buildPlayableHtml(story: ProcessedStory, inkRuntimeJs: string, audio: AudioAssets = {}, images: AudioAssets = {}): string {
+/** How a playable story is built. */
+export interface PlayableOptions {
+  /**
+   * A copy shared for feedback: readers get a Note button to jot down what they think of what's on the page, kept in
+   * their browser and downloaded as a file for the writer (see readerNotes.ts, which brings them back into Review).
+   */
+  feedback?: boolean;
+}
+
+export function buildPlayableHtml(story: ProcessedStory, inkRuntimeJs: string, audio: AudioAssets = {}, images: AudioAssets = {}, options: PlayableOptions = {}): string {
   assertExportable(story);
   const { title, author, id } = story.project.project;
   const runtime = scriptSafe(inkRuntimeJs.replace(/\/\/# sourceMappingURL=.*$/m, ''));
@@ -68,6 +77,10 @@ export function buildPlayableHtml(story: ProcessedStory, inkRuntimeJs: string, a
       title,
       author: author ?? '',
       saveKey: `narrative-bridge.play.${id}`,
+      id,
+      feedback: !!options.feedback,
+      notesKey: `narrative-bridge.notes.${id}`,
+      notesFile: `${fileBase(story.project)}-reader-notes.json`,
       chosenKey: `narrative-bridge.chosen.${id}`,
       version: storyVersion(story),
       voices,
@@ -107,9 +120,11 @@ export function buildPlayableHtml(story: ProcessedStory, inkRuntimeJs: string, a
     <p class="colophon">An interactive story. Your progress is saved in this browser.</p>
   </section>
   <section id="reader" class="reader" hidden>
-    <header class="running-head"><span id="rh-title"></span><span class="tools"><select id="language" aria-label="Language" hidden></select><button id="sounds" class="link" aria-pressed="true">Sounds on</button><button id="voice" class="link" aria-pressed="false">Voices off</button><button id="undo" class="link" disabled>Undo</button><button id="restart" class="link">Start over</button></span></header>
+    <header class="running-head"><span id="rh-title"></span><span class="tools"><select id="language" aria-label="Language" hidden></select><button id="sounds" class="link" aria-pressed="true">Sounds on</button><button id="voice" class="link" aria-pressed="false">Voices off</button><button id="undo" class="link" disabled>Undo</button><button id="restart" class="link">Start over</button><button id="note" class="link" hidden>✎ Note</button><button id="notes" class="link" hidden></button></span></header>
     <p id="notice" class="notice" role="status" hidden></p>
     <div id="text" class="text" aria-live="polite"></div>
+    <form id="note-box" class="note-box" hidden><p class="note-on"></p><textarea id="note-text" rows="3" aria-label="Your note" placeholder="What did you think of this part?"></textarea><span class="note-actions"><button type="submit" class="btn primary">Save note</button><button type="button" id="note-cancel" class="link">Cancel</button></span></form>
+    <section id="notes-box" class="note-box" hidden aria-label="Your notes"><h2>Your notes</h2><ol id="notes-list"></ol><p class="note-help">Notes stay in this browser until you download them. Send the file to the writer: they can bring your notes into their script.</p><span class="note-actions"><button type="button" id="notes-download" class="btn primary">Download notes for the writer</button><button type="button" id="notes-close" class="link">Close</button></span></section>
     <nav id="choices" class="choices"></nav>
   </section>
 </main>
@@ -171,6 +186,11 @@ padding:10px 8px 10px 30px;cursor:pointer}.choice:before{content:'❧';position:
 .end{text-align:center;color:var(--rubric);font-style:italic;font-size:22px;margin:30px 0 10px;letter-spacing:.1em}
 .end-actions{text-align:center}
 .notice{font-size:15px;font-style:italic;color:var(--ink2);background:rgba(221,161,94,.16);border-left:2px solid var(--rubric);padding:8px 12px;margin:0 0 18px}
+.note-box{margin:22px 0 0;padding:12px 14px;border:1px dashed var(--rule);border-radius:3px;background:rgba(255,253,241,.6)}
+.note-box h2{font-weight:400;font-size:20px;margin:0 0 8px}.note-on{margin:0 0 8px;font-size:15px;font-style:italic;color:var(--ink2)}
+.note-box textarea{width:100%;font:16px/1.5 var(--serif);padding:8px;border:1px solid var(--rule);border-radius:3px;background:#fffdf1;color:var(--ink)}
+.note-actions{display:flex;gap:14px;align-items:center;margin-top:8px}.note-help{font-size:14px;color:var(--faded);font-style:italic}
+#notes-list{padding-left:20px;margin:0}#notes-list li{margin:0 0 10px}#notes-list q{display:block;font-size:14px;color:var(--faded);font-style:italic}
 @media (max-width:600px){body{padding:0;font-size:17px}.book{padding:34px 22px;min-height:100vh;border-radius:0}h1{font-size:32px}}
 `;
 
@@ -723,6 +743,64 @@ const PLAYER_JS = `
       language = pick.value;
       try { localStorage.setItem('narrative-bridge.play.language', language); } catch (e) {}
       if (story) render();
+    };
+  }
+  // Reader notes, in a copy shared for feedback: a note on what's on the page (the last line shown is its anchor,
+  // which readerNotes.ts matches back to the script), kept in this browser and downloaded as a file for the writer.
+  if (meta.feedback) {
+    var notes = [];
+    try { notes = JSON.parse(localStorage.getItem(meta.notesKey) || '[]') || []; } catch (e) {}
+    var plain = function (t) { return String(t || '').replace(/<[^>]+>/g, ''); };
+    var notesLabel = function () { $('notes').textContent = 'Notes (' + notes.length + ')'; $('notes').hidden = !notes.length; };
+    var keepNotes = function () { try { localStorage.setItem(meta.notesKey, JSON.stringify(notes)); } catch (e) {} notesLabel(); };
+    var anchor = function () {
+      for (var i = lines.length - 1; i >= 0; i--) if (lines[i].text && !lines[i].chosen && (reveal === null || i < reveal)) return lines[i];
+      return null;
+    };
+    var drawNotes = function () {
+      var list = $('notes-list');
+      list.textContent = '';
+      notes.forEach(function (n, i) {
+        var li = document.createElement('li');
+        if (n.quote) { var q = document.createElement('q'); q.textContent = (n.speaker ? n.speaker + ': ' : '') + n.quote; li.appendChild(q); }
+        li.appendChild(document.createTextNode(n.note + ' '));
+        var del = el('button', 'link', 'remove');
+        del.onclick = function () { notes.splice(i, 1); keepNotes(); drawNotes(); };
+        li.appendChild(del);
+        list.appendChild(li);
+      });
+    };
+    $('note').hidden = false;
+    notesLabel();
+    $('note').onclick = function () {
+      var a = anchor();
+      $('notes-box').hidden = true;
+      $('note-box').querySelector('.note-on').textContent = a ? 'On: “' + plain(a.text).slice(0, 140) + '”' : 'On the start of the story';
+      $('note-box').hidden = false;
+      $('note-text').focus();
+    };
+    $('note-cancel').onclick = function () { $('note-box').hidden = true; };
+    $('note-box').onsubmit = function (e) {
+      e.preventDefault();
+      var text = $('note-text').value.trim();
+      if (!text) return;
+      var a = anchor();
+      notes.push({ quote: a ? plain(a.text) : '', speaker: a && a.speaker ? a.speaker : undefined, note: text, at: new Date().toISOString() });
+      $('note-text').value = '';
+      $('note-box').hidden = true;
+      keepNotes();
+      notice('Note saved. Notes (' + notes.length + ') shows them, ready to send to the writer.');
+    };
+    $('notes').onclick = function () { $('note-box').hidden = true; drawNotes(); $('notes-box').hidden = false; };
+    $('notes-close').onclick = function () { $('notes-box').hidden = true; };
+    $('notes-download').onclick = function () {
+      var data = JSON.stringify({ format: 'narrative-bridge-reader-notes', version: 1, story: meta.title, storyId: meta.id, notes: notes }, null, 2);
+      var a = document.createElement('a');
+      a.href = URL.createObjectURL(new Blob([data], { type: 'application/json' }));
+      a.download = meta.notesFile;
+      document.body.appendChild(a);
+      a.click();
+      setTimeout(function () { URL.revokeObjectURL(a.href); a.remove(); }, 1000);
     };
   }
   $('voice').onclick = function () {
