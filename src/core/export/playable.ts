@@ -9,6 +9,33 @@ import { isActive } from '../isr';
 import { isForcing } from '../forced';
 import { translationEntries } from './translations';
 import { assertExportable, storyVersion } from './common';
+import { plainText } from '../emphasis';
+import { forPlayers } from '../players';
+
+/** A line's text reduced to letters and digits, the same way the player reduces what it shows (endingKey in PLAYER_JS). */
+export function endingKey(text: string): string {
+  return plainText(text)
+    .toLowerCase()
+    .replace(/[^\p{L}\p{N}]+/gu, ' ')
+    .trim();
+}
+
+/**
+ * The story's endings, for the "Endings found" tally: each ending passage, known by the last line a player reads in it.
+ * Passages that share a last line count as one ending.
+ */
+export function endingLines(story: ProcessedStory): { total: number; byLine: Record<string, string> } {
+  const project = forPlayers(story.project);
+  const byLine: Record<string, string> = {};
+  for (const id of story.analysis.endings) {
+    if (!story.analysis.reachable.has(id)) continue;
+    const p = project.passages.find((x) => x.id === id);
+    const last = [...(p?.content ?? [])].reverse().find((b) => b.type === 'action' || b.type === 'dialogue' || b.type === 'transition');
+    const key = last && 'text' in last ? endingKey(last.text) : '';
+    if (key && !byLine[key]) byLine[key] = id;
+  }
+  return { total: new Set(Object.values(byLine)).size, byLine };
+}
 
 // "Playable story" export: one self-contained HTML file (Ink runtime + compiled story + a small
 // book-style reader) that anyone can open in a browser to read and play the story. No game engine.
@@ -81,6 +108,8 @@ export function buildPlayableHtml(story: ProcessedStory, inkRuntimeJs: string, a
       feedback: !!options.feedback,
       notesKey: `narrative-bridge.notes.${id}`,
       notesFile: `${fileBase(story.project)}-reader-notes.json`,
+      endings: endingLines(story),
+      endingsKey: `narrative-bridge.endings.${id}`,
       chosenKey: `narrative-bridge.chosen.${id}`,
       version: storyVersion(story),
       voices,
@@ -117,10 +146,11 @@ export function buildPlayableHtml(story: ProcessedStory, inkRuntimeJs: string, a
       <button id="resume" class="btn primary" hidden>Continue reading</button>
       <button id="begin" class="btn">Begin</button>
     </div>
+    <p id="endings-found" class="colophon" hidden></p>
     <p class="colophon">An interactive story. Your progress is saved in this browser.</p>
   </section>
   <section id="reader" class="reader" hidden>
-    <header class="running-head"><span id="rh-title"></span><span class="tools"><select id="language" aria-label="Language" hidden></select><button id="sounds" class="link" aria-pressed="true">Sounds on</button><button id="voice" class="link" aria-pressed="false">Voices off</button><button id="undo" class="link" disabled>Undo</button><button id="restart" class="link">Start over</button><button id="note" class="link" hidden>✎ Note</button><button id="notes" class="link" hidden></button></span></header>
+    <header class="running-head"><span id="rh-title"></span><span class="tools"><select id="language" aria-label="Language" hidden></select><button id="sounds" class="link" aria-pressed="true">Sounds on</button><button id="voice" class="link" aria-pressed="false">Voices off</button><button id="undo" class="link" disabled>Undo</button><button id="restart" class="link">Start over</button><span class="text-size" role="group" aria-label="Text size"><button id="smaller" class="link" aria-label="Smaller text">A−</button><button id="larger" class="link" aria-label="Larger text">A+</button></span><button id="note" class="link" hidden>✎ Note</button><button id="notes" class="link" hidden></button></span></header>
     <p id="notice" class="notice" role="status" hidden></p>
     <div id="text" class="text" aria-live="polite"></div>
     <form id="note-box" class="note-box" hidden><p class="note-on"></p><textarea id="note-text" rows="3" aria-label="Your note" placeholder="What did you think of this part?"></textarea><span class="note-actions"><button type="submit" class="btn primary">Save note</button><button type="button" id="note-cancel" class="link">Cancel</button></span></form>
@@ -184,14 +214,17 @@ padding:10px 8px 10px 30px;cursor:pointer}.choice:before{content:'❧';position:
 .text [data-at]{scroll-margin-top:24px}.text .fresh{animation:fresh .5s ease-out both}@keyframes fresh{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}@media (prefers-reduced-motion:reduce){.text .fresh{animation:none}}
 #language{font:inherit;font-size:inherit;background:none;border:0;color:inherit;letter-spacing:inherit;cursor:pointer}
 .end{text-align:center;color:var(--rubric);font-style:italic;font-size:22px;margin:30px 0 10px;letter-spacing:.1em}
-.end-actions{text-align:center}
+.end-actions{text-align:center}.endings{text-align:center;font-size:15px;font-style:italic;color:var(--faded);margin:0 0 14px}
+.text-size{display:inline-flex;gap:8px}.text-size .link{font-variant:normal;text-transform:none;letter-spacing:0}body{font-size:calc(18px * var(--size,1))}
 .notice{font-size:15px;font-style:italic;color:var(--ink2);background:rgba(221,161,94,.16);border-left:2px solid var(--rubric);padding:8px 12px;margin:0 0 18px}
 .note-box{margin:22px 0 0;padding:12px 14px;border:1px dashed var(--rule);border-radius:3px;background:rgba(255,253,241,.6)}
 .note-box h2{font-weight:400;font-size:20px;margin:0 0 8px}.note-on{margin:0 0 8px;font-size:15px;font-style:italic;color:var(--ink2)}
 .note-box textarea{width:100%;font:16px/1.5 var(--serif);padding:8px;border:1px solid var(--rule);border-radius:3px;background:#fffdf1;color:var(--ink)}
 .note-actions{display:flex;gap:14px;align-items:center;margin-top:8px}.note-help{font-size:14px;color:var(--faded);font-style:italic}
 #notes-list{padding-left:20px;margin:0}#notes-list li{margin:0 0 10px}#notes-list q{display:block;font-size:14px;color:var(--faded);font-style:italic}
-@media (max-width:600px){body{padding:0;font-size:17px}.book{padding:34px 22px;min-height:100vh;border-radius:0}h1{font-size:32px}}
+@media (max-width:600px){body{padding:0;font-size:calc(17px * var(--size,1))}.book{padding:34px 22px;min-height:100vh;border-radius:0}h1{font-size:32px}
+.running-head{flex-direction:column;gap:6px}.tools{flex-wrap:wrap;gap:4px 14px}}
+.tools .link,.tools select{white-space:nowrap}
 `;
 
 const PLAYER_JS = `
@@ -555,6 +588,8 @@ const PLAYER_JS = `
     if (!choices.length) {
       if (lines.length) chime();
       nav.appendChild(el('p', 'end', '❦ The End ❦'));
+      var found = foundEnding();
+      if (found) nav.appendChild(el('p', 'endings', found));
       var again = el('div', 'end-actions');
       var b = el('button', 'btn', 'Read again');
       b.onclick = startOver;
@@ -803,6 +838,40 @@ const PLAYER_JS = `
       setTimeout(function () { URL.revokeObjectURL(a.href); a.remove(); }, 1000);
     };
   }
+  // Endings found: which of the story's endings this reader has reached, known by the last line read before The End.
+  function endingKey(text) { return String(text || '').replace(/<[^>]+>/g, '').toLowerCase().replace(/[^\\p{L}\\p{N}]+/gu, ' ').trim(); }
+  var endingsFound = {};
+  try { (JSON.parse(localStorage.getItem(meta.endingsKey) || '[]') || []).forEach(function (k) { endingsFound[k] = 1; }); } catch (e) {}
+  function endingsLabel() {
+    var n = Object.keys(endingsFound).length;
+    return meta.endings.total > 1 && n ? 'Endings found: ' + Math.min(n, meta.endings.total) + ' of ' + meta.endings.total : '';
+  }
+  function foundEnding() {
+    for (var i = lines.length - 1; i >= 0; i--) {
+      if (lines[i].chosen || !lines[i].text) continue;
+      var key = endingKey(lines[i].text);
+      var id = meta.endings.byLine[key];
+      if (id && !endingsFound[id]) {
+        endingsFound[id] = 1;
+        try { localStorage.setItem(meta.endingsKey, JSON.stringify(Object.keys(endingsFound))); } catch (e) {}
+      }
+      break;
+    }
+    return endingsLabel();
+  }
+  if (endingsLabel()) { $('endings-found').textContent = endingsLabel(); $('endings-found').hidden = false; }
+  // Text size, remembered for every story in this browser.
+  var size = 1;
+  try { size = +localStorage.getItem('narrative-bridge.play.size') || 1; } catch (e) {}
+  function applySize() {
+    document.documentElement.style.setProperty('--size', String(size));
+    $('smaller').disabled = size <= 0.85;
+    $('larger').disabled = size >= 1.5;
+    try { localStorage.setItem('narrative-bridge.play.size', String(size)); } catch (e) {}
+  }
+  $('smaller').onclick = function () { size = Math.max(0.85, Math.round((size - 0.1) * 100) / 100); applySize(); };
+  $('larger').onclick = function () { size = Math.min(1.5, Math.round((size + 0.1) * 100) / 100); applySize(); };
+  applySize();
   $('voice').onclick = function () {
     voiceOn = !voiceOn;
     try { localStorage.setItem('narrative-bridge.play.voices', voiceOn ? 'on' : 'off'); } catch (e) {}

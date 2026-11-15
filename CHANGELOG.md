@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- **The playable story as a small web game.** **For itch.io (.zip)** on the Export page packs it the way game sites
+  take an HTML game. Readers see how many endings they've found (*Endings found: 1 of 2*), can make the text larger or
+  smaller, and on a phone the top bar wraps instead of running off the screen.
 - **Share a story for feedback.** On the Export page, **For feedback** gives the playable story a **✎ Note** button:
   readers jot down what they think as they read and download their notes for you. **Copy a play link** opens just the
   story, with notes on, in any browser (the story travels inside the link; nothing is uploaded). **Bring in readers' notes…**

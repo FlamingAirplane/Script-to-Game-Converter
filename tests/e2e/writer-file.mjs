@@ -145,6 +145,16 @@ for (const [name, type] of [['WebKit', webkit], ['Chromium', chromium]]) {
       await reader.getByRole('button', { name: 'Undo' }).click();
       await reader.getByRole('button', { name: 'Leave' }).click();
       await reader.getByText('❦ The End ❦').waitFor();
+      // The Locked Archive has two endings; this is one of them, remembered for the cover.
+      await reader.getByText('Endings found: 1 of 2').waitFor({ timeout: 3000 });
+      // Text size: larger, remembered through a reload.
+      const fontSize = () => reader.evaluate(() => parseFloat(getComputedStyle(document.body).fontSize));
+      const before = await fontSize();
+      await reader.getByRole('button', { name: 'Larger text' }).click();
+      if (!((await fontSize()) > before)) throw new Error('A+ did not make the text larger');
+      await reader.reload();
+      await reader.getByText('Endings found: 1 of 2').waitFor({ timeout: 3000 });
+      if (!((await fontSize()) > before)) throw new Error('the text size was not remembered');
       await reader.close();
     });
     await step('Twine: story and logic by default, or the story only', async () => {
