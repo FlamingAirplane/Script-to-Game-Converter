@@ -41,6 +41,9 @@ CI runs all of these, plus accessibility, sideways-scrolling, offline and design
 - `src/core`: everything that doesn't need a browser: parsers (`parsing/`), the story model (`isr.ts`), Ink
   generation (`inkgen.ts`), checks (`analyzer.ts`, `validate.ts`), suggestions (`proposals.ts`, `adapt.ts`,
   `rules.ts`) and the exports (`export/`). The command-line tool uses the same code.
+- `src/core/export/templates/`: the C# (Unity) and C++ (Unreal) code the exports ship, as real `.cs`, `.h` and
+  `.cpp` files. After editing one, run `npm run templates` to regenerate `templates.generated.ts`, which the exports
+  import (a test fails if you forget). `__NAMESPACE__` and the other `__WORDS__` in them are filled in per story.
 - `src/suggest`: the on-device model suggester, loaded only when asked for.
 - `src/ui`: the React app.
 - `tests/*.test.ts`: unit tests; `tests/adaptation-eval`: the suggesters' evaluation set; `tests/e2e`: browser tests.
