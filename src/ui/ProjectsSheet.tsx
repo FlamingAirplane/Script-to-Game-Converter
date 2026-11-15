@@ -4,6 +4,7 @@ import type { StoryProject } from '../core/isr';
 import { cloudIdOf, listCloudProjects, loadFromCloud, saveToCloud, type CloudProject } from './cloud';
 import { keepToken, savedToken } from './design/live';
 import { packProject } from './projectFile';
+import { storyLink } from './storyLink';
 
 // "Your projects on other browsers": a project moves as one complete file (no account), or through the
 // cloud: a private GitHub Gist per project, listed and opened from any browser with your token.
@@ -101,6 +102,8 @@ export function ProjectsSheet({
           </div>
         </section>
 
+        <LinkWay project={project} />
+
         <section className="projects-way">
           <h3>In the cloud (your GitHub account)</h3>
           <p className="small">
@@ -177,5 +180,47 @@ export function ProjectsSheet({
         </section>
       </div>
     </div>
+  );
+}
+
+/** A small story as a link: nothing to sign up for and no file to send, just paste it into a message. */
+function LinkWay({ project }: { project: StoryProject | null }) {
+  const [state, setState] = useState<{ url?: string; note?: string; error?: string }>({});
+  const make = async () => {
+    if (!project) return;
+    setState({});
+    const r = await storyLink(project, location.href);
+    if ('error' in r) return setState({ error: r.error });
+    try {
+      await navigator.clipboard.writeText(r.url);
+      setState({ url: r.url, note: `Link copied (${Math.max(1, Math.round(r.url.length / 1000))} thousand characters). Paste it into a message or another browser.` });
+    } catch {
+      setState({ url: r.url, note: 'Copy the link below.' });
+    }
+  };
+  return (
+    <section className="projects-way">
+      <h3>As a link (small stories)</h3>
+      <p className="small">
+        The whole story fits in the link itself: open it in any browser and the story opens here. It isn't uploaded anywhere, but anyone you give the link to
+        can read the story. Pictures and recordings aren't included; a project file carries those.
+      </p>
+      <div className="row wrap">
+        <button className="btn" disabled={!project} onClick={() => void make()}>
+          Copy a link to this story
+        </button>
+      </div>
+      {state.note && (
+        <p className="small note-text" role="status">
+          {state.note}
+        </p>
+      )}
+      {state.url && <input className="input mono small story-link" readOnly value={state.url} onFocus={(e) => e.target.select()} aria-label="Link to this story" />}
+      {state.error && (
+        <p className="small error-text" role="alert">
+          {state.error}
+        </p>
+      )}
+    </section>
   );
 }

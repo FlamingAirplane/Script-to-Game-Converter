@@ -36,4 +36,5 @@ export function unityTarballName(result: ExportResult): string {
 
 export { buildPlayableHtml, playableFileName } from './playable';
 export { buildTwee, twineFileName, type TwineKind } from './twine';
+export { buildRenpy, renpyFileName } from './renpy';
 export { buildRecordingScript, matchRecordings, recordingScriptFileName, recordingSlot, type RecordingMatch } from './script';

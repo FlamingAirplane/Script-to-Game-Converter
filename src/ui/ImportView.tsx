@@ -16,6 +16,7 @@ import { Logo } from './Logo';
 import demoPicture from './assets/demo-playable.jpg';
 import { putClip } from './audioStore';
 import { designWord, useDesign } from './design/design';
+import { MarkerPreview, MarkerToolbar } from './MarkerPreview';
 
 // The hosted site (GitHub Pages) also serves the offline writer edition next to index.html. Hidden in
 // development, where that file doesn't exist, and inside the offline edition itself (opened from file://).
@@ -171,6 +172,7 @@ export function ImportView({
   const [drag, setDrag] = useState(false);
   const [error, setError] = useState('');
   const input = useRef<HTMLInputElement>(null);
+  const pasteBox = useRef<HTMLTextAreaElement>(null);
 
   const addFiles = async (list: FileList | File[] | null) => {
     if (!list) return;
@@ -297,7 +299,9 @@ export function ImportView({
               <label className="muted small">…or paste text as</label>
               <input className="input mono small" value={pasteName} onChange={(e) => setPasteName(e.target.value)} aria-label="File name for pasted text" />
             </div>
-            <textarea className="textarea mono" rows={9} aria-label="Script text" placeholder={'For example:\n\nINT. ARCHIVE - NIGHT\n\nMIRA\nThe archive is locked.'} value={paste} onChange={(e) => setPaste(e.target.value)} />
+            {mode === 'structured' && <MarkerToolbar textarea={pasteBox} value={paste} onChange={setPaste} />}
+            <textarea ref={pasteBox} className="textarea mono" rows={9} aria-label="Script text" placeholder={'For example:\n\nINT. ARCHIVE - NIGHT\n\nMIRA\nThe archive is locked.'} value={paste} onChange={(e) => setPaste(e.target.value)} />
+            {mode === 'structured' && <MarkerPreview text={paste} fileName={pasteName} />}
           </div>
         </section>
 

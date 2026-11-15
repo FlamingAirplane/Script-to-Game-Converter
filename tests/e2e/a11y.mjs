@@ -2,7 +2,7 @@
 // run on the writer file opened from disk. `npm run test:a11y` (builds the file first).
 import { existsSync, readFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
-import { fileURLToPath } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 import { chromium } from 'playwright-core';
 
 const file = fileURLToPath(new URL('../../release/Narrative-Bridge.html', import.meta.url));
@@ -17,7 +17,7 @@ const browser = await chromium.launch();
 let total = 0;
 for (const theme of ['light', 'dark']) {
   const page = await browser.newPage({ viewport: { width: 1440, height: 900 }, colorScheme: theme });
-  await page.goto(`file://${encodeURI(file)}`);
+  await page.goto(pathToFileURL(file).href);
   await page.getByText('New here? Four steps.').waitFor();
   for (const tab of TABS) {
     if (tab === 'Review') {

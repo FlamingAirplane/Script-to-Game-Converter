@@ -12,6 +12,14 @@
 
 ### Added since 0.4.0 (to be tagged 0.5.0)
 
+- **Turn a line into a choice.** In Review, **⑂** beside a line of narration or dialogue makes it a choice: check the button's words and pick where it leads (a new scene with the lines that follow, a new empty scene, a passage that exists, or the end). Branching without learning a single marker.
+- **Markers as you type.** With Structured import chosen, buttons above the paste box insert each marker on its own line, and a live **Preview** shows the passages, choices and problems the text makes, so writers learn the markers by seeing what they do.
+- **Ren’Py export.** *Download for Ren’Py (.rpy)* on the Export page (and `--engine renpy` on the command line) writes the story as a Ren’Py visual novel: a character per speaker, menus for choices (a locked one appears only once its condition holds), items and variables as saved defaults, once-only choices, forced choices, cutscenes that play by themselves, and hooks for exits and cues. Checked against the story here; not yet opened in Ren’Py itself.
+- **Share a small story as a link.** *Move to another browser* → *Copy a link to this story* puts the whole story in a link; opening it in any browser opens the story (the open one goes to Drafts). It lives after the `#`, which is never sent to a website, so nothing is uploaded. Pictures and recordings stay out, and stories too long for a link are told to use a file.
+- **The first page loads faster.** The first download is down from 857 KB (262 KB compressed) to 376 KB (127 KB compressed): the Ink compiler, the export code and zip library no longer load until they're needed (Review had pulled them in through one small import), and Review, Graph and Ink load in the background once the page is idle.
+- **The story map on phones** opens at a size you can read, on the start passage, when the whole map would shrink its cards past reading; drag to move around, or *Fit* to see it all. Two fingers pinch to zoom.
+- **Send feedback** in the Menu opens the project's GitHub issue forms. There are still no usage statistics; nothing is sent from the app.
+
 - **The upload box is first.** The Import page now opens on the drop box and the conversion modes; the sample, the engine list and the offline notes come after. A one-line promise is used everywhere: *Turn a script into a playable story, then hand it to a game developer.*
 - **Review shows your words first.** A passage's id, picture, cutscene setting, order and Delete fold into one *Passage settings* row. Conditions and effects read as words (*the player gets Archive Key*), with the Ink in the tooltip; the *transformed* badge is now *from your script*.
 - **A slimmer top bar.** Undo, Redo and Save stay; everything else (theme, sounds, shortcuts, open, move to another browser, new) is behind one Menu. The ribbon bookmark tucks away while a page is scrolled, so it no longer covers a line's buttons.

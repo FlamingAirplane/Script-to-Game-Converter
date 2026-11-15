@@ -6,12 +6,10 @@ import { fileBase, type ConversionMode, type StoryProject } from '../core/isr';
 import type { ConversionState } from '../core/pipeline';
 import { validateSchema } from '../core/schema';
 import { DiagnosticsPanel, type PanelView } from './DiagnosticsPanel';
-import { GraphView } from './GraphView';
 import { ImportView } from './ImportView';
-import { InkView } from './InkView';
-import { passageForEntity } from './projectOps';
-import { ReviewView, STORY_SETTINGS } from './ReviewView';
+import { passageForEntity, STORY_SETTINGS } from './projectOps';
 import { packProject, unpackProject } from './projectFile';
+import { LINK_PREFIX, readStoryLink } from './storyLink';
 import { ProjectsSheet } from './ProjectsSheet';
 import { errorData, log } from '../core/log';
 import { Logo } from './Logo';
@@ -22,6 +20,14 @@ import { canUseFiles, kvGet, kvSet, pickProjectFile, rememberRecent, requestPers
 const appLog = log('app');
 
 // Loaded on first use: Export carries the exporters, zip library and Ink runtime; Playtest the runtime.
+// Every chapter after Import loads when it's first needed, so the first page comes up quickly; Review, Graph and Ink
+// are fetched in the background once the page is idle, so they're ready by the time a script is converted.
+const loadReview = () => import('./ReviewView');
+const loadGraph = () => import('./GraphView');
+const loadInk = () => import('./InkView');
+const ReviewView = lazy(() => loadReview().then((m) => ({ default: m.ReviewView })));
+const GraphView = lazy(() => loadGraph().then((m) => ({ default: m.GraphView })));
+const InkView = lazy(() => loadInk().then((m) => ({ default: m.InkView })));
 const ExportView = lazy(() => import('./ExportView').then((m) => ({ default: m.ExportView })));
 const PlaytestView = lazy(() => import('./PlaytestView').then((m) => ({ default: m.PlaytestView })));
 import { sfx } from './sfx';
@@ -156,6 +162,16 @@ export function App() {
     dialogueOnly: () => {},
     showGated: () => {},
   });
+  // Fetch the editing chapters once the first page is up and the browser is idle.
+  useEffect(() => {
+    const fetchAll = () => void Promise.all([loadReview(), loadGraph(), loadInk()]).catch(() => {});
+    if ('requestIdleCallback' in window) {
+      const id = requestIdleCallback(fetchAll, { timeout: 4000 });
+      return () => cancelIdleCallback(id);
+    }
+    const t = setTimeout(fetchAll, 1500);
+    return () => clearTimeout(t);
+  }, []);
   // A page turns whenever the chapter changes (not on first load).
   const prevTab = useRef(tab);
   useEffect(() => {
@@ -549,7 +565,7 @@ export function App() {
   const openProject = (file: File, handle?: FileHandle) => openProjectText(file.text(), 'file', handle);
 
   /** Opens a project from a project file's text (a file, or the cloud). */
-  const openProjectText = async (text: Promise<string>, from: 'file' | 'cloud', handle?: FileHandle) => {
+  const openProjectText = async (text: Promise<string>, from: 'file' | 'cloud' | 'link', handle?: FileHandle) => {
     try {
       let unpacked: Awaited<ReturnType<typeof unpackProject>>;
       try {
@@ -558,13 +574,13 @@ export function App() {
         return alert(e instanceof Error ? e.message : String(e));
       }
       const p = unpacked.project;
-      appLog.info(from === 'cloud' ? 'Opened project from the cloud' : 'Opened project file', { files: unpacked.files });
-      await keepBeforeReplacing(from === 'cloud' ? 'Before opening a project from the cloud' : 'Before opening a project file');
+      appLog.info(from === 'cloud' ? 'Opened project from the cloud' : from === 'link' ? 'Opened story link' : 'Opened project file', { files: unpacked.files });
+      await keepBeforeReplacing(from === 'cloud' ? 'Before opening a project from the cloud' : from === 'link' ? 'Before opening a story link' : 'Before opening a project file');
       undoStack.current = [];
       setParseDiagnostics(unpacked.parseDiagnostics);
       setProject(p);
       baseline.current = p;
-      markCopied(p); // it came from a saved copy
+      if (from !== 'link') markCopied(p); // it came from a saved copy (a link isn't one the writer keeps)
       setProjectFile(handle ?? null);
       setSavedToFile(handle ? p : null);
       if (handle) void rememberRecent(handle, p.project.title);
@@ -578,6 +594,26 @@ export function App() {
   };
 
   openRefFn.current = (f, h) => void openProject(f, h);
+
+  // A story link (#story=…, see storyLink.ts) opens that story, once; the open one is kept in Drafts first. It's read
+  // when the app opens with one, and when one is pasted into the address bar of a tab where the app is already open.
+  const openLinkRef = useRef((text: Promise<string>) => openProjectText(text, 'link'));
+  openLinkRef.current = (text) => openProjectText(text, 'link');
+  useEffect(() => {
+    const open = () => {
+      if (!location.hash.startsWith(LINK_PREFIX)) return;
+      const hash = location.hash;
+      history.replaceState(null, '', location.pathname + location.search);
+      void openLinkRef.current(
+        readStoryLink(hash)
+          .then((t) => t ?? Promise.reject(new Error('Not a story link.')))
+          .catch(() => Promise.reject(new Error('This story link couldn’t be read. It may have been cut short when it was copied: copy the whole link and try again.'))),
+      );
+    };
+    open();
+    window.addEventListener('hashchange', open);
+    return () => window.removeEventListener('hashchange', open);
+  }, []);
 
   // Latest handlers for the keyboard shortcuts (the listener is registered once).
   keys.current = {
@@ -726,6 +762,17 @@ export function App() {
             New
           </button>
         )}
+        {/* There are no usage statistics, by design: this is how to tell us where it got in the way. Nothing is sent from the app. */}
+        <a
+          className="btn tiny ghost"
+          href="https://github.com/FlamingAirplane/Script-to-Game-Converter/issues/new/choose"
+          target="_blank"
+          rel="noopener noreferrer"
+          title="Tell us where you got stuck, or what would help (opens GitHub; nothing about your story is sent)"
+          onClick={() => setMenuOpen(false)}
+        >
+          ✉ Send feedback
+        </a>
         </div>
       </header>
 

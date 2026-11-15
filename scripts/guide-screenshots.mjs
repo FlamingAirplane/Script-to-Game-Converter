@@ -4,13 +4,13 @@
 import { mkdirSync, mkdtempSync, readFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 import { chromium } from 'playwright-core';
 
 const root = fileURLToPath(new URL('..', import.meta.url));
 const out = join(root, 'docs/images');
 mkdirSync(out, { recursive: true });
-const app = `file://${encodeURI(join(root, 'release/Narrative-Bridge.html'))}`;
+const app = pathToFileURL(join(root, 'release/Narrative-Bridge.html')).href;
 const lighthouse = /const LIGHTHOUSE = `([\s\S]*?)`;/.exec(readFileSync(join(root, 'src/samples.ts'), 'utf8'))[1];
 
 const browser = await chromium.launch();
@@ -76,7 +76,7 @@ const [dl] = await Promise.all([page.waitForEvent('download'), page.getByRole('b
 const story = join(mkdtempSync(join(tmpdir(), 'nb-guide-')), dl.suggestedFilename());
 await dl.saveAs(story);
 const reader = await browser.newPage({ viewport: { width: 1000, height: 760 }, colorScheme: 'light' });
-await reader.goto(`file://${encodeURI(story)}`);
+await reader.goto(pathToFileURL(story).href);
 await reader.getByRole('button', { name: 'Begin' }).click();
 await reader.waitForTimeout(300);
 await reader.screenshot({ path: join(out, 'playable.jpg'), type: 'jpeg', quality: 82 });

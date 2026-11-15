@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { pendingSuggestions } from '../core/adapt';
 import { isPinnedRef, pascalCase } from '../core/export/common';
-import { ADAPTERS, buildPlayableHtml, buildRecordingScript, recordingScriptFileName, buildTwee, ExportBlockedError, playableFileName, twineFileName, unityTarball, unityTarballName, zipExport, type EngineTarget, type ExportResult, type TwineKind } from '../core/export';
+import { ADAPTERS, buildPlayableHtml, buildRecordingScript, buildRenpy, renpyFileName, recordingScriptFileName, buildTwee, ExportBlockedError, playableFileName, twineFileName, unityTarball, unityTarballName, zipExport, type EngineTarget, type ExportResult, type TwineKind } from '../core/export';
 import { SEMVER, unityPackageId } from '../core/export/unityPackage';
 import { languageName } from './language';
 import { importTranslations, removeLanguage, translationCoverage, translationSheet } from '../core/export/translations';
@@ -383,7 +383,7 @@ function Pass({ ok }: { ok: boolean }) {
   return <span className={`sev ${ok ? 'sev-ok' : 'sev-error'}`}>{ok ? '✓' : '●'}</span>;
 }
 
-/** Exports that need no game engine: a playable web page for readers, and a Twine project. */
+/** Exports that need no game engine (or a ready-made one): a playable web page for readers, a Twine project, a Ren'Py script. */
 function ShareSection({ processed, stale, project, update }: { processed: ProcessedStory; stale: boolean; project: StoryProject; update: Update }) {
   const [error, setError] = useState('');
   const [twineKind, setTwineKind] = useState<TwineKind>('sugarcube');
@@ -478,6 +478,18 @@ function ShareSection({ processed, stale, project, update }: { processed: Proces
           <button className="btn" disabled={blocked} onClick={() => run(() => download(twineFileName(processed, twineKind), buildTwee(processed, twineKind)))}>
             Download for Twine (.twee)
           </button>
+        </div>
+        <div className="card share-card">
+          <h2>Ren’Py</h2>
+          <p className="muted small">
+            The story as a visual novel for <a href="https://www.renpy.org" target="_blank" rel="noopener noreferrer">Ren’Py</a>, the free engine for
+            dialogue-heavy games: characters, choices, items and endings. Make a project in the Ren’Py launcher, put this file in its <code>game</code>{' '}
+            folder, delete the <code>script.rpy</code> the launcher made, and launch it. Add pictures and music there.
+          </p>
+          <button className="btn" disabled={blocked} onClick={() => run(() => download(renpyFileName(processed), buildRenpy(processed)))}>
+            Download for Ren’Py (.rpy)
+          </button>
+          <p className="muted small">Checked against the story here; not yet opened in Ren’Py itself.</p>
         </div>
       </section>
       {blocked && !stale && <p className="error-text small">Fix the items marked “must fix” in Diagnostics to enable these downloads.</p>}
