@@ -197,6 +197,22 @@ for (const [name, type] of [['WebKit', webkit], ['Chromium', chromium]]) {
       await page.getByRole('button', { name: /Review/ }).click();
       await page.getByText('The archive is locked.').first().waitFor();
     });
+    await step('a line becomes a choice with ⑂, and Undo takes it back', async () => {
+      await page.getByRole('button', { name: /Review/ }).click();
+      await page.locator('.passage-item', { hasText: 'Reading Room' }).click();
+      const before = await page.locator('.passage-item').count();
+      await page.getByRole('button', { name: 'Turn this line into a choice' }).first().click();
+      const form = page.getByRole('form', { name: 'Turn this line into a choice' });
+      await form.getByLabel('Choice text').fill('Blow out the lamp');
+      await form.getByLabel('Where the choice leads').selectOption({ label: 'A new, empty scene' });
+      await form.getByRole('button', { name: 'Make the choice' }).click();
+      const made = () => [...document.querySelectorAll('.choice-text')].some((i) => i.value === 'Blow out the lamp');
+      await page.waitForFunction(made, null, { timeout: 5000 });
+      if ((await page.locator('.passage-item').count()) !== before + 1) throw new Error('the choice did not get a new scene');
+      await page.locator('button[title^="Undo"]').click();
+      await page.waitForFunction(() => ![...document.querySelectorAll('.choice-text')].some((i) => i.value === 'Blow out the lamp'), null, { timeout: 5000 });
+      if ((await page.locator('.passage-item').count()) !== before) throw new Error('Undo left the new scene behind');
+    });
     await step('story settings show statistics and keep a draft that can be restored', async () => {
       page.on('dialog', (d) => d.accept());
       await page.getByRole('button', { name: /Review/ }).click();
