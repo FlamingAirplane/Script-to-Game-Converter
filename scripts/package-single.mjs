@@ -10,7 +10,8 @@ if (!existsSync(built)) {
   console.error('Single-file build not found. Run: npm run build:single');
   process.exit(1);
 }
-const html = readFileSync(built, 'utf8');
+// The offline copy isn't the website, so it doesn't claim the website's address as its canonical page.
+const html = readFileSync(built, 'utf8').replace(/\s*<link rel="canonical"[^>]*>/, '');
 // Everything must be inlined: an external reference would break when the file is opened from disk.
 const external = html.match(/<(?:script|link)[^>]+(?:src|href)="(?!data:)[^"]+"/g);
 if (external) {
