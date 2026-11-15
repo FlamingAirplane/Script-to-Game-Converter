@@ -87,6 +87,7 @@ describe('turning a line into a choice (Review)', () => {
 
   it('starts the button text from the line, trimmed to a button’s length', () => {
     expect(choiceTextFor('  “Open the   door.”  ')).toBe('Open the door.');
+    expect(choiceTextFor('<b>MIRA</b> lifts the <i>lantern</i>')).toBe('MIRA lifts the lantern');
     const long = choiceTextFor('She pulls the lever, and somewhere far below a great wheel begins to turn, grinding the old stones together');
     expect(long.length).toBeLessThanOrEqual(81);
     expect(long).toMatch(/…$/);
