@@ -39,7 +39,7 @@ export const questionSuggester: Suggester = {
 
 /** Ways of taking something that ACQUIRE in adapt.ts misses: "slips the letter into her pocket", "scoops up the coins". */
 export const WIDE_ACQUIRE =
-  /\b(?:slips?|tucks?|stuffs?|slides?|scoops? up|palms?|seizes?|gathers? up|clutch(?:es)?|hides?|stows?|pries? (?:loose|free)|fish(?:es)? out|draws? out|plucks?|snags?|hoists?|shoulders?|unhooks?|catch(?:es)?|wraps? up|bundles? up)\s+(?:the|a|an|his|her|their|its)\s+([a-z][a-z'\-]*(?:\s+[a-z][a-z'\-]*){0,2})/i;
+  /\b(?:slips?|tucks?|stuffs?|slides?|scoops? up|palms?|seizes?|gathers? up|clutch(?:es)?|hides?|stows?|pries? (?:loose|free)|fish(?:es)? out|draws? out|plucks?|snags?|hoists?|shoulders?|unhooks?|catch(?:es)?|wraps? up|bundles? up)\s+(?:the|a|an|his|her|their|its)\s+([a-z][a-z'-]*(?:\s+[a-z][a-z'-]*){0,2})/i;
 
 /** Wider pickup verbs: the pickup and gate rules from adapt.ts, run with WIDE_ACQUIRE. */
 export const widerPickupSuggester: Suggester = {
@@ -56,7 +56,7 @@ export const widerPickupSuggester: Suggester = {
 /** A line that tells the reader the moment is theirs to decide. */
 const DECISION_CUE = /\b(?:decide|choose|your choice|up to you|what (?:will|do) you do|make (?:up )?your mind|now or never|no (?:more )?time)\b/i;
 /** "Take it, or walk away." / "Stay and fight or run": two ways to go on, an imperative or a short phrase each side of "or". */
-const EITHER_OR = /(?:^|[.!?]\s+)([A-Z][a-z'’\-]+(?:\s+[a-z'’\-]+){0,4}?),?\s+or\s+([a-z][a-z'’\-]*(?:\s+[a-z'’\-]+){0,4})[.!?]/;
+const EITHER_OR = /(?:^|[.!?]\s+)([A-Z][a-z'’-]+(?:\s+[a-z'’-]+){0,4}?),?\s+or\s+([a-z][a-z'’-]*(?:\s+[a-z'’-]+){0,4})[.!?]/;
 
 /**
  * Decision rule: a passage whose text offers two ways to go on ("Take it, or walk away") and says the moment is the

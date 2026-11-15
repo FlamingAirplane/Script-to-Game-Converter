@@ -295,6 +295,7 @@ export function App() {
       /* not remembered */
     }
     // only when another project is opened
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- keyed on the project id, not on every edit
   }, [projectKey]);
   const markCopied = (p: StoryProject) => {
     const at = Date.now();

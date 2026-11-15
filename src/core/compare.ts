@@ -96,7 +96,7 @@ export function diffLines(a: string[], b: string[]): LineChange[] {
   while (e < n - s && e < m - s && a[n - 1 - e] === b[m - 1 - e]) e++;
   const A = a.slice(s, n - e);
   const B = b.slice(s, m - e);
-  const L: number[][] = Array.from({ length: A.length + 1 }, () => new Array<number>(B.length + 1).fill(0));
+  const L: number[][] = Array.from({ length: A.length + 1 }, () => Array.from<number>({ length: B.length + 1 }).fill(0));
   for (let i = A.length - 1; i >= 0; i--) for (let j = B.length - 1; j >= 0; j--) L[i][j] = A[i] === B[j] ? L[i + 1][j + 1] + 1 : Math.max(L[i + 1][j], L[i][j + 1]);
   const mid: LineChange[] = [];
   let i = 0;

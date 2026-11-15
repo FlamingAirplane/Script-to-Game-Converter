@@ -171,7 +171,7 @@ export function parseReply(text: string): Moment | null | undefined {
 
 /** The item phrase as the heuristics would spell it: lower case, no leading article, cut at the first preposition. */
 export function itemPhrase(item: string): string {
-  return trimPhrase(plainText(item).replace(/[^\p{L}\p{N}\s'\-]/gu, ' ').replace(/^\s*(?:the|a|an|his|her|their|its)\s+/i, '').trim()).trim();
+  return trimPhrase(plainText(item).replace(/[^\p{L}\p{N}\s'-]/gu, ' ').replace(/^\s*(?:the|a|an|his|her|their|its)\s+/i, '').trim()).trim();
 }
 
 export interface ProposalContext {

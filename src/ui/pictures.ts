@@ -49,6 +49,7 @@ export function usePicture(ref: ImageRef | undefined): string | null {
       live = false;
       if (made) URL.revokeObjectURL(made);
     };
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- the picture is known by its id
   }, [ref?.id]);
   return url;
 }

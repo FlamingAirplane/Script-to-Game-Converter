@@ -99,7 +99,7 @@ export function parseConditionExpr(src: string): Condition | null {
         const [id, lit, flip] = t.t === 'id' ? [String(t.v), other.v, false] : [String(other.v), t.v, true];
         const FLIP: Record<string, CompareOp> = { '>': '<', '<': '>', '>=': '<=', '<=': '>=', '==': '==', '!=': '!=' };
         const cmp = (flip ? FLIP[String(op.v)] : op.v) as CompareOp;
-        if (/^has_/.test(id) && typeof lit === 'boolean' && (cmp === '==' || cmp === '!=')) {
+        if (id.startsWith('has_') && typeof lit === 'boolean' && (cmp === '==' || cmp === '!=')) {
           const has = ref(id);
           return lit === (cmp === '==') ? has : { type: 'not', condition: has };
         }
@@ -126,6 +126,6 @@ export function parseAssignment(src: string): Effect | null {
   if (!m) return null;
   const [, id, raw] = m;
   const value: boolean | number | string = raw === 'true' ? true : raw === 'false' ? false : /^-?\d+$/.test(raw) ? Number(raw) : raw.slice(1, -1);
-  if (/^has_/.test(id) && typeof value === 'boolean') return { type: value ? 'give_item' : 'take_item', itemId: id.slice(4) };
+  if (id.startsWith('has_') && typeof value === 'boolean') return { type: value ? 'give_item' : 'take_item', itemId: id.slice(4) };
   return { type: 'set_var', variableId: id, value };
 }

@@ -9,7 +9,7 @@ import type { ParsedBlock, Parser } from './types';
 // notes, boneyard, page breaks, lyrics and emphasis. Unknown constructs are preserved, never dropped.
 
 const SCENE_RE = /^(?:INT|EXT|EST|INT\.?\/EXT|I\/E)[.\s]/i;
-const TRANSITION_RE = /^[A-Z0-9 .'’\-]+TO:$/;
+const TRANSITION_RE = /^[A-Z0-9 .'’-]+TO:$/;
 
 function isCharacterCue(line: string): boolean {
   const t = line.trim();
@@ -112,7 +112,7 @@ export const fountainParser: Parser = {
         flushAction();
         let heading = t.startsWith('.') ? t.slice(1) : t;
         let sceneNumber: string | undefined;
-        const num = /\s*#([\w.\-]+)#\s*$/.exec(heading);
+        const num = /\s*#([\w.-]+)#\s*$/.exec(heading);
         if (num) {
           sceneNumber = num[1];
           heading = heading.slice(0, num.index);

@@ -22,7 +22,10 @@
     "test:unity": "tsx scripts/unity-check.ts",
     "test:unreal": "tsx scripts/unreal-check.ts",
     "test:unreal:build": "tsx scripts/unreal-build.ts",
-    "templates": "node scripts/templates.mjs"
+    "templates": "node scripts/templates.mjs",
+    "lint": "oxlint --deny-warnings src tests scripts",
+    "format": "prettier --write .",
+    "format:check": "prettier --check ."
   },
   "repository": {
     "type": "git",
@@ -54,7 +57,9 @@
     "@types/react-dom": "^19.3.0",
     "@vitejs/plugin-react": "^6.3.0",
     "axe-core": "^4.14.0",
+    "oxlint": "^1.93.0",
     "playwright-core": "^1.65.0",
+    "prettier": "^3.10.1",
     "tsx": "^4.23.15",
     "typescript": "^7.0.2",
     "vite": "^8.3.8",

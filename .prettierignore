@@ -1,0 +1,10 @@
+dist/
+release/
+node_modules/
+package-lock.json
+tests/unreal-stubs/
+tests/fixtures/
+tests/adaptation-eval/
+tests/__snapshots__/
+public/
+*.md

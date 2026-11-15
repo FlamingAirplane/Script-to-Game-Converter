@@ -3,7 +3,7 @@ import { pbkdf2Sync, randomBytes } from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 import { defineConfig, loadEnv } from 'vite';
 import { viteSingleFile } from 'vite-plugin-singlefile';
-import { offlineSite } from './scripts/offline-site';
+import { offlineSite } from './scripts/offline-site.ts';
 
 // `vite build --mode single` produces one self-contained HTML file (scripts and styles inlined)
 // that writers can double-click to run offline; see scripts/package-single.mjs.

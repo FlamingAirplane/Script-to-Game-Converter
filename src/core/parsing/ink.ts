@@ -136,7 +136,7 @@ function scan(text: string): { blocks: ParsedBlock[]; unsupported: InkFeature[] 
         unsupportedNote = { line: ln, reason: unsup[1], lines: [] };
         continue;
       }
-      if (generated && /^Where a game can start the story at a line of dialogue/.test(c)) continue;
+      if (generated && c.startsWith('Where a game can start the story at a line of dialogue')) continue;
       if (generated && (GENERATOR_HEADER.test(c) || (!sawKnot && !sawText && blocks.every((b) => b.kind === 'title' || b.kind === 'marker')))) continue;
       if (generated && bodyStart && lastPassage >= 0) {
         // "// Passage title (source line N)" right after a knot header.
@@ -219,7 +219,7 @@ function scan(text: string): { blocks: ParsedBlock[]; unsupported: InkFeature[] 
       const [, , id, valueSrc, note] = varM;
       if (!/^(true|false|-?\d+|"[^"]*")$/.test(valueSrc)) lossy(ln, `variable set to an expression (${id})`);
       const value = parseValue(valueSrc);
-      if (/^has_/.test(id) && typeof value === 'boolean') {
+      if (id.startsWith('has_') && typeof value === 'boolean') {
         const consumable = /\(consumable\)\s*$/.test(note ?? '');
         blocks.push({ kind: 'marker', marker: { type: 'item', id: id.slice(4), displayName: note ? note.replace(/\s*\(consumable\)\s*$/, '').trim() || undefined : undefined, consumable }, line: ln });
       } else blocks.push({ kind: 'marker', marker: { type: 'var', id, value }, line: ln });
@@ -227,7 +227,7 @@ function scan(text: string): { blocks: ParsedBlock[]; unsupported: InkFeature[] 
     }
 
     // Global tags before the story begins: # title: …, # author: …
-    if (/^#/.test(t) && !sawKnot && !sawText) {
+    if (t.startsWith('#') && !sawKnot && !sawText) {
       for (const tag of splitTags(` ${t}`).tags) {
         const kv = /^(title|author):\s*(.*)$/i.exec(tag);
         if (kv) blocks.push({ kind: 'title', key: kv[1].toLowerCase(), value: unescape(kv[2]), line: ln });
@@ -379,7 +379,7 @@ function scan(text: string): { blocks: ParsedBlock[]; unsupported: InkFeature[] 
     else {
       const speech = /^([^:]{1,40}):\s+([\s\S]*)$/.exec(plain);
       const tagged = tag('speaker') !== undefined;
-      if (speech && (tagged || /^[A-Z][A-Z0-9 .'’\-]*$/.test(speech[1].trim()))) blocks.push({ kind: 'dialogue', character: speech[1].trim(), extension: /\(/.test(speech[1]) ? undefined : tag('ext'), parenthetical: tag('paren'), text: speech[2], line: ln });
+      if (speech && (tagged || /^[A-Z][A-Z0-9 .'’-]*$/.test(speech[1].trim()))) blocks.push({ kind: 'dialogue', character: speech[1].trim(), extension: /\(/.test(speech[1]) ? undefined : tag('ext'), parenthetical: tag('paren'), text: speech[2], line: ln });
       else if (plain) blocks.push({ kind: 'action', text: plain, line: ln });
     }
     if (textDivert) {

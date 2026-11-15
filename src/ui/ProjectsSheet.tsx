@@ -59,6 +59,7 @@ export function ProjectsSheet({
   useEffect(() => {
     if (token.trim()) void refresh();
     // only when the sheet opens
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const save = () =>

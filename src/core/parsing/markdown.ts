@@ -71,7 +71,7 @@ export const markdownParser: Parser = {
         flush();
         continue;
       }
-      const dlg = /^(?:\*\*([^*]+?):?\*\*:?|([A-Z][A-Z .'’\-]{0,30}):)\s+(.+)$/.exec(t);
+      const dlg = /^(?:\*\*([^*]+?):?\*\*:?|([A-Z][A-Z .'’-]{0,30}):)\s+(.+)$/.exec(t);
       if (dlg && !para) {
         const name = (dlg[1] ?? dlg[2]).trim();
         const paren = /^\(([^)]*)\)\s*(.*)$/.exec(dlg[3]);

@@ -12,7 +12,7 @@ import type { Proposal, Suggester } from './proposals';
 //     pickup scene so the story stays completable.
 
 export const ACQUIRE =
-  /\b(?:picks? up|takes?|grabs?|pockets?|finds?|retrieves?|snatches?|collects?|pulls? out|lifts?)\s+(?:the|a|an|his|her|their|its)\s+([a-z][a-z'\-]*(?:\s+[a-z][a-z'\-]*){0,2})/i;
+  /\b(?:picks? up|takes?|grabs?|pockets?|finds?|retrieves?|snatches?|collects?|pulls? out|lifts?)\s+(?:the|a|an|his|her|their|its)\s+([a-z][a-z'-]*(?:\s+[a-z][a-z'-]*){0,2})/i;
 const PHRASE_STOP = new Set(['from', 'off', 'out', 'on', 'in', 'into', 'and', 'with', 'to', 'of', 'at', 'under', 'behind', 'over', 'up', 'down', 'as', 'before', 'then', 'by', 'for', 'across', 'through', 'onto', 'toward', 'towards', 'around', 'past', 'beside', 'away']);
 /** "takes her playfully by the ear": an adverb where the thing taken should be means nothing is taken. */
 const ADVERB = /^[a-z]{3,}(?:fully|ingly|ously|edly|ently|antly|ately|ively|lessly)$/;

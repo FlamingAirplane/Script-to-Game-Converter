@@ -43,7 +43,7 @@ export function unityPackageId(projectName: string, title: string): UnityPackage
   const slug = packageSlug(projectName || title);
   let part = pascalCase(projectName || title);
   if (RESERVED.has(part)) part = `${part}Story`;
-  const menuTitle = (title || projectName).replace(/[^\p{L}\p{N} '\-]+/gu, ' ').replace(/\s+/g, ' ').trim().slice(0, 60) || part;
+  const menuTitle = (title || projectName).replace(/[^\p{L}\p{N} '-]+/gu, ' ').replace(/\s+/g, ' ').trim().slice(0, 60) || part;
   return { name: `com.narrativebridge.${slug}`, slug, namespace: `NarrativeBridge.${part}`, menuTitle };
 }
 
