@@ -132,7 +132,7 @@ export const FONT_CHOICES: { label: string; value: string }[] = [
 /** Words in the app the design can change: key → [label, the built-in text]. */
 export const WORDS: Record<string, [string, string]> = {
   brand: ['Name on the cover band', 'Narrative Bridge'],
-  pageTitle: ['Browser tab title', 'Narrative Bridge'],
+  pageTitle: ['Browser tab title', 'Narrative Bridge — script to game converter'],
   edition: ['Edition line (title page)', 'The Workshop Edition'],
   heroTitle: ['Title (title page)', 'Narrative Bridge'],
   subtitle: ['Subtitle (title page)', 'Turn a script into a playable story, then hand it to a game developer'],
