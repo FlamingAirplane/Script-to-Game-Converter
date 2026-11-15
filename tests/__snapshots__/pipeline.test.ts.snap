@@ -15,7 +15,7 @@ VAR curiosity = 0
 === archive_entry ===
 // Archive Entrance (source line 6)
 Rows of shelves vanish into the dark. A steel door blocks the inner vault.
-MIRA: The archive is locked. #speaker:mira
+- (line_mira_the_archive_is_locked) MIRA: The archive is locked. #speaker:mira
 + {has_archive_key} [Open the archive]
     ~ has_archive_key = false
     -> archive_inside
@@ -42,12 +42,18 @@ Wrapped in oilcloth: a heavy iron key.
 === archive_inside ===
 // The Vault (source line 33)
 The archive door opens. Inside, a single ledger glows faintly.
-MIRA: Every story we ever lost. #speaker:mira
+- (line_mira_every_story_we_ever_lost) MIRA: Every story we ever lost. #speaker:mira
 -> END
 
 === outside ===
 // Outside (source line 41)
 You step back into the rain. Some doors are better left closed.
 -> END
+
+// Where a game can start the story at a line of dialogue: StartAt("passage.line_…") chooses one of these.
+=== archive_entry__line_mira_the_archive_is_locked ===
+-> archive_entry.line_mira_the_archive_is_locked
+=== archive_inside__line_mira_every_story_we_ever_lost ===
+-> archive_inside.line_mira_every_story_we_ever_lost
 "
 `;
