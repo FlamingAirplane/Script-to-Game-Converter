@@ -188,6 +188,11 @@ describe('the heuristic suggester', () => {
         ['lighthouse_base_use_the_brass_key', 'Use the brass key', 'lighthouse_stairwell', [{ type: 'has_item', itemId: 'brass_key' }], [], 'pending', 'heuristic'],
         ['lighthouse_base_go_back_to_keeper_s_cottage', "Go back to Keeper's Cottage", 'keeper_s_cottage', [], [], 'pending', 'heuristic'],
       ]],
+      // After the heuristics, the precise rules (appRules): "Who's there?" ends the scene unanswered.
+      ['lighthouse_stairwell', [
+        ['lighthouse_stairwell_answer', 'Answer', 'lamp_room', [], [], 'pending', 'rule:last_question'],
+        ['lighthouse_stairwell_say_nothing', 'Say nothing', 'lamp_room', [], [], 'pending', 'rule:last_question'],
+      ]],
     ]);
     // The choices point at the lines that prompted them.
     expect(project.passages[2].choices[0].source).toEqual(project.passages[2].content[0].source);

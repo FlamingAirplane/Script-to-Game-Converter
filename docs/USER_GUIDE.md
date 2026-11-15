@@ -89,8 +89,11 @@ Not ready to use your own script? Scroll down to **Or start from a sample**.
   still converts, one passage per scene, so you can start without them and add them as you plan the branches.
 - **Faithful conversion** keeps your story exactly as written. Each scene becomes a passage, in order. Nothing is
   invented.
-- **Interactive adaptation** also suggests choices grounded in your text, such as picking up an item and a later path
-  that needs it. Suggestions are marked *generated* and *pending*, and **nothing is added until you approve it**.
+- **Interactive adaptation** also suggests choices grounded in your text: picking up an item and a later path that
+  needs it; a decision when a character weighs a step aloud ("Shall I open it now?"), is warned off ("Don't call out
+  or you'll be shot") or is offered two ways ("Take it, or walk away. But decide now."), or when a phone rings or
+  someone knocks; and a reply to a demand ("Promise me…") or to a question left unanswered at the end of a scene.
+  Suggestions are marked *generated* and *pending*, and **nothing is added until you approve it**.
 
 Markers work in all three modes.
 

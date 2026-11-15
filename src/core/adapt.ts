@@ -13,13 +13,16 @@ import type { Proposal, Suggester } from './proposals';
 
 export const ACQUIRE =
   /\b(?:picks? up|takes?|grabs?|pockets?|finds?|retrieves?|snatches?|collects?|pulls? out|lifts?)\s+(?:the|a|an|his|her|their|its)\s+([a-z][a-z'\-]*(?:\s+[a-z][a-z'\-]*){0,2})/i;
-const PHRASE_STOP = new Set(['from', 'off', 'out', 'on', 'in', 'into', 'and', 'with', 'to', 'of', 'at', 'under', 'behind', 'over', 'up', 'down', 'as', 'before', 'then']);
+const PHRASE_STOP = new Set(['from', 'off', 'out', 'on', 'in', 'into', 'and', 'with', 'to', 'of', 'at', 'under', 'behind', 'over', 'up', 'down', 'as', 'before', 'then', 'by', 'for', 'across', 'through', 'onto', 'toward', 'towards', 'around', 'past', 'beside', 'away']);
+/** "takes her playfully by the ear": an adverb where the thing taken should be means nothing is taken. */
+const ADVERB = /^[a-z]{3,}(?:fully|ingly|ously|edly|ently|antly|ately|ively|lessly)$/;
 
 /** The item named in a phrase, cut at the first preposition: "brass key from the mantel" → "brass key". */
 export function trimPhrase(phrase: string): string {
   const words: string[] = [];
   for (const w of phrase.toLowerCase().split(/\s+/)) {
     if (PHRASE_STOP.has(w)) break;
+    if (!words.length && ADVERB.test(w)) return '';
     words.push(w);
   }
   return words.join(' ');

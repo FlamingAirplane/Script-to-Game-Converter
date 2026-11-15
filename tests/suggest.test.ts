@@ -4,7 +4,7 @@ import { buildStory } from '../src/core/builder';
 import { generateInk } from '../src/core/inkgen';
 import { processProject } from '../src/core/pipeline';
 import { applyProposals, cleanLabel, firstSentence, SUGGESTION_DROPPED } from '../src/core/proposals';
-import { cheapRules, questionSuggester, widerPickupSuggester } from '../src/core/rules';
+import { cheapRules, demandSuggester, dilemmaSuggester, interruptionSuggester, lastQuestionSuggester, questionSuggester, warningSuggester, widerPickupSuggester } from '../src/core/rules';
 import { createModelSuggester, type ChatMessage, type Generator } from '../src/suggest/model';
 import { buildPrompt, EXAMPLES, itemPhrase, MOMENT_SCHEMA, momentSchema, parseReply, promptLines, windows } from '../src/suggest/prompt';
 import { SAMPLES } from '../src/samples';
@@ -231,6 +231,63 @@ describe('the cheap rules', () => {
       ['gate', 'train', ['Use the letter', 'Go back to Study']],
     ]);
     expect(proposals.every((p) => p.suggester === 'rule:wider_pickup')).toBe(true);
-    expect(cheapRules.map((s) => s.id)).toEqual(['rule:question', 'rule:wider_pickup', 'rule:decision']);
+    expect(cheapRules.map((s) => s.id)).toEqual(['rule:wider_pickup', 'rule:decision', 'rule:interruption', 'rule:warning', 'rule:dilemma', 'rule:demand', 'rule:last_question', 'rule:question']);
+  });
+});
+
+describe('the decision and reply rules', () => {
+  /** One scene with the given lines, then a second scene for the choices to lead to. */
+  const scene = async (lines: string) =>
+    (await buildStory([{ fileName: 'a.fountain', text: `INT. ROOM - NIGHT\n\n${lines}\n\nINT. HALL - NIGHT\n\nShe walks on.\n` }], { mode: 'adaptation', heuristics: false })).project;
+  const labels = async (rule: { suggest: (p: Awaited<ReturnType<typeof scene>>) => Promise<{ kind: string; evidence: number; choices: { text: string; target: string }[] }[]> }, lines: string) =>
+    (await rule.suggest(await scene(lines))).map((p) => [p.kind, p.evidence, p.choices.map((c) => c.text), p.choices.every((c) => c.target === 'hall')]);
+
+  it('dilemma: a character weighing a step aloud, or at a loss', async () => {
+    expect(await labels(dilemmaSuggester, 'Nora holds the bundle.\n\nNORA\nShall I open it now?')).toEqual([['decision', 1, ['Open it now', 'Not yet'], true]]);
+    expect(await labels(dilemmaSuggester, 'HIGGINS\nI don’t know what to do, Pickering.')).toEqual([['decision', 0, ['Act now', 'Wait and see'], true]]);
+    // Not in the action, and not a question about someone else.
+    expect(await labels(dilemmaSuggester, 'Shall I open it now? she wonders.\n\nTOM\nShall we go?')).toEqual([]);
+  });
+
+  it('interruption: a phone ringing or a knock at the door', async () => {
+    expect(await labels(interruptionSuggester, 'June drops her bag.\n\nThe phone rings. She stares at it.')).toEqual([['decision', 1, ['Answer it', 'Let it ring'], true]]);
+    expect(await labels(interruptionSuggester, 'There is a knock at the door.')).toEqual([['decision', 0, ['Open the door', 'Stay quiet'], true]]);
+    expect(await labels(interruptionSuggester, 'JUNE\nThe phone rings all night here.')).toEqual([]);
+  });
+
+  it('warning: a spoken threat the reader could defy', async () => {
+    expect(await labels(warningSuggester, 'A VOICE\nSh—sh! Don’t call out or you’ll be shot.')).toEqual([['decision', 0, ['Call out anyway', 'Do as you’re told'], true]]);
+    expect(await labels(warningSuggester, 'A VOICE\nDon’t call out, please.')).toEqual([]);
+  });
+
+  it('demand: agree or refuse', async () => {
+    expect(await labels(demandSuggester, 'LOVBORG\nFirst promise me that Thea shall never know.')).toEqual([['reply', 0, ['Agree', 'Refuse'], true]]);
+    expect(await labels(demandSuggester, 'DOOLITTLE\nI want my daughter: that’s what I want.')).toEqual([['reply', 0, ['Agree', 'Refuse'], true]]);
+  });
+
+  it('last question: a question nobody answers before the scene ends', async () => {
+    expect(await labels(lastQuestionSuggester, 'The door opens.\n\nTOMAS\nWho’s there?')).toEqual([['reply', 1, ['Answer', 'Say nothing'], true]]);
+    expect(await labels(lastQuestionSuggester, 'TOMAS\nWho’s there?\n\nMIRA\nOnly me.')).toEqual([]);
+  });
+
+  it('suggests nothing in a passage that already has choices, ends the story, or is a cutscene', async () => {
+    const project = await scene('The phone rings.');
+    project.passages[0].cutscene = true;
+    expect(await interruptionSuggester.suggest(project)).toEqual([]);
+    project.passages[0].cutscene = undefined;
+    project.passages[0].isEnding = true;
+    project.passages[0].divert = undefined;
+    expect(await interruptionSuggester.suggest(project)).toEqual([]);
+  });
+});
+
+describe('item phrases', () => {
+  it('stop at "by" and similar words, and an adverb is not a thing taken', async () => {
+    const { trimPhrase } = await import('../src/core/adapt');
+    expect(trimPhrase('playfully by the')).toBe('');
+    expect(trimPhrase('lantern by the')).toBe('lantern');
+    expect(trimPhrase('letter for safekeeping')).toBe('letter');
+    expect(trimPhrase('back door key')).toBe('back door key');
+    expect(trimPhrase('jelly jar')).toBe('jelly jar');
   });
 });
