@@ -697,7 +697,7 @@ input[type='checkbox'], input[type='radio'] { accent-color: var(--ink); }
 .title-page .subtitle { font-style: italic; font-size: 21px; color: var(--ink-2); margin: 0; }
 .orn-rule { display: flex; align-items: center; gap: 14px; width: 260px; margin: 14px auto 6px; color: var(--copper); }
 .orn-rule::before, .orn-rule::after { content: ''; flex: 1; border-top: 1px solid var(--rule-2); }
-.hero h1 + .lede, .lede { font-size: 17.5px; }
+.lede { font-size: 16px; }
 .engine-name, .sample-name { font-family: var(--display); font-style: normal; }
 
 .ex-libris {
@@ -1350,7 +1350,7 @@ section.drafts > h2 { margin-top: 26px; }
 .import-view .title-page h1 { font-size: 44px; }
 .import-view .title-page .subtitle { font-size: 19px; }
 .import-view .title-page .orn-rule { display: none; }
-.import-view .hero .lede { margin-bottom: 14px; font-size: 16px; max-width: 720px; }
+.import-view .hero .lede { margin-bottom: 14px; max-width: 720px; }
 .import-view .hero::after { margin-bottom: 18px; }
 .hero-notes { text-align: center; margin-top: 26px; }
 .hero-notes .offline-note { margin: 0 auto 10px; }
@@ -1359,7 +1359,7 @@ section.drafts > h2 { margin-top: 26px; }
 @media (max-width: 760px) {
   .import-view .title-page h1 { font-size: 30px; }
   .import-view .title-page .edition { display: none; }
-  .import-view .hero .lede { font-size: 15px; }
+  .lede { font-size: 15px; }
   .import-view .dropzone { padding: 18px; }
 }
 

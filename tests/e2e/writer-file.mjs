@@ -4,7 +4,7 @@
 import { existsSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 import { deflateSync } from 'node:zlib';
 import JSZip from 'jszip';
 import { chromium, webkit } from 'playwright-core';
@@ -14,7 +14,7 @@ if (!existsSync(file)) {
   console.error('release/Narrative-Bridge.html not found. Run: npm run build:single');
   process.exit(1);
 }
-const url = `file://${encodeURI(file)}`;
+const url = pathToFileURL(file).href;
 let failed = 0;
 
 for (const [name, type] of [['WebKit', webkit], ['Chromium', chromium]]) {
@@ -58,13 +58,18 @@ for (const [name, type] of [['WebKit', webkit], ['Chromium', chromium]]) {
     await step('theme toggle switches to dark and survives a reload', async () => {
       const paper = () => page.evaluate(() => getComputedStyle(document.documentElement).getPropertyValue('--paper').trim());
       const light = await paper();
+      // Theme lives in the top bar's Menu, which stays open while it's switched.
+      const menu = () => page.locator('.tb-menu').click();
+      await menu();
       await page.getByRole('button', { name: /Theme:/ }).click(); // auto → light
       await page.getByRole('button', { name: /Theme:/ }).click(); // light → dark
       if ((await paper()) === light) throw new Error('dark theme did not apply');
       await page.reload();
+      await menu();
       await page.getByRole('button', { name: 'Theme: dark' }).waitFor({ timeout: 5000 });
       if ((await paper()) === light) throw new Error('dark theme was not remembered');
       await page.getByRole('button', { name: /Theme:/ }).click(); // dark → auto (system light in tests)
+      await page.keyboard.press('Escape'); // close the Menu
     });
     await step('converts a sample', async () => {
       await page.getByText('The Locked Archive').first().click();
@@ -128,7 +133,7 @@ for (const [name, type] of [['WebKit', webkit], ['Chromium', chromium]]) {
       await dl.saveAs(path);
       const reader = await browser.newPage();
       reader.on('pageerror', (e) => errors.push(`reader: ${e.message}`));
-      await reader.goto(`file://${encodeURI(path)}`);
+      await reader.goto(pathToFileURL(path).href);
       await reader.getByRole('heading', { name: 'The Locked Archive' }).waitFor();
       await reader.getByRole('button', { name: 'Begin' }).click();
       await reader.getByText('The archive is locked.').waitFor();
@@ -169,7 +174,7 @@ for (const [name, type] of [['WebKit', webkit], ['Chromium', chromium]]) {
       await exportPlayable(path);
       const reader = await browser.newPage();
       reader.on('pageerror', (e) => errors.push(`reader: ${e.message}`));
-      await reader.goto(`file://${encodeURI(path)}`);
+      await reader.goto(pathToFileURL(path).href);
       await reader.getByRole('button', { name: 'Begin' }).click();
       await reader.getByRole('button', { name: 'Search the reading room' }).click();
       await reader.getByRole('button', { name: 'Lift the loose floorboard' }).waitFor();
@@ -312,6 +317,8 @@ for (const [name, type] of [['WebKit', webkit], ['Chromium', chromium]]) {
       writeFileSync(join(dir, 'tower.png'), png);
       await page.getByRole('button', { name: /Review/ }).click();
       await page.locator('.passage-item').first().click();
+      // The picture is one of the passage's settings, folded under its title.
+      if (!(await page.locator('details.passage-settings[open]').count())) await page.locator('details.passage-settings summary').click();
       await page.locator('input[aria-label="Scene picture file"]').setInputFiles(join(dir, 'tower.png'));
       const expect = (locator, what) => locator.waitFor({ timeout: 5000 }).catch(() => { throw new Error(what); });
       await expect(page.locator('.scene-picture', { hasText: '16 × 9' }), 'the picture did not attach in Review');
@@ -453,6 +460,7 @@ for (const [name, type] of [['WebKit', webkit], ['Chromium', chromium]]) {
       await fs.getByText(`✓ saved to ${name}`).waitFor({ timeout: 5000 });
       if ((await saved()) !== 'Archive, Revised') throw new Error('⌘S did not write back to the project file');
       // Save As picks a new file; exports go through the Save dialog, not into Downloads.
+      await fs.locator('.tb-menu').click(); // Save as… is in the top bar's Menu
       await fs.getByRole('button', { name: 'Save as…' }).click();
       await fs.getByText(`✓ saved to copy-${name}`).waitFor({ timeout: 5000 });
       await fs.getByRole('button', { name: /Export/ }).click();
