@@ -20,7 +20,7 @@ import { logbook } from '../src/core/log';
 import { BINARY_EXTENSIONS, prepareInput } from '../src/core/parsing/convert';
 import { processProject } from '../src/core/pipeline';
 import { applyProposals, type Proposal, type ProposalKind, type Suggester } from '../src/core/proposals';
-import { cheapRules } from '../src/core/rules';
+import { appRules, cheapRules } from '../src/core/rules';
 import { countWords } from '../src/core/stats';
 import { SAMPLES } from '../src/samples';
 
@@ -167,6 +167,7 @@ async function main() {
   const rows: Row[] = [
     { name: 'heuristic', suggesters: [heuristicSuggester] },
     { name: 'heuristic + rules', suggesters: [heuristicSuggester, ...cheapRules] },
+    { name: 'app (no question rule)', suggesters: [heuristicSuggester, ...appRules] },
   ];
   const suggest = opt('suggest') ?? 'heuristic';
   if (suggest === 'model' || suggest === 'all') {

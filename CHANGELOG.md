@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- **Interactive adaptation suggests decisions and more replies.** Besides pickups and the paths that need them, it now
+  suggests a decision when a character weighs a step aloud (*Shall I open it now?*, *I don't know what to do*), is
+  warned off (*Don't call out or you'll be shot*), is offered two ways (*Take it, or walk away. But decide now.*), or
+  when a phone rings or someone knocks; and a reply to a demand (*Promise me…*) or to a question nobody answers before
+  the scene ends. On the evaluation set it finds three times as many marked moments as before (12 of 36, was 4), with
+  44% of its suggestions right. As before, nothing is added until you approve it.
+- **Fixed:** "takes her playfully by the ear" was suggested as *Take the playfully by the*.
 - **Enter Dialogue Trigger (Unity and Unreal):** start a conversation at any **line of dialogue**, not just at the top
   of a passage. Talk to the gardener about flowers, go and fetch some, come back, and the trigger picks up at "You found
   them!" instead of replaying the whole conversation. Pick the passage and the line from lists in the Inspector or the

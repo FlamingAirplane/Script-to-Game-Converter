@@ -10,11 +10,19 @@ The models were not re-run.
 | ----------------- | --: | ----: | ------: | -------: | -------: | -----: | ---------: | ----------: | ---: |
 | heuristic         |   7 |     7 |    100% |        4 |      57% |    11% |        0.2 |       17/17 | 0.0s |
 | heuristic + rules |  51 |    51 |    100% |       14 |      27% |    39% |        0.8 |       17/17 | 0.0s |
+| app (no question rule) | 27 | 27 |  100% |       12 |      44% |    33% |        0.7 |       17/17 | 0.0s |
 
-By kind (valid → accepted), heuristic + rules: pickup 6→3, gate 1→1, reply 38→6, decision 6→4.
+By kind (valid → accepted), heuristic + rules: pickup 6→3, gate 1→1, reply 38→6, decision 6→4. The app row drops
+the question rule: reply 14→4, decision 6→4.
+
+**The app row is what Interactive adaptation now runs** (`appRules` in `src/core/rules.ts`): the heuristics, then
+every cheap rule except the question rule. Until now the app ran the heuristics alone, so the rules (including the
+decision rule added on 14 November) only showed up here. Against the heuristics alone it finds three times as many
+moments (12 against 4) at a lower but still useful accept rate (44% against 57%). Every suggestion still waits for the
+writer's approval.
 
 With the held-out scripts (22 scripts, 51 moments): heuristic 5 of 51 (accept 56%), heuristic + rules 15 of 51
-(accept 22%), up from 7 of 51 (11%).
+(accept 22%, up from 7 of 51 at 11%), app 13 of 51 (accept 42%).
 
 What changed, and what it doesn't show:
 

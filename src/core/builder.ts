@@ -26,6 +26,7 @@ import {
   type Variable,
 } from './isr';
 import { heuristicSuggester } from './adapt';
+import { appRules } from './rules';
 import { applyProposals } from './proposals';
 import { inkUnsupported } from './parsing/ink';
 import { detectFormat, parserFor } from './parsing/registry';
@@ -166,7 +167,12 @@ export async function buildStory(inputs: SourceInput[], options: BuildOptions): 
 
   const project = assemble(parsed, options, diagnostics);
   project.sources = sources;
-  if (options.mode === 'adaptation' && options.heuristics !== false) diagnostics.push(...applyProposals(project, await heuristicSuggester.suggest(project)));
+  if (options.mode === 'adaptation' && options.heuristics !== false) {
+    // The heuristics first, then the precise rules; a passage keeps the first suggestion made for it.
+    const proposals = await heuristicSuggester.suggest(project);
+    for (const rule of appRules) proposals.push(...(await rule.suggest(project)));
+    diagnostics.push(...applyProposals(project, proposals));
+  }
   done({
     mode: options.mode,
     documents: sources.length,

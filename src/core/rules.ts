@@ -174,3 +174,10 @@ export const lastQuestionSuggester = perLine('rule:last_question', 'reply', (lin
  * that rarely misfire go before the question rule, which finds a question in most scenes.
  */
 export const cheapRules: Suggester[] = [widerPickupSuggester, decisionSuggester, interruptionSuggester, warningSuggester, dilemmaSuggester, demandSuggester, lastQuestionSuggester, questionSuggester];
+
+/**
+ * What Interactive adaptation runs after the heuristics: every cheap rule but the question rule, which finds a question
+ * in most scenes and is right too rarely (6 of 38 on the evaluation set) to put in front of writers. The evaluation
+ * scores this set as its "app" row.
+ */
+export const appRules: Suggester[] = cheapRules.filter((s) => s !== questionSuggester);
