@@ -34,7 +34,7 @@ export function fountainAction(text: string): string {
   const t = text.trim();
   if (!t) return '';
   const caps = /[A-Z]/.test(t) && t === t.toUpperCase() && t.length < 60;
-  const special = /^[#=>~.@!\[]/.test(t) || SCENE_START.test(t) || MARKER_START.test(t) || /TO:$/.test(t);
+  const special = /^[#=>~.@![]/.test(t) || SCENE_START.test(t) || MARKER_START.test(t) || t.endsWith('TO:');
   return caps || special ? t.split('\n').map((l) => `!${l}`).join('\n') : t;
 }
 
@@ -289,6 +289,8 @@ const ORIGINAL_MIME: Record<ConvertedInput['convertedFrom'], string> = {
 /** A converted file's own bytes, kept beside its text (id from its content, so the same file is kept once). */
 function withOriginal(input: ConvertedInput, data: string | Uint8Array | ArrayBuffer): SourceInput {
   const bytes = typeof data === 'string' ? new TextEncoder().encode(data) : data instanceof Uint8Array ? data : new Uint8Array(data);
+  // Spread first: a Uint8Array's own map would turn the hex strings back into numbers.
+  // eslint-disable-next-line unicorn/no-useless-spread
   const id = `orig_${[...sha256(bytes).slice(0, 10)].map((b) => b.toString(16).padStart(2, '0')).join('')}`;
   return { ...input, original: { id, name: input.fileName, mime: ORIGINAL_MIME[input.convertedFrom], byteLength: bytes.length }, originalBytes: bytes };
 }

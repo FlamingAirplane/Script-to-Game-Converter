@@ -21,6 +21,7 @@ npm run dev        # the app at http://localhost:5173
 
 ```bash
 npm run typecheck
+npm run lint           # oxlint; fails on any warning (rules in .oxlintrc.json)
 npm test               # unit tests (tests/*.test.ts)
 npm run test:unreal    # the Unreal export's per-story C++ compiles (needs clang)
 npm run test:unreal:build -- --test   # if you changed the Unreal C++ and have Unreal 5.7: build it and run its tests

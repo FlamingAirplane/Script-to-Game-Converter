@@ -9,7 +9,7 @@ function highlight(line: string) {
   if (/^={2,}/.test(t)) return <span className="tk-knot">{line}</span>;
   if (/^(VAR|CONST)\b/.test(t)) return <span className="tk-var">{line}</span>;
   if (t.startsWith('~')) return <span className="tk-logic">{line}</span>;
-  if (/^->/.test(t)) return <span className="tk-divert">{line}</span>;
+  if (t.startsWith('->')) return <span className="tk-divert">{line}</span>;
   // Split out choice bullets, conditions, diverts and tags.
   const parts: React.ReactNode[] = [];
   const re = /(^\s*[*+]\s*)|(\{[^}]*\})|(->\s*\w+)|(\s#[^#]*)/g;

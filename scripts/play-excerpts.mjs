@@ -31,7 +31,7 @@ const FRENCH_NAME = /^-\s+(.+?)\s+-$/;
 const HEADING = /^(?:ACT|SCENE|ACTE|SC[ÈE]NE)\b/i;
 const ENTERS = /\b(?:enters?|re-enters?|comes? in|entre|rentre)\b/i;
 const EXITS = /\b(?:exit|exeunt|goes out|go out)\b/i;
-const DIRECTION = /^_?[\[(].*[\])]\.?_?$/;
+const DIRECTION = /^_?[[(].*[\])]\.?_?$/;
 const MAX_SPEECHES = 6;
 
 async function text(ebook) {
@@ -64,7 +64,7 @@ function speech(raw) {
 }
 
 function clean(s) {
-  return s.replace(/[_\[\]]/g, '').replace(/\s+/g, ' ').replace(/^[\s.,;:—–-]+(?=\S)/, '').trim();
+  return s.replace(/[_[\]]/g, '').replace(/\s+/g, ' ').replace(/^[\s.,;:—–-]+(?=\S)/, '').trim();
 }
 
 /** The excerpt as blocks: { type: 'heading' | 'action' | 'speech', … }. */

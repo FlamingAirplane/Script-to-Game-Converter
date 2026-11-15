@@ -41,6 +41,7 @@ export function StoryFiles({ project }: { project: StoryProject }) {
     return () => {
       live = false;
     };
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- `key` names the files; their objects change on every edit
   }, [key]);
 
   const one = async (f: StoryFile) => {

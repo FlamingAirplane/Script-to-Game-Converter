@@ -117,7 +117,7 @@ for (const sample of samples) {
   const smokeOk = !!line && / 0 runtime errors\.\s*$/.test(line) && !compileErrors.length;
   lines.push(`  smoke test: ${smokeOk ? 'passed' : 'FAILED'}${line ? `\n    ${line.replace('[NarrativeBridge] ', '')}` : ''}`);
   if (compileErrors.length) lines.push(...compileErrors.slice(0, 8).map((e) => `    ${e}`));
-  if (!smokeOk && line) lines.push(...(smoke.slice(smoke.indexOf(line) + line.length).split('\n').slice(1, 6).filter((l) => l.trim() && !/^UnityEngine\./.test(l)).map((l) => `    ${l}`)));
+  if (!smokeOk && line) lines.push(...(smoke.slice(smoke.indexOf(line) + line.length).split('\n').slice(1, 6).filter((l) => l.trim() && !l.startsWith('UnityEngine.')).map((l) => `    ${l}`)));
   // 2. The Test Runner: playthrough routes (Edit Mode) and the story in Play Mode.
   let testsOk = true;
   if (!compileErrors.length)

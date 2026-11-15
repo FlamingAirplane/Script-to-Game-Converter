@@ -195,8 +195,8 @@ function declarations(p: TweePassage): ParsedBlock[] {
       for (const part of splitSetters((m[1] ?? m[2]).replace(/\s+into\s+/, ' to '))) {
         const e = parseAssignment(part);
         if (!e) out.push({ kind: 'unsupported', text: m[0], reason: 'Twine set-up code', line: ln });
-        else if (e.type === 'give_item' || e.type === 'take_item') out.push({ kind: 'marker', marker: { type: 'item', id: e.itemId, displayName: display && !/^Made with/.test(display) ? display : undefined, consumable: false }, line: ln });
-        else if (e.type === 'set_var' && !/^once_/.test(e.variableId)) out.push({ kind: 'marker', marker: { type: 'var', id: e.variableId, value: e.value }, line: ln });
+        else if (e.type === 'give_item' || e.type === 'take_item') out.push({ kind: 'marker', marker: { type: 'item', id: e.itemId, displayName: display && !display.startsWith('Made with') ? display : undefined, consumable: false }, line: ln });
+        else if (e.type === 'set_var' && !e.variableId.startsWith('once_')) out.push({ kind: 'marker', marker: { type: 'var', id: e.variableId, value: e.value }, line: ln });
       }
     }
   });
@@ -208,7 +208,7 @@ type Link = { text: string; target: string; effects: Effect[]; conditions: Condi
 /** Strips Narrative Bridge's once-only flag ($once_<id>) from a condition, reporting whether it was there. */
 function takeOnce(c: Condition | null): { cond: Condition | null; once: boolean } {
   if (!c) return { cond: null, once: false };
-  const isOnce = (x: Condition) => x.type === 'not' && x.condition.type === 'has_item' && /^once_/.test(x.condition.itemId);
+  const isOnce = (x: Condition) => x.type === 'not' && x.condition.type === 'has_item' && x.condition.itemId.startsWith('once_');
   if (isOnce(c)) return { cond: null, once: true };
   if (c.type === 'and' && c.conditions.some(isOnce)) {
     const rest = c.conditions.filter((x) => !isOnce(x));
@@ -284,7 +284,7 @@ function passageBlocks(p: TweePassage, idOf: (name: string) => string, opts: { c
       out.push({ kind: 'transition', text: t, line: ln });
       return;
     }
-    const d = /^([A-Z][A-Z0-9 .'’\-]{0,30}?)(?:\s*\(([^)]*)\))?:\s+([\s\S]+)$/.exec(t);
+    const d = /^([A-Z][A-Z0-9 .'’-]{0,30}?)(?:\s*\(([^)]*)\))?:\s+([\s\S]+)$/.exec(t);
     if (d) out.push({ kind: 'dialogue', character: d[1].trim(), parenthetical: d[2], text: plainText(d[3]), line: ln });
     else out.push({ kind: 'action', text: plainText(t), line: ln });
   };

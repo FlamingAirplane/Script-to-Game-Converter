@@ -655,7 +655,7 @@ function RuleCard({ rule, over, update }: { rule: AppRule; over: Record<string, 
       const m = (d.rules[rule.key] ??= {});
       const base = rule.decls.find((x) => x.prop === p);
       if (v == null || (base && v === base.value && !important)) delete m[p];
-      else m[p] = important && !/!important$/.test(v) ? `${v} !important` : v;
+      else m[p] = important && !v.endsWith('!important') ? `${v} !important` : v;
       if (!Object.keys(m).length) delete d.rules[rule.key];
     }, `rule:${rule.key}:${p}`);
   const extra = Object.keys(over).filter((p) => !rule.decls.some((d) => d.prop === p));

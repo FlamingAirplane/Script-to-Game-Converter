@@ -113,7 +113,7 @@ function classify(l: PdfLine, margin: number, prev: Kind | ''): Kind {
   if (off >= 240) return TRANSITION.test(t) || CUE.test(t) ? 'transition' : 'action';
   if (t.startsWith('(') && (prev === 'character' || prev === 'dialogue' || prev === 'paren')) return 'paren';
   if (off >= 135 && CUE.test(t) && /[A-Z]/.test(t)) return 'character';
-  if (off >= 95 && off < 135 && prev === 'paren' && !/\)$/.test(t)) return 'paren';
+  if (off >= 95 && off < 135 && prev === 'paren' && !t.endsWith(')')) return 'paren';
   if (prev === 'character' || prev === 'dialogue' || prev === 'paren') return 'dialogue';
   return 'action';
 }
