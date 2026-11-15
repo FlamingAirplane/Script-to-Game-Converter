@@ -63,6 +63,7 @@ npm run cli -- export story.nbproj.json --engine unreal --out ./build --ref <ink
 npm run cli -- export story.md --engine web --out ./share      # one playable .html page for readers
 npm run cli -- export script.fountain --engine twine --out ./share   # Twee 3 / SugarCube for Twine 2
 npm run cli -- export script.fountain --engine twine --story-only --out ./share   # just passages, text and links
+npm run cli -- export script.fountain --engine renpy --out ./share   # a script.rpy for a Ren'Py visual novel
 npm run cli -- doctor              # checks Unity/Unreal, git, .NET and C++ toolchain
 ```
 
@@ -87,7 +88,7 @@ npm run test:offline    # the website opens, converts, plays and exports offline
 | **Graph** | The story as an old map (or an indented **Outline**): start, endings, unreachable passages, conditional and proposed routes. For large stories: focus on a passage, trace every way to an ending, faint straight-on routes, and fold scenes. Drag passages to arrange them (saved with the project), search, minimap; click a passage to edit it; *+ New scene* adds a scene after a passage, as a new choice, or on its own. *Save map* downloads the whole map as SVG or PNG. |
 | **Ink** | The deterministic generated Ink, compiled live with the pinned inkjs compiler; compile errors are mapped back to passages. |
 | **Playtest** | Play the compiled story, undo choices, toggle inventory to simulate the host game, save/load (a save from an earlier version of the story carries over, as readers' saves do), hear the dialogue (recorded clips or character voices), and see the automated playthrough report. |
-| **Export** | A playable web page, a Twine file, a recording script (.csv) for voice sessions (recordings come back one file per line, or as one long session whose takes are found and linked to lines as non-destructive regions, with trims, fades and gain as edits rendered on export; see `src/core/session.ts` and `src/ui/audioRender.ts`), or a verified Unity / Unreal package (.zip) with manifest, validation report, ISR, source map, voice clips and the original sources. |
+| **Export** | A playable web page, a Twine file, a Ren'Py script (.rpy), a recording script (.csv) for voice sessions (recordings come back one file per line, or as one long session whose takes are found and linked to lines as non-destructive regions, with trims, fades and gain as edits rendered on export; see `src/core/session.ts` and `src/ui/audioRender.ts`), or a verified Unity / Unreal package (.zip) with manifest, validation report, ISR, source map, voice clips and the original sources. |
 
 **Drafts** are named copies of a story kept in this browser: keep one before a big change and restore it later
 (restoring can be undone). A draft is also kept automatically before a story is replaced by a new conversion or an opened

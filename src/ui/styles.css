@@ -1376,3 +1376,20 @@ section.drafts > h2 { margin-top: 26px; }
 .editor-head { margin-bottom: 10px; padding-bottom: 8px; }
 .chip.cond { color: var(--warn); }
 .chip.effect { color: var(--teal); }
+
+/* Turning a line into a choice (Review) */
+.block-turning > .block { border-bottom-style: none; }
+.line-to-choice { display: flex; flex-direction: column; gap: 8px; margin: 0 0 10px 88px; padding: 10px 12px; border: 1px solid var(--rule); border-left: 3px solid var(--pen); border-radius: 6px; background: var(--paper-2); }
+.line-to-choice p { margin: 0; }
+.line-to-choice .field { display: flex; flex-direction: column; gap: 2px; }
+.made-choice { margin: 4px 0 8px; color: var(--ok); }
+@media (max-width: 720px) { .line-to-choice { margin-left: 0; } }
+
+/* Structured markers on the Import page: insert buttons and a live outline */
+.marker-toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; margin-bottom: 6px; }
+.marker-preview { margin-top: 10px; padding: 8px 12px; border: 1px dashed var(--rule-2); border-radius: 6px; background: var(--paper-hi); max-height: 320px; overflow: auto; }
+.marker-preview p { margin: 0 0 4px; }
+.marker-outline { margin: 0; padding-left: 20px; }
+.marker-outline > li { margin: 2px 0; }
+.marker-outline ul { list-style: none; margin: 0; padding-left: 8px; }
+.marker-problems { list-style: none; margin: 6px 0 0; padding: 0; color: var(--warn); }

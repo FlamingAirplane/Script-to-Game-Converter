@@ -1,5 +1,8 @@
 import { isActive, uniqueId, type Choice, type Passage, type StoryProject } from '../core/isr';
 
+/** The id Review uses for Story settings in its contents list. */
+export const STORY_SETTINGS = '__story__';
+
 // Pure editing operations on the ISR used by the review UI. Every edit made here is recorded
 // with user_authored provenance so regeneration never silently loses it.
 
@@ -54,6 +57,94 @@ export function addChoice(p: StoryProject, passageId: string): Choice | null {
   ps.choices.push(choice);
   ps.isEnding = false;
   return choice;
+}
+
+/** Where a line turned into a choice leads (see lineToChoice). */
+export type ChoiceDestination =
+  /** A new scene holding the lines after this one, and the passage's own choices and ending. */
+  | { kind: 'rest' }
+  /** A new, empty scene; the passage keeps its other lines. */
+  | { kind: 'new' }
+  /** A passage that already exists, or 'END'. */
+  | { kind: 'existing'; target: string };
+
+/** Whether a content block is a line of story text a writer could turn into a choice. */
+export function canBecomeChoice(b: { type: string }): boolean {
+  return b.type === 'dialogue' || b.type === 'action';
+}
+
+/** The text a choice made from this line starts with: the line itself, trimmed to a button's length. */
+export function choiceTextFor(text: string): string {
+  const t = text.replace(/\s+/g, ' ').trim().replace(/^[“"']+|[”"']+$/g, '');
+  if (t.length <= 80) return t;
+  const cut = t.slice(0, 80);
+  return `${cut.slice(0, Math.max(cut.lastIndexOf(' '), 40)).replace(/[,;:\s]+$/, '')}…`;
+}
+
+/**
+ * Turn one line of a passage into a choice: the point-and-click way to branch, with no markers to learn.
+ * The line leaves the passage's text and becomes the button the player clicks. With `rest`, the lines after
+ * it move into a new scene that the choice leads to, taking the passage's choices and ending with them, so
+ * the passage now stops at the choice. Returns the new choice and, for a new scene, its id; or an error.
+ */
+export function lineToChoice(
+  p: StoryProject,
+  passageId: string,
+  blockIndex: number,
+  text: string,
+  to: ChoiceDestination,
+): { choice: Choice; newPassageId?: string } | { error: string } {
+  const ps = p.passages.find((x) => x.id === passageId);
+  const block = ps?.content[blockIndex];
+  if (!ps || !block) return { error: 'That line is no longer there.' };
+  if (!canBecomeChoice(block)) return { error: 'Only a line of narration or dialogue can become a choice.' };
+  const label = text.replace(/\s+/g, ' ').trim();
+  if (!label) return { error: 'Give the choice some words for the player to click.' };
+  if (to.kind === 'existing' && to.target !== 'END' && !p.passages.some((x) => x.id === to.target)) return { error: 'That passage no longer exists.' };
+
+  let target = to.kind === 'existing' ? to.target : '';
+  let newPassageId: string | undefined;
+  if (to.kind !== 'existing') {
+    const taken = new Set(p.passages.map((x) => x.id));
+    const title = choiceTextFor(label).replace(/…$/, '').slice(0, 48) || `${ps.title} (continued)`;
+    const rest = to.kind === 'rest' ? ps.content.slice(blockIndex + 1) : [];
+    const next: Passage = {
+      id: uniqueId(`${passageId}_${title}`, taken, 'scene'),
+      title,
+      sceneHeading: ps.sceneHeading,
+      content: rest,
+      choices: to.kind === 'rest' ? ps.choices : [],
+      divert: to.kind === 'rest' ? ps.divert : undefined,
+      isEnding: to.kind === 'rest' ? ps.isEnding : true,
+      origin: 'user_authored',
+      review: 'approved',
+      source: rest.find((b) => b.source)?.source,
+    };
+    if (to.kind === 'rest') {
+      ps.content = ps.content.slice(0, blockIndex + 1);
+      ps.choices = [];
+      ps.divert = undefined;
+    }
+    p.passages.splice(p.passages.indexOf(ps) + 1, 0, next);
+    target = newPassageId = next.id;
+  }
+
+  ps.content.splice(blockIndex, 1);
+  const ids = new Set(p.passages.flatMap((x) => x.choices.map((c) => c.id)));
+  const choice: Choice = {
+    id: uniqueId(`${passageId}_choice`, ids),
+    text: label,
+    target,
+    conditions: [],
+    effects: [],
+    once: false,
+    origin: 'user_authored',
+    review: 'approved',
+    source: block.source,
+  };
+  ps.choices.push(choice);
+  ps.isEnding = false;
+  return { choice, newPassageId };
 }
 
 /** Resolve a diagnostic's entity id to the passage that contains it. */

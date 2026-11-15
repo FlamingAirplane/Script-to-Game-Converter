@@ -17,7 +17,7 @@ import { DraftShelf } from './Drafts';
 import { DialogueOnlySetting } from './DialogueOnlySetting';
 import type { SceneRequest } from './NewScene';
 import { conditionInWords, describeCondition, effectInWords } from '../core/gating';
-import { type Update, addChoice, deletePassage, findText, mergeCharacter, movePassage, renamePassage, replaceText } from './projectOps';
+import { type ChoiceDestination, type Update, STORY_SETTINGS, addChoice, canBecomeChoice, choiceTextFor, deletePassage, findText, lineToChoice, mergeCharacter, movePassage, renamePassage, replaceText } from './projectOps';
 
 /** Cues the game is likely to know, with what their value means (see NarrativeCuePlayer in the Unity package). */
 const CUE_SUGGESTIONS: [string, string][] = [
@@ -30,7 +30,7 @@ const CUE_SUGGESTIONS: [string, string][] = [
 ];
 
 
-export const STORY_SETTINGS = '__story__';
+export { STORY_SETTINGS };
 
 /** Whether Passage settings is unfolded: remembered from passage to passage while the app is open. */
 let passageSettingsOpen = false;
@@ -288,7 +288,14 @@ function PassageEditor({
   const [idDraft, setIdDraft] = useState(passage.id);
   const [idError, setIdError] = useState('');
   const [settingsOpen, setSettingsOpen] = useState(passageSettingsOpen);
+  /** The line being turned into a choice, and what the last one became (for the note under Choices). */
+  const [choiceFrom, setChoiceFrom] = useState<number | null>(null);
+  const [madeChoice, setMadeChoice] = useState('');
   const pid = passage.id;
+  useEffect(() => {
+    setChoiceFrom(null);
+    setMadeChoice('');
+  }, [pid]);
   const edit = (fn: (p: Passage, d: StoryProject) => void, group?: string) =>
     update((d) => {
       const p = d.passages.find((x) => x.id === pid);
@@ -411,14 +418,14 @@ function PassageEditor({
           </p>
         )}
         {passage.content.map((b, i) => (dialogueOnly && b.type !== 'dialogue' && b.type !== 'pause' ? null : (
+          <div key={i} className={choiceFrom === i ? 'block-turning' : undefined}>
           <BlockRow
-            key={i}
             block={b}
             project={project}
             onFocusLine={onFocusLine}
             onCueSound={(tag, audio) => update((d) => setCueSound(d, tag, audio))}
             onChange={(nb) => edit((p) => (p.content[i] = nb), `block:${pid}:${i}`)}
-            onDelete={() => edit((p) => p.content.splice(i, 1))}
+            onDelete={() => (setChoiceFrom(null), edit((p) => p.content.splice(i, 1)))}
             onMove={(dir) =>
               edit((p) => {
                 const j = i + dir;
@@ -426,7 +433,29 @@ function PassageEditor({
                 [p.content[i], p.content[j]] = [p.content[j], p.content[i]];
               })
             }
+            onToChoice={canBecomeChoice(b) ? () => (setChoiceFrom(choiceFrom === i ? null : i), setMadeChoice('')) : undefined}
           />
+          {choiceFrom === i && 'text' in b && (
+            <LineToChoice
+              passage={passage}
+              project={project}
+              index={i}
+              text={b.text}
+              onCancel={() => setChoiceFrom(null)}
+              onMake={(text, to) => {
+                let error: string | null = null;
+                update((d) => {
+                  const result = lineToChoice(d, pid, i, text, to);
+                  if ('error' in result) error = result.error;
+                });
+                if (error) return error;
+                setChoiceFrom(null);
+                setMadeChoice(text);
+                return null;
+              }}
+            />
+          )}
+          </div>
         )))}
         <div className="row">
           <button className="btn tiny" onClick={() => edit((p) => p.content.push({ type: 'action', text: 'New line of narration.', origin: 'user_authored' }))}>
@@ -486,7 +515,13 @@ function PassageEditor({
 
       <section className="flow">
         <h3>Choices</h3>
-        {passage.choices.length === 0 && <p className="muted small">No choices — the story continues automatically.</p>}
+        {passage.choices.length === 0 && <p className="muted small">No choices — the story continues automatically. To branch, press ⑂ beside a line above to turn it into a choice.</p>}
+        {madeChoice && (
+          <p className="made-choice small" role="status">
+            ⑂ “{choiceTextFor(madeChoice)}” is now a choice.{' '}
+            {activeChoices.length < 2 ? 'Add another choice (or turn another line into one) to give the player a real decision.' : 'Check where each one leads below.'}
+          </p>
+        )}
         {passage.choices.map((c, i) => (
           <ChoiceEditor
             key={c.id}
@@ -566,6 +601,7 @@ function BlockRow({
   onMove,
   onFocusLine,
   onCueSound,
+  onToChoice,
 }: {
   block: ContentBlock;
   project: StoryProject;
@@ -575,6 +611,8 @@ function BlockRow({
   onFocusLine: (line: number) => void;
   /** Attaches a sound to every cue with this tag (or takes it away). */
   onCueSound: (tag: string, audio: AudioRef | undefined) => void;
+  /** Opens the form that turns this line into a choice (only for lines of narration or dialogue). */
+  onToChoice?: () => void;
 }) {
   const touched = (b: ContentBlock): ContentBlock => ({ ...b, origin: b.origin === 'generated' ? 'generated' : 'user_authored' }) as ContentBlock;
   return (
@@ -697,6 +735,11 @@ function BlockRow({
       </div>
       <div className="block-actions">
         <ProvenanceBadge origin={block.origin} />
+        {onToChoice && (
+          <button className="icon" title="Turn this line into a choice the player clicks" aria-label="Turn this line into a choice" onClick={onToChoice}>
+            ⑂
+          </button>
+        )}
         <button className="icon" title="Move up" onClick={() => onMove(-1)}>
           ↑
         </button>
@@ -708,6 +751,81 @@ function BlockRow({
         </button>
       </div>
     </div>
+  );
+}
+
+/** The guided way to branch: turn a line into a choice, then say where it leads. */
+function LineToChoice({
+  passage,
+  project,
+  index,
+  text,
+  onCancel,
+  onMake,
+}: {
+  passage: Passage;
+  project: StoryProject;
+  index: number;
+  text: string;
+  onCancel: () => void;
+  /** Makes the choice; returns an error to show, or null. */
+  onMake: (text: string, to: ChoiceDestination) => string | null;
+}) {
+  const after = passage.content.length - index - 1;
+  const [label, setLabel] = useState(() => choiceTextFor(text));
+  const [dest, setDest] = useState(after > 0 ? '__rest' : '__new');
+  const [error, setError] = useState('');
+  const to: ChoiceDestination = dest === '__rest' ? { kind: 'rest' } : dest === '__new' ? { kind: 'new' } : { kind: 'existing', target: dest };
+  return (
+    <form
+      className="line-to-choice"
+      onSubmit={(e) => {
+        e.preventDefault();
+        setError(onMake(label, to) ?? '');
+      }}
+      onKeyDown={(e) => e.key === 'Escape' && onCancel()}
+      aria-label="Turn this line into a choice"
+    >
+      <p className="small">
+        <strong>⑂ Turn this line into a choice.</strong> <span className="muted">The line leaves the text and becomes a button the player clicks.</span>
+      </p>
+      <label className="field">
+        <span className="muted small">What the button says</span>
+        <input className="input" value={label} autoFocus onChange={(e) => setLabel(e.target.value)} aria-label="Choice text" />
+      </label>
+      <label className="field">
+        <span className="muted small">Where it leads</span>
+        <select className="input small" value={dest} onChange={(e) => setDest(e.target.value)} aria-label="Where the choice leads">
+          {after > 0 && (
+            <option value="__rest">
+              A new scene with the {after} line{after === 1 ? '' : 's'} after this one
+            </option>
+          )}
+          <option value="__new">A new, empty scene</option>
+          {project.passages
+            .filter((p) => p.id !== passage.id)
+            .map((p) => (
+              <option key={p.id} value={p.id}>
+                {p.title}
+              </option>
+            ))}
+          <option value="END">The end of the story</option>
+        </select>
+      </label>
+      {dest === '__rest' && (
+        <p className="muted small">This passage will stop at the choice. What follows{passage.choices.length ? ', and its choices,' : ''} moves into the new scene.</p>
+      )}
+      {dest !== '__rest' && after > 0 && <p className="muted small">The lines after this one stay here; the player reads them before choosing.</p>}
+      {error && <p className="error-text small">{error}</p>}
+      <div className="row">
+        <button type="submit" className="btn tiny ok">
+          Make the choice
+        </button>
+        <button type="button" className="btn tiny" onClick={onCancel}>
+          Cancel
+        </button>
+      </div>
+    </form>
   );
 }
 
