@@ -119,7 +119,7 @@ describe('default mode', () => {
   });
 
   it('builds the worked example from docs/STRUCTURED_MARKERS.md into the Ink shown there', async () => {
-    const doc = readFileSync(new URL('../docs/STRUCTURED_MARKERS.md', import.meta.url), 'utf8');
+    const doc = readFileSync(new URL('../docs/STRUCTURED_MARKERS.md', import.meta.url), 'utf8').replace(/\r\n/g, '\n');
     const script = /```fountain\n([\s\S]*?)```/.exec(doc)![1];
     const ink = /```ink\n([\s\S]*?)```/.exec(doc)![1];
     const { project, diagnostics } = await build(script, 'gatehouse.fountain', DEFAULT_MODE);

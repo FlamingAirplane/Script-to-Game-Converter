@@ -1,7 +1,7 @@
 {
   "name": "narrative-bridge",
-  "version": "0.4.0",
-  "description": "Convert screenplays and prose into Ink stories and package them for Unity or Unreal Engine.",
+  "version": "0.5.0",
+  "description": "Turn a script into a playable story, then hand it to a game developer. Screenplays and prose become Ink stories packaged for Unity or Unreal Engine.",
   "scripts": {
     "dev": "vite",
     "build": "tsc --noEmit && vite build",

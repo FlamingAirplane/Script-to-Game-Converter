@@ -4,6 +4,8 @@
 
 # Narrative Bridge
 
+**Turn a script into a playable story, then hand it to a game developer.**
+
 Turn screenplays and prose into validated [Ink](https://github.com/inkle/ink) stories, then package them for **Unity**
 (via [Ink Unity Integration](https://github.com/inkle/ink-unity-integration)) or **Unreal Engine**
 (via [Inkpot](https://github.com/The-Chinese-Room/Inkpot)).
@@ -314,7 +316,7 @@ carries a save over, starts at every passage and clicks through the story panel:
 *A complete new Unity project* (or `--unity-project` on the command line) wraps the same package in a project that creates a
 demo scene on first open.
 
-**Unreal** (5.7+): a C++ project with Inkpot enabled and `Scripts/setup_inkpot.sh|ps1` to clone Inkpot at the pinned ref,
+**Unreal** (built and tested with 5.7; Inkpot documents 5.7 and 5.8): a C++ project with Inkpot enabled and `Scripts/setup_inkpot.sh|ps1` to clone Inkpot at the pinned ref,
 with the same features as the Unity package. A Blueprint-friendly `UNarrativeBridgeComponent` starts at any passage, presents
 choices, Continue breaks and exits to the game (`Resume`, `ResumeAt`), exposes variables, keeps the game's inventory in step
 (`INarrativeInventoryAuthority`), lists locked choices with what they need, translates (`Translations.csv`), plays voice clips,

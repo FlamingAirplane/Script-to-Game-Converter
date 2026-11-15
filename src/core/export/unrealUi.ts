@@ -361,6 +361,8 @@ private:
     bool bMenuSaving = false;
     bool bMenuSlots = false;
     bool bPromptShown = false;
+    /** Frames left to keep the text scrolled to its newest line: a new line only has its size once Slate has laid it out. */
+    int32 ScrollFrames = 0;
     FDelegateHandle SettingsHandle;
     FDelegateHandle LanguageHandle;
 };
@@ -878,6 +880,7 @@ void UNarrativeStoryWidget::ShowLine(const FNarrativeLine& Line, bool bType)
         FadeSeconds.Add(Theme.LineFade);
     }
     Scroll->ScrollToEnd();
+    ScrollFrames = 3;
 }
 
 void UNarrativeStoryWidget::ShowPicture(const FString& File)
@@ -1021,6 +1024,8 @@ void UNarrativeStoryWidget::HandleStatus(const FString& Message)
 void UNarrativeStoryWidget::NativeTick(const FGeometry& MyGeometry, float InDeltaTime)
 {
     Super::NativeTick(MyGeometry, InDeltaTime);
+    // The newest line stays in view: scrolled again once it (or the choices under it) has been laid out.
+    if (ScrollFrames > 0 && Scroll) { Scroll->ScrollToEnd(); --ScrollFrames; }
     for (int32 i = Fading.Num() - 1; i >= 0; --i)
     {
         UWidget* W = Fading[i];
@@ -1043,7 +1048,7 @@ void UNarrativeStoryWidget::NativeTick(const FGeometry& MyGeometry, float InDelt
             if (Theme.PunctuationPause > 0.f && Shown.Len() > 0 && EndsSentence(Shown[Shown.Len() - 1]) && TypingShown < Total)
                 TypingClock -= Theme.PunctuationPause * Theme.CharactersPerSecond * UNarrativeSettings::SpeedMultiplier();
         }
-        if (bChanged) TypingBlock->SetText(FText::FromString(ToRichMarkup(VisiblePrefix(TypingText, TypingShown))));
+        if (bChanged) { TypingBlock->SetText(FText::FromString(ToRichMarkup(VisiblePrefix(TypingText, TypingShown)))); ScrollFrames = 2; }
         if (TypingShown >= Total) TypingBlock = nullptr;
         return;
     }
@@ -1069,7 +1074,7 @@ void UNarrativeStoryWidget::NativeTick(const FGeometry& MyGeometry, float InDelt
         }
         return;
     }
-    if (Prompt != EPrompt::None && !bPromptShown) ShowPrompt();
+    if (Prompt != EPrompt::None && !bPromptShown) { ShowPrompt(); ScrollFrames = 3; }
     if (AutoAdvanceLeft >= 0.f && !bMenuOpen)
     {
         AutoAdvanceLeft -= InDeltaTime;

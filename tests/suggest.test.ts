@@ -231,6 +231,6 @@ describe('the cheap rules', () => {
       ['gate', 'train', ['Use the letter', 'Go back to Study']],
     ]);
     expect(proposals.every((p) => p.suggester === 'rule:wider_pickup')).toBe(true);
-    expect(cheapRules.map((s) => s.id)).toEqual(['rule:question', 'rule:wider_pickup']);
+    expect(cheapRules.map((s) => s.id)).toEqual(['rule:question', 'rule:wider_pickup', 'rule:decision']);
   });
 });

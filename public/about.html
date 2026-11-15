@@ -29,7 +29,7 @@
     <main>
       <h1>About Narrative Bridge</h1>
       <p class="lede">
-        A free, open-source tool for writers and game teams: bring in a screenplay or prose, check what was understood, play it, and share it as a
+        <strong>Turn a script into a playable story, then hand it to a game developer.</strong> A free, open-source tool for writers and game teams: bring in a screenplay or prose, check what was understood, play it, and share it as a
         web page or hand it to a developer as an Ink story packaged for Unity or Unreal. Everything runs in your browser; your scripts aren't uploaded unless you choose cloud sync.
       </p>
       <a class="cta" href="./">Open Narrative Bridge</a>
@@ -52,13 +52,15 @@
       <p>Fountain, Final Draft (.fdx), Word (.docx), PDF, Markdown, plain text, Twine and Ink.</p>
       <h3>Which conversion mode should I choose?</h3>
       <p>
-        <em>Faithful</em> keeps your script as written and is the best place to start. <em>Interactive adaptation</em> also suggests choices drawn
-        from your text, which you accept or reject. <em>Structured</em> is for when you've added markers such as <code>@passage</code> to plan branches yourself.
+        <em>Structured</em> is the one the app recommends, and the best place to start: a script without markers converts scene by scene, and markers
+        you add later, such as <code>@passage</code> or a choice line, plan the branches yourself. <em>Faithful</em> keeps a finished script exactly as
+        written and invents nothing. <em>Interactive adaptation</em> also suggests choices drawn from your text, which you accept or reject.
       </p>
       <h3>What does my developer get?</h3>
       <p>
         For Unity, a package to add to an existing project (Unity 6, or 2022.3 and later) with the compiled story, a ready-made dialogue UI,
         voice clips, pictures and a sample scene. For Unreal, a C++ project set up for the Inkpot plugin, with a script that fetches it. Either way, the Ink source is included.
+        It is a story package, not a finished game: the developer adds it to a game and connects it to the gameplay.
       </p>
       <h3>Does it cost anything?</h3>
       <p>No. It's free and open source under the MIT licence.</p>
@@ -72,7 +74,7 @@
         <li>Old Word .doc files can't be read: save them as .docx first.</li>
         <li>Work is kept per browser. Safari may clear it after a week without a visit unless you add the site to the Dock.</li>
         <li>Very long scripts work but take a few seconds more; there's no fixed size limit.</li>
-        <li>The Unreal project needs the free Inkpot plugin; its setup script fetches it, which needs the internet once.</li>
+        <li>The Unreal project needs the free Inkpot plugin; its setup script fetches it, which needs the internet once. It is built and tested with Unreal Engine 5.7; on 5.9 the pinned Inkpot release needs a one-line fix (the export's README says which).</li>
       </ul>
 
       <h2 id="roadmap">Roadmap</h2>
