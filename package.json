@@ -21,7 +21,8 @@
     "design:publish": "tsx scripts/design-publish.ts",
     "test:unity": "tsx scripts/unity-check.ts",
     "test:unreal": "tsx scripts/unreal-check.ts",
-    "test:unreal:build": "tsx scripts/unreal-build.ts"
+    "test:unreal:build": "tsx scripts/unreal-build.ts",
+    "templates": "node scripts/templates.mjs"
   },
   "repository": {
     "type": "git",
