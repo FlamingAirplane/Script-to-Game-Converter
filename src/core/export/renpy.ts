@@ -1,3 +1,4 @@
+import { plainText } from '../emphasis';
 import { choiceGuards } from '../forced';
 import { log } from '../log';
 import { cutsceneSeconds, forPlayers } from '../players';
@@ -43,6 +44,14 @@ export function renpyVar(name: string): string {
 /** Text for a Ren'Py string: quotes and backslashes escaped, and [ and { doubled so they aren't read as markup. */
 export function renpyText(text: string): string {
   return text.replace(/\\/g, '\\\\').replace(/"/g, '\\"').replace(/\[/g, '[[').replace(/\{/g, '{{').replace(/\s*\n\s*/g, '\\n');
+}
+
+/**
+ * Story text for Ren'Py with its emphasis: the script's <i>, <b> and <u> become Ren'Py's {i}, {b} and {u} text tags
+ * (after escaping, so the writer's own braces stay doubled and these stay single).
+ */
+export function renpyRich(text: string): string {
+  return renpyText(text).replace(/<(\/?)([ibu])>/g, '{$1$2}');
 }
 
 function literal(v: boolean | number | string): string {
@@ -104,7 +113,7 @@ export function buildRenpy(story: ProcessedStory): string {
   ];
   if (project.characters.length) {
     out.push('# The characters.');
-    for (const c of project.characters) out.push(`define ${speakers.get(c.id)} = Character("${renpyText(c.displayName)}")`);
+    for (const c of project.characters) out.push(`define ${speakers.get(c.id)} = Character("${renpyText(plainText(c.displayName))}")`);
     out.push('');
   }
   const onceIds = project.passages.flatMap((p) => p.choices.filter((c) => isActive(c.review) && c.once).map((c) => c.id));
@@ -144,7 +153,7 @@ function passageLines(p: Passage, speakers: Map<string, string>): string[] {
   const lines: string[] = [`label ${label(p.id)}:`, `    ${comment(p.title)}`];
   // A cutscene goes on by itself: each line waits long enough to be read, then the next comes without a click.
   const wait = (text: string) => (p.cutscene ? `{w=${cutsceneSeconds(text).toFixed(1)}}{nw}` : '');
-  const say = (who: string | null, text: string) => lines.push(`    ${who ? `${who} ` : ''}"${renpyText(text)}${wait(text)}"`);
+  const say = (who: string | null, text: string) => lines.push(`    ${who ? `${who} ` : ''}"${renpyRich(text)}${wait(text)}"`);
   if (p.sceneHeading) say(null, `\u0000b\u0001${p.sceneHeading}\u0000/b\u0001`);
   for (const b of p.content) {
     switch (b.type) {
@@ -199,7 +208,7 @@ function passageLines(p: Passage, speakers: Map<string, string>): string[] {
 function choiceLines(c: Choice): string[] {
   const parts = c.conditions.map((x) => (x.type === 'or' ? `(${conditionToPython(x)})` : conditionToPython(x)));
   if (c.once) parts.push(`not once_${c.id}`);
-  const out = [`        "${renpyText(c.text) || 'Continue'}"${parts.length ? ` if ${parts.join(' and ')}` : ''}:`];
+  const out = [`        "${renpyRich(c.text) || 'Continue'}"${parts.length ? ` if ${parts.join(' and ')}` : ''}:`];
   for (const e of c.effects) out.push(`            ${effectToPython(e)}`);
   if (c.once) out.push(`            $ once_${c.id} = True`);
   out.push(`            jump ${label(c.target)}`);
