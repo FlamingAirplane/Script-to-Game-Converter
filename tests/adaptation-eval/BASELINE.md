@@ -1,6 +1,38 @@
 # Baseline: suggesters on the evaluation set
 
-## Current baseline: the grown set (14 November 2026)
+## Current baseline: decision and reply rules (15 November 2026)
+
+`npm run eval:adapt` after five rules joined the cheap rules (dilemma, interruption, warning, demand, last
+question) and item phrases stopped at "by" and similar words. Same set as below: 17 scripts, 36 moments, 5 held out.
+The models were not re-run.
+
+| Suggester         | Raw | Valid | Valid % | Accepted | Accept % | Recall | Per script | Completable | Time |
+| ----------------- | --: | ----: | ------: | -------: | -------: | -----: | ---------: | ----------: | ---: |
+| heuristic         |   7 |     7 |    100% |        4 |      57% |    11% |        0.2 |       17/17 | 0.0s |
+| heuristic + rules |  51 |    51 |    100% |       14 |      27% |    39% |        0.8 |       17/17 | 0.0s |
+
+By kind (valid → accepted), heuristic + rules: pickup 6→3, gate 1→1, reply 38→6, decision 6→4.
+
+With the held-out scripts (22 scripts, 51 moments): heuristic 5 of 51 (accept 56%), heuristic + rules 15 of 51
+(accept 22%), up from 7 of 51 (11%).
+
+What changed, and what it doesn't show:
+
+- **Decisions are found for the first time**: 6 proposed, 4 right. A character deliberating aloud ("Shall I open it
+  now?", "I don't know what to do"), a phone ringing or a knock at the door, and a threat the reader could defy
+  ("Don't call out or you'll be shot").
+- **Replies**: 6 of 38 right, from 2 of 39. Demands ("promise me", "I want my daughter") and a question nobody answers
+  before the scene ends now count. The rules run most specific first, because a passage takes only one suggestion and
+  the question rule finds a question in most scenes.
+- **The pickup fix**: "takes her playfully by the ear" no longer becomes "Take the playfully by the". That alone lifts
+  the heuristics' accept rate from 50% to 57%.
+- **Held out, nothing moved**: the five held-out scripts give 1 of 15 moments both before and after. The new rules
+  were written while reading the 17 tuning scripts' marked moments; they are general patterns, but on scripts nobody
+  looked at they have not yet found anything new. Treat the gain on the tuning set as an upper bound.
+- **Still the weakest part**: the question rule's precision. Most of its replies are questions the scene does not turn
+  on.
+
+## Earlier baseline: the grown set (14 November 2026)
 
 `npm run eval:adapt` after sixteen public-domain play excerpts joined the set. Default run: 17 scripts, 11,721 words,
 36 marked moments; five more scripts (15 moments) are held out. Re-run and replace this section whenever a suggester
