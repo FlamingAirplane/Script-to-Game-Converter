@@ -94,6 +94,11 @@ Not ready to use your own script? Scroll down to **Or start from a sample**.
 
 Markers work in all three modes.
 
+With **Structured import** chosen, a row of buttons above the paste box (**@passage**, **+ choice**, **-> go on**,
+**@item**, **@give**, **+ {locked}**, **@end**) puts a marker on its own line where the cursor is, and a **Preview**
+under the box shows the story the text makes as you type: each passage, its choices and where they lead (🔒 for one
+that needs an item), and anything that needs fixing, such as a choice leading to a passage that isn't written yet.
+
 Optionally type a **Story title** (otherwise it comes from the title page), then click **Convert**.
 
 ## 4. Review: check and edit the story
@@ -125,6 +130,12 @@ suggestions to review. Type in *Filter passages…* to narrow it down. Press **[
 - **Choices:** each has its wording, where it leads (→, with ↗ to jump there), conditions (**+ condition**, for example
   *has the brass key*), effects (**+ effect**), and **once only** (the choice disappears after it is picked). Add one with
   **+ Add choice**. **Then** sets where the story goes when there are no choices, or **End the story here**.
+- **Turning a line into a choice (⑂):** the quickest way to branch, with no markers to learn. Press **⑂** beside a line
+  of narration or dialogue, check the words on the button, and pick where it leads: **a new scene with the lines after
+  this one** (the passage then stops at the choice, and what followed, with any choices it had, moves into the new
+  scene), **a new, empty scene**, a passage that already exists, or the end of the story. The line leaves the text and
+  becomes the button the player clicks; add a second choice the same way to give the player a real decision. Undo
+  puts it back.
 - **Forced choices:** tick **forced** on a choice that has a condition, and once that condition is true the choice is
   the only one in its passage, so the player has to take it. For example, *Use the brass key* with the condition *has
   the brass key*: a player who picked up the key earlier must use it here, while one who didn't gets the other
@@ -233,7 +244,9 @@ there. **Key** in the toolbar hides or shows the key; your choice is remembered.
   once, where a reader first reaches it, with its scene heading and first line. A choice's branches are indented and
   the story carries on below them where they meet again; a route to a passage already listed says **↪ joins** and
   links to it. Click a choice to fold its branch away, or a title to open it in Review.
-- **Scroll** or **+ / −** to zoom, drag the background to move, **Fit** to see everything. Click the minimap to jump.
+- **Scroll** or **+ / −** to zoom (or pinch with two fingers), drag the background to move, **Fit** to see everything.
+  Click the minimap to jump. On a phone, a map too big to read whole opens at a readable size on the start passage;
+  drag to move around, or press **Fit** to see all of it.
 - **Find a passage…** highlights matches; press Enter to go to the first.
 - **Save map** downloads the whole map as an SVG image; **PNG** as a picture.
 
@@ -298,6 +311,13 @@ The panel beside the story shows:
   - **Story and game logic:** choices that need items, effects and a book style, for Twine's SugarCube format.
   - **Story only:** just the passages, their text and the links between them. Nothing is added, so it works in any
     Twine format (including the default, Harlowe); every choice is always shown.
+- **Download for Ren’Py (.rpy):** the story as a visual novel for [Ren’Py](https://www.renpy.org), the free engine
+  for dialogue-heavy games. Make a new project in the Ren’Py launcher, put the file in the project's `game` folder,
+  delete the `script.rpy` the launcher made there, and launch. Each speaker becomes a character, choices become menus
+  (a choice that needs an item only appears when the player has it), effects and once-only choices carry over, and a
+  cutscene's lines go on by themselves. An exit to the game calls `nb_exit` and a cue calls `nb_cue`, which a
+  developer fills in; pictures and sounds are added in Ren’Py. The file is checked against your story here, but hasn't
+  been opened in Ren’Py by Narrative Bridge itself.
 
 ### For a game engine
 
@@ -383,6 +403,11 @@ your story's text, so it is safe to attach to a bug report. Choose how much to s
   - **As a file (no account):** *Save the project file* gives you one file with everything (the story, recordings,
     recording sessions, pictures, portraits, the original scripts and the Unity settings); open it anywhere with
     **Open project**.
+  - **As a link (small stories):** **Copy a link to this story** puts the whole story into a link. Open it in any
+    browser and the story opens in Narrative Bridge (the one that was open is kept in Drafts). The story is inside the
+    part of the link after `#`, which browsers never send to a website, so it isn't uploaded anywhere, but anyone you
+    give the link to can read it. Pictures and recordings aren't included, and a long story is too big for a link: use
+    a file for those.
   - **In the cloud:** paste a GitHub token (classic, with only the `gist` scope; it stays in your browser and goes
     only to GitHub) and click **Save this project to the cloud**. It's kept as a *private* Gist in your GitHub
     account. In any other browser, open the same window, paste the token, click **Show my cloud projects** and

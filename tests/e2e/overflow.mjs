@@ -1,7 +1,7 @@
 // Checks that no screen of the app can scroll sideways, at phone to desktop widths: neither the
 // page itself nor any inner panel. Run with `npm run test:overflow` (builds the file first).
 import { existsSync } from 'node:fs';
-import { fileURLToPath } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 import { chromium } from 'playwright-core';
 
 const file = fileURLToPath(new URL('../../release/Narrative-Bridge.html', import.meta.url));
@@ -16,7 +16,7 @@ const problems = [];
 
 for (const width of WIDTHS) {
   const page = await browser.newPage({ viewport: { width, height: 860 } });
-  await page.goto(`file://${encodeURI(file)}`);
+  await page.goto(pathToFileURL(file).href);
   await page.getByText('New here? Four steps.').waitFor();
   await page.waitForTimeout(400); // let the page-turn animation finish
   const check = async (where) => {

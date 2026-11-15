@@ -8,7 +8,7 @@ import { reviewAll } from '../core/adapt';
 import { applyProposals } from '../core/proposals';
 import { buildStory } from '../core/builder';
 import { sortDiagnostics, type Diagnostic } from '../core/diagnostics';
-import { ADAPTERS, buildPlayableHtml, buildRecordingScript, recordingScriptFileName, buildTwee, ExportBlockedError, playableFileName, twineFileName, type EngineTarget } from '../core/export';
+import { ADAPTERS, buildPlayableHtml, buildRecordingScript, recordingScriptFileName, buildTwee, buildRenpy, ExportBlockedError, playableFileName, renpyFileName, twineFileName, type EngineTarget } from '../core/export';
 import { DEFAULT_MODE, type ConversionMode, type StoryProject } from '../core/isr';
 import { base64ToBytes, type AudioAssets } from '../core/audio';
 import { BINARY_EXTENSIONS, prepareInput } from '../core/parsing/convert';
@@ -27,7 +27,7 @@ Usage:
                                        default: editable unless it uses Ink the editor can't show)
                                       [--out story.ink] [--project story.nbproj.json] [--title "Title"]
   narrative-bridge validate <files... | project.nbproj.json>
-  narrative-bridge export <files... | project.nbproj.json> --engine unity|unreal|web|twine|script --out <dir>
+  narrative-bridge export <files... | project.nbproj.json> --engine unity|unreal|web|twine|renpy|script --out <dir>
                                       [--name ProjectName] [--engine-version 2022.3.62f1] [--ref <tag|sha>] [--no-demo]
                                       Unity: a package for an existing game; [--unity-project] for a new project, [--package-version 1.0.0]
                                       [--story-only]  (twine: just passages, text and links; no code, styling or variables)
@@ -225,9 +225,9 @@ async function main() {
       process.exit(story.exportBlocked ? 1 : 0);
     }
     case 'export': {
-      const engine = args.engine as EngineTarget | 'web' | 'twine' | 'script';
+      const engine = args.engine as EngineTarget | 'web' | 'twine' | 'renpy' | 'script';
       if (typeof args.out !== 'string') usage('--out <dir> is required');
-      if (engine === 'web' || engine === 'twine' || engine === 'script') {
+      if (engine === 'web' || engine === 'twine' || engine === 'renpy' || engine === 'script') {
         // Single-file exports that need no game engine.
         const story = await load(args);
         summary(story);
@@ -238,6 +238,8 @@ async function main() {
               ? [playableFileName(story), buildPlayableHtml(story, runtime(), audioAssets)]
               : engine === 'script'
                 ? [recordingScriptFileName(story.project), buildRecordingScript(story.project)]
+                : engine === 'renpy'
+                  ? [renpyFileName(story), buildRenpy(story)]
                 : [twineFileName(story, args['story-only'] ? 'plain' : 'sugarcube'), buildTwee(story, args['story-only'] ? 'plain' : 'sugarcube')];
           const outDir = resolve(args.out);
           mkdirSync(outDir, { recursive: true });
@@ -252,7 +254,7 @@ async function main() {
           throw e;
         }
       }
-      if (!ADAPTERS[engine]) usage('--engine must be unity, unreal, web, twine or script');
+      if (!ADAPTERS[engine]) usage('--engine must be unity, unreal, web, twine, renpy or script');
       const adapter = ADAPTERS[engine];
       const story = await load(args);
       summary(story);

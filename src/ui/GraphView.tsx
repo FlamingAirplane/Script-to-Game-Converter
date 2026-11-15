@@ -174,6 +174,8 @@ function BreakSign({ count, x, y, exit }: { count: number; x: number; y: number;
 }
 
 const KEY_STORE = 'narrative-bridge.map-key';
+/** The smallest zoom at which a card's title can still be read on a phone (see fit). */
+const MIN_READABLE = 0.6;
 
 /** The map's key, in plain words, drawn with the same marks as the map. */
 function MapKey({ hiddenGated }: { hiddenGated: number }) {
@@ -378,7 +380,16 @@ export function GraphView({
 
   // Whether the reader has panned or zoomed since the last fit; if not, the map refits on resize.
   const moved = useRef(false);
-  const fit = () => {
+  /** Fingers on the map, and a two-finger pinch in progress (its starting spread, midpoint and view). */
+  const touches = useRef(new Map<number, { x: number; y: number }>());
+  const pinch = useRef<{ dist: number; mx: number; my: number; view: { x: number; y: number; k: number } } | null>(null);
+  /** Whether the map last opened at a readable size on a small screen, rather than showing all of it. */
+  const [readable, setReadable] = useState(false);
+  /**
+   * Shows the whole map. On a phone-sized frame, where the whole map would shrink the cards past reading, the map
+   * opens at a readable size on the start passage instead (unless `whole`, as from the Fit button): drag to move.
+   */
+  const fit = (whole = false) => {
     const el = svg.current;
     if (!el) return;
     // The frame's own size: unlike getBoundingClientRect, not shrunk while the page-turn animation runs.
@@ -389,6 +400,14 @@ export function GraphView({
     setSize({ w: r.width, h: r.height });
     const pad = Math.min(60, Math.max(14, r.width * 0.05)); // smaller margins on small screens
     const k = Math.min(1.2, Math.max(0.2, Math.min((r.width - 2 * pad) / bounds.width, (r.height - 2 * pad) / bounds.height)));
+    const first = placed.get(start);
+    if (!whole && r.width < 640 && k < MIN_READABLE && first) {
+      setReadable(true);
+      const kr = MIN_READABLE;
+      setView({ x: pad - first.x * kr, y: Math.max(pad - bounds.minY * kr, r.height / 2 - (first.y + H / 2) * kr), k: kr });
+      return;
+    }
+    setReadable(false);
     setView({ x: (r.width - bounds.width * k) / 2 - bounds.minX * k, y: (r.height - bounds.height * k) / 2 - bounds.minY * k, k });
   };
   const centerOn = (id: string) => {
@@ -485,7 +504,7 @@ export function GraphView({
     const onKey = (e: KeyboardEvent) => {
       if (!plainKey(e)) return;
       if (e.key === '/') document.querySelector<HTMLInputElement>('.graph-search')?.focus();
-      else if (e.key.toLowerCase() === 'f') mapKeys.current.fit();
+      else if (e.key.toLowerCase() === 'f') mapKeys.current.fit(true);
       else if (e.key.toLowerCase() === 'n') mapKeys.current.newScene();
       else if (e.key === '+' || e.key === '=') mapKeys.current.zoom(1.2);
       else if (e.key === '-' || e.key === '_') mapKeys.current.zoom(1 / 1.2);
@@ -644,10 +663,11 @@ export function GraphView({
           <button className="btn tiny" aria-label="Zoom in" title="Zoom in (+)" onClick={() => zoomBy(1.2)}>
             +
           </button>
-          <button className="btn tiny" onClick={fit} title="Show the whole map (F)">
+          <button className="btn tiny" onClick={() => fit(true)} title="Show the whole map (F)">
             Fit
           </button>
         </span>
+        {readable && <span className="muted small map-hint">Shown at a size you can read: drag to move around, or Fit to see it all.</span>}
         {layout && Object.keys(layout).length > 0 && (
           <button className="btn tiny" onClick={onResetLayout} title="Forget dragged positions and arrange automatically">
             Reset layout
@@ -703,6 +723,19 @@ export function GraphView({
             });
           }}
           onPointerDown={(e) => {
+            if (e.pointerType === 'touch') {
+              touches.current.set(e.pointerId, { x: e.clientX, y: e.clientY });
+              if (touches.current.size === 2) {
+                // Two fingers: pinch to zoom, about the point between them (no dragging a card meanwhile).
+                const [a, b] = [...touches.current.values()];
+                const r = svg.current!.getBoundingClientRect();
+                nodeDrag.current = null;
+                pan.current = null;
+                setDragging(null);
+                pinch.current = { dist: Math.hypot(a.x - b.x, a.y - b.y) || 1, mx: (a.x + b.x) / 2 - r.left, my: (a.y + b.y) / 2 - r.top, view };
+                return;
+              }
+            }
             const node = (e.target as Element).closest('.node');
             const id = node?.getAttribute('data-id');
             (e.target as Element).setPointerCapture?.(e.pointerId);
@@ -717,6 +750,18 @@ export function GraphView({
             if (id && isGroupNode(id)) unfold(id);
           }}
           onPointerMove={(e) => {
+            if (touches.current.has(e.pointerId)) touches.current.set(e.pointerId, { x: e.clientX, y: e.clientY });
+            const pz = pinch.current;
+            if (pz && touches.current.size >= 2) {
+              const [a, b] = [...touches.current.values()];
+              const k = Math.min(2.5, Math.max(0.2, (pz.view.k * Math.hypot(a.x - b.x, a.y - b.y)) / pz.dist));
+              const r = svg.current!.getBoundingClientRect();
+              const mx = (a.x + b.x) / 2 - r.left;
+              const my = (a.y + b.y) / 2 - r.top;
+              moved.current = true;
+              setView({ k, x: mx - ((pz.mx - pz.view.x) * k) / pz.view.k, y: my - ((pz.my - pz.view.y) * k) / pz.view.k });
+              return;
+            }
             const nd = nodeDrag.current;
             if (nd) {
               const dx = (e.clientX - nd.sx) / view.k;
@@ -731,7 +776,20 @@ export function GraphView({
             moved.current = true;
             setView((v) => ({ ...v, x: d.vx + e.clientX - d.x, y: d.vy + e.clientY - d.y }));
           }}
-          onPointerUp={() => {
+          onPointerCancel={(e) => {
+            touches.current.delete(e.pointerId);
+            if (touches.current.size < 2) pinch.current = null;
+            nodeDrag.current = null;
+            pan.current = null;
+            setDragging(null);
+          }}
+          onPointerUp={(e) => {
+            touches.current.delete(e.pointerId);
+            if (pinch.current) {
+              // Lifting a finger ends the pinch; the other finger doesn't start a drag or open a card.
+              if (touches.current.size < 2) pinch.current = null;
+              return;
+            }
             const nd = nodeDrag.current;
             nodeDrag.current = null;
             pan.current = null;

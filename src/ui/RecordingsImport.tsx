@@ -1,5 +1,5 @@
 import { lazy, Suspense, useRef, useState } from 'react';
-import { matchRecordings } from '../core/export';
+import { matchRecordings } from '../core/export/script';
 import type { StoryProject } from '../core/isr';
 import { storeClip } from './audioStore';
 import type { Update } from './projectOps';
