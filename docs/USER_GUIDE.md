@@ -306,6 +306,18 @@ The panel beside the story shows:
 
   ![The playable story as a reader sees it](images/playable.jpg)
 
+- **Sharing for feedback:** tick **For feedback** under the download button and readers get a **✎ Note** button: they
+  write what they think of what's on the page as they read, and **Notes** → **Download notes for the writer** gives
+  them a small file to send you. **Share for feedback with a link** has two more things:
+  - **Copy a play link** gives a link that opens just the story, with notes on, in any browser: nothing to download
+    or install, and none of the writing app. The story is inside the link (after the `#`), so it isn't uploaded
+    anywhere, but anyone with the link can read it. Pictures and recordings aren't included, and a long story is too
+    big for a link (send the downloaded page instead).
+  - **Bring in readers' notes…** takes a reader's notes file. Each note goes into the script as a note line, *Reader
+    note: …*, right after the line the reader was looking at, so in Review you find it where it applies. Readers never
+    see notes, and in the Ink they're comments. Notes on a line the script no longer has go at the start of the story,
+    with the line they were about. Bringing the same file in twice adds nothing. Delete a note once you've dealt with it.
+
 - **Download recording script (.csv):** every line of dialogue in story order, by character, with its direction
   (V.O., O.S. and the parenthetical) and the file name each recording should be saved as (`hall_001.wav`, `hall_002.wav`…
   for a passage's lines in order). Opens in Excel, Numbers or Google Sheets.

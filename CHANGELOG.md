@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- **Share a story for feedback.** On the Export page, **For feedback** gives the playable story a **✎ Note** button:
+  readers jot down what they think as they read and download their notes for you. **Copy a play link** opens just the
+  story, with notes on, in any browser (the story travels inside the link; nothing is uploaded). **Bring in readers' notes…**
+  puts each note into the script right after the line it was written on, as a note line readers never see.
 - **Interactive adaptation suggests decisions and more replies.** Besides pickups and the paths that need them, it now
   suggests a decision when a character weighs a step aloud (*Shall I open it now?*, *I don't know what to do*), is
   warned off (*Don't call out or you'll be shot*), is offered two ways (*Take it, or walk away. But decide now.*), or

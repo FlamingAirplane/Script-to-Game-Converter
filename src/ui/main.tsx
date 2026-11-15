@@ -1,8 +1,9 @@
-import { Component, StrictMode, type ReactNode } from 'react';
+import { Component, lazy, StrictMode, Suspense, type ReactNode } from 'react';
 import { createRoot } from 'react-dom/client';
 import { errorData, formatEntry, log, logbook } from '../core/log';
 import { GENERATOR_VERSION } from '../core/version';
 import { App } from './App';
+import { PLAY_PREFIX } from './storyLink';
 import { AdminHost } from './admin/AdminHost';
 import { applyDesign, designSetting, designState } from './design/design';
 import { loadLiveDesign } from './design/live';
@@ -72,12 +73,25 @@ class ErrorBoundary extends Component<{ children: ReactNode }, { error: Error | 
   }
 }
 
+// A play link (#play=…) opens only the story, to read and leave notes on: none of the writing app, and none of this
+// browser's own projects are touched.
+const PlayLinkView = lazy(() => import('./PlayLinkView').then((m) => ({ default: m.PlayLinkView })));
+const playing = location.hash.startsWith(PLAY_PREFIX);
+
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
     <ErrorBoundary>
-      <App />
-      <OfflineUpdate />
-      <AdminHost />
+      {playing ? (
+        <Suspense fallback={<p className="play-link-status">Opening the story…</p>}>
+          <PlayLinkView hash={location.hash} />
+        </Suspense>
+      ) : (
+        <>
+          <App />
+          <OfflineUpdate />
+          <AdminHost />
+        </>
+      )}
     </ErrorBoundary>
   </StrictMode>,
 );

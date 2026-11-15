@@ -1393,3 +1393,12 @@ section.drafts > h2 { margin-top: 26px; }
 .marker-outline > li { margin: 2px 0; }
 .marker-outline ul { list-style: none; margin: 0; padding-left: 8px; }
 .marker-problems { list-style: none; margin: 6px 0 0; padding: 0; color: var(--warn); }
+
+/* A play link (#play=…): the story fills the page */
+.play-link-frame { position: fixed; inset: 0; width: 100%; height: 100%; border: 0; background: var(--desk); }
+.play-link-status { max-width: 36rem; margin: 20vh auto; padding: 0 16px; text-align: center; color: var(--paper); font: 18px/1.6 var(--serif); }
+.play-link-status a { color: var(--paper); }
+.feedback-check { display: flex; gap: 6px; align-items: flex-start; margin-top: 10px; }
+.feedback-more { margin-top: 8px; }
+.feedback-more > * + * { margin-top: 8px; }
+.reader-notes-in { margin-top: 10px; }

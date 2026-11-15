@@ -24,6 +24,8 @@ import { INK_COMPILER } from '../core/version';
 
 const INKJS_VERSION = INK_COMPILER.version;
 import { RecordingsImport } from './RecordingsImport';
+import { addReaderNotes, parseReaderNotes } from '../core/readerNotes';
+import { PLAY_PREFIX, storyLink } from './storyLink';
 
 // `stale`: an edit is still being processed, so exports wait for it rather than packaging the previous version.
 export function ExportView({ processed, stale, onState, project, update, onReview }: { processed: ProcessedStory; stale: boolean; onState: (s: 'Exporting' | 'Succeeded' | 'Failed' | null) => void; project: StoryProject; update: Update; onReview?: () => void }) {
@@ -325,6 +327,46 @@ export function ExportView({ processed, stale, onState, project, update, onRevie
 }
 
 /** Bring a filled-in translation sheet back into the story, and see how much of each language is done. */
+/** Brings a reader's notes file into the story: each note goes in as a note line after the line it was written on. */
+function ReaderNotesIn({ update }: { update: Update }) {
+  const [message, setMessage] = useState('');
+  return (
+    <div className="reader-notes-in">
+      <label className="btn small">
+        Bring in readers' notes…
+        <input
+          type="file"
+          accept=".json,application/json"
+          hidden
+          aria-label="Readers' notes file"
+          onChange={async (e) => {
+            const file = e.target.files?.[0];
+            e.target.value = '';
+            if (!file) return;
+            const parsed = parseReaderNotes(await file.text());
+            if ('error' in parsed) return setMessage(parsed.error);
+            let result = { placed: 0, unplaced: 0, duplicates: 0 };
+            update((d) => {
+              result = addReaderNotes(d, parsed.notes);
+            });
+            const parts = [
+              `${result.placed} note${result.placed === 1 ? '' : 's'} from ${file.name} went in beside the lines they're about, as notes in Review`,
+              result.unplaced ? `${result.unplaced} on lines the script no longer has went at the start of the story` : '',
+              result.duplicates ? `${result.duplicates} were already there` : '',
+            ].filter(Boolean);
+            setMessage(`${parts.join('; ')}. Readers don't see notes.`);
+          }}
+        />
+      </label>
+      {message && (
+        <p className="small note-text" role="status">
+          {message}
+        </p>
+      )}
+    </div>
+  );
+}
+
 function TranslationsIn({ project, update }: { project: StoryProject; update: Update }) {
   const [message, setMessage] = useState('');
   const [error, setError] = useState('');
@@ -387,6 +429,9 @@ function Pass({ ok }: { ok: boolean }) {
 function ShareSection({ processed, stale, project, update }: { processed: ProcessedStory; stale: boolean; project: StoryProject; update: Update }) {
   const [error, setError] = useState('');
   const [twineKind, setTwineKind] = useState<TwineKind>('sugarcube');
+  // A copy for feedback: readers get a Note button, and send their notes back as a file.
+  const [feedback, setFeedback] = useState(false);
+  const [playLink, setPlayLink] = useState<{ url?: string; note?: string }>({});
   const [languages, setLanguages] = useState('');
   const blocked = processed.diagnostics.some((d) => d.exportBlocked) || stale;
   const run = async (fn: () => void | Promise<void>) => {
@@ -414,12 +459,48 @@ function ShareSection({ processed, stale, project, update }: { processed: Proces
               run(async () => {
                 const audio = await renderClips(referencedAudio(processed.project));
                 const images = await collectClips(referencedImages(processed.project));
-                download(playableFileName(processed), buildPlayableHtml(processed, inkRuntime, audio, images), 'text/html');
+                download(playableFileName(processed), buildPlayableHtml(processed, inkRuntime, audio, images, { feedback }), 'text/html');
               })
             }
           >
             Download playable story (.html)
           </button>
+          <label className="check small feedback-check">
+            <input type="checkbox" checked={feedback} onChange={(e) => setFeedback(e.target.checked)} /> For feedback: readers can leave notes as they read, and
+            download them to send back to you
+          </label>
+          <details className="feedback-more">
+            <summary className="small">Share for feedback with a link, or bring readers' notes in</summary>
+            <p className="muted small">
+              A play link opens just the story, with notes on, in any browser: nothing to download. The story is inside the link (after the #), so it isn't
+              uploaded anywhere, but anyone with the link can read it. Pictures and recordings aren't included.
+            </p>
+            <button
+              className="btn"
+              disabled={blocked}
+              onClick={() =>
+                run(async () => {
+                  const r = await storyLink(processed.project, location.href, PLAY_PREFIX);
+                  if ('error' in r) return setPlayLink({ note: r.error });
+                  try {
+                    await navigator.clipboard.writeText(r.url);
+                    setPlayLink({ url: r.url, note: 'Play link copied. Paste it into a message to your readers.' });
+                  } catch {
+                    setPlayLink({ url: r.url, note: 'Copy the play link below.' });
+                  }
+                })
+              }
+            >
+              Copy a play link
+            </button>
+            {playLink.note && (
+              <p className="small note-text" role="status">
+                {playLink.note}
+              </p>
+            )}
+            {playLink.url && <input className="input mono small story-link" readOnly value={playLink.url} onFocus={(e) => e.target.select()} aria-label="Play link" />}
+            <ReaderNotesIn update={update} />
+          </details>
         </div>
         <div className="card share-card">
           <h2>Recording script</h2>
