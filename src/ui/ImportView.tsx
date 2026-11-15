@@ -220,83 +220,9 @@ export function ImportView({
           </div>
         </div>
         <p className="lede">{words.lede}</p>
-        <InstallApp />
-        {OFFLINE_COPY_AVAILABLE && (
-          <details className="offline-note small">
-            <summary>Other ways to work offline</summary>
-            <a href="./Narrative-Bridge.html" download>
-              Download Narrative Bridge as a single file
-            </a>{' '}
-            and open it in your web browser any time (if double-clicking shows text, drag the file onto a browser window instead) ·{' '}
-            <a href="./WRITERS.md">guide for writers</a>
-          </details>
-        )}
-        {SAFARI_TAB && (
-          <p className="offline-note small">
-            Using Safari? Choose <em>File → Add to Dock</em> and open Narrative Bridge from the Dock: Safari then keeps your work, instead of clearing it after a week
-            without a visit.
-          </p>
-        )}
       </section>
 
-      {/* A demo first: try a sample in one click, and see what you get. */}
-      <section className="try-first" aria-labelledby="try-title">
-        <div className="try-copy">
-          <h2 id="try-title">Try it with a sample</h2>
-          <p className="small">One click turns a short script into a story you can play here, then package for a game engine.</p>
-          <button className="btn primary big try-main" disabled={busy} onClick={() => onConvert([{ fileName: FEATURED.fileName, text: FEATURED.text }], FEATURED.mode)}>
-            ▶ Try “{FEATURED.name}”
-          </button>
-          <div className="try-more">
-            <span className="muted small">or</span>
-            {SAMPLES.filter((x) => x !== FEATURED).map((s) => (
-              <button key={s.id} className="btn small" disabled={busy} onClick={() => onConvert([{ fileName: s.fileName, text: s.text }], s.mode)} title={s.blurb}>
-                {s.name}
-              </button>
-            ))}
-          </div>
-        </div>
-        <figure className="try-demo">
-          <img src={demoPicture} alt="A finished story: a screenplay shown as a book page, with the choices Take the brass key and Leave it" width={1000} height={760} />
-          <figcaption className="muted small">What you get: your script as a playable story, with choices.</figcaption>
-        </figure>
-      </section>
-
-      {/* Exactly what comes out, so the promise matches the tool (the Export tab has the full details). */}
-      <section className="exports-overview" aria-labelledby="exports-title">
-        <h2 id="exports-title">What you can export</h2>
-        <ul className="exports-list">
-          <li>
-            <strong>A web page to share</strong>
-            <span className="small">One .html file anyone can play in a browser, even offline. Nothing to install.</span>
-          </li>
-          <li>
-            <strong>For Unity (a .zip)</strong>
-            <span className="small">
-              Your story in Ink, compiled; a Unity package with ready-made C# that plays it and a styled story panel; your recordings and pictures. For Unity 6
-              or 2022.3 and later, with Ink Unity Integration 2.0.0.
-            </span>
-          </li>
-          <li>
-            <strong>For Unreal (a .zip)</strong>
-            <span className="small">
-              Your story in Ink, plus a C++ project for Unreal Engine 5.7 or later, set up for the free Inkpot plugin (a pinned release), with a script that
-              fetches it.
-            </span>
-          </li>
-          <li>
-            <strong>Text and data</strong>
-            <span className="small">The Ink script on its own (.ink, or compiled .json), a Twine story to keep editing, and a recording script for voice actors: a spreadsheet (CSV) of every line.</span>
-          </li>
-        </ul>
-        <p className="muted small">
-          It’s not a finished game: a developer adds the package to a game, places the story and connects it to the gameplay. The Export tab lists exactly what
-          they still do.
-        </p>
-      </section>
-
-      <GettingStarted />
-
+      {/* The one thing a visitor came to do, first: bring a script in (or try a sample, just below). */}
       <div className="import-grid">
         <section className="card">
           <h2>1 · Source</h2>
@@ -326,6 +252,12 @@ export function ImportView({
             <span className="muted small">Final Draft, Word, PDF, Fountain, Markdown or plain text — or a Twine or Ink story to keep working on</span>
             <input ref={input} type="file" multiple hidden accept={[...ACCEPTED, '.text'].join(',')} onChange={(e) => addFiles(e.target.files)} />
           </div>
+          <p className="small sample-shortcut">
+            No script to hand?{' '}
+            <button className="link" disabled={busy} onClick={() => onConvert([{ fileName: FEATURED.fileName, text: FEATURED.text }], FEATURED.mode)}>
+              Try the sample “{FEATURED.name}”
+            </button>
+          </p>
           {error && <p className="error-text">{error}</p>}
           {files.length > 0 && (
             <ul className="file-list">
@@ -394,11 +326,90 @@ export function ImportView({
           </button>
           {!inputs.length && !busy && (
             <p className="muted small convert-hint" id="convert-hint">
-              Add a file or paste a script in step 1 to convert it, or try a sample above.
+              Add a file or paste a script in step 1 to convert it, or try a sample.
             </p>
           )}
         </section>
       </div>
+
+      {/* How to keep it and work offline: below the upload box, so the box is on the first screen. */}
+      <section className="hero-notes">
+        <InstallApp />
+        {OFFLINE_COPY_AVAILABLE && (
+          <details className="offline-note small">
+            <summary>Other ways to work offline</summary>
+            <a href="./Narrative-Bridge.html" download>
+              Download Narrative Bridge as a single file
+            </a>{' '}
+            and open it in your web browser any time (if double-clicking shows text, drag the file onto a browser window instead) ·{' '}
+            <a href="./WRITERS.md">guide for writers</a>
+          </details>
+        )}
+        {SAFARI_TAB && (
+          <p className="offline-note small">
+            Using Safari? Choose <em>File → Add to Dock</em> and open Narrative Bridge from the Dock: Safari then keeps your work, instead of clearing it after a week
+            without a visit.
+          </p>
+        )}
+      </section>
+
+      {/* Or try a sample in one click, and see what you get. */}
+      <section className="try-first" aria-labelledby="try-title">
+        <div className="try-copy">
+          <h2 id="try-title">Try it with a sample</h2>
+          <p className="small">One click turns a short script into a story you can play here, then package for a game engine.</p>
+          <button className="btn primary big try-main" disabled={busy} onClick={() => onConvert([{ fileName: FEATURED.fileName, text: FEATURED.text }], FEATURED.mode)}>
+            ▶ Try “{FEATURED.name}”
+          </button>
+          <div className="try-more">
+            <span className="muted small">or</span>
+            {SAMPLES.filter((x) => x !== FEATURED).map((s) => (
+              <button key={s.id} className="btn small" disabled={busy} onClick={() => onConvert([{ fileName: s.fileName, text: s.text }], s.mode)} title={s.blurb}>
+                {s.name}
+              </button>
+            ))}
+          </div>
+        </div>
+        <figure className="try-demo">
+          <img src={demoPicture} alt="A finished story: a screenplay shown as a book page, with the choices Take the brass key and Leave it" width={1000} height={760} />
+          <figcaption className="muted small">What you get: your script as a playable story, with choices.</figcaption>
+        </figure>
+      </section>
+
+      {/* Exactly what comes out, so the promise matches the tool (the Export tab has the full details). */}
+      <section className="exports-overview" aria-labelledby="exports-title">
+        <h2 id="exports-title">What you can export</h2>
+        <ul className="exports-list">
+          <li>
+            <strong>A web page to share</strong>
+            <span className="small">One .html file anyone can play in a browser, even offline. Nothing to install.</span>
+          </li>
+          <li>
+            <strong>For Unity (a .zip)</strong>
+            <span className="small">
+              Your story in Ink, compiled; a Unity package with ready-made C# that plays it and a styled story panel; your recordings and pictures. For Unity 6
+              or 2022.3 and later, with Ink Unity Integration 2.0.0.
+            </span>
+          </li>
+          <li>
+            <strong>For Unreal (a .zip)</strong>
+            <span className="small">
+              Your story in Ink, plus a C++ project for Unreal Engine (tested with 5.7), set up for the free Inkpot plugin (a pinned release), with a script that
+              fetches it.
+            </span>
+          </li>
+          <li>
+            <strong>Text and data</strong>
+            <span className="small">The Ink script on its own (.ink, or compiled .json), a Twine story to keep editing, and a recording script for voice actors: a spreadsheet (CSV) of every line.</span>
+          </li>
+        </ul>
+        <p className="muted small">
+          It’s not a finished game: a developer adds the package to a game, places the story and connects it to the gameplay. The Export tab lists exactly what
+          they still do.
+        </p>
+      </section>
+
+      <GettingStarted />
 
       <section className="samples">
         <h2>All the samples</h2>

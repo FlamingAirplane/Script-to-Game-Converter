@@ -1,5 +1,5 @@
 import { forPlayers } from '../players';
-import { describeCondition } from '../gating';
+import { describeNeed } from '../gating';
 import { isActive, type StoryProject, type UnityTheme } from '../isr';
 import { normaliseUnityTheme } from './unityTheme';
 
@@ -87,7 +87,7 @@ export function translationEntries(story: StoryProject, theme: UnityTheme = norm
     for (const c of p.choices) {
       if (!isActive(c.review)) continue;
       add('choice', p.id, c.text);
-      for (const x of c.conditions) add('needs', p.id, describeCondition(x, project));
+      for (const x of c.conditions) add('needs', p.id, describeNeed(x, project));
     }
   }
   for (const w of interfaceWords(theme)) add('interface', '', w);

@@ -2,6 +2,18 @@
 
 ## Unreleased
 
+### Added since 0.4.0 (to be tagged 0.5.0)
+
+- **The upload box is first.** The Import page now opens on the drop box and the conversion modes; the sample, the engine list and the offline notes come after. A one-line promise is used everywhere: *Turn a script into a playable story, then hand it to a game developer.*
+- **Review shows your words first.** A passage's id, picture, cutscene setting, order and Delete fold into one *Passage settings* row. Conditions and effects read as words (*the player gets Archive Key*), with the Ink in the tooltip; the *transformed* badge is now *from your script*.
+- **A slimmer top bar.** Undo, Redo and Save stay; everything else (theme, sounds, shortcuts, open, move to another browser, new) is behind one Menu. The ribbon bookmark tucks away while a page is scrolled, so it no longer covers a line's buttons.
+- **Prose reads better.** Quoted speech with a tag (*“Take it,” said Mira*) becomes a character speaking; *he/she said* and untagged replies are guessed and flagged for review. Section breaks (* * *) and chapter lines start new scenes.
+- **A decision rule** for adaptation suggestions: *Take it, or walk away. But decide now.* becomes a pending choice pair.
+- **Unity:** the TextMeshPro essentials are imported when the project opens, so the story panel is no longer blank on first Play; a locked choice that needs the player to be without an item reads *Needs to be without …*.
+- **Unreal:** the story panel keeps the newest line in view. The export, the Export page and the About page name the tested version (5.7) and the one-line Inkpot fix 5.9 needs.
+- **About page** now agrees with the app that Structured is the recommended mode; added a sitemap.
+
+
 - **Reading on after a choice.** In Playtest and the playable story, a choice now scrolls to the first line of the
   text it led to (not the end of it), and that text fades in gently (not at all if the reader's system asks for less
   motion). Choices show the number key that takes them; Enter or Space goes on at a *Continue*, an exit or a cutscene.

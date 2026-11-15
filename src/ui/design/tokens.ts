@@ -135,10 +135,10 @@ export const WORDS: Record<string, [string, string]> = {
   pageTitle: ['Browser tab title', 'Narrative Bridge'],
   edition: ['Edition line (title page)', 'The Workshop Edition'],
   heroTitle: ['Title (title page)', 'Narrative Bridge'],
-  subtitle: ['Subtitle (title page)', 'Turn a script into a playable story'],
+  subtitle: ['Subtitle (title page)', 'Turn a script into a playable story, then hand it to a game developer'],
   lede: [
     'Introduction (title page)',
-    'Bring in a screenplay or prose, check what was understood, and play it. Then share it as a web page anyone can play, or hand your developer an Ink story (Ink is the scripting language many games use for dialogue) packaged for Unity or Unreal. Everything runs in your browser — nothing is uploaded.',
+    'Bring in a screenplay or prose, check what was understood, and play it. Share it as a web page anyone can play, or hand your developer the story packaged for Unity or Unreal. It’s a story package, not a finished game. Everything runs in your browser — nothing is uploaded.',
   ],
 };
 

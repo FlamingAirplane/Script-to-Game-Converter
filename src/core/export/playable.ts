@@ -4,7 +4,7 @@ import { imageFileName, portraitFiles, referencedImages } from '../images';
 import { log } from '../log';
 import { EXIT_PREFIX, fileBase, RESERVED_TAGS } from '../isr';
 import { cueSounds } from '../cues';
-import { describeCondition } from '../gating';
+import { describeNeed } from '../gating';
 import { isActive } from '../isr';
 import { isForcing } from '../forced';
 import { translationEntries } from './translations';
@@ -60,7 +60,7 @@ export function buildPlayableHtml(story: ProcessedStory, inkRuntimeJs: string, a
     : { languages: [] as string[], strings: {} };
   // Choices that need something, to show greyed out with what they need while the reader lacks it.
   const gated = story.project.passages.flatMap((p) =>
-    p.choices.filter((c) => isActive(c.review) && c.conditions.length).map((c) => ({ p: p.id, t: c.text.trim(), needs: c.conditions.map((x) => ({ w: describeCondition(x, story.project), c: x })), ...(isForcing(c) ? { f: 1 } : {}) })),
+    p.choices.filter((c) => isActive(c.review) && c.conditions.length).map((c) => ({ p: p.id, t: c.text.trim(), needs: c.conditions.map((x) => ({ w: describeNeed(x, story.project), c: x })), ...(isForcing(c) ? { f: 1 } : {}) })),
   );
   const hasVoiceClips = story.project.passages.some((p) => p.content.some((b) => b.type === 'dialogue' && b.audio && clips[audioFileName(b.audio)]));
   const meta = jsonSafe(

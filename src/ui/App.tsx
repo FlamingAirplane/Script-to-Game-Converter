@@ -420,6 +420,21 @@ export function App() {
   };
 
   const [justImported, setJustImported] = useState(false);
+  // The ribbon bookmark hangs over the top of the page: it's tucked away while what's under it is scrolled,
+  // so it never sits on a line's buttons.
+  const workspace = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const el = workspace.current;
+    if (!el) return;
+    const ribbon = () => el.querySelector('.ribbon');
+    ribbon()?.classList.remove('tucked');
+    const onScroll = (e: Event) => {
+      const t = e.target;
+      if (t instanceof HTMLElement && !t.closest('.diagnostics, .source-pane, .passage-list')) ribbon()?.classList.toggle('tucked', t.scrollTop > 8);
+    };
+    el.addEventListener('scroll', onScroll, true);
+    return () => el.removeEventListener('scroll', onScroll, true);
+  }, [tab]);
   const [menuOpen, setMenuOpen] = useState(false);
   // On narrower screens the Diagnostics panel opens over the page instead of beside it.
   const [diagOverlay, setDiagOverlay] = useState(false);
@@ -658,13 +673,17 @@ export function App() {
             Save project
           </button>
         )}
-        <button className="btn tiny ghost tb-menu" aria-expanded={menuOpen} aria-controls="tb-actions" onClick={() => setMenuOpen(!menuOpen)}>
+        <button className="btn tiny ghost tb-menu" aria-expanded={menuOpen} aria-controls="tb-actions" title="Open or move a project, start a new story, theme, sounds and shortcuts" onClick={() => setMenuOpen(!menuOpen)}>
           ☰ Menu
         </button>
         <div
           className={`tb-actions ${menuOpen ? 'open' : ''}`}
           id="tb-actions"
-          onClick={(e) => (e.target as HTMLElement).closest('button') && setMenuOpen(false)}
+          onClick={(e) => {
+            // Theme and sounds are switches: the menu stays open so the change can be seen (and made again).
+            const b = (e.target as HTMLElement).closest('button');
+            if (b && !b.matches('.theme-toggle, .sound-toggle')) setMenuOpen(false);
+          }}
           onKeyDown={(e) => e.key === 'Escape' && setMenuOpen(false)}
         >
         <button className="btn tiny ghost" onClick={() => setShowKeys(true)} title="Keyboard shortcuts (?)" aria-label="Keyboard shortcuts">
@@ -753,7 +772,7 @@ export function App() {
         )}
       </nav>
 
-      <div className="workspace">
+      <div className="workspace" ref={workspace}>
         {/* Silk ribbon bookmark marking the open chapter (decorative). */}
         <div className="ribbon" aria-hidden key={tab}>
           <span>{TABS.find((t) => t.id === tab)!.numeral}</span>
