@@ -32,7 +32,7 @@ Tick items off here in the same pull request that does them.
 - [x] Prose: quoted speech and speech tags, section and chapter breaks (#61)
 - [x] Lighter first load: 262 KB → 127 KB compressed (#62)
 - [ ] Make the code easier to change:
-  - [x] A linter (oxlint) in CI, with a clean run (`npm run lint`)
+  - [x] A linter (oxlint) in CI, with a clean run (`npm run lint`) (#67)
   - [ ] A formatter (Prettier is installed and `npm run format:check` exists, but the code hasn't been reformatted:
         do it in one PR when no other PR is open, since it touches most files)
   - [x] Split `tests/pipeline.test.ts` (about 160 KB) by area (#65)
