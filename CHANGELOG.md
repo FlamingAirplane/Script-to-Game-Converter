@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- **How it was made.** A new page on the website, *How Narrative Bridge was made*, gathers every file behind the tool
+  in one place: the slide deck about the app, the design and planning notes, the guides, the story model schema, the
+  build and test scripts, the automated checks and the release history, each with a line on what it is. It is linked
+  from the Import page's footer and the About page, and opens offline like the rest of the site.
 - **The playable story as a small web game.** **For itch.io (.zip)** on the Export page packs it the way game sites
   take an HTML game. Readers see how many endings they've found (*Endings found: 1 of 2*), can make the text larger or
   smaller, and on a phone the top bar wraps instead of running off the screen.

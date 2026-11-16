@@ -1,0 +1,267 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="color-scheme" content="light dark" />
+    <title>How Narrative Bridge was made — project files</title>
+    <meta name="description" content="Every file about how Narrative Bridge was built: design and planning notes, documentation, the story model schema, build and test scripts, and the release history." />
+    <link rel="canonical" href="https://flamingairplane.github.io/Script-to-Game-Converter/making-of.html" />
+    <style>
+      :root { --bg: #fefae0; --fg: #283618; --muted: #5a5f3c; --accent: #8a4b14; --card: #fffdf0; --line: #d9d3b0; }
+      @media (prefers-color-scheme: dark) { :root { --bg: #1c2112; --fg: #f1edd2; --muted: #c9c4a3; --accent: #e9a35f; --card: #252b18; --line: #3d4428; } }
+      * { box-sizing: border-box; }
+      body { margin: 0; background: var(--bg); color: var(--fg); font: 17px/1.6 Georgia, 'Iowan Old Style', serif; }
+      main { max-width: 46rem; margin: 0 auto; padding: 2rem 16px 4rem; }
+      h1 { font-size: 2rem; margin: 0 0 0.25rem; line-height: 1.2; }
+      h2 { margin-top: 2.2rem; border-bottom: 1px solid var(--line); padding-bottom: 0.25rem; }
+      a { color: var(--accent); }
+      .lede { color: var(--muted); font-size: 1.1rem; }
+      .cta { display: inline-block; margin: 1rem 0; padding: 0.6rem 1.1rem; background: var(--accent); color: var(--bg); border-radius: 6px; text-decoration: none; font-weight: bold; }
+      nav.toc ul { display: flex; flex-wrap: wrap; gap: 0.25rem 1rem; list-style: none; padding: 0; margin: 0.5rem 0 0; }
+      dl.files { margin: 0; }
+      dl.files > div { padding: 0.6rem 0.8rem; margin: 0.5rem 0; background: var(--card); border: 1px solid var(--line); border-radius: 6px; }
+      dl.files dt { font-weight: bold; overflow-wrap: anywhere; }
+      dl.files dd { margin: 0.1rem 0 0; color: var(--muted); }
+      .path { font-family: ui-monospace, Menlo, Consolas, monospace; font-size: 0.85em; font-weight: normal; color: var(--muted); }
+      code { font-size: 0.92em; }
+      footer { margin-top: 3rem; color: var(--muted); font-size: 0.9rem; }
+    </style>
+  </head>
+  <body>
+    <main>
+      <h1>How Narrative Bridge was made</h1>
+      <p class="lede">
+        The files behind the tool: the plans and design notes, the guides, the story model, the scripts that build and test it,
+        and the history of every release. Most links open the file on GitHub, where the whole project is public.
+      </p>
+      <a class="cta" href="https://github.com/FlamingAirplane/Script-to-Game-Converter/archive/refs/heads/main.zip" rel="noopener">Download all the source (.zip)</a>
+
+      <nav class="toc" aria-label="On this page">
+        <ul>
+          <li><a href="#story">The story of the app</a></li>
+          <li><a href="#design">Design and planning</a></li>
+          <li><a href="#docs">Documentation</a></li>
+          <li><a href="#specs">Specs and schemas</a></li>
+          <li><a href="#scripts">Build and test scripts</a></li>
+          <li><a href="#automation">Automation</a></li>
+          <li><a href="#history">Release history</a></li>
+        </ul>
+      </nav>
+
+      <h2 id="story">The story of the app</h2>
+      <dl class="files">
+        <div>
+          <dt><a href="https://claude.ai/artifact/EtkLDdbjPnyrGWJNxYy7Y2" rel="noopener">The Narrative Bridge story (slide deck)</a></dt>
+          <dd>32 slides with speaker notes: why and how the app was built, its strengths and shortcomings, and the roadmap. Opens for its owner, or for anyone it is shared with.</dd>
+        </div>
+        <div>
+          <dt><a href="https://github.com/FlamingAirplane/Script-to-Game-Converter" rel="noopener">Source code on GitHub</a></dt>
+          <dd>The whole project: the app, the conversion engine, the Unity and Unreal templates, the tests and these documents.</dd>
+        </div>
+        <div>
+          <dt><a href="./about.html">About, FAQ, known limits and roadmap</a></dt>
+          <dd>What the tool is for, the questions people ask, and what it can't do yet.</dd>
+        </div>
+      </dl>
+
+      <h2 id="design">Design and planning</h2>
+      <dl class="files">
+        <div>
+          <dt><a href="https://github.com/FlamingAirplane/Script-to-Game-Converter/blob/main/docs/REVIEW_PROGRESS.md" rel="noopener">Acting on the November 2026 review</a> <span class="path">docs/REVIEW_PROGRESS.md</span></dt>
+          <dd>The plan of quick wins, medium projects and bigger bets from the app's review, and which are done.</dd>
+        </div>
+        <div>
+          <dt><a href="https://github.com/FlamingAirplane/Script-to-Game-Converter/blob/main/src/ui/styles.css" rel="noopener">The app's look</a> <span class="path">src/ui/styles.css</span></dt>
+          <dd>The design variables (colours, type, spacing) for the day and night editions, and every screen's styles.</dd>
+        </div>
+        <div>
+          <dt><a href="https://github.com/FlamingAirplane/Script-to-Game-Converter/blob/main/src/ui/design/tokens.ts" rel="noopener">Design variables, by group</a> <span class="path">src/ui/design/tokens.ts</span></dt>
+          <dd>The list of design variables the admin design editor shows.</dd>
+        </div>
+        <div>
+          <dt><a href="https://github.com/FlamingAirplane/Script-to-Game-Converter/blob/main/src/ui/design/published.json" rel="noopener">The published design</a> <span class="path">src/ui/design/published.json</span></dt>
+          <dd>The design changes saved from the admin design editor that the site uses.</dd>
+        </div>
+        <div>
+          <dt><a href="https://github.com/FlamingAirplane/Script-to-Game-Converter/tree/main/docs/images" rel="noopener">Screenshots</a> <span class="path">docs/images/</span></dt>
+          <dd>Pictures of each screen, used by the user guide and the slide deck.</dd>
+        </div>
+        <div>
+          <dt><a href="https://github.com/FlamingAirplane/Script-to-Game-Converter/tree/main/public" rel="noopener">Icons and social card</a> <span class="path">public/</span></dt>
+          <dd>The app icons, the link preview picture (og.png) and the site's static pages.</dd>
+        </div>
+      </dl>
+
+      <h2 id="docs">Documentation</h2>
+      <dl class="files">
+        <div>
+          <dt><a href="https://github.com/FlamingAirplane/Script-to-Game-Converter/blob/main/README.md" rel="noopener">README</a> <span class="path">README.md</span></dt>
+          <dd>What the tool does, how to run it, and how the project is laid out.</dd>
+        </div>
+        <div>
+          <dt><a href="https://github.com/FlamingAirplane/Script-to-Game-Converter/blob/main/docs/USER_GUIDE.md" rel="noopener">User guide</a> <span class="path">docs/USER_GUIDE.md</span></dt>
+          <dd>Every screen explained, with pictures.</dd>
+        </div>
+        <div>
+          <dt><a href="https://github.com/FlamingAirplane/Script-to-Game-Converter/blob/main/WRITERS.md" rel="noopener">Narrative Bridge for writers</a> <span class="path">WRITERS.md</span></dt>
+          <dd>The short version of the guide, for writers using the offline edition.</dd>
+        </div>
+        <div>
+          <dt><a href="https://github.com/FlamingAirplane/Script-to-Game-Converter/blob/main/docs/STRUCTURED_MARKERS.md" rel="noopener">Structured markers</a> <span class="path">docs/STRUCTURED_MARKERS.md</span></dt>
+          <dd>The markers writers add to a script to plan passages, choices, items and game cues.</dd>
+        </div>
+        <div>
+          <dt><a href="https://github.com/FlamingAirplane/Script-to-Game-Converter/blob/main/CONTRIBUTING.md" rel="noopener">Contributing</a> <span class="path">CONTRIBUTING.md</span></dt>
+          <dd>How to report a problem, send a script that converts badly, or open a pull request.</dd>
+        </div>
+        <div>
+          <dt><a href="https://github.com/FlamingAirplane/Script-to-Game-Converter/blob/main/SECURITY.md" rel="noopener">Security</a> <span class="path">SECURITY.md</span></dt>
+          <dd>How to report a security problem privately.</dd>
+        </div>
+        <div>
+          <dt><a href="https://github.com/FlamingAirplane/Script-to-Game-Converter/blob/main/LICENSE" rel="noopener">Licence</a> <span class="path">LICENSE</span></dt>
+          <dd>The MIT licence the project is released under.</dd>
+        </div>
+      </dl>
+
+      <h2 id="specs">Specs and schemas</h2>
+      <dl class="files">
+        <div>
+          <dt><a href="https://github.com/FlamingAirplane/Script-to-Game-Converter/blob/main/schemas/story-model-v1.schema.json" rel="noopener">Story model schema</a> <span class="path">schemas/story-model-v1.schema.json</span></dt>
+          <dd>The JSON Schema for a story: characters, passages, lines, choices, items and variables.</dd>
+        </div>
+        <div>
+          <dt><a href="https://github.com/FlamingAirplane/Script-to-Game-Converter/blob/main/src/core/isr.ts" rel="noopener">The story model in code</a> <span class="path">src/core/isr.ts</span></dt>
+          <dd>The engine-independent story representation that every import and export goes through.</dd>
+        </div>
+        <div>
+          <dt><a href="https://github.com/FlamingAirplane/Script-to-Game-Converter/tree/main/src/core/export/templates" rel="noopener">Unity and Unreal templates</a> <span class="path">src/core/export/templates/</span></dt>
+          <dd>The C# and C++ code that each Unity package and Unreal project is built from.</dd>
+        </div>
+        <div>
+          <dt><a href="https://github.com/FlamingAirplane/Script-to-Game-Converter/blob/main/tests/adaptation-eval/README.md" rel="noopener">Adaptation evaluation set</a> <span class="path">tests/adaptation-eval/</span></dt>
+          <dd>Hand-marked choice moments in scripts and public-domain plays, used to score interactive adaptation.</dd>
+        </div>
+        <div>
+          <dt><a href="https://github.com/FlamingAirplane/Script-to-Game-Converter/blob/main/tests/adaptation-eval/BASELINE.md" rel="noopener">Adaptation baseline</a> <span class="path">tests/adaptation-eval/BASELINE.md</span></dt>
+          <dd>How well each set of suggestion rules does on that set, and how that changed over time.</dd>
+        </div>
+      </dl>
+
+      <h2 id="scripts">Build and test scripts</h2>
+      <dl class="files">
+        <div>
+          <dt><a href="https://github.com/FlamingAirplane/Script-to-Game-Converter/blob/main/package.json" rel="noopener">Project commands</a> <span class="path">package.json</span></dt>
+          <dd>Every <code>npm run</code> command: build, test, lint and the checks below.</dd>
+        </div>
+        <div>
+          <dt><a href="https://github.com/FlamingAirplane/Script-to-Game-Converter/blob/main/vite.config.ts" rel="noopener">Build settings</a> <span class="path">vite.config.ts</span></dt>
+          <dd>How the website and the single-file offline edition are built.</dd>
+        </div>
+        <div>
+          <dt><a href="https://github.com/FlamingAirplane/Script-to-Game-Converter/blob/main/scripts/offline-site.ts" rel="noopener">Offline website</a> <span class="path">scripts/offline-site.ts</span></dt>
+          <dd>Makes the site installable and usable with no connection after one visit.</dd>
+        </div>
+        <div>
+          <dt><a href="https://github.com/FlamingAirplane/Script-to-Game-Converter/blob/main/scripts/package-single.mjs" rel="noopener">Offline edition packager</a> <span class="path">scripts/package-single.mjs</span></dt>
+          <dd>Turns the single-file build into the file writers download.</dd>
+        </div>
+        <div>
+          <dt><a href="https://github.com/FlamingAirplane/Script-to-Game-Converter/blob/main/scripts/templates.mjs" rel="noopener">Template compiler</a> <span class="path">scripts/templates.mjs</span></dt>
+          <dd>Turns the Unity and Unreal template files into code the exports use.</dd>
+        </div>
+        <div>
+          <dt><a href="https://github.com/FlamingAirplane/Script-to-Game-Converter/blob/main/scripts/icons.mjs" rel="noopener">App icons</a> <span class="path">scripts/icons.mjs</span></dt>
+          <dd>Draws the icons used when the site is installed.</dd>
+        </div>
+        <div>
+          <dt><a href="https://github.com/FlamingAirplane/Script-to-Game-Converter/blob/main/scripts/og-image.mjs" rel="noopener">Social card</a> <span class="path">scripts/og-image.mjs</span></dt>
+          <dd>Draws the picture shown when the site link is shared.</dd>
+        </div>
+        <div>
+          <dt><a href="https://github.com/FlamingAirplane/Script-to-Game-Converter/blob/main/scripts/guide-screenshots.mjs" rel="noopener">Guide screenshots</a> <span class="path">scripts/guide-screenshots.mjs</span></dt>
+          <dd>Captures the user guide's pictures from the app, so they always match it.</dd>
+        </div>
+        <div>
+          <dt><a href="https://github.com/FlamingAirplane/Script-to-Game-Converter/blob/main/scripts/design-publish.ts" rel="noopener">Design publisher</a> <span class="path">scripts/design-publish.ts</span></dt>
+          <dd>Checks a design saved from the admin design editor and makes it the published design.</dd>
+        </div>
+        <div>
+          <dt><a href="https://github.com/FlamingAirplane/Script-to-Game-Converter/blob/main/scripts/adapt-eval.ts" rel="noopener">Adaptation scorer</a> <span class="path">scripts/adapt-eval.ts</span></dt>
+          <dd>Scores the choice suggesters against the evaluation set.</dd>
+        </div>
+        <div>
+          <dt><a href="https://github.com/FlamingAirplane/Script-to-Game-Converter/blob/main/scripts/play-excerpts.mjs" rel="noopener">Play excerpts</a> <span class="path">scripts/play-excerpts.mjs</span></dt>
+          <dd>Cuts scenes from public-domain plays into Fountain for the evaluation set.</dd>
+        </div>
+        <div>
+          <dt><a href="https://github.com/FlamingAirplane/Script-to-Game-Converter/blob/main/scripts/unity-check.ts" rel="noopener">Unity check</a> <span class="path">scripts/unity-check.ts</span></dt>
+          <dd>Exports the sample stories and runs their tests in a real Unity editor.</dd>
+        </div>
+        <div>
+          <dt><a href="https://github.com/FlamingAirplane/Script-to-Game-Converter/blob/main/scripts/unreal-check.ts" rel="noopener">Unreal check</a> <span class="path">scripts/unreal-check.ts</span></dt>
+          <dd>Compiles each export's generated Unreal C++ against stand-in headers.</dd>
+        </div>
+        <div>
+          <dt><a href="https://github.com/FlamingAirplane/Script-to-Game-Converter/blob/main/scripts/unreal-build.ts" rel="noopener">Unreal build</a> <span class="path">scripts/unreal-build.ts</span></dt>
+          <dd>Builds and tests an exported Unreal project with a real Unreal Engine.</dd>
+        </div>
+        <div>
+          <dt><a href="https://github.com/FlamingAirplane/Script-to-Game-Converter/tree/main/tests" rel="noopener">Tests</a> <span class="path">tests/</span></dt>
+          <dd>The unit tests, sample scripts, and browser tests for the offline file, offline site, accessibility and layout.</dd>
+        </div>
+      </dl>
+
+      <h2 id="automation">Automation</h2>
+      <dl class="files">
+        <div>
+          <dt><a href="https://github.com/FlamingAirplane/Script-to-Game-Converter/blob/main/.github/workflows/ci.yml" rel="noopener">Pull request checks</a> <span class="path">.github/workflows/ci.yml</span></dt>
+          <dd>Typecheck, tests, both builds and the browser tests in Safari's and Chrome's engines, on every pull request.</dd>
+        </div>
+        <div>
+          <dt><a href="https://github.com/FlamingAirplane/Script-to-Game-Converter/blob/main/.github/workflows/pages.yml" rel="noopener">Website deploy</a> <span class="path">.github/workflows/pages.yml</span></dt>
+          <dd>Builds this site and the offline edition and publishes them to GitHub Pages.</dd>
+        </div>
+        <div>
+          <dt><a href="https://github.com/FlamingAirplane/Script-to-Game-Converter/blob/main/.github/workflows/release.yml" rel="noopener">Release files</a> <span class="path">.github/workflows/release.yml</span></dt>
+          <dd>Attaches the offline edition to each GitHub release.</dd>
+        </div>
+        <div>
+          <dt><a href="https://github.com/FlamingAirplane/Script-to-Game-Converter/blob/main/.github/workflows/unity.yml" rel="noopener">Unity checks</a> <span class="path">.github/workflows/unity.yml</span></dt>
+          <dd>Runs the Unity export's tests in a real Unity editor.</dd>
+        </div>
+      </dl>
+
+      <h2 id="history">Release history</h2>
+      <dl class="files">
+        <div>
+          <dt><a href="https://github.com/FlamingAirplane/Script-to-Game-Converter/blob/main/CHANGELOG.md" rel="noopener">What's new</a> <span class="path">CHANGELOG.md</span></dt>
+          <dd>Every change writers and developers will notice, release by release.</dd>
+        </div>
+        <div>
+          <dt><a href="https://github.com/FlamingAirplane/Script-to-Game-Converter/releases" rel="noopener">Releases</a></dt>
+          <dd>Each published version, with its offline edition to download.</dd>
+        </div>
+        <div>
+          <dt><a href="https://github.com/FlamingAirplane/Script-to-Game-Converter/pulls?q=is%3Apr+is%3Amerged" rel="noopener">Pull requests</a></dt>
+          <dd>Each piece of work as it was proposed, discussed and merged.</dd>
+        </div>
+        <div>
+          <dt><a href="https://github.com/FlamingAirplane/Script-to-Game-Converter/commits/main" rel="noopener">Commit history</a></dt>
+          <dd>Every change to the code, from the first commit.</dd>
+        </div>
+        <div>
+          <dt><a href="https://github.com/FlamingAirplane/Script-to-Game-Converter/issues" rel="noopener">Issues</a></dt>
+          <dd>Reported problems and suggested ideas.</dd>
+        </div>
+      </dl>
+
+      <footer>
+        <a href="./">Open Narrative Bridge</a> · <a href="./about.html">About &amp; FAQ</a> ·
+        <a href="https://github.com/FlamingAirplane/Script-to-Game-Converter" rel="noopener">Source on GitHub</a> ·
+        <a href="https://github.com/FlamingAirplane/Script-to-Game-Converter/blob/main/LICENSE" rel="noopener">MIT licence</a>
+      </footer>
+    </main>
+  </body>
+</html>
