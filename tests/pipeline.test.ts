@@ -358,3 +358,117 @@ describe('second website review fixes', () => {
     expect([playableFileName(story), recordingScriptFileName(project), twineFileName(story)]).toEqual(['the-last-train.html', 'the-last-train-recording-script.csv', 'the-last-train.twee']);
   });
 });
+
+describe('acts', () => {
+  const script = `@act act_one The Storm
+@passage harbour Harbour
+The boats are tied up.
+-> lighthouse
+
+@passage lighthouse Lighthouse
+MARA: Light the lamp.
+-> cliff
+
+@act act_two
+@passage cliff Cliff
+Waves break below.
+-> epilogue
+
+@act
+@passage epilogue Epilogue
+It is over.
+-> END
+`;
+
+  it('are authored with @act: each applies to the passages after it, and a bare @act ends it', async () => {
+    const { project } = await build(script, 'acts.md', 'structured');
+    expect(project.acts).toEqual([
+      { id: 'act_one', title: 'The Storm' },
+      { id: 'act_two', title: 'Act Two' },
+    ]);
+    expect(project.passages.map((p) => [p.id, p.act])).toEqual([
+      ['harbour', 'act_one'],
+      ['lighthouse', 'act_one'],
+      ['cliff', 'act_two'],
+      ['epilogue', undefined],
+    ]);
+  });
+
+  it('come back from generated Ink, and the story plays the same', async () => {
+    const { project } = await build(script, 'acts.md', 'structured');
+    const s = processProject(project);
+    expect(s.compile.ok).toBe(true);
+    expect(s.generated.ink).toContain('// @act act_one The Storm\n=== harbour ===');
+    expect(s.generated.ink).toContain('// @act act_two Act Two\n=== cliff ===');
+    expect(s.generated.ink).toContain('// @act\n=== epilogue ===');
+    expect(s.generated.ink.match(/\/\/ @act/g)).toHaveLength(3);
+    const back = (await build(s.generated.ink, 'story.ink', 'structured')).project;
+    expect(back.acts).toEqual(project.acts);
+    expect(back.passages.map((p) => p.act)).toEqual(project.passages.map((p) => p.act));
+    expect(back.passages.map((p) => p.title)).toEqual(project.passages.map((p) => p.title));
+    expect(back.passages.some((p) => p.content.some((b) => b.type === 'note' && b.text.includes('@act')))).toBe(false);
+    const without = processProject({ ...project, acts: undefined, passages: project.passages.map(({ act: _a, ...p }) => p) });
+    expect(s.generated.ink.replace(/^\/\/ @act.*\n/gm, '')).toBe(without.generated.ink);
+  });
+
+  it('are tagged in Twine, read back from the tags, and listed in Unity and Unreal StoryInfo', async () => {
+    const { buildTwee } = await import('../src/core/export');
+    const { project } = await build(script, 'acts.md', 'structured');
+    const s = processProject(project);
+    const twee = buildTwee(s, 'sugarcube');
+    expect(twee).toMatch(/^:: Harbour \[act:act_one\] \{/m);
+    expect(twee).toMatch(/^:: Cliff \[act:act_two\] \{/m);
+    expect(twee).toMatch(/^:: Epilogue \[ending\] \{/m);
+    expect(buildTwee(s, 'plain')).toMatch(/^:: Lighthouse \[act:act_one\] \{/m);
+    const fromTwine = (await build(twee, 'story.twee', 'structured')).project;
+    expect(fromTwine.passages.map((p) => p.act)).toEqual(['act_one', 'act_one', 'act_two', undefined]);
+
+    const unity = await ADAPTERS.unity.export(s, { engine: 'unity', projectName: 'P', engineVersion: '6000.3', integrationRef: 'v1.21.0', includeDemo: true });
+    const info = unity.files.find((f) => f.path.endsWith('StoryInfo.cs'))!.content;
+    expect(info).toContain('public static readonly string[] Acts = { "act_one", "act_two" };');
+    expect(info).toContain('public static readonly string[] ActTitles = { "The Storm", "Act Two" };');
+    expect(info).toContain('public static readonly string[] PassageActs = { "act_one", "act_one", "act_two", "" };');
+    expect(info).toContain('public static string ActOf(string passage)');
+    const unreal = await ADAPTERS.unreal.export(s, { engine: 'unreal', projectName: 'P', engineVersion: '5.7', integrationRef: 'v1.21.0', includeDemo: true });
+    const h = unreal.files.find((f) => f.path.endsWith('NarrativeBridgeStoryInfo.h'))!.content;
+    expect(h).toContain('static const TCHAR* Acts[] = { TEXT("act_one"), TEXT("act_two") };');
+    expect(h).toContain('static const int32 NumActs = 2;');
+    expect(h).toContain('static const TCHAR* PassageActs[] = { TEXT("act_one"), TEXT("act_one"), TEXT("act_two"), TEXT("") };');
+    expect(h).toContain('static inline const TCHAR* ActOf(const FString& Passage)');
+  });
+
+  it('leave a story without them exactly as before', async () => {
+    const { project } = await build('@passage a A\nHello.\n-> END\n', 'a.md', 'structured');
+    expect('acts' in project).toBe(false);
+    expect(project.passages[0].act).toBeUndefined();
+    const s = processProject(project);
+    expect(s.generated.ink).not.toContain('@act');
+    const unity = await ADAPTERS.unity.export(s, { engine: 'unity', projectName: 'P', engineVersion: '6000.3', integrationRef: 'v1.21.0', includeDemo: true });
+    expect(unity.files.find((f) => f.path.endsWith('StoryInfo.cs'))!.content).toContain('public static readonly string[] Acts = {  };');
+  });
+
+  it('can be set and changed in Review', async () => {
+    const { actToFollowing, actsOf, addAct, passagesByAct, removeAct, renameAct, setPassageAct } = await import('../src/core/acts');
+    const { project } = await build(script, 'acts.md', 'structured');
+    const id = addAct(project, 'The End', 'epilogue');
+    expect(id).toBe('the_end');
+    expect(project.passages[3].act).toBe('the_end');
+    renameAct(project, 'act_two', 'The Cliff');
+    expect(actsOf(project).map((a) => a.title)).toEqual(['The Storm', 'The Cliff', 'The End']);
+    setPassageAct(project, 'lighthouse', 'act_two');
+    expect(passagesByAct(project, project.passages).map((g) => [g.act?.id ?? null, g.passages.map((p) => p.id)])).toEqual([
+      ['act_one', ['harbour']],
+      ['act_two', ['lighthouse', 'cliff']],
+      ['the_end', ['epilogue']],
+    ]);
+    setPassageAct(project, 'lighthouse', undefined);
+    setPassageAct(project, 'cliff', undefined);
+    expect(actToFollowing(project, 'harbour')).toBe(2);
+    expect(project.passages.map((p) => p.act)).toEqual(['act_one', 'act_one', 'act_one', 'the_end']);
+    removeAct(project, 'act_one');
+    removeAct(project, 'act_two');
+    removeAct(project, 'the_end');
+    expect(project.acts).toBeUndefined();
+    expect(project.passages.every((p) => p.act === undefined)).toBe(true);
+  });
+});

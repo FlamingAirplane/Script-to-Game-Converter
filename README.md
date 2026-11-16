@@ -192,6 +192,7 @@ Cheat sheet (each marker on its own line):
 -> target   /   @end                         divert / ending
 @pause                                       Continue break: the player clicks Continue to read on
 @cutscene                                    the passage is a cutscene: only its dialogue, playing by itself
+@act act_one The Storm                       the passages after it are in this act (a bare @act ends it)
 @exit wolf_fight The player fights wolves    exit to the game: the dialogue stops while the game plays
 @cue music calm                              a cue for the game (Ink tag #music:calm)
 ## Heading {#custom_id}                      Markdown heading as a passage
@@ -235,6 +236,10 @@ ships in the web app only once it beats the heuristics there.
   becomes comments (`// Players don’t see this: …`) and its Continue breaks are dropped. Readers show the lines one at a
   time, going on by themselves after 1.2 s + 0.055 s a letter (2 to 9 s), with a Skip button. The Ink importer reads
   `#cutscene` back.
+- Acts (`@act id Title`, or **🎭 Act** in Review) are a comment before the first knot of each act,
+  `// @act act_one The Storm` (a bare `// @act` where the passages after it are in no act); the Ink importer reads it back,
+  from any Ink. A story without acts has none. Twine passages get an `act:<id>` tag, and the Unity and Unreal `StoryInfo`
+  list the acts (`Acts`, `ActTitles`, `PassageActs`, `ActOf(passage)`).
 - Choices are sticky (`+`) unless marked once-only (`*`). A passage's divert becomes an invisible fallback choice when the passage also has choices, so players never get stuck.
 - An exit to the game (`@exit name note`, or **+ Exit to game** in Review) is a single sticky choice
   `+ [Back to the game: name] // note` followed by a gather `-`: a game (Unity's `NarrativeController`) stops there, raises

@@ -153,6 +153,13 @@ suggestions to review. Type in *Filter passages…* to narrow it down. Press **[
   put `@cutscene` on its own line in the passage. It works in Playtest, the playable story, Twine (SugarCube, with
   `<<timed>>`), and the Unity and Unreal story panels, where the player's *Go on by itself: Off* setting makes each
   line wait for a click.
+- **Acts:** group passages into acts with **🎭 Act** in a passage's settings: pick an act, or **New act…** to make one.
+  Give it a title there, put the passages after it in the same act with **Also the passages after it**, or **Remove
+  act** (its passages stay, in no act). The contents list then shows the passages under their act's title. Acts only
+  group passages: the story plays the same. In a script, put `@act act_one The Storm` before the act's first passage;
+  every passage after it is in that act until the next `@act` (a bare `@act` ends it). Twine passages are tagged
+  `act:<id>`, and Unity and Unreal get the list of acts and each passage's act in `StoryInfo`, for a chapter menu or
+  save slots.
 - **New scenes:** **+ New scene** under the contents adds one after the selected passage, as a new choice in it, or on
   its own (the same form as on the Graph, section 5). A choice's destination and **Then** also offer **+ A new
   scene…**, which creates the scene and points that choice (or Then) at it.
@@ -543,6 +550,7 @@ marker goes on a line of its own; ids are letters, digits and underscores.
 -> target                                    continue to another passage
 @pause                                       a Continue break: the player clicks Continue to read on
 @cutscene                                    this passage is a cutscene: only its dialogue, playing by itself
+@act act_one The Storm                       the passages after it are in this act (a bare @act ends it)
 @exit wolf_fight The player fights wolves    an exit to the game: the dialogue stops while the game plays
 @cue music calm                              a cue for the game: music, ambience, a sound or a screen shake
 @end                                         end the story here
