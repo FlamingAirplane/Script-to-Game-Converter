@@ -58,6 +58,24 @@ for (const theme of ['light', 'dark']) {
   }
   await page.close();
 }
+// The site's static pages, from public/.
+for (const theme of ['light', 'dark']) {
+  for (const name of ['about.html', 'making-of.html']) {
+    const page = await browser.newPage({ viewport: { width: 1440, height: 900 }, colorScheme: theme });
+    await page.goto(new URL(`../../public/${name}`, import.meta.url).href);
+    await page.addScriptTag({ content: axeSource });
+    const result = await page.evaluate(() =>
+      // eslint-disable-next-line no-undef
+      axe.run(document, { runOnly: { type: 'tag', values: ['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa'] } }),
+    );
+    for (const v of result.violations) {
+      total += v.nodes.length;
+      console.log(`✗ ${theme} · ${name} · ${v.id} (${v.impact}) ×${v.nodes.length}: ${v.help}`);
+      for (const n of v.nodes.slice(0, 3)) console.log(`    ${n.target.join(' ')}`);
+    }
+    await page.close();
+  }
+}
 await browser.close();
-console.log(total ? `\n${total} accessibility issue(s) found.` : '✓ No WCAG 2.1 A/AA violations found in any tab, light or dark.');
+console.log(total ? `\n${total} accessibility issue(s) found.` : '✓ No WCAG 2.1 A/AA violations found in any tab or site page, light or dark.');
 process.exit(total ? 1 : 0);

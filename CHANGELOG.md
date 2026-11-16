@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- **How it was made.** A new page on the website, *How Narrative Bridge was made*, gathers every file behind the tool
+  in one place: the slide deck about the app, the design and planning notes, the guides, the story model schema, the
+  build and test scripts, the automated checks and the release history, each with a line on what it is. It is linked
+  from the Import page's footer and the About page, and opens offline like the rest of the site.
 - **Acts.** Group passages into acts: **🎭 Act** in a passage's settings in Review (pick one, make a new one, rename or
   remove it), or `@act act_one The Storm` in a script before the act's first passage. Review's contents list shows the
   passages by act. Acts survive a round trip through Ink (a `// @act` comment) and Twine (an `act:<id>` tag), and the
