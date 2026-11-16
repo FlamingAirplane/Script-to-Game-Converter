@@ -7,6 +7,8 @@ export type Marker =
   | { type: 'start'; id: string }
   | { type: 'end' }
   | { type: 'cutscene' }
+  /** The passages after it are in this act (no id: in no act). */
+  | { type: 'act'; id?: string; title?: string }
   | { type: 'divert'; target: string }
   /** A Continue break: what follows waits for the reader. */
   | { type: 'pause' }

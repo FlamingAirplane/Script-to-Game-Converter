@@ -236,6 +236,9 @@ function assemble(
   let sceneCounter = 0;
   let current: Passage | null = null;
   const choiceIds = new Set<string>();
+  // Acts (@act): the act the passages started from here on are in, and every act by id, in order (titled ones keep their title).
+  let act: string | undefined;
+  const acts = new Map<string, { id: string; title: string; titled: boolean }>();
 
   const origin = (b: ParsedBlock): Provenance => (b.transformed ? 'transformed' : 'source');
   const src = (doc: SourceDocument, b: ParsedBlock) => ({ documentId: doc.id, line: b.line, endLine: b.endLine });
@@ -250,6 +253,7 @@ function assemble(
       origin: 'source',
       review: 'approved',
       source: src(doc, b),
+      ...(act ? { act } : {}),
       ...extra,
     };
     passages.push(p);
@@ -276,6 +280,17 @@ function assemble(
     if (b.kind === 'title') {
       if (/^title$/i.test(b.key) && !title) title = plainText(markupToTags(b.value.replace(/\n/g, ' ')));
       if (/^(author|authors|credit)$/i.test(b.key) && /^author/i.test(b.key)) author = b.value;
+      continue;
+    }
+    // An act applies to the passages that start after it; it never starts a passage itself.
+    if (b.kind === 'marker' && b.marker.type === 'act') {
+      const { id, title: actTitle } = b.marker;
+      act = id;
+      if (id) {
+        const known = acts.get(id);
+        if (!known) acts.set(id, { id, title: actTitle ?? titleCase(id.replace(/_/g, ' ')), titled: !!actTitle });
+        else if (actTitle && !known.titled) Object.assign(known, { title: actTitle, titled: true });
+      }
       continue;
     }
     if (boundary(b)) {
@@ -396,6 +411,7 @@ function assemble(
             return null;
           }
           case 'passage':
+          case 'act':
             return null;
         }
       }
@@ -513,6 +529,7 @@ function assemble(
     items: [...items.values()],
     variables: [...variables.values()],
     passages,
+    ...(acts.size ? { acts: [...acts.values()].map(({ id, title }) => ({ id, title })) } : {}),
     inkPassthrough: isInk ? parsed.map((p) => p.doc.text).join('\n') : undefined,
   };
 }

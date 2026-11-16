@@ -145,8 +145,13 @@ export const tweeParser: Parser = {
     if (format && !/^(SugarCube|Harlowe|Chapbook|Snowman)$/i.test(format))
       diagnostics.push(diag('TWINE_FORMAT', 'info', 'parsing', `This story uses the ${format} story format; its links and text are imported, but its own code may not be.`, { entityId: documentId, exportBlocked: false }));
 
+    // A passage tagged act:<id> is in that act (as Twine export writes it); the passages after an untagged one are in none.
+    let act: string | undefined;
     for (const p of story) {
       if (parts.has(p.name)) continue;
+      const pAct = p.tags.map((t) => /^act:([A-Za-z_]\w*)$/.exec(t)?.[1]).find(Boolean);
+      if (pAct !== act) blocks.push({ kind: 'marker', marker: { type: 'act', ...(pAct ? { id: pAct } : {}) }, line: p.line });
+      act = pAct;
       blocks.push({ kind: 'marker', marker: { type: 'passage', id: idOf(p.name), title: p.name }, line: p.line });
       for (let part: TweePassage | undefined = p, first = true; part; first = false) {
         const after = next.get(part.name);

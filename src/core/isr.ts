@@ -177,6 +177,8 @@ export interface Passage {
   image?: ImageRef;
   /** A cutscene: players see only its dialogue, one line at a time, going on by itself (see players.ts). */
   cutscene?: boolean;
+  /** The act the passage belongs to: an id in StoryProject.acts (absent = in no act; see acts.ts). */
+  act?: string;
   content: ContentBlock[];
   choices: Choice[];
   divert?: string; // unconditional continuation when there are no choices
@@ -184,6 +186,12 @@ export interface Passage {
   origin: Provenance;
   review: ReviewStatus;
   source?: SourceRef;
+}
+
+/** An act: a titled group of passages (Passage.act; @act in a script). Acts only group passages: the story plays the same. */
+export interface Act {
+  id: string;
+  title: string;
 }
 
 export interface StoryProject {
@@ -200,6 +208,8 @@ export interface StoryProject {
   items: Item[];
   variables: Variable[];
   passages: Passage[];
+  /** The story's acts, in order (absent or empty = no acts). Passages name theirs in Passage.act. */
+  acts?: Act[];
   // When importing Ink, the original Ink is passed through instead of regenerated.
   inkPassthrough?: string;
   /** Passage positions dragged by hand on the story map (UI only; absent = automatic layout). */
