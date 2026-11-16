@@ -21,6 +21,7 @@ export function validateSchema(p: unknown): Diagnostic[] {
   }
   if (!isObj(sp.project) || !str(sp.project.id) || !str(sp.project.title) || !str(sp.project.startPassage)) err('project.id, project.title and project.startPassage are required.');
   for (const k of ['characters', 'items', 'variables', 'passages', 'sources'] as const) if (!Array.isArray(sp[k])) err(`${k} must be an array.`);
+  if (sp.acts !== undefined && (!Array.isArray(sp.acts) || sp.acts.some((a) => !isObj(a) || !str(a.id) || !str(a.title)))) err('acts must be a list of { id, title }.');
   if (ds.some((d) => d.severity === 'error')) return ds;
 
   sp.passages.forEach((ps, i) => {

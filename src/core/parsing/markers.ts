@@ -6,6 +6,7 @@ import type { Marker } from './types';
 //   @start <id>                      set the start passage
 //   @end                             mark the current passage as an ending
 //   @cutscene                        the current passage is a cutscene: only its dialogue, playing by itself
+//   @act <id> [Title words]          the passages after it are in this act (a bare @act: in no act)
 //   -> <target>                      unconditional divert
 //   @item <id> ["Display Name"] [consumable]
 //   @var <id> = <true|false|number|"text">
@@ -17,7 +18,7 @@ import type { Marker } from './types';
 //   + {has key} [Choice text] -> target @forced       while it's open, the only choice in the passage
 //   - [Choice text](#target)         Markdown link form
 
-const KEYWORDS = new Set(['passage', 'start', 'end', 'cutscene', 'pause', 'exit', 'cue', 'item', 'var', 'give', 'take', 'set', 'add']);
+const KEYWORDS = new Set(['passage', 'start', 'end', 'cutscene', 'act', 'pause', 'exit', 'cue', 'item', 'var', 'give', 'take', 'set', 'add']);
 
 export function isMarkerLine(line: string): boolean {
   const t = line.trim();
@@ -98,6 +99,12 @@ export function parseMarker(line: string): Marker | null {
       return { type: 'end' };
     case 'cutscene':
       return { type: 'cutscene' };
+    case 'act': {
+      // @act act_one The Storm: the passages after it are in this act. A bare @act ends it (the passages after are in none).
+      if (!rest.trim()) return { type: 'act' };
+      const p = /^([A-Za-z_]\w*)\s*(.*)$/.exec(rest.trim());
+      return p ? { type: 'act', id: p[1], ...(p[2].trim() ? { title: p[2].trim() } : {}) } : null;
+    }
     case 'pause':
       return { type: 'pause' };
     case 'exit': {

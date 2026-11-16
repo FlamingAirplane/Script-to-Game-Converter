@@ -1,3 +1,4 @@
+import { actsOf, actTitleLine } from './acts';
 import { audioFileName } from './audio';
 import { choiceGuards, isForcing } from './forced';
 import { imageFileName } from './images';
@@ -15,6 +16,8 @@ import { CONTINUE_TEXT, cueTag, EXIT_PREFIX, exitName, isActive, itemVar, type C
 //    a recorded clip adds #audio:<file> (the file ships with the export).
 //  - Transitions carry a #transition tag; scene headings are a #scene tag on the first line.
 //  - A cutscene's dialogue lines carry #cutscene: readers show them one at a time, going on by themselves.
+//  - Acts are a comment before the first knot of each act, "// @act <id> <Title>" (a bare "// @act" when the passages
+//    after it are in no act), which the Ink importer reads back (see acts.ts). A story without acts has none.
 //  - Notes and unsupported constructs are preserved as Ink comments. So is everything but dialogue when players
 //    see only the dialogue (presentation.dialogueOnly; see players.ts).
 //  - A Continue break is "+ [Continue]" followed by a gather "-": what follows waits for the reader.
@@ -129,8 +132,15 @@ export function generateInk(story: StoryProject): GeneratedInk {
   emit(`-> ${project.project.startPassage}`);
 
   const speakers = new Map(project.characters.map((c) => [c.id, c]));
+  const acts = new Map(actsOf(project).map((a) => [a.id, a]));
+  let act: string | undefined;
   for (const p of project.passages) {
     emit('');
+    const pAct = p.act && acts.has(p.act) ? p.act : undefined;
+    if (pAct !== act) {
+      act = pAct;
+      emit(act ? `// @act ${act} ${actTitleLine(acts.get(act)!.title)}` : '// @act');
+    }
     emit(`=== ${p.id} ===`, p.id);
     if (p.title && p.title !== p.id) emit(`// ${p.title.replace(/\n/g, ' ')}${p.source ? ` (source line ${p.source.line})` : ''}`, p.id);
     const labels = passageLineLabels(p);

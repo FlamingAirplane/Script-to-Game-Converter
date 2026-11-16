@@ -1,3 +1,4 @@
+import { actsOf, actTitleLine } from '../acts';
 import { audioFileName } from '../audio';
 import { cueSounds } from '../cues';
 import { describeNeed } from '../gating';
@@ -291,6 +292,9 @@ function storyInfoH(story: ProcessedStory, module: string) {
   const entryKnots = new Set(lines.map((l) => l.entryKnot));
   const passages = [...story.generated.ink.matchAll(/^=== (\w+) ===$/gm)].map((m) => m[1]).filter((k) => !entryKnots.has(k));
   const knots = new Set(passages);
+  const acts = actsOf(story.project);
+  const actIds = new Set(acts.map((a) => a.id));
+  const passageActs = passages.map((k) => story.project.passages.find((p) => p.id === k)?.act ?? '').map((a) => (actIds.has(a) ? a : ''));
   const blocks = story.project.passages.flatMap((p) => p.content);
   const exits = [...new Set(blocks.flatMap((b) => (b.type === 'exit' ? [exitName(b.name)] : [])))];
   const cueBlocks = blocks.flatMap((b) => (b.type === 'cue' ? [b] : []));
@@ -339,6 +343,24 @@ namespace NarrativeBridgeStoryInfo
 ${list('Passages', passages, 'Every passage (Ink knot) the story can start at: UNarrativeBridgeComponent::StartAt.')}
     /** Each passage's title, in the same order as Passages (for save slots and menus). */
     static const TCHAR* PassageTitles[] = { ${passages.length ? passages.map((k) => q(story.project.passages.find((p) => p.id === k)?.title || k)).join(', ') : 'nullptr'} };
+${list('Acts', acts.map((a) => a.id), "The story's acts (groups of passages), in order; none when it has none.")}
+${list('ActTitles', acts.map((a) => actTitleLine(a.title)), "Each act's title, in the same order as Acts (for chapter menus and save slots).")}
+    /** The act each passage is in, in the same order as Passages (an empty string for a passage in no act). */
+    static const TCHAR* PassageActs[] = { ${passages.length ? passageActs.map(q).join(', ') : 'nullptr'} };
+    /** The act a passage is in (UNarrativeBridgeComponent::GetCurrentPassage, say), or an empty string when it's in none. */
+    static inline const TCHAR* ActOf(const FString& Passage)
+    {
+        for (int32 i = 0; i < NumPassages; ++i)
+            if (Passage == Passages[i]) return PassageActs[i];
+        return TEXT("");
+    }
+    /** An act's title, or an empty string for an unknown act. */
+    static inline const TCHAR* ActTitle(const FString& Act)
+    {
+        for (int32 i = 0; i < NumActs; ++i)
+            if (Act == Acts[i]) return ActTitles[i];
+        return TEXT("");
+    }
 ${list('Lines', lines.map((l) => l.path), 'Every line of dialogue the story can start at, "passage.line_…": StartAt, EnterAt or ResumeAt picks a conversation up there (the Narrative Enter Dialogue Trigger does it without code).')}
     /** Each line as it reads, "MARA: Did you bring the flowers?", in the same order as Lines (for menus). */
     static const TCHAR* LineTexts[] = { ${lines.length ? lines.map((l) => q(l.display)).join(', ') : 'nullptr'} };

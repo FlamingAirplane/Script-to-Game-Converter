@@ -1,3 +1,4 @@
+import { actsOf } from '../acts';
 import { cutsceneSeconds, forPlayers } from '../players';
 import { fnv1a } from '../hash';
 import { storyLayout } from '../layout';
@@ -25,6 +26,8 @@ import { assertExportable, ExportBlockedError } from './common';
 // blank lines, dialogue as a speaker line followed by the speech. Passages are placed on Twine's
 // story map the way they are on the Graph chapter's map. A Continue break splits a passage into
 // "Name" and "Name (continued)" joined by a Continue link (works in every story format).
+// A passage in an act is tagged act:<id> in both kinds (Twine's editor can highlight a tag), and the Twine importer
+// reads the tag back as the passage's act.
 
 export const SUGARCUBE_VERSION = '2.37.3';
 
@@ -165,9 +168,11 @@ export function buildTwee(story: ProcessedStory, kind: TwineKind = 'sugarcube'):
     out.push(':: StoryStylesheet [stylesheet]', STYLESHEET.trim(), '');
   }
 
+  const actIds = new Set(actsOf(project).map((a) => a.id));
   for (const p of project.passages)
     parts.get(p.id)!.forEach((part, k) => {
-      const tags = !plain && part.isEnding ? ' [ending]' : '';
+      const tagList = [...(!plain && part.isEnding ? ['ending'] : []), ...(p.act && actIds.has(p.act) ? [`act:${p.act}`] : [])];
+      const tags = tagList.length ? ` [${tagList.join(' ')}]` : '';
       const [x, y] = (positions.get(p.id) ?? '100,100').split(',').map(Number);
       out.push(`:: ${nameOf(part.id)}${tags} {"position":"${x},${y + k * 130}"}`);
       out.push(...(plain ? plainBody(part, speakers, nameOf) : sugarBody(part, speakers, nameOf)), '');
