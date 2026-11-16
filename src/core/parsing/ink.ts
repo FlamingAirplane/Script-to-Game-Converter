@@ -136,6 +136,12 @@ function scan(text: string): { blocks: ParsedBlock[]; unsupported: InkFeature[] 
         unsupportedNote = { line: ln, reason: unsup[1], lines: [] };
         continue;
       }
+      // "// @act act_one The Storm": the knots after it are in that act ("// @act" alone: in none; see acts.ts).
+      const actM = /^@act(?:\s+([A-Za-z_]\w*)\s*(.*))?$/.exec(c);
+      if (actM) {
+        blocks.push({ kind: 'marker', marker: { type: 'act', ...(actM[1] ? { id: actM[1] } : {}), ...(actM[2]?.trim() ? { title: actM[2].trim() } : {}) }, line: ln });
+        continue;
+      }
       if (generated && c.startsWith('Where a game can start the story at a line of dialogue')) continue;
       if (generated && (GENERATOR_HEADER.test(c) || (!sawKnot && !sawText && blocks.every((b) => b.kind === 'title' || b.kind === 'marker')))) continue;
       if (generated && bodyStart && lastPassage >= 0) {

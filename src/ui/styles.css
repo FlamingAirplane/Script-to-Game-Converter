@@ -1330,6 +1330,10 @@ section.drafts > h2 { margin-top: 26px; }
 @media (prefers-reduced-motion: reduce) { .t-dialogue.t-cutscene.now { animation: none; } }
 /* Review: the passage's Cutscene box. */
 .cutscene-setting { display: flex; align-items: baseline; gap: 6px; margin: 6px 0 10px; flex-wrap: wrap; }
+/* Review: the passage's Act box, and the contents list grouped by act. */
+.act-setting { display: flex; align-items: baseline; gap: 6px; margin: 6px 0 4px; flex-wrap: wrap; }
+.act-setting select, .act-setting input { max-width: 16em; }
+.act-head { margin: 10px 0 2px; font-family: var(--display); font-size: 14px; letter-spacing: 0.08em; text-align: center; }
 
 /* A choice taken before (in this read or an earlier one): greyed out, still clickable. */
 .choice-btn.chosen { color: var(--faded); }

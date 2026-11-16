@@ -28,6 +28,9 @@ export function addPassage(p: StoryProject, afterId?: string): Passage {
   const id = uniqueId('new_passage', taken);
   const passage: Passage = { id, title: 'New Passage', content: [], choices: [], isEnding: true, origin: 'user_authored', review: 'approved' };
   const idx = afterId ? p.passages.findIndex((x) => x.id === afterId) : -1;
+  // A passage added after one in an act is in that act too.
+  const act = idx >= 0 ? p.passages[idx].act : undefined;
+  if (act) passage.act = act;
   if (idx >= 0) p.passages.splice(idx + 1, 0, passage);
   else p.passages.push(passage);
   return passage;

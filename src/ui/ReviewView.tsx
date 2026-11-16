@@ -12,6 +12,8 @@ import { BlockRow, LineToChoice } from './review/ContentBlocks';
 import { ChoiceEditor } from './review/ChoiceEditor';
 import { StorySettings } from './review/StorySettings';
 import { FindReplace } from './review/FindReplace';
+import { ActSetting } from './review/ActSetting';
+import { actOf, passagesByAct } from '../core/acts';
 
 /** Whether Passage settings is unfolded: remembered from passage to passage while the app is open. */
 let passageSettingsOpen = false;
@@ -97,8 +99,16 @@ export function ReviewView({
         <input className="input small" placeholder="Filter passages…" value={filter} onChange={(e) => setFilter(e.target.value)} aria-label="Filter passages" />
         <FindReplace project={project} update={update} onSelect={onSelect} />
         <h3 className="contents-head">Contents</h3>
+        {passagesByAct(project, visible).map((group) => (
+        <div className="act-group" key={group.act?.id ?? ''}>
+        {group.act && (
+          <h4 className="act-head" title={`Act ${group.act.id}`}>
+            {group.act.title}
+          </h4>
+        )}
+        {!group.act && visible.some((p) => p.act) && <h4 className="act-head muted">Not in an act</h4>}
         <ol className="passages">
-          {visible.map((p) => {
+          {group.passages.map((p) => {
             const issues = issuesByPassage.get(p.id);
             const pending = p.choices.filter((c) => c.review === 'pending').length;
             const node = processed.analysis.graph.nodes.find((n) => n.id === p.id);
@@ -138,6 +148,8 @@ export function ReviewView({
             );
           })}
         </ol>
+        </div>
+        ))}
         <button
           className="btn small"
           title="Add a scene: after the selected passage, as a new choice in it, or on its own"
@@ -330,7 +342,7 @@ function PassageEditor({
         <summary>
           <span className="passage-settings-title">Passage settings</span>
           <span className="muted small">
-            {[passage.image ? '🖼 has a picture' : 'picture', passage.cutscene ? '🎬 plays as a cutscene' : 'cutscene', isStart ? 'the story starts here' : 'start', 'order', 'id', 'delete'].join(' · ')}
+            {[passage.image ? '🖼 has a picture' : 'picture', actOf(project, passage) ? `🎭 ${actOf(project, passage)!.title}` : 'act', passage.cutscene ? '🎬 plays as a cutscene' : 'cutscene', isStart ? 'the story starts here' : 'start', 'order', 'id', 'delete'].join(' · ')}
           </span>
         </summary>
         <div className="row wrap passage-settings-row">
@@ -373,6 +385,8 @@ function PassageEditor({
         </div>
         {idError && <p className="error-text small">{idError}</p>}
         <ScenePicture passage={passage} update={update} />
+
+        <ActSetting project={project} passage={passage} update={update} />
 
         <div className="cutscene-setting">
           <label>

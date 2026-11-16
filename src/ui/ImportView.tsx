@@ -475,6 +475,7 @@ export function ImportView({
 -> target   /   @end                         divert / ending
 @pause                                       Continue break: the player clicks Continue to read on
 @cutscene                                    the passage is a cutscene: only its dialogue, playing by itself
+@act act_one The Storm                       the passages after it are in this act (a bare @act ends it)
 @exit wolf_fight The player fights wolves    exit to the game: the dialogue stops while the game plays
 @cue music calm                              a cue for the game (Ink tag #music:calm)
 ## Heading {#custom_id}                      Markdown heading as a passage`}</pre>

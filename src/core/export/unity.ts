@@ -1,3 +1,4 @@
+import { actsOf, actTitleLine } from '../acts';
 import { log } from '../log';
 import type { ProcessedStory } from '../pipeline';
 import { portraitFiles } from '../images';
@@ -327,6 +328,9 @@ function storyInfoCs(story: ProcessedStory, id: UnityPackageId, addressables = f
   const cueTags = [...new Set(cueBlocks.map((b) => cueTag(b.name, b.value)))];
   const soundTags = [...cueSounds(story.project)].map(([t, ref]) => [t, audioFileName(ref)] as const);
   const knots = new Set(passages);
+  const acts = actsOf(story.project);
+  const actIds = new Set(acts.map((a) => a.id));
+  const passageActs = passages.map((k) => story.project.passages.find((p) => p.id === k)?.act ?? '').map((a) => (actIds.has(a) ? a : ''));
   const gated = story.project.passages.flatMap((p) =>
     knots.has(p.id)
       ? p.choices
@@ -368,6 +372,24 @@ namespace ${id.namespace}
         public static readonly string[] Passages = { ${passages.map(csString).join(', ')} };
         /// <summary>Each passage's title, in the same order as Passages (for save slots and menus).</summary>
         public static readonly string[] PassageTitles = { ${passages.map((k) => csString(story.project.passages.find((p) => p.id === k)?.title || k)).join(', ')} };
+        /// <summary>The story's acts (groups of passages), in order; empty when it has none.</summary>
+        public static readonly string[] Acts = { ${acts.map((a) => csString(a.id)).join(', ')} };
+        /// <summary>Each act's title, in the same order as Acts (for chapter menus and save slots).</summary>
+        public static readonly string[] ActTitles = { ${acts.map((a) => csString(actTitleLine(a.title))).join(', ')} };
+        /// <summary>The act each passage is in, in the same order as Passages ("" for a passage in no act).</summary>
+        public static readonly string[] PassageActs = { ${passageActs.map(csString).join(', ')} };
+        /// <summary>The act a passage is in (NarrativeController.CurrentPassage, say), or "" when it's in none.</summary>
+        public static string ActOf(string passage)
+        {
+            var i = System.Array.IndexOf(Passages, passage);
+            return i < 0 ? "" : PassageActs[i];
+        }
+        /// <summary>An act's title, or "" for an unknown act.</summary>
+        public static string ActTitle(string act)
+        {
+            var i = System.Array.IndexOf(Acts, act);
+            return i < 0 ? "" : ActTitles[i];
+        }
         /// <summary>
         /// Every line of dialogue the story can start at, as "passage.line_…": StartAt(name) or ResumeAt(name) picks a
         /// conversation up there instead of at the top of its passage (StoryTrigger's Line does it without code).

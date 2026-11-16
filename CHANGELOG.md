@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- **Acts.** Group passages into acts: **🎭 Act** in a passage's settings in Review (pick one, make a new one, rename or
+  remove it), or `@act act_one The Storm` in a script before the act's first passage. Review's contents list shows the
+  passages by act. Acts survive a round trip through Ink (a `// @act` comment) and Twine (an `act:<id>` tag), and the
+  Unity and Unreal `StoryInfo` list them (`Acts`, `ActTitles`, `PassageActs`, `ActOf`) for chapter menus and save slots.
+  A story without acts is unchanged.
 - **The playable story as a small web game.** **For itch.io (.zip)** on the Export page packs it the way game sites
   take an HTML game. Readers see how many endings they've found (*Endings found: 1 of 2*), can make the text larger or
   smaller, and on a phone the top bar wraps instead of running off the screen.

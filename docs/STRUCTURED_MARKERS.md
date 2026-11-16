@@ -80,6 +80,7 @@ don't start with a digit: `archive_key`, `act2_finale`.
 | `@passage id Optional Title` | Starts a passage. Everything up to the next `@passage` belongs to it. |
 | `@start id` | Makes `id` the passage the story starts at (default: the first passage). |
 | `@end` | This passage is an ending. |
+| `@act id Optional Title` | The passages after it are in this act; a bare `@act` ends it. |
 | `-> id` | When this passage is done, go on to `id`. `-> END` ends the story. |
 | `* [Text] -> id` | A choice that disappears once picked. |
 | `+ [Text] -> id` | A choice that can be picked every time the player comes back. |
@@ -155,6 +156,27 @@ So a script that's just passages one after another plays straight through, and t
 can have both choices and a `-> target`: the divert then becomes a hidden fallback, taken only when every choice is
 closed (by its condition, or because it was a `*` choice already picked), so the player never gets stuck. A passage with
 more than one `-> target` uses the last one (and Diagnostics says so).
+
+### `@act`: group passages into acts
+
+```text
+@act act_one The Storm
+@passage harbour Harbour
+…
+@passage lighthouse Lighthouse
+…
+@act act_two
+@passage cliff Cliff
+…
+@act
+@passage epilogue Epilogue
+```
+
+Every passage that starts after an `@act` line is in that act, until the next `@act`. `act_one` is the act's id (letters,
+digits and underscores; the game uses it), and the words after it are its title; without them the title comes from the id
+(*Act Two*). A bare `@act` ends the act: the passages after it are in none. Acts are optional and only group passages: the
+story plays exactly the same. Review lists the passages by act, and *Passage settings → 🎭 Act* puts a passage in an act,
+makes a new one, renames one or removes it.
 
 ## 4. Choices
 
@@ -483,6 +505,7 @@ Reading it side by side with the script:
 | `@give gate_key`, `@add trust 1` | `~ has_gate_key = true`, `~ trust += 1` |
 | `-> yard` | `-> yard` |
 | `@cutscene` | `#cutscene` on each line of dialogue; the narration becomes a comment |
+| `@act act_one The Storm` | `// @act act_one The Storm` before the act's first knot (a bare `// @act` where the passages after are in no act) |
 | `@end` | `-> END` |
 
 The story map for this script is the diagram in [How passages, choices and exits connect](#how-passages-choices-and-exits-connect).
@@ -500,6 +523,7 @@ for dialogue; the markers are the same.
 | `@cutscene` | Lines one at a time, with Skip | Lines appear one after another (`<<timed>>`) | Story panel plays it by itself | Story panel plays it by itself |
 | `@exit` | *Resume* button | A Continue link with a note (Twine has no game) | `ExitReached(name)`, `Resume()`, `ResumeAt()` | `Resume`, `ResumeAt` |
 | `@cue` | Plays the attached sound | Not used | `NarrativeCuePlayer`, `TagFound` | Cue player |
+| `@act` | Not shown (the story plays the same) | An `act:<id>` tag on each passage | `StoryInfo.Acts`, `ActTitles`, `PassageActs`, `ActOf(passage)` | `NarrativeBridgeStoryInfo::Acts`, `ActTitles`, `PassageActs`, `ActOf` |
 
 See [Engine exports](../README.md#engine-exports) in the README for the packages themselves, and
 [Ink conventions](../README.md#ink-conventions) for the exact Ink each marker becomes.
