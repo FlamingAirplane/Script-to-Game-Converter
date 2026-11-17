@@ -94,7 +94,7 @@ function InstallApp() {
 
 const IS_OFFLINE_FILE = typeof location !== 'undefined' && location.protocol === 'file:';
 // The site's own pages (About, How it was made): next to the app on the website, on the website from the offline file.
-const SITE = IS_OFFLINE_FILE ? 'https://flamingairplane.github.io/Script-to-Game-Converter/' : './';
+export const SITE = IS_OFFLINE_FILE ? 'https://flamingairplane.github.io/Script-to-Game-Converter/' : './';
 
 /** Safari in a normal tab (not added to the Dock): its storage is cleared after 7 days without a visit. */
 const SAFARI_TAB =
@@ -224,6 +224,9 @@ export function ImportView({
           </div>
         </div>
         <p className="lede">{words.lede}</p>
+        <p className="hero-links small">
+          <a href={`${SITE}making-of.html`}>How Narrative Bridge was made</a> · <a href={`${SITE}about.html`}>About &amp; FAQ</a>
+        </p>
       </section>
 
       {/* The one thing a visitor came to do, first: bring a script in (or try a sample, just below). */}
