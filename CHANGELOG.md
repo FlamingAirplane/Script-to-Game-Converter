@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- **"How it was made" is easier to find:** the main page now links to it just under the introduction, and it is in the ☰ Menu too.
 - **How it was made.** A new page on the website, *How Narrative Bridge was made*, gathers every file behind the tool
   in one place: the slide deck about the app, the design and planning notes, the guides, the story model schema, the
   build and test scripts, the automated checks and the release history, each with a line on what it is. It is linked

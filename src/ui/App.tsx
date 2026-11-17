@@ -6,7 +6,7 @@ import { fileBase, type ConversionMode, type StoryProject } from '../core/isr';
 import type { ConversionState } from '../core/pipeline';
 import { validateSchema } from '../core/schema';
 import { DiagnosticsPanel, type PanelView } from './DiagnosticsPanel';
-import { ImportView } from './ImportView';
+import { ImportView, SITE } from './ImportView';
 import { passageForEntity, STORY_SETTINGS } from './projectOps';
 import { packProject, unpackProject } from './projectFile';
 import { LINK_PREFIX, readStoryLink } from './storyLink';
@@ -773,6 +773,9 @@ export function App() {
           onClick={() => setMenuOpen(false)}
         >
           ✉ Send feedback
+        </a>
+        <a className="btn tiny ghost" href={`${SITE}making-of.html`} title="Every plan, guide, spec and script behind Narrative Bridge" onClick={() => setMenuOpen(false)}>
+          How it was made
         </a>
         </div>
       </header>

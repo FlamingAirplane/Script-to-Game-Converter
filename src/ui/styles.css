@@ -367,6 +367,7 @@ input[type='checkbox'], input[type='radio'] { accent-color: var(--ink); }
 /* ---------- Import: a title page ---------- */
 .import-view { max-width: 1040px; margin: 0 auto; padding-top: 44px; }
 .hero { text-align: center; margin-bottom: 8px; }
+.hero-links { margin: 4px 0 0; }
 .hero::before { display: block; color: var(--rubric); font-size: 26px; margin-bottom: 6px; content: none; }
 .hero h1 { font-weight: 400; font-size: var(--hero-size); letter-spacing: -0.01em; margin-bottom: 12px; line-height: 1.15; }
 .lede { color: var(--ink-2); max-width: 640px; font-size: 17px; margin: 0 auto 26px; font-style: italic; }
