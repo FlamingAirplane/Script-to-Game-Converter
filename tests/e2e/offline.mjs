@@ -75,7 +75,7 @@ try {
     await context.setOffline(false);
     deploy++;
     await page.evaluate(async () => (await navigator.serviceWorker.getRegistration())?.update());
-    await page.getByText('A new edition of Narrative Bridge is ready.').waitFor({ timeout: 10000 });
+    await page.getByText('A new edition of Pen to Ink is ready.').waitFor({ timeout: 10000 });
     await Promise.all([page.waitForEvent('load'), page.getByRole('button', { name: 'Reload' }).click()]);
     await page.getByRole('button', { name: /Archive Entrance/ }).first().waitFor({ timeout: 10000 });
     const keys = await page.evaluate(() => caches.keys());

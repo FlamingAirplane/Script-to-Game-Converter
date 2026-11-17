@@ -30,7 +30,7 @@ export interface DesignDoc {
 
 export const DRAFT_KEY = 'narrative-bridge.design-draft';
 
-export function emptyDesign(name = 'Narrative Bridge'): DesignDoc {
+export function emptyDesign(name = 'Pen to Ink'): DesignDoc {
   return { format: DESIGN_FORMAT, version: 1, name, tokens: {}, light: {}, dark: {}, rules: {}, css: '', words: {}, settings: {} };
 }
 
@@ -88,7 +88,7 @@ export function normaliseDesign(raw: unknown): DesignDoc {
   return {
     format: DESIGN_FORMAT,
     version: 1,
-    name: typeof d.name === 'string' && d.name.trim() ? d.name.trim().slice(0, 80) : 'Narrative Bridge',
+    name: typeof d.name === 'string' && d.name.trim() ? d.name.trim().slice(0, 80) : 'Pen to Ink',
     tokens: cleanMap(d.tokens, CUSTOM_PROPERTY),
     light: cleanMap(d.light, CUSTOM_PROPERTY),
     dark: cleanMap(d.dark, CUSTOM_PROPERTY),

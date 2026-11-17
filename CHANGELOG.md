@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+- **Narrative Bridge is now Pen to Ink, with a new look.** A new name and logo (a fountain-pen nib writing a stroke of
+  ink), and a redesign of the whole app and website in the same colours: a clean sans-serif interface (Inter) with the
+  story still set in EB Garamond, flat surfaces with soft shadows, chapter tabs as a segmented control, pill-shaped
+  stages and badges, icons on every button (Lucide), and a new loading indicator. The design follows
+  [Beautiful UI](https://www.beautifului.dev) (MIT). The app icons, the link preview card and the About and *How it was
+  made* pages are redone too. The offline file is now `Pen-to-Ink.html` (the old address still works), and Ink written
+  under the old name still opens as Pen to Ink's own. The Unity and Unreal packages keep their Narrative Bridge names, so
+  games built with earlier exports keep working.
 - **"How it was made" is easier to find:** the main page now links to it just under the introduction, and it is in the ☰ Menu too.
 - **How it was made.** A new page on the website, *How Narrative Bridge was made*, gathers every file behind the tool
   in one place: the slide deck about the app, the design and planning notes, the guides, the story model schema, the

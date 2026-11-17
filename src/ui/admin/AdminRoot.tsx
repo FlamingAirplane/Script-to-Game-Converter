@@ -137,7 +137,7 @@ function LockScreen({ onUnlock, onClose }: { onUnlock: () => void; onClose: () =
           </>
         ) : (
           <>
-            <p>This copy of Narrative Bridge was built without an admin password, so the design editor can’t be opened here.</p>
+            <p>This copy of Pen to Ink was built without an admin password, so the design editor can’t be opened here.</p>
             <p className="muted small">
               Set <code>NB_ADMIN_PASSWORD</code> when building (for the website, the repository’s Actions secret) and deploy again.
             </p>
@@ -818,7 +818,7 @@ function PublishTab({ doc, update, onLock }: { doc: DesignDoc; update: Update; o
   const load = async (f: File) => {
     try {
       const raw = JSON.parse(await f.text());
-      if (raw?.format !== DESIGN_FORMAT) throw new Error('not a Narrative Bridge design file');
+      if (raw?.format !== DESIGN_FORMAT) throw new Error('not a Pen to Ink design file');
       update((d) => Object.assign(d, normaliseDesign(raw)));
       say(`Loaded ${f.name}.`);
     } catch (e) {
@@ -829,7 +829,7 @@ function PublishTab({ doc, update, onLock }: { doc: DesignDoc; update: Update; o
     <>
       <label className="field">
         <span>Design name</span>
-        <TextInput value={doc.name} label="Design name" onCommit={(v) => update((d) => void (d.name = v || 'Narrative Bridge'))} />
+        <TextInput value={doc.name} label="Design name" onCommit={(v) => update((d) => void (d.name = v || 'Pen to Ink'))} />
       </label>
       <Box title="This draft">
         <p>

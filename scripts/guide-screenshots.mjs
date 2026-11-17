@@ -10,7 +10,7 @@ import { chromium } from 'playwright-core';
 const root = fileURLToPath(new URL('..', import.meta.url));
 const out = join(root, 'docs/images');
 mkdirSync(out, { recursive: true });
-const app = pathToFileURL(join(root, 'release/Narrative-Bridge.html')).href;
+const app = pathToFileURL(join(root, 'release/Pen-to-Ink.html')).href;
 const lighthouse = /const LIGHTHOUSE = `([\s\S]*?)`;/.exec(readFileSync(join(root, 'src/samples.ts'), 'utf8'))[1];
 
 const browser = await chromium.launch();
@@ -44,7 +44,7 @@ await shot('review');
 await page.locator('.passage-item', { hasText: "Keeper's Cottage" }).click();
 await page.locator('.choice.choice-pending').first().scrollIntoViewIfNeeded();
 await shot('review-proposal');
-await page.getByRole('button', { name: 'Approve all' }).click();
+await page.getByRole('button', { name: 'Approve all' }).first().click();
 
 await page.locator('.story-entry').click();
 await page.getByRole('heading', { name: 'At a glance' }).waitFor();
@@ -67,8 +67,9 @@ await chapter('Export');
 await page.getByRole('heading', { name: 'Share without a game engine' }).waitFor();
 await shot('export');
 await page.getByRole('button', { name: /^Build Unity package/ }).click();
-await page.getByText('package verified').waitFor({ timeout: 20000 });
-await page.getByText('package verified').scrollIntoViewIfNeeded();
+const built = page.getByRole('region', { name: 'The built package' });
+await built.waitFor({ timeout: 20000 });
+await built.scrollIntoViewIfNeeded();
 await shot('export-unity');
 
 // The reader's view of the playable story.

@@ -34,4 +34,4 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          gh release upload "$TAG" "release/Narrative-Bridge.html#Narrative Bridge (double-click to open)" "WRITERS.md#Guide for writers" --clobber
+          gh release upload "$TAG" "release/Pen-to-Ink.html#Pen to Ink (double-click to open)" "WRITERS.md#Guide for writers" --clobber

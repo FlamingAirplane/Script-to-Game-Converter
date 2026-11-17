@@ -63,7 +63,7 @@ for (const [name, type] of [['WebKit', webkit], ['Chromium', chromium]]) {
       if (await page.locator('#nb-admin-host').count()) throw new Error('editor on the page');
       // (The offline service worker may cache it with every other file; the page itself never runs it.)
       if (await page.evaluate(() => performance.getEntriesByType('resource').some((e) => /AdminRoot/.test(e.name)))) throw new Error('the page loaded the editor’s code');
-      if ((await style('.btn', 'borderTopLeftRadius')) !== '3px') throw new Error('not the built-in design');
+      if ((await style('.btn', 'borderTopLeftRadius')) !== '8px') throw new Error('not the built-in design');
     });
     await step('#admin asks for the password and refuses a wrong one', async () => {
       await page.goto(`${url}#admin`);
@@ -99,7 +99,7 @@ for (const [name, type] of [['WebKit', webkit], ['Chromium', chromium]]) {
       await brand.press('Enter');
       await page.locator('.brand span', { hasText: 'Story Forge' }).waitFor();
       await editor.getByRole('button', { name: 'Undo' }).click();
-      await page.locator('.brand span', { hasText: 'Narrative Bridge' }).waitFor();
+      await page.locator('.brand span', { hasText: 'Pen to Ink' }).waitFor();
     });
     let saved;
     await step('the draft downloads as a design file for publishing', async () => {
@@ -126,7 +126,7 @@ for (const [name, type] of [['WebKit', webkit], ['Chromium', chromium]]) {
       const r = await p2.evaluate(() => getComputedStyle(document.querySelector('.btn')).borderTopLeftRadius);
       const pill = await p2.getByRole('button', { name: 'Design draft' }).count();
       await other.close();
-      if (r !== '3px' || pill) throw new Error(`radius ${r}, pill ${pill}`);
+      if (r !== '8px' || pill) throw new Error(`radius ${r}, pill ${pill}`);
     });
     await step('locking closes it, and repeated wrong passwords make you wait', async () => {
       await editor.getByRole('tab', { name: 'Save & publish' }).click();

@@ -38,7 +38,7 @@ export interface ParsedCue {
   tag: string;
 }
 
-/** The cues among a line's tags (the ones that aren't Narrative Bridge's own, such as speaker: or audio:). */
+/** The cues among a line's tags (the ones that aren't Pen to Ink's own, such as speaker: or audio:). */
 export function cuesIn(tags: string[]): ParsedCue[] {
   const out: ParsedCue[] = [];
   for (const raw of tags) {

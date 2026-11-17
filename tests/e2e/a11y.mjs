@@ -5,9 +5,9 @@ import { createRequire } from 'node:module';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { chromium } from 'playwright-core';
 
-const file = fileURLToPath(new URL('../../release/Narrative-Bridge.html', import.meta.url));
+const file = fileURLToPath(new URL('../../release/Pen-to-Ink.html', import.meta.url));
 if (!existsSync(file)) {
-  console.error('release/Narrative-Bridge.html not found. Run: npm run build:single');
+  console.error('release/Pen-to-Ink.html not found. Run: npm run build:single');
   process.exit(1);
 }
 const axeSource = readFileSync(createRequire(import.meta.url).resolve('axe-core/axe.min.js'), 'utf8');

@@ -15,7 +15,7 @@ import { BINARY_EXTENSIONS, prepareInput } from '../core/parsing/convert';
 import { formatEntry, LEVELS, log, logbook, type LogLevel } from '../core/log';
 import { processProject } from '../core/pipeline';
 
-const HELP = `Narrative Bridge — screenplays and prose → Ink → Unity / Unreal
+const HELP = `Pen to Ink — screenplays and prose → Ink → Unity / Unreal
 
 Usage:
   narrative-bridge convert <files...>          (.fountain .txt .md .fdx .docx .pdf, or a story: .ink .twee .tw .html) [--mode structured|faithful|adaptation] [--approve-all]

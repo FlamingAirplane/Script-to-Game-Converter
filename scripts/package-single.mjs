@@ -1,10 +1,10 @@
-// Turns the single-file Vite build into the file writers receive: release/Narrative-Bridge.html.
+// Turns the single-file Vite build into the file writers receive: release/Pen-to-Ink.html.
 import { existsSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 
 const root = fileURLToPath(new URL('..', import.meta.url));
 const built = `${root}release/.build/index.html`;
-const target = `${root}release/Narrative-Bridge.html`;
+const target = `${root}release/Pen-to-Ink.html`;
 
 if (!existsSync(built)) {
   console.error('Single-file build not found. Run: npm run build:single');
@@ -20,4 +20,4 @@ if (external) {
 }
 writeFileSync(target, html);
 rmSync(`${root}release/.build`, { recursive: true, force: true });
-console.log(`Wrote release/Narrative-Bridge.html (${(statSync(target).size / 1024 / 1024).toFixed(2)} MB)`);
+console.log(`Wrote release/Pen-to-Ink.html (${(statSync(target).size / 1024 / 1024).toFixed(2)} MB)`);

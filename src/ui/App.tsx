@@ -12,7 +12,10 @@ import { packProject, unpackProject } from './projectFile';
 import { LINK_PREFIX, readStoryLink } from './storyLink';
 import { ProjectsSheet } from './ProjectsSheet';
 import { errorData, log } from '../core/log';
-import { Logo } from './Logo';
+import { Logo, Wordmark } from './Logo';
+import { Loading } from './Loading';
+import { ArrowLeftRight, BookOpen, Code2, FilePlus2, FileUp, FolderOpen, Keyboard, ListChecks, Menu, MessageSquare, Music, Network, Package, Play, Redo2, Save, SaveAll, Undo2 } from 'lucide-react';
+import type { LucideIcon } from 'lucide-react';
 import { designSetting, useWord } from './design/design';
 import { getDraft, keepDraft } from './draftStore';
 import { canUseFiles, kvGet, kvSet, pickProjectFile, rememberRecent, requestPersistence, saveFile, storageUse, writeToHandle, type FileHandle } from './platform';
@@ -38,6 +41,8 @@ import { useProcessedStory } from './useProcessedStory';
 
 type Tab = 'import' | 'review' | 'graph' | 'ink' | 'play' | 'export';
 // Tabs read as chapters of the book, numbered in roman numerals.
+const TAB_ICONS: Record<Tab, LucideIcon> = { import: FileUp, review: ListChecks, graph: Network, ink: Code2, play: Play, export: Package };
+
 const TABS: { id: Tab; label: string; key: string; numeral: string; about: string }[] = [
   { id: 'import', label: 'Import', key: '1', numeral: 'I', about: 'Bring in a script, or try a sample' },
   { id: 'review', label: 'Review', key: '2', numeral: 'II', about: 'Check and edit each passage (a scene or page of the story)' },
@@ -659,8 +664,8 @@ export function App() {
       {diagOverlay && <div className="diag-backdrop" aria-hidden onClick={() => setDiagOverlay(false)} />}
       <header className="topbar">
         <div className="brand">
-          <Logo size={26} />
-          <span>{brand}</span>
+          <Logo size={24} />
+          <Wordmark name={brand} />
         </div>
         {project && (
           <>
@@ -700,18 +705,18 @@ export function App() {
         )}
         <span className="spacer" />
         <button className="btn tiny ghost" onClick={undo} disabled={!undoStack.current.length} title="Undo your last change (⌘Z)" aria-label="Undo">
-          ↶ <span className="tb-word">undo</span>
+          <Undo2 size={15} aria-hidden /> <span className="tb-word">Undo</span>
         </button>
         <button className="btn tiny ghost" onClick={redo} disabled={!redoStack.current.length} title="Redo (⇧⌘Z)" aria-label="Redo">
-          ↷ <span className="tb-word">redo</span>
+          <Redo2 size={15} aria-hidden /> <span className="tb-word">Redo</span>
         </button>
         {project && (
           <button className="btn tiny ghost" onClick={() => void saveProject()} title={projectFile ? `Save to ${projectFile.name} (⌘S)` : 'Save the project as a file (⌘S)'}>
-            Save project
+            <Save size={15} aria-hidden /> Save project
           </button>
         )}
         <button className="btn tiny ghost tb-menu" aria-expanded={menuOpen} aria-controls="tb-actions" title="Open or move a project, start a new story, theme, sounds and shortcuts" onClick={() => setMenuOpen(!menuOpen)}>
-          ☰ Menu
+          <Menu size={15} aria-hidden /> Menu
         </button>
         <div
           className={`tb-actions ${menuOpen ? 'open' : ''}`}
@@ -724,7 +729,7 @@ export function App() {
           onKeyDown={(e) => e.key === 'Escape' && setMenuOpen(false)}
         >
         <button className="btn tiny ghost" onClick={() => setShowKeys(true)} title="Keyboard shortcuts (?)" aria-label="Keyboard shortcuts">
-          ⌨ <span className="tb-word">shortcuts</span>
+          <Keyboard size={15} aria-hidden /> <span className="tb-word">Shortcuts</span>
         </button>
         <ThemeToggle />
         <button
@@ -736,18 +741,18 @@ export function App() {
             if (!soundOn) sfx.choice();
           }}
         >
-          <span aria-hidden className="sound-icon">♪</span> sounds: {soundOn ? 'on' : 'off'}
+          <Music size={15} aria-hidden className="sound-icon" /> Sounds: {soundOn ? 'on' : 'off'}
         </button>
         <button className="btn tiny ghost" onClick={() => void chooseProject()}>
-          Open project
+          <FolderOpen size={15} aria-hidden /> Open project
         </button>
         <input ref={openRef} type="file" accept=".json" hidden onChange={(e) => e.target.files?.[0] && openProject(e.target.files[0])} />
         <button className="btn tiny ghost" onClick={() => setShowProjects(true)} title="Carry on in another browser or computer: as a file, or through the cloud">
-          ⇅ Move to another browser
+          <ArrowLeftRight size={15} aria-hidden /> Move to another browser
         </button>
         {project && canUseFiles() && (
           <button className="btn tiny ghost" onClick={() => void saveProject(true)} title="Save the project to a new file (⇧⌘S)">
-            Save as…
+            <SaveAll size={15} aria-hidden /> Save as…
           </button>
         )}
         {project && (
@@ -760,7 +765,7 @@ export function App() {
             }}
             title="Start a new story from a script or a sample. The open one is kept in Drafts." 
           >
-            New
+            <FilePlus2 size={15} aria-hidden /> New
           </button>
         )}
         {/* There are no usage statistics, by design: this is how to tell us where it got in the way. Nothing is sent from the app. */}
@@ -772,10 +777,10 @@ export function App() {
           title="Tell us where you got stuck, or what would help (opens GitHub; nothing about your story is sent)"
           onClick={() => setMenuOpen(false)}
         >
-          ✉ Send feedback
+          <MessageSquare size={15} aria-hidden /> Send feedback
         </a>
-        <a className="btn tiny ghost" href={`${SITE}making-of.html`} title="Every plan, guide, spec and script behind Narrative Bridge" onClick={() => setMenuOpen(false)}>
-          How it was made
+        <a className="btn tiny ghost" href={`${SITE}making-of.html`} title="Every plan, guide, spec and script behind Pen to Ink" onClick={() => setMenuOpen(false)}>
+          <BookOpen size={15} aria-hidden /> How it was made
         </a>
         </div>
       </header>
@@ -799,6 +804,10 @@ export function App() {
         {TABS.map((t) => (
           <button key={t.id} className={`tab ${tab === t.id ? 'active' : ''}`} aria-current={tab === t.id ? 'page' : undefined} disabled={t.id !== 'import' && !processed} onClick={() => setTab(t.id)} aria-keyshortcuts={`Meta+${t.key} Control+${t.key}`} title={t.id !== 'import' && !processed ? `${t.about}. Import a script (or try a sample) first.` : `${t.about}. Shortcut: ${MOD}${IS_MAC ? "" : "+"}${t.key}`}>
             <span className="tab-num" aria-hidden>{t.numeral}</span>
+            {(() => {
+              const Icon = TAB_ICONS[t.id];
+              return <Icon size={15} strokeWidth={1.9} aria-hidden />;
+            })()}
             {t.label}
             {t.id === 'review' && counts && counts.review > 0 && <span className="tab-count review">{counts.review}</span>}
           </button>
@@ -829,7 +838,7 @@ export function App() {
           <span>{TABS.find((t) => t.id === tab)!.numeral}</span>
         </div>
         <div className="content" key={`page-${tab}`}>
-          <Suspense fallback={<p className="muted pad">Turning the page…</p>}>
+          <Suspense fallback={<p className="pad"><Loading label="Opening…" elapsed={false} /></p>}>
           {tab === 'import' && newNote && project && (
             <div className="new-note card" role="status">
               <span>
@@ -859,8 +868,7 @@ export function App() {
           )}
           {project && !processed && tab !== 'import' && (
             <div className="building" role="status" aria-live="polite">
-              <span className="spinner" aria-hidden />
-              {busy ? 'Reading your script…' : 'Building your story…'}
+              <Loading label={busy ? 'Reading your script…' : 'Building your story…'} />
             </div>
           )}
           {processed && tab === 'review' && justImported && (

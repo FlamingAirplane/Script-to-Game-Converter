@@ -159,7 +159,7 @@ export function buildTwee(story: ProcessedStory, kind: TwineKind = 'sugarcube'):
   if (!plain) {
     const onceIds = project.passages.flatMap((p) => p.choices.filter((c) => isActive(c.review) && c.once).map((c) => c.id));
     const init = [
-      `/* Made with Narrative Bridge ${GENERATOR_VERSION}. Each item is a true/false variable named $has_<item>. */`,
+      `/* Made with Pen to Ink ${GENERATOR_VERSION}. Each item is a true/false variable named $has_<item>. */`,
       ...project.items.map((i) => `<<set $${itemVar(i.id)} to false>> /* ${i.displayName.replace(/\*\//g, '')} */`),
       ...project.variables.map((v) => `<<set $${v.id} to ${literal(v.initial)}>>`),
       ...(onceIds.length ? ['/* Choices that can only be made once. */', ...onceIds.map((id) => `<<set $once_${id} to false>>`)] : []),
@@ -354,7 +354,7 @@ function choiceLink(c: Choice, nameOf: (id: string) => string): string {
 const END_MARKUP = '@@.end;❦ The End ❦@@';
 
 const STYLESHEET = `
-/* Book style from Narrative Bridge. Delete this passage to use SugarCube's own look. */
+/* Book style from Pen to Ink. Delete this passage to use SugarCube's own look. */
 body { background: #1d270f; color: #283618; font-family: 'Iowan Old Style', 'Palatino Linotype', Palatino, Georgia, serif; }
 #passages { max-width: 46em; margin: 2.5em 0; background: #fefae0; padding: 3em 3.5em; border-radius: 2px; box-shadow: 0 18px 40px rgba(0, 0, 0, 0.5); line-height: 1.7; font-size: 1.1em; }
 @media (max-width: 40em) { #passages { padding: 1.5em 1.25em; margin: 1em 0; } }

@@ -1,4 +1,4 @@
-# Contributing to Narrative Bridge
+# Contributing to Pen to Ink
 
 Thanks for helping. Bug reports, sample scripts that convert badly, and pull requests are all welcome.
 

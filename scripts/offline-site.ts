@@ -11,8 +11,8 @@ import { createHash } from 'node:crypto';
 import type { Plugin } from 'vite';
 
 const MANIFEST = {
-  name: 'Narrative Bridge',
-  short_name: 'Narrative Bridge',
+  name: 'Pen to Ink',
+  short_name: 'Pen to Ink',
   description: 'Turn screenplays and prose into playable interactive stories: Ink, Twine, Unity and Unreal.',
   start_url: './',
   scope: './',

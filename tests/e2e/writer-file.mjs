@@ -9,9 +9,9 @@ import { deflateSync } from 'node:zlib';
 import JSZip from 'jszip';
 import { chromium, webkit } from 'playwright-core';
 
-const file = fileURLToPath(new URL('../../release/Narrative-Bridge.html', import.meta.url));
+const file = fileURLToPath(new URL('../../release/Pen-to-Ink.html', import.meta.url));
 if (!existsSync(file)) {
-  console.error('release/Narrative-Bridge.html not found. Run: npm run build:single');
+  console.error('release/Pen-to-Ink.html not found. Run: npm run build:single');
   process.exit(1);
 }
 const url = pathToFileURL(file).href;

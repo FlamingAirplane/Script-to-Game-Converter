@@ -158,7 +158,7 @@ describe('exits to the game', () => {
     expect(s.currentChoices.map((c) => c.text)).toEqual(['Back to the game: wolf_fight']);
     s.ChooseChoiceIndex(0);
     expect(s.ContinueMaximally()).toContain('The last wolf runs.');
-    // Ink that Narrative Bridge wrote comes back with its exit.
+    // Ink that Pen to Ink wrote comes back with its exit.
     const again = await build(story.generated.ink, 'x.ink', 'faithful');
     expect(again.project.passages.find((p) => p.id === 'camp')!.content.find((b) => b.type === 'exit')).toMatchObject({ name: 'wolf_fight', note: 'The player fights the wolves' });
   });

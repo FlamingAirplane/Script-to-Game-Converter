@@ -36,3 +36,20 @@
   font-display: swap;
   src: url('../../node_modules/@fontsource/im-fell-english-sc/files/im-fell-english-sc-latin-400-normal.woff2') format('woff2');
 }
+
+/* Inter (SIL Open Font License), the interface face since the Pen to Ink redesign: one variable
+   file per style covers every weight. EB Garamond above stays for the story itself. */
+@font-face {
+  font-family: 'Inter Variable';
+  font-style: normal;
+  font-weight: 100 900;
+  font-display: swap;
+  src: url('../../node_modules/@fontsource-variable/inter/files/inter-latin-wght-normal.woff2') format('woff2-variations');
+}
+@font-face {
+  font-family: 'Inter Variable';
+  font-style: italic;
+  font-weight: 100 900;
+  font-display: swap;
+  src: url('../../node_modules/@fontsource-variable/inter/files/inter-latin-wght-italic.woff2') format('woff2-variations');
+}

@@ -45,7 +45,7 @@ export function OfflineUpdate() {
   if (!waiting) return null;
   return (
     <div className="update-toast" role="status">
-      <span>A new edition of Narrative Bridge is ready.</span>
+      <span>A new edition of Pen to Ink is ready.</span>
       <button className="btn tiny primary" onClick={() => waiting.postMessage('skip-waiting')}>
         Reload
       </button>

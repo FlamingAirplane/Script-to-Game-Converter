@@ -36,7 +36,7 @@ export function canUseFiles(): boolean {
   return typeof w.showSaveFilePicker === 'function' && typeof w.showOpenFilePicker === 'function';
 }
 
-export const PROJECT_TYPE: PickerType = { description: 'Narrative Bridge project', accept: { 'application/json': ['.json'] } };
+export const PROJECT_TYPE: PickerType = { description: 'Pen to Ink project', accept: { 'application/json': ['.json'] } };
 
 const TYPES: Record<string, PickerType> = {
   html: { description: 'Web page', accept: { 'text/html': ['.html'] } },

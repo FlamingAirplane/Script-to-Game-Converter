@@ -10,7 +10,7 @@ export interface Sample {
 }
 
 const LIGHTHOUSE = `Title: The Lighthouse Keeper
-Author: Narrative Bridge Samples
+Author: Pen to Ink Samples
 Draft date: 2026-11-02
 
 FADE IN:

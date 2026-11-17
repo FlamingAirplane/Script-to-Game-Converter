@@ -18,7 +18,7 @@ try {
   process.exit(1);
 }
 if ((raw as { format?: string })?.format !== DESIGN_FORMAT) {
-  console.error(`${file} isn't a Narrative Bridge design file (its "format" should be "${DESIGN_FORMAT}").`);
+  console.error(`${file} isn't a Pen to Ink design file (its "format" should be "${DESIGN_FORMAT}").`);
   process.exit(1);
 }
 const design = normaliseDesign(raw);

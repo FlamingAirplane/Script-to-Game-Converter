@@ -49,7 +49,7 @@ export function PlayLinkView({ hash }: { hash: string }) {
       <div className="play-link-status" role="alert">
         <p>{state.error}</p>
         <p>
-          <a href={location.pathname}>Open Narrative Bridge</a>
+          <a href={location.pathname}>Open Pen to Ink</a>
         </p>
       </div>
     );

@@ -1,6 +1,6 @@
-# Narrative Bridge user guide
+# Pen to Ink user guide
 
-Narrative Bridge turns a screenplay or a piece of prose into an interactive story. You bring a script, check what the app
+Pen to Ink turns a screenplay or a piece of prose into an interactive story. You bring a script, check what the app
 understood, add choices, play it, and then share it as a web page or hand it to a game developer as a Unity or Unreal
 project.
 
@@ -27,12 +27,12 @@ Everything happens in your browser. Your scripts are never uploaded.
 
 ## 1. Opening the app
 
-There are two ways to use Narrative Bridge, and both work the same:
+There are two ways to use Pen to Ink, and both work the same:
 
 - **Online:** open https://flamingairplane.github.io/Script-to-Game-Converter/. After your first visit it also works
   without an internet connection, and your browser may offer to install it as an app (in Chrome or Edge, the install
   icon in the address bar; on iPhone or iPad, Share → *Add to Home Screen*).
-- **Offline file:** download **Narrative Bridge (double-click to open)** from the
+- **Offline file:** download **Pen to Ink (double-click to open)** from the
   [latest release](https://github.com/FlamingAirplane/Script-to-Game-Converter/releases/latest), save it somewhere easy
   to find, and double-click it. It opens in Safari, Chrome, Edge or Firefox. Nothing is installed.
 
@@ -70,7 +70,7 @@ Drop files onto the box, click it to choose files, or paste text into the box be
 | **Twine** (`.twee`, `.tw`, or `.html` from *Publish to File*) | Passages, links, and the common SugarCube and Harlowe logic (conditions on links, variables being set) come in ready to edit. Other code is kept as notes. |
 | **Ink** (`.ink`) | Becomes an editable story when it uses only what the editor can show. Otherwise it is kept exactly as written (see below). |
 
-**Ink files** get a choice on their row: **Edit in Narrative Bridge** or **Keep the Ink exactly as written**. If the Ink
+**Ink files** get a choice on their row: **Edit in Pen to Ink** or **Keep the Ink exactly as written**. If the Ink
 uses things the editor can't show (such as tunnels, gathers or `{inline|alternatives}`), the row lists them with their line
 numbers and starts on *Keep exactly as written*: the story then plays and exports as before, but edits in Review don't
 change it. Choosing *Edit* anyway keeps those lines as notes, which stop working in play.
@@ -343,7 +343,7 @@ The panel beside the story shows:
   (a choice that needs an item only appears when the player has it), effects and once-only choices carry over, and a
   cutscene's lines go on by themselves. An exit to the game calls `nb_exit` and a cue calls `nb_cue`, which a
   developer fills in; pictures and sounds are added in Ren’Py. The file is checked against your story here, but hasn't
-  been opened in Ren’Py by Narrative Bridge itself.
+  been opened in Ren’Py by Pen to Ink itself.
 
 ### For a game engine
 
@@ -438,7 +438,7 @@ your story's text, so it is safe to attach to a bug report. Choose how much to s
     recording sessions, pictures, portraits, the original scripts and the Unity settings); open it anywhere with
     **Open project**.
   - **As a link (small stories):** **Copy a link to this story** puts the whole story into a link. Open it in any
-    browser and the story opens in Narrative Bridge (the one that was open is kept in Drafts). The story is inside the
+    browser and the story opens in Pen to Ink (the one that was open is kept in Drafts). The story is inside the
     part of the link after `#`, which browsers never send to a website, so it isn't uploaded anywhere, but anyone you
     give the link to can read it. Pictures and recordings aren't included, and a long story is too big for a link: use
     a file for those.
@@ -460,9 +460,9 @@ your story's text, so it is safe to attach to a bug report. Choose how much to s
   - Exports open a Save dialog, and each kind of export remembers its folder.
   - The Import page lists **Recent project files** to reopen in one click.
   - Install the website as an app (the install icon in the address bar), and you can open scripts, stories and project
-    files with it from your computer (*Open with → Narrative Bridge*).
+    files with it from your computer (*Open with → Pen to Ink*).
 - **In Safari and Firefox,** saves and exports are downloads, as before. In Safari, choose *File → Add to Dock* and open
-  Narrative Bridge from the Dock; otherwise Safari clears a site's stored work after a week without a visit.
+  Pen to Ink from the Dock; otherwise Safari clears a site's stored work after a week without a visit.
 - **The offline file** shows its version at the bottom of the Import page. **Check for a newer version** asks GitHub
   (only when you click it).
 - **Drafts** (in Story settings): type a name and click **Keep a draft** before a big change. **Restore** brings a draft
@@ -592,6 +592,6 @@ the short list, and *The Locked Archive* sample uses markers throughout.
 - **Export buttons are greyed out.** Fix the ● *must fix* items in Diagnostics. Buttons are also disabled for a moment
   while the app re-checks the story after an edit.
 - **A choice I expected isn't in the game.** It may still be *pending*: approve it in Review.
-- **The page offers "A new edition of Narrative Bridge is ready".** Click **Reload**; your work is kept.
+- **The page offers "A new edition of Pen to Ink is ready".** Click **Reload**; your work is kept.
 - **Reporting a problem:** open the Logbook (⌘L / Ctrl+L), click **download**, and attach the file to a
   [new issue](https://github.com/FlamingAirplane/Script-to-Game-Converter/issues). It contains no story text.

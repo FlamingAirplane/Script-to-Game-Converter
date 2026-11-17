@@ -131,7 +131,7 @@ export function buildPlayableHtml(story: ProcessedStory, inkRuntimeJs: string, a
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="color-scheme" content="light">
-<meta name="generator" content="Narrative Bridge">
+<meta name="generator" content="Pen to Ink">
 <title>${htmlText(title)}</title>
 <style>${PLAYER_CSS}</style>
 </head>

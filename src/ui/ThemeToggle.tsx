@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { Monitor, Moon, Sun } from 'lucide-react';
 import { designSetting } from './design/design';
 
 // Light ("day") and dark ("night edition") themes. "auto" follows the system setting.
@@ -10,10 +11,10 @@ export type ThemeChoice = 'auto' | 'light' | 'dark';
 export const THEME_KEY = 'narrative-bridge.theme';
 
 const NEXT: Record<ThemeChoice, ThemeChoice> = { auto: 'light', light: 'dark', dark: 'auto' };
-const LABEL: Record<ThemeChoice, { icon: string; text: string; title: string }> = {
-  auto: { icon: '◐', text: 'auto', title: 'Theme follows your system. Click for light.' },
-  light: { icon: '☀', text: 'light', title: 'Light pages. Click for dark.' },
-  dark: { icon: '☾', text: 'dark', title: 'Night edition. Click to follow your system.' },
+const LABEL: Record<ThemeChoice, { icon: typeof Sun; text: string; title: string }> = {
+  auto: { icon: Monitor, text: 'auto', title: 'Theme follows your system. Click for light.' },
+  light: { icon: Sun, text: 'light', title: 'Light theme. Click for dark.' },
+  dark: { icon: Moon, text: 'dark', title: 'Dark theme. Click to follow your system.' },
 };
 
 function readChoice(): ThemeChoice {
@@ -47,7 +48,7 @@ export function ThemeToggle() {
   const l = LABEL[choice];
   return (
     <button className="btn tiny ghost theme-toggle" onClick={() => choose(NEXT[choice])} title={l.title} aria-label={`Theme: ${l.text}`}>
-      <span aria-hidden>{l.icon}</span> <span className="tb-word">theme:</span> {l.text}
+      <l.icon size={15} aria-hidden /> <span className="tb-word">Theme:</span> {l.text}
     </button>
   );
 }

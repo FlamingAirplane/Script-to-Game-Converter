@@ -15,7 +15,7 @@ const PROV_LABEL: Record<Provenance, string> = { source: 'source', transformed: 
 const PROV_HELP: Record<Provenance, string> = {
   source: 'Source: taken word for word from your script',
   transformed: 'From your script: your words, but reshaped to fit a game (for example a scene split into a passage)',
-  generated: 'Generated: suggested by Narrative Bridge, not in your script. Approve or reject it',
+  generated: 'Generated: suggested by Pen to Ink, not in your script. Approve or reject it',
   user_authored: 'Edited: you added or changed this here',
 };
 

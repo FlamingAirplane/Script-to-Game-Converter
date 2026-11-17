@@ -4,15 +4,15 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="color-scheme" content="light dark" />
-    <title>Narrative Bridge — script to game converter</title>
-    <meta name="description" content="Narrative Bridge: turn a script into a playable story, then hand it to a game developer. A free script to game converter: screenplays and prose become a branching story and Ink, Twine, Ren’Py, Unity and Unreal files, right in your browser." />
+    <title>Pen to Ink — script to game converter</title>
+    <meta name="description" content="Pen to Ink: turn a script into a playable story, then hand it to a game developer. A free script to game converter: screenplays and prose become a branching story and Ink, Twine, Ren’Py, Unity and Unreal files, right in your browser." />
     <link rel="canonical" href="https://flamingairplane.github.io/Script-to-Game-Converter/" />
     <script type="application/ld+json">
       {
         "@context": "https://schema.org",
         "@type": "SoftwareApplication",
-        "name": "Narrative Bridge",
-        "alternateName": "Script to Game Converter",
+        "name": "Pen to Ink",
+        "alternateName": ["Script to Game Converter", "Narrative Bridge"],
         "applicationCategory": "DeveloperApplication",
         "operatingSystem": "Any (runs in a web browser)",
         "url": "https://flamingairplane.github.io/Script-to-Game-Converter/",
@@ -28,13 +28,13 @@
     </script>
     <meta name="theme-color" content="#283618" />
     <meta property="og:type" content="website" />
-    <meta property="og:title" content="Narrative Bridge — turn a script into a playable story" />
+    <meta property="og:title" content="Pen to Ink — turn a script into a playable story" />
     <meta property="og:description" content="Turn a script into a playable story, then hand it to a game developer. Ink, Twine, Unity and Unreal packages, right in your browser. Nothing is uploaded." />
     <meta property="og:url" content="https://flamingairplane.github.io/Script-to-Game-Converter/" />
     <meta property="og:image" content="https://flamingairplane.github.io/Script-to-Game-Converter/og.png" />
     <meta property="og:image:width" content="1200" />
     <meta property="og:image:height" content="630" />
-    <meta property="og:image:alt" content="Narrative Bridge title page: an open book forming a bridge, and the words Turn a script into a playable story" />
+    <meta property="og:image:alt" content="Pen to Ink: a fountain-pen nib writing a stroke of ink, and the words Turn a script into a playable story" />
     <meta name="twitter:card" content="summary_large_image" />
     <script>
       // Apply the saved theme before first paint (see src/ui/ThemeToggle.tsx).
@@ -43,13 +43,13 @@
         if (t === 'light' || t === 'dark') document.documentElement.setAttribute('data-theme', t);
       } catch (e) {}
     </script>
-    <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath fill='%23bc6c25' d='M2 13.4 C 5.6 10.4, 9.4 10, 12 11.6 C 14.6 10, 18.4 10.4, 22 13.4 V 15.6 C 18.4 12.8, 14.6 12.6, 12 14.2 C 9.4 12.6, 5.6 12.8, 2 15.6 Z'/%3E%3Cpath d='M5 21 C 6.4 16.6, 9.2 14.6, 12 14.4 C 14.8 14.6, 17.6 16.6, 19 21 M3 14.6 V 21 M21 14.6 V 21' fill='none' stroke='%23bc6c25' stroke-width='2.2' stroke-linecap='round'/%3E%3C/svg%3E" />
+    <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath fill='%23bc6c25' fill-rule='evenodd' d='M8.5 2.5H15.5V5.4C17.9 7.4 19.1 9.5 18.7 11.7L12 19.6L5.3 11.7C4.9 9.5 6.1 7.4 8.5 5.4ZM12 9.2A1.5 1.5 0 1 0 12 12.2A1.5 1.5 0 1 0 12 9.2ZM11.55 13.2H12.45L12.08 18.4H11.92Z'/%3E%3Cpath d='M3.5 22.2C6.2 20.6 8.6 20.6 11.2 21.6C13.8 22.6 16.6 22.4 20.5 20.4' fill='none' stroke='%23bc6c25' stroke-width='2' stroke-linecap='round'/%3E%3C/svg%3E" />
   </head>
   <body>
     <div id="root"></div>
     <noscript>
       <p style="max-width: 40rem; margin: 2rem auto; padding: 0 16px; font: 17px/1.6 Georgia, serif">
-        Narrative Bridge is a free script to game converter. It turns screenplays (Final Draft, Fountain, Word, PDF) and prose into playable
+        Pen to Ink is a free script to game converter. It turns screenplays (Final Draft, Fountain, Word, PDF) and prose into playable
         branching stories, then hands them to a game developer as Ink scripts, Twine and Ren’Py files, or Unity and Unreal packages, all in your
         browser, with nothing uploaded. It needs JavaScript to run. <a href="./about.html">Read about it, the FAQ and known limits</a>.
       </p>
