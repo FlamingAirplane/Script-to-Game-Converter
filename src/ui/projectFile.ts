@@ -29,7 +29,7 @@ export async function unpackProject(text: string): Promise<{ project: StoryProje
   const data = JSON.parse(text);
   const project: StoryProject = data.project?.schemaVersion ? data.project : data;
   const errs = validateSchema(project).filter((d) => d.severity === 'error');
-  if (errs.length) throw new Error(`Not a valid Narrative Bridge project:\n${errs.map((e) => e.message).join('\n')}`);
+  if (errs.length) throw new Error(`Not a valid Pen to Ink project:\n${errs.map((e) => e.message).join('\n')}`);
   const media = Object.entries((data.audio ?? {}) as Record<string, { mime: string; data: string }>);
   for (const [id, c] of media) await putClip(id, c.mime, base64ToBytes(c.data));
   return { project, parseDiagnostics: data.parseDiagnostics ?? [], files: media.length };

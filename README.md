@@ -1,8 +1,10 @@
-<p align="center"><a href="https://flamingairplane.github.io/Script-to-Game-Converter/"><img src="public/og.png" alt="Narrative Bridge — turn a script into a playable story" width="720"></a></p>
+<p align="center"><a href="https://flamingairplane.github.io/Script-to-Game-Converter/"><img src="public/og.png" alt="Pen to Ink — turn a script into a playable story" width="720"></a></p>
 
-<p align="center"><b><a href="https://flamingairplane.github.io/Script-to-Game-Converter/">Open Narrative Bridge</a></b> · <a href="https://github.com/FlamingAirplane/Script-to-Game-Converter/releases">Download the offline edition</a> · <a href="docs/USER_GUIDE.md">User guide</a> · <a href="WRITERS.md">Quick start for writers</a></p>
+<p align="center"><b><a href="https://flamingairplane.github.io/Script-to-Game-Converter/">Open Pen to Ink</a></b> · <a href="https://github.com/FlamingAirplane/Script-to-Game-Converter/releases">Download the offline edition</a> · <a href="docs/USER_GUIDE.md">User guide</a> · <a href="WRITERS.md">Quick start for writers</a></p>
 
-# Narrative Bridge
+# Pen to Ink
+
+*Formerly Narrative Bridge.* The Unity and Unreal packages it exports still use the Narrative Bridge names (menus, components, the `NarrativeBridge` folders), so games built with earlier exports keep working.
 
 **Turn a script into a playable story, then hand it to a game developer.**
 
@@ -44,7 +46,7 @@ npm test           # unit, golden-file, compiler, runtime and export tests
 ### For writers: a single file, no install
 
 ```bash
-npm run build:single   # → release/Narrative-Bridge.html
+npm run build:single   # → release/Pen-to-Ink.html
 ```
 
 This produces one self-contained HTML file (~3 MB, most of it the PDF reader) with all scripts and styles inlined. Writers double-click it to run the
@@ -120,11 +122,11 @@ Existing interactive stories can be opened and worked on like any other project.
   File*, or a library archive, whose first story is used). Passages, links (`->`, `<-`, `|`, setter links, `<<link>>`,
   `(link-goto:)`), SugarCube `<<if>>` / `<<set>>` and Harlowe `(if:)` / `(set:)` become passages, choices, conditions and
   effects; `StoryInit` (or Harlowe `startup` passages) declares variables, and `$has_<item>` variables become items.
-  Narrative Bridge's own Twine exports come back as they were made. Other macros, multi-line conditional text and code
+  Pen to Ink's own Twine exports come back as they were made. Other macros, multi-line conditional text and code
   passages are kept as notes or left out with a diagnostic; nothing is dropped silently.
 - **Ink** (`.ink`): Ink that uses only what the story model can represent (knots and stitches, `VAR`s, text and dialogue,
   `#speaker` / `#paren` / `#scene` / `#transition` tags, choices with `{conditions}`, `~` effects and diverts, fallback
-  choices) becomes an editable story; Narrative Bridge's own Ink comes back byte for byte. Ink that uses more (gathers,
+  choices) becomes an editable story; Pen to Ink's own Ink comes back byte for byte. Ink that uses more (gathers,
   tunnels, threads, inline logic and alternatives, functions, visit counts, other tags…) is kept **exactly as written** by
   default: it plays and exports as before, but edits in Review don't change it. The Import page says which features
   decided that and lets you convert anyway, keeping those lines as notes. CLI: `--edit-ink` / `--keep-ink`.

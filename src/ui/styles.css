@@ -1,6 +1,6 @@
-/* Narrative Bridge — "open book" theme.
-   The app sits on a dark desk; the workspace is a stack of paper pages with index tabs.
-   Headings and ornaments are rubricated (red), interactive marks use fountain-pen blue. */
+/* Pen to Ink — base styles: the colour palette, design tokens and every layout rule.
+   The look on top of these (type, surfaces, controls, motion) is in pen-to-ink.css, loaded after
+   this file. */
 
 :root {
   --desk: #1d270f;

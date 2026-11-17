@@ -96,7 +96,7 @@ export async function loadFromCloud(token: string, gistId: string): Promise<stri
   const res = await check(await fetch(`${API}/${gistId}`, { headers: headers(token), cache: 'no-cache' }));
   const g = (await res.json()) as { description: string | null; files: Record<string, { filename: string; content?: string; truncated?: boolean; raw_url: string }> };
   const file = Object.values(g.files).find((f) => f.filename.endsWith('.nbproj.json'));
-  if (!file) throw new Error('That Gist has no Narrative Bridge project in it.');
+  if (!file) throw new Error('That Gist has no Pen to Ink project in it.');
   const text = file.truncated || file.content == null ? await (await check(await fetch(file.raw_url, { cache: 'no-cache' }))).text() : file.content;
   const d = parseDescription(g.description);
   if (d?.projectId) link(d.projectId, gistId);

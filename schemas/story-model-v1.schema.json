@@ -1,7 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://narrative-bridge.local/schemas/story-model-v1.schema.json",
-  "title": "Narrative Bridge Intermediate Story Representation",
+  "title": "Pen to Ink Intermediate Story Representation",
   "type": "object",
   "required": ["schemaVersion", "project", "sources", "characters", "items", "variables", "passages"],
   "properties": {

@@ -174,7 +174,7 @@ export function ReviewView({
             <dt>from your script</dt>
             <dd>From your script, reshaped to fit a game (a scene became a passage, a line became a choice).</dd>
             <dt>generated</dt>
-            <dd>Suggested by Narrative Bridge; not in your script.</dd>
+            <dd>Suggested by Pen to Ink; not in your script.</dd>
             <dt>edited</dt>
             <dd>You added or changed it here.</dd>
             <dt>pending</dt>

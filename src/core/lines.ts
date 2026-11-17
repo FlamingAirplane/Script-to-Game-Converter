@@ -57,7 +57,7 @@ export function lineEntries(story: StoryProject): LineEntry[] {
   });
 }
 
-/** The entry knot names Narrative Bridge adds to the Ink (not passages of the story). */
+/** The entry knot names Pen to Ink adds to the Ink (not passages of the story). */
 export function lineEntryKnots(story: StoryProject): Set<string> {
   return new Set(lineEntries(story).map((e) => e.entryKnot));
 }

@@ -4,9 +4,9 @@ import { existsSync } from 'node:fs';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { chromium } from 'playwright-core';
 
-const file = fileURLToPath(new URL('../../release/Narrative-Bridge.html', import.meta.url));
+const file = fileURLToPath(new URL('../../release/Pen-to-Ink.html', import.meta.url));
 if (!existsSync(file)) {
-  console.error('release/Narrative-Bridge.html not found. Run: npm run build:single');
+  console.error('release/Pen-to-Ink.html not found. Run: npm run build:single');
   process.exit(1);
 }
 const WIDTHS = (process.env.WIDTHS ?? '360,414,768,1024,1280,1366,1440,1536,1920').split(',').map(Number);

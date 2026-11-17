@@ -11,6 +11,7 @@ import { OfflineUpdate } from './OfflineUpdate';
 import { THEME_KEY, applyTheme } from './ThemeToggle';
 import './fonts.css';
 import './styles.css';
+import './pen-to-ink.css';
 
 // The published design (and, in the admin's browser, their draft) before the first render; then the
 // live design is read from its Gist, if there is one, and applied when it arrives.
@@ -24,7 +25,7 @@ try {
 }
 
 const appLog = log('app');
-appLog.info('Narrative Bridge started', {
+appLog.info('Pen to Ink started', {
   version: GENERATOR_VERSION,
   edition: location.protocol === 'file:' ? 'offline file' : 'web',
   language: navigator.language,

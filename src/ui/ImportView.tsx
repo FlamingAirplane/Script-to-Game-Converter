@@ -12,6 +12,7 @@ import { DraftShelf } from './Drafts';
 import type { FileHandle } from './platform';
 import { RecentFiles } from './RecentFiles';
 import { GettingStarted, USER_GUIDE_URL } from './GettingStarted';
+import { BookOpen, FileText, Info, SlidersHorizontal, Upload } from 'lucide-react';
 import { Logo } from './Logo';
 import demoPicture from './assets/demo-playable.jpg';
 import { putClip } from './audioStore';
@@ -94,6 +95,18 @@ function InstallApp() {
 
 const IS_OFFLINE_FILE = typeof location !== 'undefined' && location.protocol === 'file:';
 // The site's own pages (About, How it was made): next to the app on the website, on the website from the offline file.
+/** "Pen to Ink" with the "to" set in italics, as in the wordmark. */
+function titleWithItalicTo(title: string) {
+  const m = /^(.*?)\s+(to)\s+(.*)$/i.exec(title);
+  return m ? (
+    <>
+      {m[1]} <em>{m[2]}</em> {m[3]}
+    </>
+  ) : (
+    title
+  );
+}
+
 export const SITE = IS_OFFLINE_FILE ? 'https://flamingairplane.github.io/Script-to-Game-Converter/' : './';
 
 /** Safari in a normal tab (not added to the Dock): its storage is cleared after 7 days without a visit. */
@@ -217,7 +230,7 @@ export function ImportView({
         <div className="title-page">
           <Logo size={58} />
           <p className="edition">{words.edition}</p>
-          <h1>{words.heroTitle}</h1>
+          <h1>{titleWithItalicTo(words.heroTitle)}</h1>
           <p className="subtitle">{words.subtitle}</p>
           <div className="orn-rule" aria-hidden>
             <span>❦</span>
@@ -225,14 +238,21 @@ export function ImportView({
         </div>
         <p className="lede">{words.lede}</p>
         <p className="hero-links small">
-          <a href={`${SITE}making-of.html`}>How Narrative Bridge was made</a> · <a href={`${SITE}about.html`}>About &amp; FAQ</a>
+          <a href={`${SITE}making-of.html`}>
+            <BookOpen size={14} aria-hidden /> How Pen to Ink was made
+          </a>{' '}
+          <a href={`${SITE}about.html`}>
+            <Info size={14} aria-hidden /> About &amp; FAQ
+          </a>
         </p>
       </section>
 
       {/* The one thing a visitor came to do, first: bring a script in (or try a sample, just below). */}
       <div className="import-grid">
         <section className="card">
-          <h2>1 · Source</h2>
+          <h2>
+            <FileText size={16} aria-hidden /> 1 · Source
+          </h2>
           <div
             className={`dropzone ${drag ? 'drag' : ''}`}
             onDragOver={(e) => {
@@ -255,6 +275,7 @@ export function ImportView({
             role="button"
             tabIndex={0}
           >
+            <Upload size={22} aria-hidden />
             <strong>Drop files here</strong> or click to browse
             <span className="muted small">Final Draft, Word, PDF, Fountain, Markdown or plain text — or a Twine or Ink story to keep working on</span>
             <input ref={input} type="file" multiple hidden accept={[...ACCEPTED, '.text'].join(',')} onChange={(e) => addFiles(e.target.files)} />
@@ -283,7 +304,7 @@ export function ImportView({
                         value={f.inkMode}
                         onChange={(e) => setFiles(files.map((x, j) => (j === i ? { ...x, inkMode: e.target.value as 'edit' | 'keep' } : x)))}
                       >
-                        <option value="edit">Edit in Narrative Bridge</option>
+                        <option value="edit">Edit in Pen to Ink</option>
                         <option value="keep">Keep the Ink exactly as written</option>
                       </select>
                       <span className="muted small">
@@ -311,7 +332,9 @@ export function ImportView({
         </section>
 
         <section className="card">
-          <h2 id="mode-heading">2 · Conversion mode</h2>
+          <h2 id="mode-heading">
+            <SlidersHorizontal size={16} aria-hidden /> 2 · Conversion mode
+          </h2>
           <div className="modes" role="radiogroup" aria-labelledby="mode-heading">
             {MODES.map((m) => (
               <label key={m.id} className={`mode ${mode === m.id ? 'selected' : ''}`}>
@@ -347,8 +370,8 @@ export function ImportView({
         {OFFLINE_COPY_AVAILABLE && (
           <details className="offline-note small">
             <summary>Other ways to work offline</summary>
-            <a href="./Narrative-Bridge.html" download>
-              Download Narrative Bridge as a single file
+            <a href="./Pen-to-Ink.html" download>
+              Download Pen to Ink as a single file
             </a>{' '}
             and open it in your web browser any time (if double-clicking shows text, drag the file onto a browser window instead) ·{' '}
             <a href="./WRITERS.md">guide for writers</a>
@@ -356,7 +379,7 @@ export function ImportView({
         )}
         {SAFARI_TAB && (
           <p className="offline-note small">
-            Using Safari? Choose <em>File → Add to Dock</em> and open Narrative Bridge from the Dock: Safari then keeps your work, instead of clearing it after a week
+            Using Safari? Choose <em>File → Add to Dock</em> and open Pen to Ink from the Dock: Safari then keeps your work, instead of clearing it after a week
             without a visit.
           </p>
         )}
@@ -487,7 +510,7 @@ export function ImportView({
       </details>
 
       <p className="colophon-note small">
-        Narrative Bridge {GENERATOR_VERSION} is free and open source · {IS_OFFLINE_FILE && <VersionCheck />}
+        Pen to Ink {GENERATOR_VERSION} is free and open source · {IS_OFFLINE_FILE && <VersionCheck />}
         {IS_OFFLINE_FILE && ' · '}
         <a href={USER_GUIDE_URL} target="_blank" rel="noopener noreferrer">
           User guide

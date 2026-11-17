@@ -4,33 +4,20 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="color-scheme" content="light dark" />
-    <title>How Narrative Bridge was made — project files</title>
-    <meta name="description" content="Every file about how Narrative Bridge was built: design and planning notes, documentation, the story model schema, build and test scripts, and the release history." />
+    <title>How Pen to Ink was made — project files</title>
+    <meta name="description" content="Every file about how Pen to Ink was built: design and planning notes, documentation, the story model schema, build and test scripts, and the release history." />
     <link rel="canonical" href="https://flamingairplane.github.io/Script-to-Game-Converter/making-of.html" />
-    <style>
-      :root { --bg: #fefae0; --fg: #283618; --muted: #5a5f3c; --accent: #8a4b14; --card: #fffdf0; --line: #d9d3b0; }
-      @media (prefers-color-scheme: dark) { :root { --bg: #1c2112; --fg: #f1edd2; --muted: #c9c4a3; --accent: #e9a35f; --card: #252b18; --line: #3d4428; } }
-      * { box-sizing: border-box; }
-      body { margin: 0; background: var(--bg); color: var(--fg); font: 17px/1.6 Georgia, 'Iowan Old Style', serif; }
-      main { max-width: 46rem; margin: 0 auto; padding: 2rem 16px 4rem; }
-      h1 { font-size: 2rem; margin: 0 0 0.25rem; line-height: 1.2; }
-      h2 { margin-top: 2.2rem; border-bottom: 1px solid var(--line); padding-bottom: 0.25rem; }
-      a { color: var(--accent); }
-      .lede { color: var(--muted); font-size: 1.1rem; }
-      .cta { display: inline-block; margin: 1rem 0; padding: 0.6rem 1.1rem; background: var(--accent); color: var(--bg); border-radius: 6px; text-decoration: none; font-weight: bold; }
-      nav.toc ul { display: flex; flex-wrap: wrap; gap: 0.25rem 1rem; list-style: none; padding: 0; margin: 0.5rem 0 0; }
-      dl.files { margin: 0; }
-      dl.files > div { padding: 0.6rem 0.8rem; margin: 0.5rem 0; background: var(--card); border: 1px solid var(--line); border-radius: 6px; }
-      dl.files dt { font-weight: bold; overflow-wrap: anywhere; }
-      dl.files dd { margin: 0.1rem 0 0; color: var(--muted); }
-      .path { font-family: ui-monospace, Menlo, Consolas, monospace; font-size: 0.85em; font-weight: normal; color: var(--muted); }
-      code { font-size: 0.92em; }
-      footer { margin-top: 3rem; color: var(--muted); font-size: 0.9rem; }
-    </style>
+    <link rel="stylesheet" href="./site.css" />
+    <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath fill='%23bc6c25' fill-rule='evenodd' d='M8.5 2.5H15.5V5.4C17.9 7.4 19.1 9.5 18.7 11.7L12 19.6L5.3 11.7C4.9 9.5 6.1 7.4 8.5 5.4ZM12 9.2A1.5 1.5 0 1 0 12 12.2A1.5 1.5 0 1 0 12 9.2ZM11.55 13.2H12.45L12.08 18.4H11.92Z'/%3E%3Cpath d='M3.5 22.2C6.2 20.6 8.6 20.6 11.2 21.6C13.8 22.6 16.6 22.4 20.5 20.4' fill='none' stroke='%23bc6c25' stroke-width='2' stroke-linecap='round'/%3E%3C/svg%3E" />
   </head>
   <body>
+    <header class="site-bar">
+      <a href="./" aria-label="Pen to Ink, open the app"><svg width="22" height="22" viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" fill-rule="evenodd" d="M8.5 2.5H15.5V5.4C17.9 7.4 19.1 9.5 18.7 11.7L12 19.6L5.3 11.7C4.9 9.5 6.1 7.4 8.5 5.4ZM12 9.2A1.5 1.5 0 1 0 12 12.2A1.5 1.5 0 1 0 12 9.2ZM11.55 13.2H12.45L12.08 18.4H11.92Z"/><path d="M3.5 22.2C6.2 20.6 8.6 20.6 11.2 21.6C13.8 22.6 16.6 22.4 20.5 20.4" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg><span>Pen <em>to</em> Ink</span></a>
+      <span class="spacer"></span>
+      <a class="open" href="./">Open the app</a>
+    </header>
     <main>
-      <h1>How Narrative Bridge was made</h1>
+      <h1>How Pen to Ink was made</h1>
       <p class="lede">
         The files behind the tool: the plans and design notes, the guides, the story model, the scripts that build and test it,
         and the history of every release. Most links open the file on GitHub, where the whole project is public.
@@ -52,7 +39,7 @@
       <h2 id="story">The story of the app</h2>
       <dl class="files">
         <div>
-          <dt><a href="https://claude.ai/artifact/EtkLDdbjPnyrGWJNxYy7Y2" rel="noopener">The Narrative Bridge story (slide deck)</a></dt>
+          <dt><a href="https://claude.ai/artifact/EtkLDdbjPnyrGWJNxYy7Y2" rel="noopener">The story of the app, from its Narrative Bridge days (slide deck)</a></dt>
           <dd>32 slides with speaker notes: why and how the app was built, its strengths and shortcomings, and the roadmap. Opens for its owner, or for anyone it is shared with.</dd>
         </div>
         <div>
@@ -72,8 +59,16 @@
           <dd>The plan of quick wins, medium projects and bigger bets from the app's review, and which are done.</dd>
         </div>
         <div>
-          <dt><a href="https://github.com/FlamingAirplane/Script-to-Game-Converter/blob/main/src/ui/styles.css" rel="noopener">The app's look</a> <span class="path">src/ui/styles.css</span></dt>
-          <dd>The design variables (colours, type, spacing) for the day and night editions, and every screen's styles.</dd>
+          <dt><a href="https://github.com/FlamingAirplane/Script-to-Game-Converter/blob/main/src/ui/styles.css" rel="noopener">The app's palette and layout</a> <span class="path">src/ui/styles.css</span></dt>
+          <dd>The colour palette for the light and dark themes, the design variables, and every screen's layout.</dd>
+        </div>
+        <div>
+          <dt><a href="https://github.com/FlamingAirplane/Script-to-Game-Converter/blob/main/src/ui/pen-to-ink.css" rel="noopener">The Pen to Ink look</a> <span class="path">src/ui/pen-to-ink.css</span></dt>
+          <dd>The 2026 redesign on top of the palette: type, surfaces, controls and motion, after <a href="https://www.beautifului.dev" rel="noopener">Beautiful UI</a> (MIT), with <a href="https://lucide.dev" rel="noopener">Lucide</a> icons (ISC).</dd>
+        </div>
+        <div>
+          <dt><a href="https://github.com/FlamingAirplane/Script-to-Game-Converter/blob/main/src/ui/Logo.tsx" rel="noopener">The logo</a> <span class="path">src/ui/Logo.tsx</span></dt>
+          <dd>The Pen to Ink mark, a fountain-pen nib writing a stroke of ink, and the wordmark.</dd>
         </div>
         <div>
           <dt><a href="https://github.com/FlamingAirplane/Script-to-Game-Converter/blob/main/src/ui/design/tokens.ts" rel="noopener">Design variables, by group</a> <span class="path">src/ui/design/tokens.ts</span></dt>
@@ -104,7 +99,7 @@
           <dd>Every screen explained, with pictures.</dd>
         </div>
         <div>
-          <dt><a href="https://github.com/FlamingAirplane/Script-to-Game-Converter/blob/main/WRITERS.md" rel="noopener">Narrative Bridge for writers</a> <span class="path">WRITERS.md</span></dt>
+          <dt><a href="https://github.com/FlamingAirplane/Script-to-Game-Converter/blob/main/WRITERS.md" rel="noopener">Pen to Ink for writers</a> <span class="path">WRITERS.md</span></dt>
           <dd>The short version of the guide, for writers using the offline edition.</dd>
         </div>
         <div>
@@ -258,7 +253,7 @@
       </dl>
 
       <footer>
-        <a href="./">Open Narrative Bridge</a> · <a href="./about.html">About &amp; FAQ</a> ·
+        <a href="./">Open Pen to Ink</a> · <a href="./about.html">About &amp; FAQ</a> ·
         <a href="https://github.com/FlamingAirplane/Script-to-Game-Converter" rel="noopener">Source on GitHub</a> ·
         <a href="https://github.com/FlamingAirplane/Script-to-Game-Converter/blob/main/LICENSE" rel="noopener">MIT licence</a>
       </footer>

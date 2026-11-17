@@ -97,9 +97,9 @@ export function buildRenpy(story: ProcessedStory): string {
   const speakers = new Map(project.characters.map((c) => [c.id, `c_${c.id}`]));
   const out: string[] = [
     `# ${project.project.title}`,
-    `# Made with Narrative Bridge ${GENERATOR_VERSION}. Put this file in your Ren'Py project's game/ folder and delete`,
+    `# Made with Pen to Ink ${GENERATOR_VERSION}. Put this file in your Ren'Py project's game/ folder and delete`,
     `# the script.rpy the launcher made there (this file has its own "label start"), then launch the project.`,
-    `# Regenerate it from Narrative Bridge rather than editing it, or your changes will be lost next time.`,
+    `# Regenerate it from Pen to Ink rather than editing it, or your changes will be lost next time.`,
     '',
   ];
   if (project.characters.length) {

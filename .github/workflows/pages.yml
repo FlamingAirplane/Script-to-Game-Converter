@@ -1,5 +1,5 @@
-# Builds Narrative Bridge and publishes it to GitHub Pages on every push to main.
-# The site also serves the offline writer edition at ./Narrative-Bridge.html.
+# Builds Pen to Ink and publishes it to GitHub Pages on every push to main.
+# The site also serves the offline writer edition at ./Pen-to-Ink.html.
 name: Deploy to GitHub Pages
 
 on:
@@ -39,7 +39,9 @@ jobs:
           NB_DESIGN_GIST: ${{ vars.NB_DESIGN_GIST }}
         run: |
           npm run build:single
-          cp release/Narrative-Bridge.html dist/Narrative-Bridge.html
+          cp release/Pen-to-Ink.html dist/Pen-to-Ink.html
+          # The old name, so links shared before the rename keep working.
+          cp release/Pen-to-Ink.html dist/Narrative-Bridge.html
           cp WRITERS.md dist/WRITERS.md
       - uses: actions/configure-pages@v6
       - uses: actions/upload-pages-artifact@v5

@@ -1,12 +1,12 @@
 name: Idea or request
-description: Something Narrative Bridge could do, or do better.
+description: Something Pen to Ink could do, or do better.
 labels: [enhancement]
 body:
   - type: textarea
     id: need
     attributes:
       label: What you're trying to do
-      description: The story or game you're working on, and where Narrative Bridge gets in the way.
+      description: The story or game you're working on, and where Pen to Ink gets in the way.
     validations:
       required: true
   - type: textarea

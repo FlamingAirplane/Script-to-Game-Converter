@@ -126,10 +126,10 @@ export function exitName(name: string): string {
   return slugify(name) || 'exit';
 }
 
-/** Tags Narrative Bridge writes itself, which a cue can't be called. */
+/** Tags Pen to Ink writes itself, which a cue can't be called. */
 export const RESERVED_TAGS = new Set(['speaker', 'scene', 'paren', 'ext', 'image', 'audio', 'transition', 'title', 'author', 'choice', 'cutscene']);
 
-/** A cue's name made safe for a tag (letters, digits and underscores), never one of Narrative Bridge's own tags. */
+/** A cue's name made safe for a tag (letters, digits and underscores), never one of Pen to Ink's own tags. */
 export function cueName(name: string): string {
   const n = slugify(name) || 'cue';
   return RESERVED_TAGS.has(n) ? `${n}_cue` : n;

@@ -4,11 +4,11 @@ import { parseAssignment, parseConditionExpr } from './expr';
 import type { ParsedBlock, Parser } from './types';
 
 // Twine import: Twee 3 (and Twee 1) source, as exported by Twine 2 (Build → Export as Twee), Tweego,
-// or Narrative Bridge. Twine's .html files are converted to Twee first (see convert.ts).
+// or Pen to Ink. Twine's .html files are converted to Twee first (see convert.ts).
 //
 // Passages become passages, links become choices, and the common story-format logic becomes the
 // story model's conditions and effects: SugarCube <<if>> / <<set>> / setter links and Harlowe
-// (if:) / (set:). Narrative Bridge's own export (scene, speaker and transition marks, once-only
+// (if:) / (set:). Pen to Ink's own export (scene, speaker and transition marks, once-only
 // flags, "Continue" fallbacks) comes back as it was. Anything else (other macros, multi-line
 // conditional text, scripts) is kept as a note so it is visible in Review rather than lost.
 
@@ -210,7 +210,7 @@ function declarations(p: TweePassage): ParsedBlock[] {
 
 type Link = { text: string; target: string; effects: Effect[]; conditions: Condition[]; once: boolean };
 
-/** Strips Narrative Bridge's once-only flag ($once_<id>) from a condition, reporting whether it was there. */
+/** Strips Pen to Ink's once-only flag ($once_<id>) from a condition, reporting whether it was there. */
 function takeOnce(c: Condition | null): { cond: Condition | null; once: boolean } {
   if (!c) return { cond: null, once: false };
   const isOnce = (x: Condition) => x.type === 'not' && x.condition.type === 'has_item' && x.condition.itemId.startsWith('once_');
@@ -227,7 +227,7 @@ function passageBlocks(p: TweePassage, idOf: (name: string) => string, opts: { c
   const out: ParsedBlock[] = [];
   const links: (Link & { line: number })[] = [];
   let body = p.body;
-  // Narrative Bridge's earlier exports wrapped dialogue in HTML spans.
+  // Pen to Ink's earlier exports wrapped dialogue in HTML spans.
   body = body
     .replace(/<span class="dialogue"><span class="speaker">(.*?)<\/span>(?:<span class="paren">(.*?)<\/span>)?(.*?)<\/span>/g, (_, who, paren, line) => `@@.speaker;${who}@@${paren ? ` //${paren}//` : ''}\n${line}`)
     .replace(/<span class="(scene|transition|end)">(.*?)<\/span>/g, '@@.$1;$2@@');
@@ -236,7 +236,7 @@ function passageBlocks(p: TweePassage, idOf: (name: string) => string, opts: { c
   body = body.replace(/"""([\s\S]*?)"""|<nowiki>([\s\S]*?)<\/nowiki>/g, (_, a, b) => `\u0000${verbatim.push((a ?? b).replace(/​/g, '')) - 1}\u0000`);
   const restore = (s: string) => s.replace(/\u0000(\d+)\u0000/g, (_, i) => verbatim[Number(i)]);
   body = body.replace(/\\\n/g, '\n'); // SugarCube line continuations: the parts are separate lines here
-  // Comments become notes (and Narrative Bridge's "Not converted" notes come back as such).
+  // Comments become notes (and Pen to Ink's "Not converted" notes come back as such).
   body = body.replace(/\/\*([\s\S]*?)\*\/|<!--([\s\S]*?)-->/g, (_, a, b) => {
     const c = (a ?? b).trim();
     const nc = /^Not converted \((.*?)\):\s*([\s\S]*)$/.exec(c);
@@ -311,7 +311,7 @@ function passageBlocks(p: TweePassage, idOf: (name: string) => string, opts: { c
     }
     if (t === '@@.choices;' || t === '@@') continue;
     let m: RegExpExecArray | null;
-    // Narrative Bridge marks.
+    // Pen to Ink marks.
     if ((m = /^@@\.end;.*@@$/.exec(t)) || /^The End$/i.test(t)) {
       flush();
       out.push({ kind: 'marker', marker: { type: 'end' }, line: ln });
@@ -399,7 +399,7 @@ function passageBlocks(p: TweePassage, idOf: (name: string) => string, opts: { c
   flush();
 
   // "Continue" is the passage's onward route, not a choice, when it is the only link or the
-  // conditional fallback Narrative Bridge exports (offered only when no other choice is).
+  // conditional fallback Pen to Ink exports (offered only when no other choice is).
   // The link to the passage's next part is the Continue break the caller adds.
   if (opts.continueTo) links.splice(0, links.length, ...links.filter((l) => !(/^continue$/i.test(l.text) && l.target === opts.continueTo)));
   const onward = (l: Link) => /^continue$/i.test(l.text) && !l.effects.length && (links.length === 1 || l.conditions.length > 0);

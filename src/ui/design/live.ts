@@ -119,7 +119,7 @@ export async function publishLive(doc: DesignDoc, token: string, id = gistId()):
     setLiveDesign(doc);
     return { id: g.id, url: g.html_url, created: false };
   }
-  const g = await gitHub('POST', API, token, { description: 'Narrative Bridge live design (read by the website when it opens)', public: true, files: fileOf(doc) });
+  const g = await gitHub('POST', API, token, { description: 'Pen to Ink live design (read by the website when it opens)', public: true, files: fileOf(doc) });
   setLocalGist(g.id);
   setLiveDesign(doc);
   return { id: g.id, url: g.html_url, created: true };

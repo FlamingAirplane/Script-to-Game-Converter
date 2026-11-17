@@ -1,4 +1,4 @@
-# Narrative Bridge for writers
+# Pen to Ink for writers
 
 Turn your script into a playable, interactive story, with nothing to install.
 
@@ -6,7 +6,7 @@ This page is the short version. The [full user guide](https://github.com/Flaming
 
 ## Getting started
 
-1. Get the file **`Narrative-Bridge.html`** from whoever sent you this, and save it somewhere easy, such as your Documents folder.
+1. Get the file **`Pen-to-Ink.html`** from whoever sent you this, and save it somewhere easy, such as your Documents folder.
 2. **Double-click it.** It opens in your web browser (Safari, Chrome, Edge or Firefox).
 3. Follow the four steps on the first screen.
 
@@ -49,7 +49,7 @@ click **Save project** (top right). This saves a `.nbproj.json` file. Use **Open
 
 In **Chrome or Edge**, that's a real file: after the first save, ⌘S (Ctrl+S) saves straight back to it, **Save as…**
 makes a copy, and the Import page lists your recent project files. In **Safari**, choose *File → Add to Dock* and use
-Narrative Bridge from the Dock, so Safari doesn't clear your work after a week away. The offline file shows its version at
+Pen to Ink from the Dock, so Safari doesn't clear your work after a week away. The offline file shows its version at
 the bottom of the first page, with a button to check for a newer one.
 
 If you clear your browser history or use a private window, the remembered copy is lost, so save a project file you want to keep.

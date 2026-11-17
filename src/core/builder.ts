@@ -149,7 +149,7 @@ export async function buildStory(inputs: SourceInput[], options: BuildOptions): 
         diagnostics.push(
           diag('INK_KEPT_AS_WRITTEN', 'info', 'input_validation', `${input.fileName} is kept exactly as written, so it plays as before but edits in Review don't change it.${features.length ? ` It uses Ink the editor can't show: ${kinds.slice(0, 4).join(', ')}${kinds.length > 4 ? '…' : ''}.` : ''}`, {
             entityId: docId,
-            remediation: 'To edit it here, import it again and choose "Edit in Narrative Bridge"; those parts are then kept as notes.',
+            remediation: 'To edit it here, import it again and choose "Edit in Pen to Ink"; those parts are then kept as notes.',
             exportBlocked: false,
           }),
         );
@@ -433,7 +433,7 @@ function assemble(
     for (const c of p.choices) c.target = resolveRel(c.target) ?? '';
   }
 
-  // Ink written by Narrative Bridge spells out what forced choices do to the other choices; take that back off.
+  // Ink written by Pen to Ink spells out what forced choices do to the other choices; take that back off.
   for (const p of passages) if (p.choices.some((c) => c.forced)) stripGuards(p);
 
   // Linear flow: passages without explicit control flow continue to the next passage.
