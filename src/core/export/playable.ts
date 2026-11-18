@@ -11,6 +11,7 @@ import { translationEntries } from './translations';
 import { assertExportable, storyVersion } from './common';
 import { plainText } from '../emphasis';
 import { forPlayers } from '../players';
+import { PAGE_FLIPS } from '../pageFlips';
 
 /** A line's text reduced to letters and digits, the same way the player reduces what it shows (endingKey in PLAYER_JS). */
 export function endingKey(text: string): string {
@@ -111,6 +112,7 @@ export function buildPlayableHtml(story: ProcessedStory, inkRuntimeJs: string, a
       endings: endingLines(story),
       endingsKey: `narrative-bridge.endings.${id}`,
       chosenKey: `narrative-bridge.chosen.${id}`,
+      pageFlips: PAGE_FLIPS,
       version: storyVersion(story),
       voices,
       hasClips: hasVoiceClips,
@@ -458,7 +460,8 @@ const PLAYER_JS = `
     });
   }
 
-  // ---- Book sounds (synthesised; no audio files): page turn on a choice, a bell at the end ----
+  // ---- Book sounds: a page turn on a choice (recorded paper flips, CC0, embedded; the synthesised turn until
+  // they're decoded or if they can't be), a bell at the end ----
   var soundsOn = true, actx = null;
   try { soundsOn = localStorage.getItem('narrative-bridge.play.sounds') !== 'off'; } catch (e) {}
   function ac() {
@@ -466,8 +469,25 @@ const PLAYER_JS = `
     try { actx = actx || new AudioContext(); if (actx.state === 'suspended') actx.resume(); return actx; } catch (e) { return null; }
   }
   function env(c, peak, a, d) { var g = c.createGain(), t = c.currentTime; g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(peak, t + a); g.gain.exponentialRampToValueAtTime(0.0001, t + a + d); return g; }
+  var flips = null;
+  function loadFlips(c) {
+    if (flips) return;
+    flips = [];
+    meta.pageFlips.forEach(function (uri) {
+      fetch(uri).then(function (r) { return r.arrayBuffer(); }).then(function (b) { return c.decodeAudioData(b); })
+        .then(function (buf) { flips.push(buf); }).catch(function () {});
+    });
+  }
   function pageTurn() {
     var c = ac(); if (!c) return;
+    loadFlips(c);
+    if (flips.length) {
+      var s = c.createBufferSource(); s.buffer = flips[Math.floor(Math.random() * flips.length)];
+      s.playbackRate.value = 0.94 + Math.random() * 0.12;
+      var g = c.createGain(); g.gain.value = 0.5;
+      s.connect(g).connect(c.destination); s.start();
+      return;
+    }
     var buf = c.createBuffer(1, Math.ceil(c.sampleRate * 0.45), c.sampleRate), d = buf.getChannelData(0);
     for (var i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1;
     var src = c.createBufferSource(); src.buffer = buf;

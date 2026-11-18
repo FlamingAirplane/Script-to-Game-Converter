@@ -1,7 +1,8 @@
 import { designSetting } from './design/design';
-// Book sounds, synthesised with the Web Audio API (no audio files, nothing to license):
-// a papery page turn, a soft quill tap for choices, a small bell for endings, and an embossing
-// stamp when an export is bound. Quiet by design, and switchable from the cover band.
+import { PAGE_FLIPS } from '../core/pageFlips';
+// Book sounds: a page turn (three recorded paper flips, CC0; see core/pageFlips.ts), and, synthesised with the Web
+// Audio API, a soft quill tap for choices, a small bell for endings, and an embossing stamp when an export is bound.
+// Quiet by design, and switchable from the cover band.
 
 const KEY = 'narrative-bridge.sounds';
 let ctx: AudioContext | null = null;
@@ -44,6 +45,32 @@ function envelope(c: AudioContext, peak: number, attack: number, decay: number):
   return g;
 }
 
+// The recorded flips, decoded the first time a page turns. Until they're ready (or if this browser can't decode them),
+// the synthesised turn plays instead.
+let flips: AudioBuffer[] | null = null;
+let decoding = false;
+function loadFlips(c: AudioContext) {
+  if (flips || decoding) return;
+  decoding = true;
+  void Promise.all(PAGE_FLIPS.map((uri) => fetch(uri).then((r) => r.arrayBuffer()).then((b) => c.decodeAudioData(b))))
+    .then((bufs) => (flips = bufs))
+    .catch(() => (flips = []));
+}
+
+/** The synthesised turn: a band of noise sweeping upward, soft attack, quick fall. */
+function synthTurn(c: AudioContext) {
+  const src = noise(c, 0.45);
+  const band = c.createBiquadFilter();
+  band.type = 'bandpass';
+  band.Q.value = 0.9;
+  band.frequency.setValueAtTime(900, c.currentTime);
+  band.frequency.exponentialRampToValueAtTime(3800, c.currentTime + 0.32);
+  const g = envelope(c, 0.13, 0.06, 0.32);
+  src.connect(band).connect(g).connect(c.destination);
+  src.start();
+  src.stop(c.currentTime + 0.45);
+}
+
 export const sfx = {
   get enabled() {
     return enabled;
@@ -57,20 +84,19 @@ export const sfx = {
     }
   },
 
-  /** A leaf turning: a band of noise sweeping upward, soft attack, quick fall. */
+  /** A leaf turning: one of the recorded paper flips at random, a touch faster or slower each time. */
   pageTurn() {
     const c = audio();
     if (!c) return;
-    const src = noise(c, 0.45);
-    const band = c.createBiquadFilter();
-    band.type = 'bandpass';
-    band.Q.value = 0.9;
-    band.frequency.setValueAtTime(900, c.currentTime);
-    band.frequency.exponentialRampToValueAtTime(3800, c.currentTime + 0.32);
-    const g = envelope(c, 0.13, 0.06, 0.32);
-    src.connect(band).connect(g).connect(c.destination);
+    loadFlips(c);
+    if (!flips?.length) return synthTurn(c);
+    const src = c.createBufferSource();
+    src.buffer = flips[Math.floor(Math.random() * flips.length)];
+    src.playbackRate.value = 0.94 + Math.random() * 0.12;
+    const g = c.createGain();
+    g.gain.value = 0.5;
+    src.connect(g).connect(c.destination);
     src.start();
-    src.stop(c.currentTime + 0.45);
   },
 
   /** A quill touching paper: a tiny tick with a soft body. */
