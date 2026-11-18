@@ -472,3 +472,17 @@ It is over.
     expect(project.passages.every((p) => p.act === undefined)).toBe(true);
   });
 });
+
+describe('page-turn sounds', () => {
+  it('carries the three recorded flips into the playable story', async () => {
+    const { PAGE_FLIPS } = await import('../src/core/pageFlips');
+    const { buildPlayableHtml } = await import('../src/core/export');
+    expect(PAGE_FLIPS).toHaveLength(3);
+    for (const f of PAGE_FLIPS) expect(f).toMatch(/^data:audio\/mp4;base64,[A-Za-z0-9+/=]{8000,}$/);
+    const sample = SAMPLES.find((x) => x.id === 'archive')!;
+    const { project } = await buildStory([{ fileName: sample.fileName, text: sample.text }], { mode: sample.mode });
+    const html = buildPlayableHtml(processProject(project), '/* runtime */');
+    expect(html).toContain(PAGE_FLIPS[2]);
+    expect(html).toContain('meta.pageFlips.forEach');
+  });
+});

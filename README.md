@@ -110,7 +110,8 @@ install warnings. If one is built, it should implement this same module with nat
 wrapper).
 
 Press **?** for keyboard shortcuts. Book sounds (page turns, a bell at endings) and the light/dark theme switch
-are on the cover band.
+are on the cover band. The page turns are "paper flip 1–3" by gynation on [Freesound](https://freesound.org/people/gynation/packs/5398/)
+(CC0, public domain).
 
 The **Diagnostics** panel lists every issue with a stable code, severity, stage, remediation, and whether it blocks export. Click one to jump to it.
 

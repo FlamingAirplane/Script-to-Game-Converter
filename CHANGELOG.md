@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- **Real page-turn sounds:** with book sounds on, turning a page (changing chapters in the app, or making a choice in
+  the playable story) plays one of three recorded paper flips, picked at random and a touch faster or slower each time.
+  They're tiny (about 9 KB each) and built into the playable story, so it still works offline as one file.
 - **Narrative Bridge is now Pen to Ink, with a new look.** A new name and logo (a fountain-pen nib writing a stroke of
   ink), and a redesign of the whole app and website in the same colours: a clean sans-serif interface (Inter) with the
   story still set in EB Garamond, flat surfaces with soft shadows, chapter tabs as a segmented control, pill-shaped
