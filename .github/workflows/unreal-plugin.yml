@@ -1,0 +1,68 @@
+# Builds the NarrativeBridge Unreal plugin's binaries (the code in every Unreal export) with real Unreal Engines, one Mac
+# and one Windows machine, and puts both platforms in one NarrativeBridge-<version>-UE<engine>.zip per engine version.
+#
+# Needs two self-hosted runners with Unreal Engine installed (each version asked for, as UE_<version> in the usual place)
+# and the platform's toolchain (Xcode on the Mac, Visual Studio 2022 with "Game development with C++" on Windows):
+#   labels [self-hosted, macOS, unreal] and [self-hosted, Windows, unreal]
+# Run it by hand from the Actions tab; it is not part of pull requests. The zips come out as the "unreal-plugin-zips" artifact.
+name: Unreal plugin
+
+on:
+  workflow_dispatch:
+    inputs:
+      engines:
+        description: Unreal Engine versions to build for, comma separated
+        default: '5.7,5.8'
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: ${{ matrix.platform }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: Mac
+            runner: '["self-hosted", "macOS", "unreal"]'
+          - platform: Win64
+            runner: '["self-hosted", "Windows", "unreal"]'
+    runs-on: ${{ fromJSON(matrix.runner) }}
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - run: npm run build:unreal-plugin -- --engines ${{ inputs.engines }} --out dist/unreal-plugin
+      - uses: actions/upload-artifact@v4
+        with:
+          name: unreal-plugin-${{ matrix.platform }}
+          path: |
+            dist/unreal-plugin/*/${{ matrix.platform }}/
+            !dist/unreal-plugin/work/
+
+  zip:
+    needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: unreal-plugin-*
+          path: dist/unreal-plugin
+          merge-multiple: true
+      - run: npm run build:unreal-plugin -- --zip-only --engines ${{ inputs.engines }} --out dist/unreal-plugin
+      - uses: actions/upload-artifact@v4
+        with:
+          name: unreal-plugin-zips
+          path: dist/unreal-plugin/NarrativeBridge-*.zip

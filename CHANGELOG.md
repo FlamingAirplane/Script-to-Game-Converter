@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- **Unreal: a script that builds the plugin's binaries.** `npm run build:unreal-plugin` runs `RunUAT BuildPlugin` for the
+  machine's platform (Win64 or Mac) for each engine version and writes `NarrativeBridge-<version>-UE<engine>.zip`
+  holding the binaries of every platform built, so a Mac and a Windows machine can each add theirs. A manual
+  workflow (`.github/workflows/unreal-plugin.yml`) runs it on two self-hosted runners and merges the zips. The plugin
+  carries the generator's version as its own. Not run in CI: it needs Unreal Engine installed.
 - **Unreal: the export is a Blueprint-only project plus one plugin.** All the C++ now lives in
   `Plugins/NarrativeBridge/` (`NarrativeBridge.uplugin`, with a runtime and an editor module), the same for every story;
   the project itself has no `Source/` or target files. The story is data and content in the project. The demo game

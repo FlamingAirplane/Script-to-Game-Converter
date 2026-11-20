@@ -1,4 +1,5 @@
 import type { ProcessedStory } from '../pipeline';
+import { GENERATOR_VERSION } from '../version';
 import { storyRoutes } from './routes';
 import { translationSheet } from './translations';
 import { assertExportable, audioFiles, buildManifest, imageFiles, commonFiles, isPinnedRef, json, pascalCase, sourceFiles, storyVersion } from './common';
@@ -175,7 +176,7 @@ function uplugin() {
   return {
     FileVersion: 3,
     Version: 1,
-    VersionName: '1.0',
+    VersionName: GENERATOR_VERSION,
     FriendlyName: 'Narrative Bridge',
     Description: 'Plays a story written in Narrative Bridge: a story component, a themed story panel, cues, translations and saves. The story itself is data in the project (StorySource/ and Content/NarrativeBridge/).',
     Category: 'Narrative',
