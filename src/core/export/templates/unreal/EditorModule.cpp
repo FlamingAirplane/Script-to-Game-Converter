@@ -17,6 +17,7 @@
 #include "UObject/Package.h"
 #include "NarrativeBridgeComponent.h"
 #include "NarrativeBridgeInkImport.h"
+#include "NarrativeBridgeStoryData.h"
 #include "NarrativeBridgeStoryInfo.h"
 #include "NarrativeCuePlayer.h"
 #include "NarrativeStoryPanel.h"
@@ -28,6 +29,20 @@ namespace NarrativeBridgeEditor
     FString PackageOf(const TCHAR* ObjectPath)
     {
         return FPackageName::ObjectPathToPackageName(FString(ObjectPath));
+    }
+
+    /** Makes the story data asset (NarrativeBridgeStoryInfo::StoryDataAssetPath) from StorySource/StoryInfo.json, or refreshes it. */
+    bool CreateStoryDataAsset(const FString& Source)
+    {
+        FString Json;
+        if (!FFileHelper::LoadFileToString(Json, *(Source / TEXT("StoryInfo.json")))) return false;
+        const FString PackageName = PackageOf(NarrativeBridgeStoryInfo::StoryDataAssetPath);
+        UPackage* Package = CreatePackage(*PackageName);
+        UNarrativeStoryData* Asset = FindObject<UNarrativeStoryData>(Package, *FPackageName::GetShortName(PackageName));
+        if (!Asset) Asset = NewObject<UNarrativeStoryData>(Package, *FPackageName::GetShortName(PackageName), RF_Public | RF_Standalone);
+        Asset->Json = Json;
+        Asset->MarkPackageDirty();
+        return UEditorLoadingAndSavingUtils::SavePackages({ Package }, false);
     }
 
     /** Imports StorySource/MainStory.ink and StorySource/VoiceClips/* into Content/NarrativeBridge (all of them, or only what's missing). */
@@ -58,6 +73,8 @@ namespace NarrativeBridgeEditor
             const FString Name = UNarrativeBridgeComponent::ClipAssetName(Clip);
             if (bAll || !FPackageName::DoesPackageExist(AudioPath / Name)) Add(Source / TEXT("VoiceClips") / Clip, AudioPath, Name);
         }
+        // The story data is small and always current: refresh it every time.
+        CreateStoryDataAsset(Source);
         if (Tasks.Num() == 0) return;
         FAssetToolsModule::GetModule().Get().ImportAssetTasks(Tasks);
         if ((bAll || bStoryMissing) && !FPackageName::DoesPackageExist(StoryPackage))

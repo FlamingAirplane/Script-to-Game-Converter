@@ -1,0 +1,78 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://narrative-bridge.local/schemas/unreal-story-info.schema.json",
+  "title": "Pen to Ink: the story data in an Unreal export (StorySource/StoryInfo.json)",
+  "description": "What the Unreal runtime reads about a story: its passages, lines, acts, items, cues and the conditions of its locked choices. The plugin reads any schemaVersion up to its own and ignores fields it doesn't know, so an older export keeps working after a plugin update; a story newer than the plugin is refused with a message.",
+  "type": "object",
+  "required": ["schemaVersion", "title", "projectId", "storyVersion", "sourceLanguage", "passages", "acts", "lines", "itemVariables", "variables", "exits", "cues", "cueTags", "cueSounds", "portraits", "reservedTags", "gatedChoices"],
+  "properties": {
+    "schemaVersion": { "type": "integer", "minimum": 1, "description": "Bumped when a field changes meaning or goes. Adding a field doesn't bump it." },
+    "title": { "type": "string" },
+    "projectId": { "type": "string" },
+    "storyVersion": { "type": "string", "description": "Changes whenever the generated Ink changes. A save from another version is carried over by replaying its choices." },
+    "sourceLanguage": { "type": "string", "description": "The language the story is written in (the translation sheet's \"source\" column)." },
+    "passages": {
+      "type": "array",
+      "description": "Every passage (Ink knot) the story can start at, in story order.",
+      "items": {
+        "type": "object",
+        "required": ["id", "title", "act"],
+        "properties": {
+          "id": { "type": "string" },
+          "title": { "type": "string" },
+          "act": { "type": "string", "description": "The act it is in, or an empty string." }
+        }
+      }
+    },
+    "acts": {
+      "type": "array",
+      "items": { "type": "object", "required": ["id", "title"], "properties": { "id": { "type": "string" }, "title": { "type": "string" } } }
+    },
+    "lines": {
+      "type": "array",
+      "description": "Every line of dialogue the story can start at.",
+      "items": { "type": "object", "required": ["path", "text"], "properties": { "path": { "type": "string", "description": "\"passage.line_…\"" }, "text": { "type": "string", "description": "The line as it reads: \"MARA: Did you bring the flowers?\"" } } }
+    },
+    "itemVariables": { "type": "array", "items": { "type": "string" }, "description": "Ink Booleans named has_<item>." },
+    "variables": { "type": "array", "items": { "type": "string" }, "description": "Story variables the game may read and write." },
+    "exits": { "type": "array", "items": { "type": "string" } },
+    "cues": { "type": "array", "items": { "type": "string" } },
+    "cueTags": { "type": "array", "items": { "type": "string" }, "description": "Every cue with its value, e.g. \"music:calm\"." },
+    "cueSounds": { "type": "array", "items": { "type": "object", "required": ["tag", "file"], "properties": { "tag": { "type": "string" }, "file": { "type": "string" } } } },
+    "portraits": { "type": "array", "items": { "type": "object", "required": ["speaker", "file"], "properties": { "speaker": { "type": "string" }, "file": { "type": "string" } } } },
+    "reservedTags": { "type": "array", "items": { "type": "string" }, "description": "Pen to Ink's own tags; every other tag is a cue." },
+    "gatedChoices": {
+      "type": "array",
+      "description": "Choices that need an item or a value. Ink leaves them out while locked.",
+      "items": {
+        "type": "object",
+        "required": ["passage", "text", "needs", "forced", "requirements"],
+        "properties": {
+          "passage": { "type": "string" },
+          "text": { "type": "string" },
+          "needs": { "type": "string", "description": "What it needs, in words." },
+          "forced": { "type": "boolean", "description": "While it is on offer it is the only choice in its passage." },
+          "requirements": {
+            "type": "array",
+            "items": { "type": "object", "required": ["words", "condition"], "properties": { "words": { "type": "string" }, "condition": { "$ref": "#/$defs/condition" } } }
+          }
+        }
+      }
+    }
+  },
+  "$defs": {
+    "condition": {
+      "description": "An ISR condition (the same shape as in the story model).",
+      "oneOf": [
+        { "type": "object", "required": ["type", "itemId"], "properties": { "type": { "const": "has_item" }, "itemId": { "type": "string" } } },
+        { "type": "object", "required": ["type", "condition"], "properties": { "type": { "const": "not" }, "condition": { "$ref": "#/$defs/condition" } } },
+        { "type": "object", "required": ["type", "conditions"], "properties": { "type": { "enum": ["and", "or"] }, "conditions": { "type": "array", "items": { "$ref": "#/$defs/condition" } } } },
+        {
+          "type": "object",
+          "required": ["type", "variableId", "op", "value"],
+          "properties": { "type": { "const": "compare" }, "variableId": { "type": "string" }, "op": { "enum": ["==", "!=", "<", "<=", ">", ">="] }, "value": { "type": ["boolean", "number", "string"] } }
+        }
+      ]
+    }
+  }
+}

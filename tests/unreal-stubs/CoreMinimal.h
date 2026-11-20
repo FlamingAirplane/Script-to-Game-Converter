@@ -21,6 +21,7 @@ struct FString {
   bool operator==(const TCHAR* o) const { return s == o; }
   FString operator+(const FString& o) const { return s + o.s; }
   operator const TCHAR*() const { return s.c_str(); }
+  const TCHAR* operator*() const { return s.c_str(); }
 };
 template <class T> struct TArray { std::vector<T> v; int32 Num() const { return (int32)v.size(); } void Add(const T& x) { v.push_back(x); } T& operator[](int32 i) { return v[i]; } const T& operator[](int32 i) const { return v[i]; } auto begin() const { return v.begin(); } auto end() const { return v.end(); } };
 template <class T> using TObjectPtr = T*;

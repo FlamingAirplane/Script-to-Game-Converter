@@ -1,3 +1,4 @@
+import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import { reviewAll } from '../src/core/adapt';
 import { analyze } from '../src/core/analyzer';
@@ -266,5 +267,37 @@ describe('translations brought back in', () => {
     expect(boundaryViolations([{ path: 'X/Source/X/Foo.cpp', content: '#include "Inkpot/InkpotStory.h"\n' }])).toHaveLength(1);
     expect(boundaryViolations([{ path: 'X/Source/X/Foo.cpp', content: 'TSharedPtr<Ink::FChoice> C;\n' }])).toHaveLength(1);
     expect(boundaryViolations([{ path: 'X/Source/X/NarrativeBridgeComponent.cpp', content: '// uses Inkpot\n' }])).toHaveLength(1);
+  });
+});
+
+describe('the Unreal export’s story data', () => {
+  it('writes StoryInfo.json that matches its schema and the header, and condition checks the TypeScript evaluator made', async () => {
+    const s = SAMPLES.find((x) => x.id === 'archive')!;
+    const { project } = await buildStory([{ fileName: s.fileName, text: s.text }], { mode: s.mode });
+    reviewAll(project, 'approved');
+    const r = await ADAPTERS.unreal.export(processProject(project), { engine: 'unreal', projectName: 'Archive', engineVersion: '5.7', integrationRef: 'v1.42.21-release', includeDemo: false });
+    const file = (end: string) => r.files.find((f) => f.path.endsWith(end))!.content as string;
+    const info = JSON.parse(file('StorySource/StoryInfo.json'));
+    const schema = JSON.parse(readFileSync('schemas/unreal-story-info.schema.json', 'utf8'));
+    // Every field the schema requires is there, and nothing in the data is missing from the schema.
+    for (const key of schema.required) expect(info, key).toHaveProperty(key);
+    for (const key of Object.keys(info)) expect(schema.properties, key).toHaveProperty(key);
+    expect(info.schemaVersion).toBe(1);
+    // The header is written from the same data.
+    const header = file('NarrativeBridgeStoryInfo.h');
+    expect(header).toContain(`static const int32 NumPassages = ${info.passages.length};`);
+    expect(header).toContain(`static const int32 NumGatedChoices = ${info.gatedChoices.length};`);
+    expect(info.gatedChoices.length).toBeGreaterThan(0);
+    // Locked choices carry the ISR condition itself, and ConditionChecks.json has an answer for each one.
+    const checks = JSON.parse(file('StorySource/ConditionChecks.json')).checks;
+    expect(checks.length).toBe(info.gatedChoices.reduce((n: number, g: { requirements: unknown[] }) => n + g.requirements.length, 0));
+    for (const c of checks) {
+      expect(c.cases.length).toBeGreaterThan(0);
+      expect(c.cases.some((x: { holds: boolean }) => x.holds)).toBe(true);
+      expect(c.cases.some((x: { holds: boolean }) => !x.holds)).toBe(true);
+    }
+    // The runtime and the tests that read it are in the export.
+    const names = r.files.map((f) => f.path.split('/').pop());
+    for (const n of ['NarrativeBridgeStoryData.h', 'NarrativeBridgeStoryData.cpp', 'NarrativeBridgeCondition.h', 'NarrativeBridgeStoryDataTests.cpp']) expect(names).toContain(n);
   });
 });
