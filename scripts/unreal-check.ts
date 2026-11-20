@@ -188,7 +188,7 @@ for (const sample of samples) {
   const result = await adapter.export(story, { engine: 'unreal', projectName: sample.id, engineVersion: adapter.defaultEngineVersion, integrationRef: adapter.integration.defaultRef, includeDemo: true });
   const dir = join(out, sample.id);
   mkdirSync(dir, { recursive: true });
-  const headers = result.files.filter((f) => /\/NarrativeBridgeCondition\.h$/.test(f.path));
+  const headers = result.files.filter((f) => f.path.endsWith('/NarrativeBridgeCondition.h'));
   for (const f of headers) writeFileSync(join(dir, f.path.split('/').pop()!), f.content as string);
   writeFileSync(join(dir, 'check.cpp'), '#include "NarrativeBridgeCondition.h"\nint main() { return 0; }\n');
   const r = spawnSync(cxx, ['-std=c++20', '-fsyntax-only', '-Wall', '-Wno-unused-variable', '-Wno-unused-const-variable', '-I', stubs, '-I', dir, join(dir, 'check.cpp')], { encoding: 'utf8' });
