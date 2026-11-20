@@ -646,7 +646,7 @@ function PackageContents({ engine, layout }: { engine: EngineTarget; layout: 'pa
             ) : (
               <>
                 <li>
-                  <strong>An Unreal project</strong> (C++) set up for the Inkpot plugin, with a script that fetches Inkpot.
+                  <strong>An Unreal project</strong> with no code of its own: all the C++ is in one NarrativeBridge plugin (the same for every story), next to a script that fetches the Inkpot plugin it uses.
                 </li>
                 <li>
                   <strong>Ready-made code</strong> that plays the story: lines, choices, Continue breaks, exits to the game, saves, items and translations (C++, usable from Blueprints).
@@ -670,7 +670,8 @@ function PackageContents({ engine, layout }: { engine: EngineTarget; layout: 'pa
               </>
             ) : (
               <>
-                <li>Run the setup script (it fetches Inkpot), then open the project in Unreal and let it build.</li>
+                <li>Run the setup script (it fetches Inkpot), then open the project in Unreal and let it build the plugin (a toolchain is needed once, unless you export with a prebuilt plugin from the command line).</li>
+                <li>Already have a game? Copy the plugin into it, then use Tools → Import Pen to Ink Story to bring the story in. Importing again replaces it in place, so Blueprints keep working.</li>
                 <li>Put the story where it belongs in the game (a menu adds it to a level), and connect it to their gameplay: the README explains how.</li>
               </>
             )}

@@ -2,17 +2,24 @@
 #include "Modules/ModuleManager.h"
 #include "AssetImportTask.h"
 #include "AssetToolsModule.h"
+#include "DesktopPlatformModule.h"
+#include "Dom/JsonObject.h"
 #include "Editor.h"
 #include "Engine/World.h"
 #include "FileHelpers.h"
+#include "Framework/Application/SlateApplication.h"
 #include "GameFramework/Actor.h"
 #include "HAL/FileManager.h"
 #include "HAL/IConsoleManager.h"
+#include "HAL/PlatformFileManager.h"
 #include "IAssetTools.h"
 #include "Misc/App.h"
 #include "Misc/FileHelper.h"
 #include "Misc/PackageName.h"
 #include "Misc/Paths.h"
+#include "Interfaces/IPluginManager.h"
+#include "Serialization/JsonReader.h"
+#include "Serialization/JsonSerializer.h"
 #include "ToolMenus.h"
 #include "UObject/Package.h"
 #include "NarrativeBridgeComponent.h"
@@ -85,6 +92,62 @@ namespace NarrativeBridgeEditor
         UE_LOG(LogTemp, Display, TEXT("[NarrativeBridge] Imported %d story file(s) into /Game/NarrativeBridge."), Tasks.Num());
     }
 
+    /** The version of a NarrativeBridge.uplugin file, or empty. */
+    FString PluginVersionIn(const FString& File)
+    {
+        FString Text;
+        TSharedPtr<FJsonObject> Root;
+        FString Version;
+        if (FFileHelper::LoadFileToString(Text, *File) && FJsonSerializer::Deserialize(TJsonReaderFactory<>::Create(Text), Root) && Root.IsValid()) Root->TryGetStringField(TEXT("VersionName"), Version);
+        return Version;
+    }
+
+    /**
+     * Brings a story exported by Pen to Ink into this project: copies the exported folder's StorySource/ and
+     * Content/NarrativeBridge/Data/ (the story's own files; never the plugin, Config/ or the project file) and imports them again.
+     * Assets are replaced in place, so Blueprints that refer to them keep working.
+     */
+    bool ImportStoryFolder(const FString& From)
+    {
+        IPlatformFile& Files = FPlatformFileManager::Get().GetPlatformFile();
+        if (!Files.DirectoryExists(*(From / TEXT("StorySource"))))
+        {
+            UE_LOG(LogTemp, Error, TEXT("[NarrativeBridge] %s has no StorySource/ folder: choose the folder a story was exported to."), *From);
+            return false;
+        }
+        // An export made with another version of the plugin than this project has may carry data the plugin can't read.
+        const FString Exported = PluginVersionIn(From / TEXT("Plugins/NarrativeBridge/NarrativeBridge.uplugin"));
+        const TSharedPtr<IPlugin> Installed = IPluginManager::Get().FindPlugin(TEXT("NarrativeBridge"));
+        if (!Exported.IsEmpty() && Installed.IsValid() && Installed->GetDescriptor().VersionName != Exported)
+            UE_LOG(LogTemp, Warning, TEXT("[NarrativeBridge] That story was exported with Narrative Bridge %s, but this project has plugin version %s. Update the plugin if the story doesn't play."), *Exported, *Installed->GetDescriptor().VersionName);
+        const TCHAR* Folders[] = { TEXT("StorySource"), TEXT("Content/NarrativeBridge/Data") };
+        for (const TCHAR* Folder : Folders)
+        {
+            const FString Source = From / Folder;
+            if (!Files.DirectoryExists(*Source)) continue;
+            const FString Destination = FPaths::ProjectDir() / Folder;
+            Files.CreateDirectoryTree(*Destination);
+            if (!Files.CopyDirectoryTree(*Destination, *Source, true))
+            {
+                UE_LOG(LogTemp, Error, TEXT("[NarrativeBridge] Couldn't copy %s into the project."), *Source);
+                return false;
+            }
+        }
+        ImportStoryFiles(true);
+        return true;
+    }
+
+    /** Asks for the exported folder, then imports it. */
+    void ChooseAndImportStoryFolder()
+    {
+        IDesktopPlatform* Desktop = FDesktopPlatformModule::Get();
+        if (!Desktop) return;
+        FString Folder;
+        const void* Parent = FSlateApplication::IsInitialized() ? FSlateApplication::Get().FindBestParentWindowHandleForDialogs(nullptr) : nullptr;
+        if (Desktop->OpenDirectoryDialog(Parent, TEXT("Choose the folder a story was exported to (the one that has StorySource in it)"), FPaths::ProjectDir(), Folder))
+            ImportStoryFolder(Folder);
+    }
+
     /** Puts an actor with the story, its panel and its cue player in the level being edited. */
     void AddStoryToLevel()
     {
@@ -137,12 +200,21 @@ private:
             FText::Format(LOCTEXT("AddStory", "Add {0} to the Level"), FText::FromString(UNarrativeStoryData::DefaultInfo().Title)),
             LOCTEXT("AddStoryTip", "Adds an actor with the story, its story panel and its cue player."),
             FSlateIcon(), FUIAction(FExecuteAction::CreateStatic(&NarrativeBridgeEditor::AddStoryToLevel)));
+        Section.AddMenuEntry("NarrativeBridgeImportStory",
+            LOCTEXT("ImportStory", "Import Pen to Ink Story…"),
+            LOCTEXT("ImportStoryTip", "Brings a story exported by Pen to Ink into this project: choose the exported folder. Assets are replaced in place, so Blueprints that use them keep working."),
+            FSlateIcon(), FUIAction(FExecuteAction::CreateStatic(&NarrativeBridgeEditor::ChooseAndImportStoryFolder)));
         Section.AddMenuEntry("NarrativeBridgeImport",
             LOCTEXT("Import", "Re-import Story Files"),
             LOCTEXT("ImportTip", "Imports StorySource/MainStory.ink and the voice clips into Content/NarrativeBridge again, e.g. after exporting a new version."),
             FSlateIcon(), FUIAction(FExecuteAction::CreateLambda([] { NarrativeBridgeEditor::ImportStoryFiles(true); })));
     }
 };
+
+static FAutoConsoleCommand ImportFolderCommand(
+    TEXT("NarrativeBridge.ImportFolder"),
+    TEXT("NarrativeBridge.ImportFolder <folder>: imports the story in a folder exported by Pen to Ink (the one with StorySource/ in it)."),
+    FConsoleCommandWithArgsDelegate::CreateLambda([](const TArray<FString>& Args) { if (Args.Num() > 0) NarrativeBridgeEditor::ImportStoryFolder(Args[0]); }));
 
 static FAutoConsoleCommand ImportCommand(
     TEXT("NarrativeBridge.Import"),

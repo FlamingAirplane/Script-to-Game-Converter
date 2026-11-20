@@ -16,7 +16,7 @@ public class ${module}Editor : ModuleRules
     public ${module}Editor(ReadOnlyTargetRules Target) : base(Target)
     {
         PCHUsage = PCHUsageMode.UseExplicitOrSharedPCHs;
-        PrivateDependencyModuleNames.AddRange(new string[] { "Core", "CoreUObject", "Engine", "UnrealEd", "AssetTools", "AssetRegistry", "ToolMenus", "Slate", "SlateCore", "Json", "Inkpot", "InkPlusPlus", "${module}" });
+        PrivateDependencyModuleNames.AddRange(new string[] { "Core", "CoreUObject", "Engine", "UnrealEd", "AssetTools", "AssetRegistry", "ToolMenus", "Slate", "SlateCore", "Json", "DesktopPlatform", "Projects", "ApplicationCore", "Inkpot", "InkPlusPlus", "${module}" });
         // Only NarrativeBridgeInkImport.cpp uses Inkpot and InkPlusPlus; the rest of this module reaches the story through ${module}.
     }
 }
