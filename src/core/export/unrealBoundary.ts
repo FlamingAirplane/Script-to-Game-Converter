@@ -8,7 +8,7 @@ export function boundaryViolations(files: { path: string; content: string | Uint
     if (!/\.(h|cpp)$/.test(f.path) || BACKEND.test(f.path) || typeof f.content !== 'string') continue;
     if (RUNTIME_INCLUDE.test(f.content) || /\bInk::/.test(f.content)) out.push(`${f.path} calls the Ink runtime directly; move it into NarrativeBridgeInk.cpp.`);
     // The component keeps the deprecated Inkpot-typed Blueprint functions in its header only; its code never names the runtime.
-    if (/NarrativeBridgeComponent\.cpp$/.test(f.path) && /Inkpot/i.test(f.content)) out.push(`${f.path} still mentions Inkpot.`);
+    if (f.path.endsWith('NarrativeBridgeComponent.cpp') && /Inkpot/i.test(f.content)) out.push(`${f.path} still mentions Inkpot.`);
   }
   return out;
 }
