@@ -392,7 +392,8 @@ Dust.
     const unity = await ADAPTERS.unity.export(s, { engine: 'unity', projectName: 'P', ...opts });
     expect(unity.files.find((f) => f.path.endsWith('StoryInfo.cs'))!.content).toContain('ForcedChoices = { "hall\\nOpen the door with the key" }');
     const unreal = await ADAPTERS.unreal.export(s, { engine: 'unreal', projectName: 'P', ...opts, engineVersion: '5.7' });
-    expect(unreal.files.find((f) => f.path.endsWith('NarrativeBridgeStoryInfo.h'))!.content).toContain('"Open the door with the key"), TEXT("Brass Key"), true }');
+    const gated = JSON.parse(String(unreal.files.find((f) => f.path.endsWith('StorySource/StoryInfo.json'))!.content)).gatedChoices;
+    expect(gated).toEqual([expect.objectContaining({ passage: 'hall', text: 'Open the door with the key', needs: 'Brass Key', forced: true })]);
   });
 });
 
@@ -511,10 +512,11 @@ describe('starting at a line of dialogue', () => {
     expect(u('StoryPointDrawers.cs')).toContain('[CustomPropertyDrawer(typeof(StoryLineAttribute))]');
     const unreal = await ADAPTERS.unreal.export(story, { engine: 'unreal', projectName: 'Garden', engineVersion: '5.7', integrationRef: 'v1.2.3', includeDemo: false });
     const r = (end: string) => String(unreal.files.find((f) => f.path.endsWith(end))!.content);
-    expect(r('NarrativeBridgeStoryInfo.h')).toContain('static const TCHAR* Passages[] = { TEXT("garden") };');
-    expect(r('NarrativeBridgeStoryInfo.h')).toContain('static const int32 NumLines = 4;');
+    const data = JSON.parse(r('StorySource/StoryInfo.json'));
+    expect(data.passages.map((p: { id: string }) => p.id)).toEqual(['garden']);
+    expect(data.lines).toHaveLength(4);
     expect(r('NarrativeEnterDialogueTrigger.h')).toContain('meta = (GetOptions = "GetLineOptions")');
-    expect(r('NarrativeBridgeComponent.cpp')).toContain('Ink->GoTo(InkPathOf(Name));');
+    expect(r('NarrativeBridgeComponent.cpp')).toContain('Ink->GoTo(InkPathOf(StoryInfo(), Name));');
   });
 });
 
@@ -579,7 +581,7 @@ Look.
     const cpp = unreal.files.map((f) => f.content).join('\n');
     expect(cpp).toContain('else if (Name == TEXT("cutscene")) Line.bIsCutscene = true;');
     expect(cpp).toContain('if (Next.bIsCutscene)');
-    expect(cpp).toMatch(/ReservedTags[^;]*"cutscene"/);
+    expect(JSON.parse(String(unreal.files.find((f) => f.path.endsWith('StorySource/StoryInfo.json'))!.content)).reservedTags).toContain('cutscene');
   });
 });
 

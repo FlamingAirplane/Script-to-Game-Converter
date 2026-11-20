@@ -18,7 +18,7 @@
 #include "NarrativeBridgeComponent.h"
 #include "NarrativeBridgeInkImport.h"
 #include "NarrativeBridgeStoryData.h"
-#include "NarrativeBridgeStoryInfo.h"
+#include "NarrativeBridgeTypes.h"
 #include "NarrativeCuePlayer.h"
 #include "NarrativeStoryPanel.h"
 
@@ -31,16 +31,16 @@ namespace NarrativeBridgeEditor
         return FPackageName::ObjectPathToPackageName(FString(ObjectPath));
     }
 
-    /** Makes the story data asset (NarrativeBridgeStoryInfo::StoryDataAssetPath) from StorySource/StoryInfo.json, or refreshes it. */
+    /** Makes the story data asset (NarrativeBridge::StoryDataAssetPath) from StorySource/StoryInfo.json, or refreshes it. */
     bool CreateStoryDataAsset(const FString& Source)
     {
         FString Json;
         if (!FFileHelper::LoadFileToString(Json, *(Source / TEXT("StoryInfo.json")))) return false;
-        const FString PackageName = PackageOf(NarrativeBridgeStoryInfo::StoryDataAssetPath);
+        const FString PackageName = PackageOf(NarrativeBridge::StoryDataAssetPath);
         UPackage* Package = CreatePackage(*PackageName);
         UNarrativeStoryData* Asset = FindObject<UNarrativeStoryData>(Package, *FPackageName::GetShortName(PackageName));
         if (!Asset) Asset = NewObject<UNarrativeStoryData>(Package, *FPackageName::GetShortName(PackageName), RF_Public | RF_Standalone);
-        Asset->Json = Json;
+        Asset->SetJson(Json);
         Asset->MarkPackageDirty();
         return UEditorLoadingAndSavingUtils::SavePackages({ Package }, false);
     }
@@ -61,12 +61,12 @@ namespace NarrativeBridgeEditor
             Task->bSave = true;
             Tasks.Add(Task);
         };
-        const FString StoryPackage = PackageOf(NarrativeBridgeStoryInfo::StoryAssetPath);
+        const FString StoryPackage = PackageOf(NarrativeBridge::StoryAssetPath);
         const bool bStoryMissing = !FPackageName::DoesPackageExist(StoryPackage);
         if (bAll || bStoryMissing) Add(Source / TEXT("MainStory.ink"), FPackageName::GetLongPackagePath(StoryPackage), FPackageName::GetShortName(StoryPackage));
         TArray<FString> Clips;
         IFileManager::Get().FindFiles(Clips, *(Source / TEXT("VoiceClips")), nullptr);
-        FString AudioPath = NarrativeBridgeStoryInfo::AudioPackagePath;
+        FString AudioPath = NarrativeBridge::AudioPackagePath;
         AudioPath.RemoveFromEnd(TEXT("/"));
         for (const FString& Clip : Clips)
         {
@@ -95,7 +95,7 @@ namespace NarrativeBridgeEditor
         Params.Name = MakeUniqueObjectName(World->GetCurrentLevel(), AActor::StaticClass(), TEXT("NarrativeStory"));
         AActor* Actor = World->SpawnActor<AActor>(AActor::StaticClass(), FTransform::Identity, Params);
         if (!Actor) return;
-        Actor->SetActorLabel(FString::Printf(TEXT("%s (Narrative Bridge)"), NarrativeBridgeStoryInfo::Title));
+        Actor->SetActorLabel(FString::Printf(TEXT("%s (Narrative Bridge)"), *UNarrativeStoryData::DefaultInfo().Title));
         auto Attach = [Actor](UActorComponent* C)
         {
             Actor->AddInstanceComponent(C);
@@ -134,7 +134,7 @@ private:
         UToolMenu* Menu = UToolMenus::Get()->ExtendMenu("LevelEditor.MainMenu.Tools");
         FToolMenuSection& Section = Menu->FindOrAddSection("NarrativeBridge", LOCTEXT("Section", "Narrative Bridge"));
         Section.AddMenuEntry("NarrativeBridgeAddStory",
-            FText::Format(LOCTEXT("AddStory", "Add {0} to the Level"), FText::FromString(NarrativeBridgeStoryInfo::Title)),
+            FText::Format(LOCTEXT("AddStory", "Add {0} to the Level"), FText::FromString(UNarrativeStoryData::DefaultInfo().Title)),
             LOCTEXT("AddStoryTip", "Adds an actor with the story, its story panel and its cue player."),
             FSlateIcon(), FUIAction(FExecuteAction::CreateStatic(&NarrativeBridgeEditor::AddStoryToLevel)));
         Section.AddMenuEntry("NarrativeBridgeImport",

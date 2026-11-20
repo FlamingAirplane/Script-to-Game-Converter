@@ -28,7 +28,7 @@ struct FNarrativeCueSetup
 {
     GENERATED_BODY()
 
-    /** The cue's name as the writer gave it (one of NarrativeBridgeStoryInfo::Cues), e.g. music, sound or shake. */
+    /** The cue's name as the writer gave it (one of the story's cues), e.g. music, sound or shake. */
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Narrative Bridge")
     FString Name;
 
@@ -61,7 +61,7 @@ public:
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Narrative Bridge")
     TArray<FNarrativeCueSetup> Cues;
 
-    /** Play the sounds the writer attached to cues in Narrative Bridge (NarrativeBridgeStoryInfo::CueSoundTags) when a cue has no sound of its own named by its value. */
+    /** Play the sounds the writer attached to cues in Narrative Bridge (the story data's cue sounds) when a cue has no sound of its own named by its value. */
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Narrative Bridge")
     bool bPlayStorySounds = true;
 

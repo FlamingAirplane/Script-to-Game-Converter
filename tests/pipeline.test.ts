@@ -430,11 +430,12 @@ It is over.
     expect(info).toContain('public static readonly string[] PassageActs = { "act_one", "act_one", "act_two", "" };');
     expect(info).toContain('public static string ActOf(string passage)');
     const unreal = await ADAPTERS.unreal.export(s, { engine: 'unreal', projectName: 'P', engineVersion: '5.7', integrationRef: 'v1.21.0', includeDemo: true });
-    const h = unreal.files.find((f) => f.path.endsWith('NarrativeBridgeStoryInfo.h'))!.content;
-    expect(h).toContain('static const TCHAR* Acts[] = { TEXT("act_one"), TEXT("act_two") };');
-    expect(h).toContain('static const int32 NumActs = 2;');
-    expect(h).toContain('static const TCHAR* PassageActs[] = { TEXT("act_one"), TEXT("act_one"), TEXT("act_two"), TEXT("") };');
-    expect(h).toContain('static inline const TCHAR* ActOf(const FString& Passage)');
+    const data = JSON.parse(String(unreal.files.find((f) => f.path.endsWith('StorySource/StoryInfo.json'))!.content));
+    expect(data.acts.map((x: { id: string }) => x.id)).toEqual(['act_one', 'act_two']);
+    expect(data.passages.map((x: { act: string }) => x.act)).toEqual(['act_one', 'act_one', 'act_two', '']);
+    const component = String(unreal.files.find((f) => f.path.endsWith('NarrativeBridgeComponent.h'))!.content);
+    expect(component).toContain('FString GetActOf(const FString& Passage) const;');
+    expect(component).toContain('FString GetActTitle(const FString& Act) const;');
   });
 
   it('leave a story without them exactly as before', async () => {

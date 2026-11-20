@@ -1,12 +1,11 @@
-// Checks the C++ that changes from story to story in the Unreal export: exports each sample story as an Unreal project
-// and compiles its generated headers (NarrativeBridgeStoryInfo.h, with the story's passages, cues and the C++ conditions
-// of its locked choices, and NarrativeBridgeRoutes.h, the playthrough routes) with clang, against the stand-in
-// CoreMinimal.h in tests/unreal-stubs (syntax and types only, nothing is linked). It runs in CI, which has no Unreal.
-//
+// Checks the Unreal export without Unreal. The runtime is the same for every story (the story is data, in
+// StorySource/StoryInfo.json), so what can change from story to story is the data, and in particular the conditions of its
+// locked choices. This script exports each sample, builds the runtime's condition evaluator (NarrativeBridgeCondition.h) with
+// clang against the stand-in CoreMinimal.h in tests/unreal-stubs, and runs it over sample variable values, checking it gives
+// the same answers as the TypeScript evaluator (conditionHolds) for every locked choice and a set of synthetic conditions.
 // It also checks the Ink runtime boundary: only the NarrativeBridgeInk* files may include Inkpot or InkPlusPlus headers.
 //
-// The rest of the export's C++ is the same for every story; `npm run test:unreal:build` builds all of it, and runs its
-// automation tests, with a real Unreal Engine and Inkpot.
+// `npm run test:unreal:build` builds the rest of the export, and runs its automation tests, with a real Unreal Engine and Inkpot.
 //
 //   npm run test:unreal                       every sample
 //   npm run test:unreal -- --sample archive   one sample
@@ -38,42 +37,6 @@ if (!samples.length) {
   process.exit(2);
 }
 const out = mkdtempSync(join(tmpdir(), 'narrative-bridge-unreal-check-'));
-
-// Uses every table, and calls every locked choice's conditions, so their types are checked too.
-const CHECK_CPP = `#include "NarrativeBridgeStoryInfo.h"
-#include "NarrativeBridgeRoutes.h"
-
-namespace
-{
-    struct FReader final : NarrativeBridgeStoryInfo::FVariableReader
-    {
-        bool Has(const TCHAR*) const override { return false; }
-        bool CompareNumber(const TCHAR*, const TCHAR*, double) const override { return false; }
-        bool CompareText(const TCHAR*, const TCHAR*, const TCHAR*) const override { return false; }
-        bool CompareBool(const TCHAR*, const TCHAR*, bool) const override { return false; }
-    };
-}
-
-int32 CheckStoryInfo()
-{
-    using namespace NarrativeBridgeStoryInfo;
-    int32 N = 0;
-    const TCHAR* const* Lists[] = { Passages, PassageTitles, Lines, LineTexts, ItemVariables, Variables, Exits, Cues, CueTags, CueSoundTags, CueSoundFiles, PortraitSpeakers, PortraitFiles, ReservedTags };
-    for (const TCHAR* const* List : Lists) N += List[0] ? 1 : 0;
-    N += NumPassages + NumLines + NumItemVariables + NumVariables + NumExits + NumCues + NumCueTags + NumCueSoundTags + NumPortraitSpeakers + NumReservedTags;
-    const TCHAR* Strings[] = { Title, ProjectId, StoryVersion, SourceLanguage, StoryAssetPath, AudioPackagePath, ThemeFile, TranslationsFile, ImageFolder, SaveFolder, ContinueText, ExitPrefix };
-    N += Strings[0] ? 1 : 0;
-    const FReader Reader;
-    for (int32 i = 0; i < NumGatedChoices; ++i)
-    {
-        const FGatedChoice& G = GatedChoices[i];
-        N += G.bForced ? 1 : 0;
-        for (int32 r = 0; r < G.NumRequirements; ++r) N += G.Requirements[r].Test(Reader) ? 1 : 0;
-    }
-    for (int32 i = 0; i < NarrativeBridgeRoutes::NumRoutes; ++i) N += NarrativeBridgeRoutes::All[i].NumChoices;
-    return N;
-}
-`;
 
 const wide = (v: string) => `TEXT(${JSON.stringify(v)})`;
 /** A condition as C++ that builds the FNarrativeCondition tree (the runtime builds the same tree from StoryInfo.json). */
@@ -225,9 +188,9 @@ for (const sample of samples) {
   const result = await adapter.export(story, { engine: 'unreal', projectName: sample.id, engineVersion: adapter.defaultEngineVersion, integrationRef: adapter.integration.defaultRef, includeDemo: true });
   const dir = join(out, sample.id);
   mkdirSync(dir, { recursive: true });
-  const headers = result.files.filter((f) => /\/(NarrativeBridgeStoryInfo|NarrativeBridgeRoutes|NarrativeBridgeCondition)\.h$/.test(f.path));
+  const headers = result.files.filter((f) => /\/NarrativeBridgeCondition\.h$/.test(f.path));
   for (const f of headers) writeFileSync(join(dir, f.path.split('/').pop()!), f.content as string);
-  writeFileSync(join(dir, 'check.cpp'), CHECK_CPP);
+  writeFileSync(join(dir, 'check.cpp'), '#include "NarrativeBridgeCondition.h"\nint main() { return 0; }\n');
   const r = spawnSync(cxx, ['-std=c++20', '-fsyntax-only', '-Wall', '-Wno-unused-variable', '-Wno-unused-const-variable', '-I', stubs, '-I', dir, join(dir, 'check.cpp')], { encoding: 'utf8' });
   if (r.error) {
     console.error(`Couldn’t run ${cxx}: ${r.error.message}. Install clang, or pass --cxx <compiler>.`);
@@ -239,7 +202,7 @@ for (const sample of samples) {
   const built = spawnSync(cxx, ['-std=c++20', '-Wall', '-Wno-unused-variable', '-Wno-unused-function', '-I', stubs, '-I', dir, join(dir, 'parity.cpp'), '-o', join(dir, 'parity')], { encoding: 'utf8' });
   const ran = built.status === 0 ? spawnSync(join(dir, 'parity'), [], { encoding: 'utf8' }) : built;
   const leaks = boundaryViolations(result.files);
-  const ok = r.status === 0 && ran.status === 0 && headers.length === 3 && leaks.length === 0;
+  const ok = r.status === 0 && ran.status === 0 && headers.length === 1 && leaks.length === 0;
   if (!ok) failed++;
   console.log(`${ok ? '✓' : '✗'} ${sample.id}: ${headers.map((f) => f.path.split('/').pop()).join(', ')}`);
   for (const l of leaks) console.log(l);

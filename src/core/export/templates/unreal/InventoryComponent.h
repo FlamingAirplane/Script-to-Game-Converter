@@ -11,7 +11,7 @@ DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(FNarrativeItemChanged, const FStrin
 /**
  * A list of item ids that is the story's inventory (it implements Narrative Inventory Authority): put it on the same actor
  * as the Narrative Bridge component, or point the component's Inventory Authority at it. Items the story gives or takes
- * arrive here; give and take them from your game too. Item ids are NarrativeBridgeStoryInfo::ItemVariables without "has_".
+ * arrive here; give and take them from your game too. Item ids are the story's item variables without "has_".
  */
 UCLASS(ClassGroup = (NarrativeBridge), meta = (BlueprintSpawnableComponent, DisplayName = "Narrative Simple Inventory"))
 class __API__ UNarrativeSimpleInventoryComponent : public UActorComponent, public INarrativeInventoryAuthority

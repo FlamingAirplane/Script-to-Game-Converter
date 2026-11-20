@@ -18,7 +18,7 @@ class __API__ UNarrativeStoryTriggerComponent : public UActorComponent
     GENERATED_BODY()
 
 public:
-    /** The passage to start at (one of NarrativeBridgeStoryInfo::Passages), or empty for the beginning. */
+    /** The passage to start at (one of the story's passages), or empty for the beginning. */
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Narrative Bridge")
     FString Passage;
 

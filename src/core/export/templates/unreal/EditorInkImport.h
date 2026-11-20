@@ -6,7 +6,7 @@
 
 namespace NarrativeBridgeInkImport
 {
-    /** Makes and saves the story asset (NarrativeBridgeStoryInfo::StoryAssetPath) from StorySource/MainStory.compiled.json, with no Ink compiler needed. */
+    /** Makes and saves the story asset (NarrativeBridge::StoryAssetPath) from StorySource/MainStory.compiled.json, with no Ink compiler needed. */
     bool CreateStoryAssetFromCompiled(const FString& SourceFolder);
 
     /** A story asset made in memory from the compiled story's text, outside any package (for the automation tests). */

@@ -14,7 +14,7 @@ class __API__ UNarrativeInventoryAuthority : public UInterface
 /**
  * Implement on an actor or component (in C++ or Blueprint) to make your game the authority for item possession, and set
  * it as the story component's Inventory Authority. The story asks it before every step and sends it the gains and losses
- * instead of keeping its own copy. Item ids are NarrativeBridgeStoryInfo::ItemVariables without the "has_" prefix.
+ * instead of keeping its own copy. Item ids are the story's item variables without the "has_" prefix.
  */
 class __API__ INarrativeInventoryAuthority
 {

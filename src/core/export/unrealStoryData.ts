@@ -25,6 +25,8 @@ export interface StoryInfoData {
   /** Changes whenever the generated Ink changes. Saves from another version are carried over by replaying their choices. */
   storyVersion: string;
   sourceLanguage: string;
+  /** Save slots go in Saved/SaveGames/NarrativeBridge/<this>/. */
+  saveFolder: string;
   passages: { id: string; title: string; act: string }[];
   acts: { id: string; title: string }[];
   lines: { path: string; text: string }[];
@@ -48,7 +50,7 @@ export interface StoryInfoData {
   }[];
 }
 
-export function storyInfoData(story: ProcessedStory): StoryInfoData {
+export function storyInfoData(story: ProcessedStory, saveFolder: string): StoryInfoData {
   const lines = lineEntries(story.project);
   const entryKnots = new Set(lines.map((l) => l.entryKnot));
   const passageIds = [...story.generated.ink.matchAll(/^=== (\w+) ===$/gm)].map((m) => m[1]).filter((k) => !entryKnots.has(k));
@@ -63,6 +65,7 @@ export function storyInfoData(story: ProcessedStory): StoryInfoData {
     projectId: story.project.project.id,
     storyVersion: storyVersion(story),
     sourceLanguage: 'en',
+    saveFolder,
     passages: passageIds.map((id) => {
       const p = story.project.passages.find((x) => x.id === id);
       return { id, title: p?.title || id, act: actIds.has(p?.act ?? '') ? p!.act! : '' };

@@ -38,7 +38,10 @@ struct __API__ FNarrativeStoryInfo
     FString ProjectId;
     /** Changes whenever the generated Ink changes. Saves from another version are carried over by replaying their choices. */
     FString StoryVersion;
-    FString SourceLanguage;
+    /** The language the story is written in (the translation sheet's "source" column). */
+    FString SourceLanguage = TEXT("en");
+    /** Save slots go in Saved/SaveGames/NarrativeBridge/<this>/. */
+    FString SaveFolder;
     TArray<FNarrativeStoryPassage> Passages;
     TArray<FNarrativeStoryAct> Acts;
     TArray<FNarrativeStoryLine> Lines;
@@ -69,6 +72,15 @@ public:
     /** StoryInfo.json, as text. */
     UPROPERTY(EditAnywhere, Category = "Narrative Bridge", meta = (MultiLine = "true"))
     FString Json;
+
+    /** Replaces the JSON (the editor does this when the story is imported again). */
+    void SetJson(const FString& NewJson) { Json = NewJson; bParsed = false; }
+
+    /** The story data at NarrativeBridge::StoryDataAssetPath (the one imported from StorySource/), or null. */
+    static UNarrativeStoryData* GetDefault();
+
+    /** The default story data's info, or an empty one when there is none (the project hasn't imported its story yet). */
+    static const FNarrativeStoryInfo& DefaultInfo();
 
     /** The parsed data (parsed the first time it's asked for). Empty when the JSON can't be read: see GetError. */
     const FNarrativeStoryInfo& Info() const;
