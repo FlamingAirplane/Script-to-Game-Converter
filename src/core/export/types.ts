@@ -50,6 +50,8 @@ export interface EnvironmentRequirement {
   detail: string;
   /** A command or path the CLI's `doctor` can probe; the browser UI only shows these as a checklist. */
   probe?: { command?: string; paths?: string[] };
+  /** Nice to have: the export works without it (doctor reports it but doesn't fail). */
+  optional?: boolean;
 }
 
 export interface ExportResult {

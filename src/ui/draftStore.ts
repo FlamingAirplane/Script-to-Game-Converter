@@ -7,7 +7,7 @@ import { storyStats } from '../core/stats';
 // sources can outgrow localStorage). Writers keep one before a big change, and one is kept
 // automatically before a project is replaced or restored, so earlier work is never lost.
 // Voice clips are stored separately by id (see audioStore.ts) and are never deleted with a project,
-// so a restored draft still plays its clips.
+// so a restored draft still plays its clips; the media sweep (mediaSweep.ts) keeps every file a draft uses.
 
 const draftLog = log('drafts');
 const DB = 'narrative-bridge-drafts';
@@ -91,6 +91,12 @@ export async function listDrafts(): Promise<DraftSummary[]> {
     draftLog.warn('Could not read drafts', errorData(e));
     return [];
   }
+}
+
+/** Every draft's project, for the media sweep. Throws if the drafts can't be read, so nothing a draft needs is swept. */
+export async function draftProjects(): Promise<StoryProject[]> {
+  const all = await tx<Draft[]>('readonly', (s) => s.getAll());
+  return all.map((d) => d.project);
 }
 
 export async function getDraft(id: number): Promise<Draft | undefined> {

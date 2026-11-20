@@ -268,3 +268,26 @@ describe('cue sounds', () => {
     expect(cueSounds(project).has('music:calm')).toBe(false);
   });
 });
+
+describe('sweeping unused media', () => {
+  it('keeps every file a story or draft uses, including the sessions regions play from', async () => {
+    const { mediaInUse } = await import('../src/ui/mediaSweep');
+    const { project } = await build('@passage hall Hall\nMIRA: Who is there?\n\nTOMAS: Only me.\n@end\n', 'p.md', 'structured');
+    const [a, b] = project.passages[0].content.filter((x) => x.type === 'dialogue') as { audio?: unknown }[];
+    a.audio = { id: 'vo_own', name: 'a.wav', mime: 'audio/wav' };
+    // A region: no bytes of its own, it plays a stretch of its session (listed in project.sessions or not).
+    b.audio = { id: 'vo_region', name: 'b.wav', mime: 'audio/wav', region: true, from: { session: 'ses_1', start: 1, end: 2 } };
+    project.passages[0].image = { id: 'img_scene', name: 'hall.png', mime: 'image/png' } as never;
+    const draft = structuredClone(project);
+    draft.characters[0].portrait = { id: 'img_old_portrait', name: 'm.png', mime: 'image/png' } as never;
+    const ids = mediaInUse([project, draft]);
+    expect([...ids].sort()).toEqual(['img_old_portrait', 'img_scene', 'ses_1', 'vo_own']);
+  });
+
+  it('deletes only files nothing uses and that were not stored recently', async () => {
+    const { mediaToSweep } = await import('../src/ui/audioStore');
+    const stored = ['used', 'unused_old', 'unused_new', 'undated'];
+    expect(mediaToSweep(stored, new Set(['unused_new']), new Set(['used']))).toEqual(['unused_old', 'undated']);
+    expect(mediaToSweep(stored, new Set(), new Set(stored))).toEqual([]);
+  });
+});

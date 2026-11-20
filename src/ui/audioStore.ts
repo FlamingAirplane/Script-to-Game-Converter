@@ -11,10 +11,15 @@ const logger = log('audio');
 const DB = 'narrative-bridge-audio';
 const STORE = 'clips';
 
+/** Version 2 records when each file was stored (`at`, indexed), so unused media can be swept without touching new files. */
 function open(): Promise<IDBDatabase> {
   return new Promise((resolve, reject) => {
-    const req = indexedDB.open(DB, 1);
-    req.onupgradeneeded = () => req.result.createObjectStore(STORE);
+    const req = indexedDB.open(DB, 2);
+    req.onupgradeneeded = () => {
+      const db = req.result;
+      const store = db.objectStoreNames.contains(STORE) ? req.transaction!.objectStore(STORE) : db.createObjectStore(STORE);
+      if (!store.indexNames.contains('at')) store.createIndex('at', 'at');
+    };
     req.onsuccess = () => resolve(req.result);
     req.onerror = () => reject(req.error);
   });
@@ -30,7 +35,27 @@ async function tx<T>(mode: IDBTransactionMode, fn: (s: IDBObjectStore) => IDBReq
 }
 
 export async function putClip(id: string, mime: string, bytes: Uint8Array): Promise<void> {
-  await tx('readwrite', (s) => s.put({ mime, bytes }, id));
+  await tx('readwrite', (s) => s.put({ mime, bytes, at: Date.now() }, id));
+}
+
+/** Files stored more recently than this are never swept: a recording made just before the page closed may not be in a saved project yet. */
+export const MEDIA_GRACE_MS = 24 * 60 * 60 * 1000;
+
+/**
+ * Which stored files to delete: those no project uses and that weren't stored recently. Files stored before
+ * version 2 have no date, so they count as old.
+ */
+export function mediaToSweep(stored: string[], recent: Set<string>, inUse: Set<string>): string[] {
+  return stored.filter((id) => !inUse.has(id) && !recent.has(id));
+}
+
+/** Deletes stored files that no project in `inUse` refers to and that are older than MEDIA_GRACE_MS. Returns how many went. */
+export async function sweepMedia(inUse: Set<string>, now = Date.now()): Promise<{ deleted: number; kept: number }> {
+  const stored = (await tx<IDBValidKey[]>('readonly', (s) => s.getAllKeys())).map(String);
+  const recent = (await tx<IDBValidKey[]>('readonly', (s) => s.index('at').getAllKeys(IDBKeyRange.lowerBound(now - MEDIA_GRACE_MS)))).map(String);
+  const gone = mediaToSweep(stored, new Set(recent), inUse);
+  for (const id of gone) await tx('readwrite', (s) => s.delete(id));
+  return { deleted: gone.length, kept: stored.length - gone.length };
 }
 
 export async function getClip(id: string): Promise<{ mime: string; bytes: Uint8Array } | undefined> {
