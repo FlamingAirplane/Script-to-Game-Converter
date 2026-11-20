@@ -48,12 +48,12 @@ export const unrealAdapter: EngineAdapter = {
     assertExportable(story);
     const name = pascalCase(options.projectName);
     const root = `${name}/`;
-    // Three modules: the project's own (the primary game module, which holds the demo game mode), the runtime and the editor
-    // module. The last two are the same for every story: their names and code never depend on it, so a prebuilt plugin can
-    // replace them. The story itself is data (StorySource/StoryInfo.json).
-    const proj = `${root}Source/${name}/`;
-    const src = `${root}Source/${MODULE}/`;
-    const ed = `${root}Source/${MODULE}Editor/`;
+    // The project is Blueprint-only (no Source/): all the code is in the NarrativeBridge plugin, with a runtime and an editor
+    // module. The plugin is the same for every story (its code never depends on it), so a prebuilt copy can replace it:
+    // the story itself is data (StorySource/StoryInfo.json) and content (Content/NarrativeBridge/).
+    const plugin = `${root}Plugins/${MODULE}/`;
+    const src = `${plugin}Source/${MODULE}/`;
+    const ed = `${plugin}Source/${MODULE}Editor/`;
     const manifest = await buildManifest(story, options, this);
     const theme = normaliseUnityTheme(options.unityTheme ?? story.project.presentation?.unity);
     // Voice clips and cue sounds are imported as Sound Waves by the editor module (into Content/NarrativeBridge/Audio).
@@ -63,10 +63,9 @@ export const unrealAdapter: EngineAdapter = {
     // Playthrough routes for the tests; not for Ink with randomness, which needn't replay the same way.
     const routes = /RANDOM\(|\{~/.test(story.generated.ink) ? [] : storyRoutes(story.compile.json!, story.project);
     const fill = (template: string) => fillUnreal(template, MODULE);
-    const fillProject = (template: string) => fillUnreal(template, name);
     const info = storyInfoData(story, name);
     const files: ExportFile[] = [
-      { path: `${root}${name}.uproject`, content: json(uproject(name, options)) },
+      { path: `${root}${name}.uproject`, content: json(uproject(options)) },
       { path: `${root}StorySource/MainStory.ink`, content: story.generated.ink },
       { path: `${root}StorySource/MainStory.compiled.json`, content: story.compile.json! },
       // The story's passages, lines, cues and the conditions of its locked choices, as data; the runtime reads it through a UNarrativeStoryData asset.
@@ -79,11 +78,8 @@ export const unrealAdapter: EngineAdapter = {
       { path: `${root}Content/${DATA}Translations.csv`, content: translationSheet(story.project, theme, options.translationLanguages ?? []) },
       ...pictures.files,
       { path: `${root}Config/DefaultGame.ini`, content: defaultGameIni(story) },
-      { path: `${root}Config/DefaultEngine.ini`, content: defaultEngineIni(name, theme, options.includeDemo) },
-      { path: `${root}Source/${name}.Target.cs`, content: target(name, 'Game') },
-      { path: `${root}Source/${name}Editor.Target.cs`, content: target(name, 'Editor') },
-      { path: `${proj}${name}.Build.cs`, content: projectBuildCs(name) },
-      { path: `${proj}${name}.cpp`, content: `#include "Modules/ModuleManager.h"\n\nIMPLEMENT_PRIMARY_GAME_MODULE(FDefaultGameModuleImpl, ${name}, "${name}");\n` },
+      { path: `${root}Config/DefaultEngine.ini`, content: defaultEngineIni(theme, options.includeDemo) },
+      { path: `${plugin}${MODULE}.uplugin`, content: json(uplugin()) },
       { path: `${src}${MODULE}.Build.cs`, content: buildCs(MODULE) },
       { path: `${src}${MODULE}.cpp`, content: `#include "Modules/ModuleManager.h"\n\nIMPLEMENT_MODULE(FDefaultGameModuleImpl, ${MODULE});\n` },
       { path: `${src}NarrativeBridgeCondition.h`, content: fill(CONDITION_H) },
@@ -118,12 +114,9 @@ export const unrealAdapter: EngineAdapter = {
       { path: `${src}NarrativeStoryWidget.cpp`, content: fill(WIDGET_CPP) },
       { path: `${src}NarrativeStoryPanel.h`, content: fill(PANEL_H) },
       { path: `${src}NarrativeStoryPanel.cpp`, content: fill(PANEL_CPP) },
-      ...(options.includeDemo
-        ? [
-            { path: `${proj}NarrativeDemoGameMode.h`, content: fillProject(DEMO_H) },
-            { path: `${proj}NarrativeDemoGameMode.cpp`, content: fillProject(DEMO_CPP) },
-          ]
-        : []),
+      // The demo game mode is always in the plugin, so the plugin never depends on the options; Config/DefaultEngine.ini turns it on.
+      { path: `${src}NarrativeDemoGameMode.h`, content: fill(DEMO_H) },
+      { path: `${src}NarrativeDemoGameMode.cpp`, content: fill(DEMO_CPP) },
       { path: `${ed}${MODULE}Editor.Build.cs`, content: editorBuildCs(MODULE) },
       { path: `${ed}${MODULE}Editor.cpp`, content: fill(EDITOR_MODULE_CPP) },
       { path: `${ed}NarrativeBridgeInkImport.h`, content: fill(EDITOR_INK_IMPORT_H) },
@@ -164,52 +157,37 @@ export const unrealAdapter: EngineAdapter = {
   },
 };
 
-function uproject(name: string, o: ExportOptions) {
+function uproject(o: ExportOptions) {
   return {
     FileVersion: 3,
     EngineAssociation: o.engineVersion,
     Category: '',
     Description: 'Generated by Narrative Bridge',
+    Plugins: [
+      { Name: MODULE, Enabled: true },
+      { Name: 'Inkpot', Enabled: true },
+    ],
+  };
+}
+
+/** The plugin that holds all the export's code: the same for every story. */
+function uplugin() {
+  return {
+    FileVersion: 3,
+    Version: 1,
+    VersionName: '1.0',
+    FriendlyName: 'Narrative Bridge',
+    Description: 'Plays a story written in Narrative Bridge: a story component, a themed story panel, cues, translations and saves. The story itself is data in the project (StorySource/ and Content/NarrativeBridge/).',
+    Category: 'Narrative',
+    CreatedBy: 'Narrative Bridge',
+    CanContainContent: false,
+    Installed: false,
     Modules: [
-      { Name: name, Type: 'Runtime', LoadingPhase: 'Default' },
-      { Name: MODULE, Type: 'Runtime', LoadingPhase: 'Default', AdditionalDependencies: ['Engine', 'UMG'] },
+      { Name: MODULE, Type: 'Runtime', LoadingPhase: 'Default' },
       { Name: `${MODULE}Editor`, Type: 'Editor', LoadingPhase: 'Default' },
     ],
     Plugins: [{ Name: 'Inkpot', Enabled: true }],
   };
-}
-
-function target(name: string, kind: 'Game' | 'Editor') {
-  const cls = kind === 'Game' ? `${name}Target` : `${name}EditorTarget`;
-  return `using UnrealBuildTool;
-
-public class ${cls} : TargetRules
-{
-    public ${cls}(TargetInfo Target) : base(Target)
-    {
-        Type = TargetType.${kind};
-        DefaultBuildSettings = BuildSettingsVersion.Latest;
-        IncludeOrderVersion = EngineIncludeOrderVersion.Latest;
-        ExtraModuleNames.Add("${name}");
-        ExtraModuleNames.Add("${MODULE}");${kind === 'Editor' ? `\n        ExtraModuleNames.Add("${MODULE}Editor");` : ''}
-    }
-}
-`;
-}
-
-/** The project's own module: the primary game module, which holds the demo game mode and your game's code. */
-function projectBuildCs(name: string) {
-  return `using UnrealBuildTool;
-
-public class ${name} : ModuleRules
-{
-    public ${name}(ReadOnlyTargetRules Target) : base(Target)
-    {
-        PCHUsage = PCHUsageMode.UseExplicitOrSharedPCHs;
-        PublicDependencyModuleNames.AddRange(new string[] { "Core", "CoreUObject", "Engine", "InputCore", "UMG", "${MODULE}" });
-    }
-}
-`;
 }
 
 /** The runtime module (the same for every story). */
@@ -240,20 +218,17 @@ ProjectName=${story.project.project.title.replace(/\n/g, ' ')}
 `;
 }
 
-function defaultEngineIni(name: string, theme: ReturnType<typeof normaliseUnityTheme>, demo: boolean): string {
+function defaultEngineIni(theme: ReturnType<typeof normaliseUnityTheme>, demo: boolean): string {
   // Scale the UI with the screen as the theme was designed (its reference resolution, matched by width, height or both).
   const rule = theme.matchWidthOrHeight <= 0.25 ? 'Horizontal' : theme.matchWidthOrHeight >= 0.75 ? 'Vertical' : 'ShortestSide';
   const reference = rule === 'Horizontal' ? theme.referenceWidth : theme.referenceHeight;
-  return `[/Script/Engine.Engine]
-+ActiveGameNameRedirects=(OldGameName="TP_Blank",NewGameName="/Script/${name}")
-
-[/Script/Engine.UserInterfaceSettings]
+  return `[/Script/Engine.UserInterfaceSettings]
 UIScaleRule=${rule}
 UIScaleCurve=(EditorCurveData=(Keys=((Time=0.000000,Value=0.000000),(Time=${(reference * 8).toFixed(6)},Value=8.000000))),ExternalCurve=None)
 ${demo ? `
 [/Script/EngineSettings.GameMapsSettings]
 ; Press Play: the demo game mode puts the story on screen in any level.
-GlobalDefaultGameMode=/Script/${name}.NarrativeDemoGameMode
+GlobalDefaultGameMode=/Script/${MODULE}.NarrativeDemoGameMode
 EditorStartupMap=/Engine/Maps/Entry
 GameDefaultMap=/Engine/Maps/Entry
 ` : ''}`;
@@ -291,7 +266,7 @@ function setupSteps(o: ExportOptions, name: string): string[] {
   return [
     `Use Unreal Engine 5.7 or 5.8: the project is built and tested with 5.7, and Inkpot @ ${o.integrationRef} documents 5.7 and 5.8. On 5.9 that Inkpot release may not compile until one line is fixed (see the README's integration notes).`,
     `Run Scripts/setup_inkpot.sh (or .ps1 on Windows) to clone Inkpot @ ${o.integrationRef} into Plugins/Inkpot.`,
-    `Right-click ${name}.uproject → Generate project files, then build the "${name}Editor" target (or open the .uproject and accept the rebuild prompt).`,
+    `Open ${name}.uproject and accept the rebuild prompt: the project has no code of its own, only the Narrative Bridge plugin in Plugins/NarrativeBridge, which needs a C++ toolchain to build once (prebuilt binaries will remove that).`,
     'Open the project: the first time, the editor imports StorySource/MainStory.ink (as an Inkpot story asset) and the voice clips into Content/NarrativeBridge.',
     o.includeDemo
       ? 'Press Play: the story runs in its themed story panel. To put it in your own level, use Tools → Narrative Bridge → Add … to the Level.'
@@ -321,9 +296,8 @@ ${setupSteps(o, name).map((s, i) => `${i + 1}. ${s}`).join('\n')}
 - \`StorySource/VoiceClips/\` — recorded dialogue and cue sounds; imported into \`Content/NarrativeBridge/Audio\`.
 - \`Content/NarrativeBridge/Data/\` — the story panel's look (\`Theme.json\`), the translation sheet (\`Translations.csv\`) and the scene
   pictures, read while the game runs (\`Config/DefaultGame.ini\` stages them with the game).
-- \`Source/NarrativeBridge/\` — the runtime module, the same for every story: the story component, story panel, cue player, translations, settings and the story data reader.
-- \`Source/${name}/\` — your game's own module (the primary game module); it holds the demo game mode.
-- \`Source/NarrativeBridgeEditor/\` — the editor module, also the same for every story: importing the story files, *Tools → Narrative Bridge*, and the automation tests.
+- \`Plugins/NarrativeBridge/\` — all the code, as a plugin that is the same for every story. \`Source/NarrativeBridge/\` is the runtime module (the story component, story panel, cue player, translations, settings, the story data reader and the demo game mode). The project itself has no \`Source/\`: it is Blueprint-only, and you can copy the plugin into your own project.
+- \`Plugins/NarrativeBridge/Source/NarrativeBridgeEditor/\` — the editor module: importing the story files, *Tools → Narrative Bridge*, and the automation tests.
 - \`NarrativeBridge/\` — manifest, validation report, ISR, source map and original sources.
 
 ## The story component
@@ -416,7 +390,7 @@ save and load (and carry a save over from an earlier version), and check the tra
   release may make that unnecessary. 5.6 and earlier aren't supported.
 - The C++ targets Inkpot's \`UInkpot::BeginStory\` / \`UInkpotStory\` API and InkPlusPlus's \`Ink::FStory\`. Header paths and method names can
   change between Inkpot releases; if the build fails, compare against \`Plugins/Inkpot/Source\`.
-- Exporting again replaces \`Source/\`, \`StorySource/\`, \`Config/\` and \`Content/NarrativeBridge/Data/\`; run *Tools → Narrative Bridge →
+- Exporting again replaces \`Plugins/NarrativeBridge/\`, \`StorySource/\`, \`Config/\` and \`Content/NarrativeBridge/Data/\`; run *Tools → Narrative Bridge →
   Re-import Story Files* afterwards. Your own Narrative Theme assets and levels are kept.
 `;
 }

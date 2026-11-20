@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- **Unreal: the export is a Blueprint-only project plus one plugin.** All the C++ now lives in
+  `Plugins/NarrativeBridge/` (`NarrativeBridge.uplugin`, with a runtime and an editor module), the same for every story;
+  the project itself has no `Source/` or target files. The story is data and content in the project. The demo game
+  mode moved into the plugin (the project's config only switches it on), so the plugin never depends on the export
+  options. The project still needs a C++ toolchain once, to build the plugin, until prebuilt binaries ship.
 - **Unreal: one runtime for every story.** The export's C++ no longer changes from story to story: the story's passages,
   lines, cues and locked-choice conditions are read from `StoryInfo.json` at run time, so `NarrativeBridgeStoryInfo.h`,
   the per-story routes header and the generated tests are gone. The runtime and editor modules are now called
