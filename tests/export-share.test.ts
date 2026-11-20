@@ -241,7 +241,7 @@ describe('translations brought back in', () => {
     const uproject = JSON.parse(file('Archive.uproject'));
     expect(uproject.Modules).toBeUndefined();
     expect(uproject.Plugins.map((p: { Name: string }) => p.Name)).toEqual(['NarrativeBridge', 'Inkpot']);
-    expect(r.files.some((f) => /^Archive\/Source\//.test(f.path))).toBe(false);
+    expect(r.files.some((f) => f.path.startsWith('Archive/Source/'))).toBe(false);
     const plugin = JSON.parse(file('Plugins/NarrativeBridge/NarrativeBridge.uplugin'));
     expect(plugin.Modules.map((m: { Name: string; Type: string }) => m.Name + ':' + m.Type)).toEqual(['NarrativeBridge:Runtime', 'NarrativeBridgeEditor:Editor']);
     expect(plugin.Plugins).toEqual([{ Name: 'Inkpot', Enabled: true }]);
