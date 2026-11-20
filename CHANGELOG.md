@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- **Unreal: the Ink runtime is behind one file.** Every call into Inkpot and InkPlusPlus now goes through a small
+  class, `FNarrativeInk` (`NarrativeBridgeInk.h/.cpp`, about 20 functions), so an Inkpot upgrade, an engine patch or a
+  runtime swap touches one file. The story component has its own value type, `FNarrativeValue`, and new typed
+  functions (`GetBool`, `GetInt`, `GetFloat`, `GetString`, `GetStoryValue` and the matching setters). The old
+  `GetVariable`, `SetVariable` and `GetInkpotStory` still work but are marked deprecated. `npm run test:unreal` now fails
+  if any other generated file includes the runtime's headers.
 - **Real page-turn sounds:** with book sounds on, turning a page (changing chapters in the app, or making a choice in
   the playable story) plays one of three recorded paper flips, picked at random and a touch faster or slower each time.
   They're tiny (about 9 KB each) and built into the playable story, so it still works offline as one file.

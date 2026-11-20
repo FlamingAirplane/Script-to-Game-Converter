@@ -3,6 +3,8 @@
 // of its locked choices, and NarrativeBridgeRoutes.h, the playthrough routes) with clang, against the stand-in
 // CoreMinimal.h in tests/unreal-stubs (syntax and types only, nothing is linked). It runs in CI, which has no Unreal.
 //
+// It also checks the Ink runtime boundary: only the NarrativeBridgeInk* files may include Inkpot or InkPlusPlus headers.
+//
 // The rest of the export's C++ is the same for every story; `npm run test:unreal:build` builds all of it, and runs its
 // automation tests, with a real Unreal Engine and Inkpot.
 //
@@ -17,6 +19,7 @@ import { join, resolve } from 'node:path';
 import { reviewAll } from '../src/core/adapt';
 import { buildStory } from '../src/core/builder';
 import { ADAPTERS } from '../src/core/export';
+import { boundaryViolations } from '../src/core/export/unrealBoundary';
 import { processProject } from '../src/core/pipeline';
 import { SAMPLES } from '../src/samples';
 
@@ -87,9 +90,11 @@ for (const sample of samples) {
     console.error(`Couldn’t run ${cxx}: ${r.error.message}. Install clang, or pass --cxx <compiler>.`);
     process.exit(2);
   }
-  const ok = r.status === 0 && headers.length === 2;
+  const leaks = boundaryViolations(result.files);
+  const ok = r.status === 0 && headers.length === 2 && leaks.length === 0;
   if (!ok) failed++;
   console.log(`${ok ? '✓' : '✗'} ${sample.id}: ${headers.map((f) => f.path.split('/').pop()).join(', ')}`);
+  for (const l of leaks) console.log(l);
   if (r.stderr.trim()) console.log(r.stderr.trim());
 }
 console.log(failed ? `${failed} of ${samples.length} failed.` : `All ${samples.length} compile against the stand-in headers (files in ${out}).`);

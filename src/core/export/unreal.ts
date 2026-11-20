@@ -15,8 +15,8 @@ import { finalize } from './unity';
 import { normaliseUnityTheme } from './unityTheme';
 import { COMPONENT_CPP, COMPONENT_H } from './unrealComponent';
 import { CUE_PLAYER_CPP, CUE_PLAYER_H, ENTER_DIALOGUE_TRIGGER_CPP, ENTER_DIALOGUE_TRIGGER_H, INVENTORY_COMPONENT_H, TRIGGER_CPP, TRIGGER_H } from './unrealCues';
-import { EDITOR_MODULE_CPP, editorBuildCs, keySamples, routesH, testsCpp } from './unrealEditor';
-import { fillUnreal, INVENTORY_H, LOCALIZATION_CPP, LOCALIZATION_H, SAVE_STORAGE_H, SETTINGS_CPP, SETTINGS_H, TYPES_H } from './unrealRuntime';
+import { EDITOR_INK_IMPORT_CPP, EDITOR_INK_IMPORT_H, EDITOR_MODULE_CPP, editorBuildCs, keySamples, routesH, testsCpp } from './unrealEditor';
+import { fillUnreal, INK_COMPAT_CPP, INK_COMPAT_H, INK_CPP, INK_H, INK_OBSERVER_H, INVENTORY_H, LOCALIZATION_CPP, LOCALIZATION_H, SAVE_STORAGE_H, SETTINGS_CPP, SETTINGS_H, TYPES_H } from './unrealRuntime';
 import { DEMO_CPP, DEMO_H, PANEL_CPP, PANEL_H, THEME_CPP, themeH, unrealThemeJson, WIDGET_CPP, WIDGET_H } from './unrealUi';
 
 // Unreal adapter. Uses The Chinese Room's Inkpot plugin, provisioned at a pinned ref by the included setup script (never
@@ -81,6 +81,12 @@ export const unrealAdapter: EngineAdapter = {
       { path: `${src}${name}.cpp`, content: `#include "Modules/ModuleManager.h"\n\nIMPLEMENT_PRIMARY_GAME_MODULE(FDefaultGameModuleImpl, ${name}, "${name}");\n` },
       { path: `${src}NarrativeBridgeStoryInfo.h`, content: storyInfoH(story, name) },
       { path: `${src}NarrativeBridgeTypes.h`, content: fill(TYPES_H) },
+      // The only files that call the Ink runtime (see NarrativeBridgeInk.h); scripts/unreal-check.ts enforces it.
+      { path: `${src}NarrativeBridgeInk.h`, content: fill(INK_H) },
+      { path: `${src}NarrativeBridgeInk.cpp`, content: fill(INK_CPP) },
+      { path: `${src}NarrativeBridgeInkObserver.h`, content: fill(INK_OBSERVER_H) },
+      { path: `${src}NarrativeBridgeInkCompat.h`, content: fill(INK_COMPAT_H) },
+      { path: `${src}NarrativeBridgeInkCompat.cpp`, content: fill(INK_COMPAT_CPP) },
       { path: `${src}NarrativeInventoryAuthority.h`, content: fill(INVENTORY_H) },
       { path: `${src}NarrativeSaveStorage.h`, content: fill(SAVE_STORAGE_H) },
       { path: `${src}NarrativeLocalization.h`, content: fill(LOCALIZATION_H) },
@@ -110,6 +116,8 @@ export const unrealAdapter: EngineAdapter = {
         : []),
       { path: `${ed}${name}Editor.Build.cs`, content: editorBuildCs(name) },
       { path: `${ed}${name}Editor.cpp`, content: fill(EDITOR_MODULE_CPP) },
+      { path: `${ed}NarrativeBridgeInkImport.h`, content: fill(EDITOR_INK_IMPORT_H) },
+      { path: `${ed}NarrativeBridgeInkImport.cpp`, content: fill(EDITOR_INK_IMPORT_CPP) },
       { path: `${ed}NarrativeBridgeRoutes.h`, content: routesH(routes) },
       { path: `${ed}NarrativeBridgeTests.cpp`, content: testsCpp(keySamples(story.project.passages.flatMap((p) => p.choices.map((c) => c.text)).slice(0, 3))) },
       { path: `${root}Plugins/README.md`, content: `Run ../Scripts/setup_inkpot.sh (macOS/Linux) or ..\\Scripts\\setup_inkpot.ps1 (Windows) to install Inkpot @ ${options.integrationRef} into Plugins/Inkpot/.\n` },
@@ -366,7 +374,7 @@ ${list('Lines', lines.map((l) => l.path), 'Every line of dialogue the story can 
     static const TCHAR* LineTexts[] = { ${lines.length ? lines.map((l) => q(l.display)).join(', ') : 'nullptr'} };
     static const TCHAR* ItemVariables[] = { ${items.length ? items.map(q).join(', ') : 'nullptr'} };
     static const int32 NumItemVariables = ${items.length};
-${list('Variables', story.project.variables.map((v) => v.id), 'Story variables the game is allowed to read and write (GetVariable, SetVariable).')}
+${list('Variables', story.project.variables.map((v) => v.id), 'Story variables the game is allowed to read and write (GetStoryValue, SetStoryValue).')}
 ${list('Exits', exits, "The story's exits to the game (UNarrativeBridgeComponent::OnExit gives their names).")}
 ${list('Cues', cues, 'The cues the writer added (#music:calm → "music"); the Narrative Cue Player plays them.')}
 ${list('CueTags', cueTags, 'Every cue as it appears in the story, with its value (e.g. "music:calm"); OnCue broadcasts them.')}
@@ -453,7 +461,7 @@ the story panel and the cue player). It plays \`Content/NarrativeBridge/MainStor
 - **Exits to the game**: \`OnExit\` fires (with the exit's name, one of \`NarrativeBridgeStoryInfo::Exits\`) instead of \`OnChoices\`, and the story
   panel steps aside. When the gameplay is done, call \`Resume\` to go on from there, or \`ResumeAt("passage")\` to go on somewhere else (after a
   lost fight, say); set variables or items first to tell the story what happened.
-- **Variables**: \`GetVariable\` / \`GetVariableAsString\` and \`SetVariable\` for the story's own variables (\`NarrativeBridgeStoryInfo::Variables\`).
+- **Variables**: \`GetBool\` / \`GetInt\` / \`GetFloat\` / \`GetString\` (or \`GetStoryValue\`, \`GetVariableAsString\`) and the matching \`Set…\` functions for the story's own variables (\`NarrativeBridgeStoryInfo::Variables\`). \`GetVariable\`, \`SetVariable\` and \`GetInkpotStory\` still work but are deprecated.
 - **Inventory**: items are Ink Booleans \`has_<item>\`. Implement **Narrative Inventory Authority** (\`HasItem\`, \`GiveItem\`, \`TakeItem\`) on an
   actor or component, in C++ or Blueprint, and your inventory becomes the one source of truth: the story asks it before every step and sends it
   the gains and losses. **Narrative Simple Inventory** is a ready-made one. Or call \`SetItemOwned\` yourself.

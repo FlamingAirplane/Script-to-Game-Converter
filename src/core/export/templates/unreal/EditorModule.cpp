@@ -2,7 +2,6 @@
 #include "Modules/ModuleManager.h"
 #include "AssetImportTask.h"
 #include "AssetToolsModule.h"
-#include "Asset/InkpotStoryAsset.h"
 #include "Editor.h"
 #include "Engine/World.h"
 #include "FileHelpers.h"
@@ -17,6 +16,7 @@
 #include "ToolMenus.h"
 #include "UObject/Package.h"
 #include "NarrativeBridgeComponent.h"
+#include "NarrativeBridgeInkImport.h"
 #include "NarrativeBridgeStoryInfo.h"
 #include "NarrativeCuePlayer.h"
 #include "NarrativeStoryPanel.h"
@@ -28,21 +28,6 @@ namespace NarrativeBridgeEditor
     FString PackageOf(const TCHAR* ObjectPath)
     {
         return FPackageName::ObjectPathToPackageName(FString(ObjectPath));
-    }
-
-    /** Makes the story asset straight from the compiled story, when Inkpot's importer couldn't (e.g. no .NET for its compiler). */
-    bool CreateStoryFromCompiled(const FString& Source)
-    {
-        FString Json, Ink;
-        if (!FFileHelper::LoadFileToString(Json, *(Source / TEXT("MainStory.compiled.json")))) return false;
-        FFileHelper::LoadFileToString(Ink, *(Source / TEXT("MainStory.ink")));
-        const FString PackageName = PackageOf(NarrativeBridgeStoryInfo::StoryAssetPath);
-        UPackage* Package = CreatePackage(*PackageName);
-        UInkpotStoryAsset* Asset = NewObject<UInkpotStoryAsset>(Package, *FPackageName::GetShortName(PackageName), RF_Public | RF_Standalone);
-        Asset->SetSource(Ink);
-        Asset->SetCompiledJSON(Json);
-        Package->MarkPackageDirty();
-        return UEditorLoadingAndSavingUtils::SavePackages({ Package }, false);
     }
 
     /** Imports StorySource/MainStory.ink and StorySource/VoiceClips/* into Content/NarrativeBridge (all of them, or only what's missing). */
@@ -78,7 +63,7 @@ namespace NarrativeBridgeEditor
         if ((bAll || bStoryMissing) && !FPackageName::DoesPackageExist(StoryPackage))
         {
             UE_LOG(LogTemp, Warning, TEXT("[NarrativeBridge] Inkpot couldn't import MainStory.ink (its compiler needs .NET); made the story asset from MainStory.compiled.json instead."));
-            CreateStoryFromCompiled(Source);
+            NarrativeBridgeInkImport::CreateStoryAssetFromCompiled(Source);
         }
         UE_LOG(LogTemp, Display, TEXT("[NarrativeBridge] Imported %d story file(s) into /Game/NarrativeBridge."), Tasks.Num());
     }

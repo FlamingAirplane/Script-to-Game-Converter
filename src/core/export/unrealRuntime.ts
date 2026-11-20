@@ -1,5 +1,5 @@
-import { INVENTORY_H, LOCALIZATION_CPP, LOCALIZATION_H, SAVE_STORAGE_H, SETTINGS_CPP, SETTINGS_H, TYPES_H } from './templates.generated';
-export { INVENTORY_H, LOCALIZATION_CPP, LOCALIZATION_H, SAVE_STORAGE_H, SETTINGS_CPP, SETTINGS_H, TYPES_H };
+import { INK_COMPAT_CPP, INK_COMPAT_H, INK_CPP, INK_H, INK_OBSERVER_H, INVENTORY_H, LOCALIZATION_CPP, LOCALIZATION_H, SAVE_STORAGE_H, SETTINGS_CPP, SETTINGS_H, TYPES_H } from './templates.generated';
+export { INK_COMPAT_CPP, INK_COMPAT_H, INK_CPP, INK_H, INK_OBSERVER_H, INVENTORY_H, LOCALIZATION_CPP, LOCALIZATION_H, SAVE_STORAGE_H, SETTINGS_CPP, SETTINGS_H, TYPES_H };
 // The Unreal export's runtime C++ (the game module): the story component, its types and interfaces, translations,
 // the player's reading settings, the cue player, and two small helpers for hooking the story into a game. The
 // story panel is in unrealUi.ts and the editor module (import, tests) in unrealEditor.ts. Written against Inkpot's
