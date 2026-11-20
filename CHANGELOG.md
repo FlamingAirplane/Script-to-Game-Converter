@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- **Unreal: the story's info is data too.** The export now writes `StorySource/StoryInfo.json` (passages, lines, acts,
+  items, cues and the conditions of locked choices; described by `schemas/unreal-story-info.schema.json`) and the editor
+  imports it as a `UNarrativeStoryData` asset. A small condition evaluator in the runtime walks the same condition trees
+  Narrative Bridge uses, and `npm run test:unreal` builds it and checks it against the TypeScript evaluator. The
+  generated `NarrativeBridgeStoryInfo.h` is unchanged for now; the runtime moves over to the data in the next step.
 - **Unreal: the Ink runtime is behind one file.** Every call into Inkpot and InkPlusPlus now goes through a small
   class, `FNarrativeInk` (`NarrativeBridgeInk.h/.cpp`, about 20 functions), so an Inkpot upgrade, an engine patch or a
   runtime swap touches one file. The story component has its own value type, `FNarrativeValue`, and new typed

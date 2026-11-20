@@ -6,8 +6,8 @@
 
 import type { StoryRoute } from './routes';
 import { translationKey } from './translations';
-import { EDITOR_INK_IMPORT_CPP, EDITOR_INK_IMPORT_H, EDITOR_MODULE_CPP } from './templates.generated';
-export { EDITOR_INK_IMPORT_CPP, EDITOR_INK_IMPORT_H, EDITOR_MODULE_CPP };
+import { EDITOR_INK_IMPORT_CPP, EDITOR_INK_IMPORT_H, EDITOR_MODULE_CPP, EDITOR_STORY_DATA_TESTS_CPP } from './templates.generated';
+export { EDITOR_INK_IMPORT_CPP, EDITOR_INK_IMPORT_H, EDITOR_MODULE_CPP, EDITOR_STORY_DATA_TESTS_CPP };
 
 export function editorBuildCs(module: string): string {
   return `using UnrealBuildTool;
