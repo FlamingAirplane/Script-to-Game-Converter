@@ -22,6 +22,7 @@
     "test:unity": "tsx scripts/unity-check.ts",
     "test:unreal": "tsx scripts/unreal-check.ts",
     "test:unreal:build": "tsx scripts/unreal-build.ts",
+    "build:unreal-plugin": "tsx scripts/unreal-plugin-build.ts",
     "templates": "node scripts/templates.mjs",
     "lint": "oxlint --deny-warnings src tests scripts",
     "format": "prettier --write .",

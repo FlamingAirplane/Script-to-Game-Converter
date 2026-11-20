@@ -30,7 +30,7 @@ jobs:
       - run: npm run lint
       - run: npm test
       - run: npm run build
-      - name: Unreal C++ compiles (against stand-in Unreal and Inkpot headers)
+      - name: Unreal export checks (condition evaluator against the TypeScript one, Ink runtime boundary)
         run: npm run test:unreal
 
   e2e:

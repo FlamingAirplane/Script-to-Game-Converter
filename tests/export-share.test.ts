@@ -4,7 +4,9 @@ import { reviewAll } from '../src/core/adapt';
 import { analyze } from '../src/core/analyzer';
 import { buildStory } from '../src/core/builder';
 import { ADAPTERS } from '../src/core/export';
+import { GENERATOR_VERSION } from '../src/core/version';
 import { CONTINUE_TEXT, EXIT_PREFIX } from '../src/core/isr';
+import { buildPluginCommand, pluginFilesOf, pluginZipName, shipsInPluginZip } from '../src/core/export/unrealPlugin';
 import { boundaryViolations } from '../src/core/export/unrealBoundary';
 import { processProject } from '../src/core/pipeline';
 import { SAMPLES } from '../src/samples';
@@ -334,5 +336,29 @@ describe('the Unreal export’s generic runtime', () => {
       expect(text, path).not.toContain('NarrativeBridgeStoryInfo');
       expect(text, path).not.toMatch(/ARCHIVE_API|__MODULE__|__API__/);
     }
+  });
+});
+
+describe('the Unreal plugin as something to build', () => {
+  it('takes the plugin out of an export and names its zip and build command', async () => {
+    const s = SAMPLES.find((x) => x.id === 'archive')!;
+    const { project } = await buildStory([{ fileName: s.fileName, text: s.text }], { mode: s.mode });
+    reviewAll(project, 'approved');
+    const r = await ADAPTERS.unreal.export(processProject(project), { engine: 'unreal', projectName: 'Archive', engineVersion: '5.7', integrationRef: 'v1.42.21-release', includeDemo: false });
+    const files = pluginFilesOf(r);
+    const paths = files.map((f) => f.path);
+    expect(paths).toContain('NarrativeBridge.uplugin');
+    expect(paths).toContain('Source/NarrativeBridge/NarrativeBridge.Build.cs');
+    expect(paths).toContain('Source/NarrativeBridgeEditor/NarrativeBridgeEditor.Build.cs');
+    expect(paths.every((p) => !p.startsWith('Plugins/') && !p.startsWith('StorySource/') && !p.startsWith('Content/'))).toBe(true);
+    // The plugin carries its own version, so a project can tell which plugin it has.
+    expect(JSON.parse(String(files.find((f) => f.path === 'NarrativeBridge.uplugin')!.content)).VersionName).toBe(GENERATOR_VERSION);
+    expect(pluginZipName('0.5.0', '5.7')).toBe('NarrativeBridge-0.5.0-UE5.7.zip');
+    const mac = buildPluginCommand({ engineDir: '/Users/Shared/Epic Games/UE_5.7/', platform: 'Mac', uplugin: '/w/NarrativeBridge.uplugin', packageDir: '/o/Mac/NarrativeBridge' });
+    expect(mac.command).toBe('/Users/Shared/Epic Games/UE_5.7/Engine/Build/BatchFiles/RunUAT.sh');
+    expect(mac.args).toEqual(['BuildPlugin', '-Plugin=/w/NarrativeBridge.uplugin', '-Package=/o/Mac/NarrativeBridge', '-TargetPlatforms=Mac']);
+    expect(buildPluginCommand({ engineDir: 'D:/UE_5.7', platform: 'Win64', uplugin: 'u', packageDir: 'p' }).command).toBe('D:/UE_5.7/Engine/Build/BatchFiles/RunUAT.bat');
+    expect(['Binaries/Mac/UnrealEditor-NarrativeBridge.dylib', 'Source/NarrativeBridge/Foo.cpp', 'NarrativeBridge.uplugin'].every(shipsInPluginZip)).toBe(true);
+    expect(['Intermediate/Build/x.o', 'Binaries/Win64/x.pdb', 'Saved/Logs/a.log'].some(shipsInPluginZip)).toBe(false);
   });
 });
