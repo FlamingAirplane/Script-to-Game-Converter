@@ -4,6 +4,7 @@ import { reviewAll } from '../src/core/adapt';
 import { analyze } from '../src/core/analyzer';
 import { buildStory } from '../src/core/builder';
 import { ADAPTERS } from '../src/core/export';
+import { CONTINUE_TEXT, EXIT_PREFIX } from '../src/core/isr';
 import { boundaryViolations } from '../src/core/export/unrealBoundary';
 import { processProject } from '../src/core/pipeline';
 import { SAMPLES } from '../src/samples';
@@ -200,15 +201,17 @@ describe('translations brought back in', () => {
 
   it('gives Unreal the locked choices, cues and exits, and text helpers for italics', async () => {
     const r = await ADAPTERS.unreal.export(processProject(await archive()), { engine: 'unreal', projectName: 'Archive', engineVersion: '5.7', integrationRef: 'v1.42.21-release', includeDemo: true });
-    const info = r.files.find((f) => f.path.endsWith('NarrativeBridgeStoryInfo.h'))!.content as string;
-    expect(info).toContain('1, TEXT("archive_entry"), TEXT("Open the archive"), TEXT("Archive Key"), false }');
-    // Each locked choice's condition is C++ the component tests against the story's variables.
-    expect(info).toContain('{ TEXT("Archive Key"), [](const FVariableReader& V) -> bool { return V.Has(TEXT("has_archive_key")); } }');
-    expect(info).toMatch(/static const int32 NumGatedChoices = [1-9]/);
-    expect(info).toContain('static const int32 NumReservedTags = ');
-    expect(info).toContain('TEXT("speaker")');
+    const data = JSON.parse(r.files.find((f) => f.path.endsWith('StorySource/StoryInfo.json'))!.content as string);
+    const locked = data.gatedChoices.find((g: { text: string }) => g.text === 'Open the archive');
+    expect(locked).toMatchObject({ passage: 'archive_entry', needs: 'Archive Key', forced: false });
+    // Each locked choice's condition is the ISR condition itself, which the runtime's evaluator tests against the story's variables.
+    expect(locked.requirements).toEqual([{ words: 'Archive Key', condition: { type: 'has_item', itemId: 'archive_key' } }]);
+    expect(data.reservedTags).toContain('speaker');
     const cpp = r.files.find((f) => f.path.endsWith('NarrativeBridgeComponent.cpp'))!.content as string;
-    expect(info).toContain('static const TCHAR* ExitPrefix = TEXT("Back to the game: ");');
+    // The words Ink uses for Continue breaks and exits are the same for every story, so they live in the runtime.
+    const types = r.files.find((f) => f.path.endsWith('NarrativeBridgeTypes.h'))!.content as string;
+    expect(types).toContain(`ExitPrefix = TEXT("${EXIT_PREFIX}");`);
+    expect(types).toContain(`ContinueText = TEXT("${CONTINUE_TEXT}");`);
     expect(cpp).toContain('OnCue.Broadcast(Name, Value)');
     expect(cpp).toContain('UNarrativeBridgeComponent::PlainText');
     // Inkpot's SetBool takes a third, out, argument.
@@ -217,7 +220,7 @@ describe('translations brought back in', () => {
     const api = ['void Resume();', 'void ResumeAt(const FString& Passage);', 'void StartAt(const FString& Passage);', 'FNarrativeCue OnCue;', 'FNarrativeWords OnExit;', 'FNarrativeVariable OnVariableChanged;', 'TArray<FNarrativeLockedChoice> GetLockedChoices() const;', 'bool TryLoadState(const FString& Save, FString& Error);', 'static FString RichText(const FString& Text);'];
     for (const fn of api) expect(h).toContain(fn);
     // Braces balance in the generated C++ (a cheap check without an Unreal build).
-    for (const src of [info, cpp, h]) expect(src.split('{').length).toBe(src.split('}').length);
+    for (const src of [cpp, h]) expect(src.split('{').length).toBe(src.split('}').length);
   });
 
   it('gives Unreal the story panel, its look, an editor module and automation tests', async () => {
@@ -229,18 +232,22 @@ describe('translations brought back in', () => {
     expect(theme.Preset).toBe('night');
     expect(theme.bShowSpeakers).toBe(true);
     expect(theme.Background).toEqual({ R: expect.any(Number), G: expect.any(Number), B: expect.any(Number), A: 1 });
+    // The panel's look comes only from Theme.json: the C++ defaults are the same for every story.
     expect(file('NarrativeTheme.h')).toContain('bool bShowLockedChoices = true;');
+    expect(file('NarrativeTheme.h')).not.toContain('TEXT("night")');
     // Float literals always have a decimal point (1.0f; 1f isn't C++).
     expect(file('NarrativeTheme.h')).not.toMatch(/[^.\d\w]\d+f[;,)]/);
-    // Two modules: the game and its editor tools, which hold the tests.
+    // Three modules: the project's own, the runtime (the same for every story) and its editor tools, which hold the tests.
     const uproject = JSON.parse(file('Archive.uproject'));
-    expect(uproject.Modules.map((m: { Name: string; Type: string }) => m.Name + ':' + m.Type)).toEqual(['Archive:Runtime', 'ArchiveEditor:Editor']);
-    expect(file('ArchiveEditor.Target.cs')).toContain('ExtraModuleNames.Add("ArchiveEditor");');
-    expect(file('Archive.Build.cs')).toContain('"UMG"');
-    expect(file('NarrativeBridgeRoutes.h')).toMatch(/static const int32 NumRoutes = [1-9]/);
+    expect(uproject.Modules.map((m: { Name: string; Type: string }) => m.Name + ':' + m.Type)).toEqual(['Archive:Runtime', 'NarrativeBridge:Runtime', 'NarrativeBridgeEditor:Editor']);
+    expect(file('ArchiveEditor.Target.cs')).toContain('ExtraModuleNames.Add("NarrativeBridgeEditor");');
+    expect(file('NarrativeBridge.Build.cs')).toContain('"UMG"');
+    expect(file('Archive.Build.cs')).toContain('"NarrativeBridge"');
+    expect(JSON.parse(file('StorySource/PlaythroughRoutes.json')).routes.length).toBeGreaterThan(0);
     const tests = file('NarrativeBridgeTests.cpp');
     for (const t of ['"NarrativeBridge.Playthrough"', '"NarrativeBridge.StartAtEveryPassage"', '"NarrativeBridge.Saves"', '"NarrativeBridge.TranslationKeys"']) expect(tests).toContain(t);
-    expect(tests).toContain('UNarrativeLocalization::Key(TEXT("The lamp is out.")), FString(TEXT("nb_');
+    const keys = JSON.parse(file('StorySource/TestData.json')).translationKeys;
+    expect(keys[0]).toEqual({ text: 'The lamp is out.', key: expect.stringMatching(/^nb_/) });
     // Press Play: the demo game mode, and the story's files cooked and staged with the game.
     expect(file('Config/DefaultEngine.ini')).toContain('GlobalDefaultGameMode=/Script/Archive.NarrativeDemoGameMode');
     expect(file('Config/DefaultGame.ini')).toContain('+DirectoriesToAlwaysCook=(Path="/Game/NarrativeBridge")');
@@ -283,10 +290,9 @@ describe('the Unreal export’s story data', () => {
     for (const key of schema.required) expect(info, key).toHaveProperty(key);
     for (const key of Object.keys(info)) expect(schema.properties, key).toHaveProperty(key);
     expect(info.schemaVersion).toBe(1);
-    // The header is written from the same data.
-    const header = file('NarrativeBridgeStoryInfo.h');
-    expect(header).toContain(`static const int32 NumPassages = ${info.passages.length};`);
-    expect(header).toContain(`static const int32 NumGatedChoices = ${info.gatedChoices.length};`);
+    // There is no per-story header any more: the story is data.
+    expect(r.files.some((f) => f.path.endsWith('NarrativeBridgeStoryInfo.h'))).toBe(false);
+    expect(info.saveFolder).toBe('Archive');
     expect(info.gatedChoices.length).toBeGreaterThan(0);
     // Locked choices carry the ISR condition itself, and ConditionChecks.json has an answer for each one.
     const checks = JSON.parse(file('StorySource/ConditionChecks.json')).checks;
@@ -299,5 +305,27 @@ describe('the Unreal export’s story data', () => {
     // The runtime and the tests that read it are in the export.
     const names = r.files.map((f) => f.path.split('/').pop());
     for (const n of ['NarrativeBridgeStoryData.h', 'NarrativeBridgeStoryData.cpp', 'NarrativeBridgeCondition.h', 'NarrativeBridgeStoryDataTests.cpp']) expect(names).toContain(n);
+  });
+});
+
+describe('the Unreal export’s generic runtime', () => {
+  it('gives every story the same runtime and editor modules, byte for byte', async () => {
+    const out = new Map<string, Map<string, string>>();
+    for (const id of ['archive', 'lighthouse']) {
+      const sample = SAMPLES.find((x) => x.id === id)!;
+      const { project } = await buildStory([{ fileName: sample.fileName, text: sample.text }], { mode: sample.mode });
+      reviewAll(project, 'approved');
+      const r = await ADAPTERS.unreal.export(processProject(project), { engine: 'unreal', projectName: id === 'archive' ? 'Archive' : 'Lighthouse', engineVersion: '5.7', integrationRef: 'v1.42.21-release', includeDemo: true });
+      out.set(id, new Map(r.files.filter((f) => /\/Source\/NarrativeBridge(Editor)?\//.test(f.path)).map((f) => [f.path.replace(/^[^/]+\//, ''), String(f.content)])));
+    }
+    const [a, b] = [out.get('archive')!, out.get('lighthouse')!];
+    expect([...a.keys()].length).toBeGreaterThan(30);
+    expect([...b.keys()]).toEqual([...a.keys()]);
+    for (const [path, text] of a) expect(b.get(path), path).toBe(text);
+    // Nothing in them is the story's: no story or project names, and no reference to the old per-story header.
+    for (const [path, text] of a) {
+      expect(text, path).not.toContain('NarrativeBridgeStoryInfo');
+      expect(text, path).not.toMatch(/ARCHIVE_API|__MODULE__|__API__/);
+    }
   });
 });

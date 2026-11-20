@@ -2,7 +2,9 @@
 #include "NarrativeBridgeStoryData.h"
 #include "Dom/JsonObject.h"
 #include "Serialization/JsonReader.h"
+#include "NarrativeBridgeTypes.h"
 #include "Serialization/JsonSerializer.h"
+#include "UObject/StrongObjectPtr.h"
 
 namespace
 {
@@ -103,7 +105,9 @@ bool FNarrativeStoryInfo::Parse(const FString& Text, FNarrativeStoryInfo& Out, F
     Out.Title = Str(Root, TEXT("title"));
     Out.ProjectId = Str(Root, TEXT("projectId"));
     Out.StoryVersion = Str(Root, TEXT("storyVersion"));
-    Out.SourceLanguage = Str(Root, TEXT("sourceLanguage"));
+    const FString Language = Str(Root, TEXT("sourceLanguage"));
+    if (!Language.IsEmpty()) Out.SourceLanguage = Language;
+    Out.SaveFolder = Str(Root, TEXT("saveFolder"));
     for (const TSharedPtr<FJsonObject>& O : Objects(Root, TEXT("passages"))) Out.Passages.Add({ Str(O, TEXT("id")), Str(O, TEXT("title")), Str(O, TEXT("act")) });
     for (const TSharedPtr<FJsonObject>& O : Objects(Root, TEXT("acts"))) Out.Acts.Add({ Str(O, TEXT("id")), Str(O, TEXT("title")) });
     for (const TSharedPtr<FJsonObject>& O : Objects(Root, TEXT("lines"))) Out.Lines.Add({ Str(O, TEXT("path")), Str(O, TEXT("text")) });
@@ -156,4 +160,18 @@ void UNarrativeStoryData::Parse() const
 {
     bParsed = true;
     FNarrativeStoryInfo::Parse(Json, Parsed, Error);
+}
+
+UNarrativeStoryData* UNarrativeStoryData::GetDefault()
+{
+    static TStrongObjectPtr<UNarrativeStoryData> Loaded;
+    if (!Loaded.IsValid()) Loaded.Reset(LoadObject<UNarrativeStoryData>(nullptr, NarrativeBridge::StoryDataAssetPath, nullptr, LOAD_NoWarn | LOAD_Quiet));
+    return Loaded.Get();
+}
+
+const FNarrativeStoryInfo& UNarrativeStoryData::DefaultInfo()
+{
+    static const FNarrativeStoryInfo Empty;
+    const UNarrativeStoryData* Data = GetDefault();
+    return Data ? Data->Info() : Empty;
 }

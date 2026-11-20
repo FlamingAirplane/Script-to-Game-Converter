@@ -6,7 +6,7 @@
 #include "Misc/PackageName.h"
 #include "Misc/Paths.h"
 #include "UObject/Package.h"
-#include "NarrativeBridgeStoryInfo.h"
+#include "NarrativeBridgeTypes.h"
 
 namespace NarrativeBridgeInkImport
 {
@@ -15,7 +15,7 @@ namespace NarrativeBridgeInkImport
         FString Json, Ink;
         if (!FFileHelper::LoadFileToString(Json, *(Source / TEXT("MainStory.compiled.json")))) return false;
         FFileHelper::LoadFileToString(Ink, *(Source / TEXT("MainStory.ink")));
-        const FString PackageName = FPackageName::ObjectPathToPackageName(FString(NarrativeBridgeStoryInfo::StoryAssetPath));
+        const FString PackageName = FPackageName::ObjectPathToPackageName(FString(NarrativeBridge::StoryAssetPath));
         UPackage* Package = CreatePackage(*PackageName);
         UInkpotStoryAsset* Asset = NewObject<UInkpotStoryAsset>(Package, *FPackageName::GetShortName(PackageName), RF_Public | RF_Standalone);
         Asset->SetSource(Ink);

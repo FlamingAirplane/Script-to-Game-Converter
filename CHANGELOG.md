@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+- **Unreal: one runtime for every story.** The export's C++ no longer changes from story to story: the story's passages,
+  lines, cues and locked-choice conditions are read from `StoryInfo.json` at run time, so `NarrativeBridgeStoryInfo.h`,
+  the per-story routes header and the generated tests are gone. The runtime and editor modules are now called
+  `NarrativeBridge` and `NarrativeBridgeEditor` for every project (your own project keeps a small module of its name,
+  with the demo game mode), and two different stories export byte-identical code in them. Blueprint users get
+  `GetPassages`, `GetLines`, `GetActs`, `GetExits`, `GetActOf` and `GetActTitle` to fill dropdowns. **This breaks
+  projects that used the old exports:** C++ that includes `NarrativeBridgeStoryInfo.h` and Blueprints that reference
+  classes as `/Script/<ProjectName>` need updating (a legacy layout and redirects are planned for the plugin step).
 - **Unreal: the story's info is data too.** The export now writes `StorySource/StoryInfo.json` (passages, lines, acts,
   items, cues and the conditions of locked choices; described by `schemas/unreal-story-info.schema.json`) and the editor
   imports it as a `UNarrativeStoryData` asset. A small condition evaluator in the runtime walks the same condition trees

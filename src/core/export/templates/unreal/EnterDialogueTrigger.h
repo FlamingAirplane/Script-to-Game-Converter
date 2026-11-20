@@ -22,11 +22,11 @@ public:
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Narrative Bridge")
     TObjectPtr<AActor> StoryActor;
 
-    /** The passage to enter (one of NarrativeBridgeStoryInfo::Passages). Empty: the beginning of the story. */
+    /** The passage to enter (one of the story's passages). Empty: the beginning of the story. */
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Narrative Bridge", meta = (GetOptions = "GetPassageOptions"))
     FString Passage;
 
-    /** The line of dialogue in that passage the player picks up on (see NarrativeBridgeStoryInfo::Lines). Empty: the top of the passage. */
+    /** The line of dialogue in that passage the player picks up on (see the story's lines). Empty: the top of the passage. */
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Narrative Bridge", meta = (GetOptions = "GetLineOptions"))
     FString Line;
 

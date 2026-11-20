@@ -6,6 +6,7 @@
 #include "Components/ActorComponent.h"
 #include "NarrativeBridgeInk.h"
 #include "NarrativeBridgeInkCompat.h"
+#include "NarrativeBridgeStoryData.h"
 #include "NarrativeBridgeTypes.h"
 #include "NarrativeBridgeComponent.generated.h"
 
@@ -39,6 +40,10 @@ public:
     /** The story asset (an Inkpot story asset). Empty: the one imported from StorySource/MainStory.ink (Content/NarrativeBridge/MainStory). */
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Narrative Bridge", meta = (AllowedClasses = "/Script/Inkpot.InkpotStoryAsset"))
     TObjectPtr<UObject> StoryAsset;
+
+    /** The story's data (passages, lines, items, locked choices). Empty: the one imported from StorySource/StoryInfo.json (Content/NarrativeBridge/StoryData). */
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Narrative Bridge")
+    TObjectPtr<UNarrativeStoryData> StoryData;
 
     /** Start when play begins. Turn off to start it yourself with StartStory or StartAt. */
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Narrative Bridge")
@@ -103,7 +108,7 @@ public:
     UPROPERTY(BlueprintAssignable, Category = "Narrative Bridge")
     FNarrativeVariable OnVariableChanged;
 
-    /** The dialogue reached an exit to the game (its name, one of NarrativeBridgeStoryInfo::Exits): play your gameplay, then call Resume or ResumeAt. */
+    /** The dialogue reached an exit to the game (its name, one of GetExits): play your gameplay, then call Resume or ResumeAt. */
     UPROPERTY(BlueprintAssignable, Category = "Narrative Bridge")
     FNarrativeWords OnExit;
 
@@ -130,8 +135,8 @@ public:
     void StartStory();
 
     /**
-     * Starts (or restarts) the story at a passage, e.g. when the player talks to someone (see NarrativeBridgeStoryInfo::Passages),
-     * or at a line of dialogue in one, "passage.line_…" (see NarrativeBridgeStoryInfo::Lines), to pick a conversation up partway.
+     * Starts (or restarts) the story at a passage, e.g. when the player talks to someone (see GetPassages),
+     * or at a line of dialogue in one, "passage.line_…" (see GetLines), to pick a conversation up partway.
      */
     UFUNCTION(BlueprintCallable, Category = "Narrative Bridge")
     void StartAt(const FString& Passage);
@@ -143,9 +148,9 @@ public:
     UFUNCTION(BlueprintCallable, Category = "Narrative Bridge")
     void EnterAt(const FString& Name);
 
-    /** Whether the story can start at (or jump to) this name: one of NarrativeBridgeStoryInfo::Passages or ::Lines. */
+    /** Whether the story can start at (or jump to) this name: one of GetPassages or GetLines. */
     UFUNCTION(BlueprintPure, Category = "Narrative Bridge")
-    static bool IsStartPoint(const FString& Name);
+    bool IsStartPoint(const FString& Name) const;
 
     /** Whether the player has an item (an item id, without "has_"): your inventory's answer, or the story's. */
     UFUNCTION(BlueprintPure, Category = "Narrative Bridge")
@@ -196,7 +201,7 @@ public:
     UFUNCTION(BlueprintPure, Category = "Narrative Bridge")
     TArray<FNarrativeLockedChoice> GetLockedChoices() const;
 
-    /** The passage (one of NarrativeBridgeStoryInfo::Passages) the reader is in, or empty before the story starts. */
+    /** The passage (one of GetPassages) the reader is in, or empty before the story starts. */
     UFUNCTION(BlueprintPure, Category = "Narrative Bridge")
     FString GetCurrentPassage() const;
 
@@ -230,10 +235,37 @@ public:
     UFUNCTION(BlueprintPure, Category = "Narrative Bridge")
     FString GetStoryVersion() const;
 
+    /** The story's data: StoryData, or the default one imported from StorySource/. */
+    const FNarrativeStoryInfo& StoryInfo() const;
+
+    /** Every passage (Ink knot) the story can start at: StartAt, EnterAt and ResumeAt take these. Use it to fill a dropdown. */
+    UFUNCTION(BlueprintPure, Category = "Narrative Bridge")
+    TArray<FString> GetPassages() const;
+
+    /** Every line of dialogue the story can start at, "passage.line_…". */
+    UFUNCTION(BlueprintPure, Category = "Narrative Bridge")
+    TArray<FString> GetLines() const;
+
+    /** The story's acts (groups of passages), in order. */
+    UFUNCTION(BlueprintPure, Category = "Narrative Bridge")
+    TArray<FString> GetActs() const;
+
+    /** The act a passage is in, or an empty string when it's in none. */
+    UFUNCTION(BlueprintPure, Category = "Narrative Bridge")
+    FString GetActOf(const FString& Passage) const;
+
+    /** An act's title (for chapter menus and save slots), or an empty string for an unknown act. */
+    UFUNCTION(BlueprintPure, Category = "Narrative Bridge")
+    FString GetActTitle(const FString& Act) const;
+
+    /** The story's exits to the game: OnExit gives their names. */
+    UFUNCTION(BlueprintPure, Category = "Narrative Bridge")
+    TArray<FString> GetExits() const;
+
     /** The running story's runtime, for C++ that needs more than the functions here (null before the story starts). */
     const FNarrativeInk* GetInk() const { return Ink.Get(); }
 
-    /** A story variable or item (one of NarrativeBridgeStoryInfo::Variables or ItemVariables). */
+    /** A story variable or item (one of the story's variables or items). */
     UFUNCTION(BlueprintPure, Category = "Narrative Bridge|Variables")
     FNarrativeValue GetStoryValue(const FString& Name, bool& bFound) const;
 
@@ -257,7 +289,7 @@ public:
     UFUNCTION(BlueprintPure, Category = "Narrative Bridge|Variables")
     FString GetVariableAsString(const FString& Name) const;
 
-    /** Sets one of the story's own variables (NarrativeBridgeStoryInfo::Variables). False when it isn't one. */
+    /** Sets one of the story's own variables (the story's own variables). False when it isn't one. */
     UFUNCTION(BlueprintCallable, Category = "Narrative Bridge|Variables")
     bool SetStoryValue(const FString& Name, const FNarrativeValue& Value);
 
@@ -274,7 +306,7 @@ public:
     bool SetString(const FString& Name, const FString& Value) { return SetStoryValue(Name, FNarrativeValue::FromString(Value)); }
 
     /** Whether a name is one of the story's variables (or, for reading, its items). */
-    static bool CanAccessVariable(const FString& Name, bool bWrite);
+    bool CanAccessVariable(const FString& Name, bool bWrite) const;
 
     /** Deprecated: use GetStoryValue. Kept so Blueprints made before the Ink runtime moved behind FNarrativeInk still work. */
     UFUNCTION(BlueprintPure, Category = "Narrative Bridge|Variables", meta = (DeprecatedFunction, DeprecationMessage = "Use Get Story Value, or Get Bool / Get Int / Get Float / Get String."))

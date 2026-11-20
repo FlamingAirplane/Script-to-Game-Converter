@@ -4,13 +4,14 @@
   "title": "Pen to Ink: the story data in an Unreal export (StorySource/StoryInfo.json)",
   "description": "What the Unreal runtime reads about a story: its passages, lines, acts, items, cues and the conditions of its locked choices. The plugin reads any schemaVersion up to its own and ignores fields it doesn't know, so an older export keeps working after a plugin update; a story newer than the plugin is refused with a message.",
   "type": "object",
-  "required": ["schemaVersion", "title", "projectId", "storyVersion", "sourceLanguage", "passages", "acts", "lines", "itemVariables", "variables", "exits", "cues", "cueTags", "cueSounds", "portraits", "reservedTags", "gatedChoices"],
+  "required": ["schemaVersion", "title", "projectId", "storyVersion", "sourceLanguage", "saveFolder", "passages", "acts", "lines", "itemVariables", "variables", "exits", "cues", "cueTags", "cueSounds", "portraits", "reservedTags", "gatedChoices"],
   "properties": {
     "schemaVersion": { "type": "integer", "minimum": 1, "description": "Bumped when a field changes meaning or goes. Adding a field doesn't bump it." },
     "title": { "type": "string" },
     "projectId": { "type": "string" },
     "storyVersion": { "type": "string", "description": "Changes whenever the generated Ink changes. A save from another version is carried over by replaying its choices." },
     "sourceLanguage": { "type": "string", "description": "The language the story is written in (the translation sheet's \"source\" column)." },
+    "saveFolder": { "type": "string", "description": "Save slots go in Saved/SaveGames/NarrativeBridge/<this>/. Added in schemaVersion 1; older files without it save to the root folder." },
     "passages": {
       "type": "array",
       "description": "Every passage (Ink knot) the story can start at, in story order.",

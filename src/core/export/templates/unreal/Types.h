@@ -4,6 +4,24 @@
 #include "CoreMinimal.h"
 #include "NarrativeBridgeTypes.generated.h"
 
+/** The same for every story: where the editor puts the story's assets, and the words Ink uses for Continue breaks and exits. */
+namespace NarrativeBridge
+{
+    /** The Ink story asset the editor imports from StorySource/MainStory.ink. */
+    static const TCHAR* StoryAssetPath = TEXT("/Game/NarrativeBridge/MainStory.MainStory");
+    /** The story data asset (UNarrativeStoryData) the editor makes from StorySource/StoryInfo.json. */
+    static const TCHAR* StoryDataAssetPath = TEXT("/Game/NarrativeBridge/StoryData.StoryData");
+    /** Where the editor imports the voice clips and cue sounds (StorySource/VoiceClips). */
+    static const TCHAR* AudioPackagePath = TEXT("/Game/NarrativeBridge/Audio/");
+    /** The story's files read while the game runs, under Content/ (staged with the game; see Config/DefaultGame.ini). */
+    static const TCHAR* ThemeFile = TEXT("NarrativeBridge/Data/Theme.json");
+    static const TCHAR* TranslationsFile = TEXT("NarrativeBridge/Data/Translations.csv");
+    static const TCHAR* ImageFolder = TEXT("NarrativeBridge/Data/Images/");
+    /** The text of a Continue break's only choice, and the text before an exit's name (see the Ink conventions). */
+    static const TCHAR* ContinueText = TEXT("Continue");
+    static const TCHAR* ExitPrefix = TEXT("Back to the game: ");
+}
+
 /** A line of the story, as the component shows it (OnLineShown) and keeps it (GetTranscript). */
 USTRUCT(BlueprintType)
 struct FNarrativeLine
