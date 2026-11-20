@@ -11,6 +11,7 @@ import { CUE_PLAYER_CPP, CUE_PLAYER_H, ENTER_DIALOGUE_TRIGGER_CPP, ENTER_DIALOGU
 import { EDITOR_INK_IMPORT_CPP, EDITOR_INK_IMPORT_H, EDITOR_MODULE_CPP, EDITOR_STORY_DATA_TESTS_CPP, EDITOR_TESTS_CPP, editorBuildCs, keySamples } from './unrealEditor';
 import { CONDITION_H, fillUnreal, INK_COMPAT_CPP, INK_COMPAT_H, INK_CPP, INK_H, INK_OBSERVER_H, INVENTORY_H, LOCALIZATION_CPP, LOCALIZATION_H, SAVE_STORAGE_H, SETTINGS_CPP, SETTINGS_H, STORY_DATA_CPP, STORY_DATA_H, TYPES_H } from './unrealRuntime';
 import { conditionChecks, storyInfoData } from './unrealStoryData';
+import { coreRedirectsIni } from './unrealPlugin';
 import { DEMO_CPP, DEMO_H, PANEL_CPP, PANEL_H, THEME_CPP, themeH, unrealThemeJson, WIDGET_CPP, WIDGET_H } from './unrealUi';
 
 // Unreal adapter. Uses The Chinese Room's Inkpot plugin, provisioned at a pinned ref by the included setup script (never
@@ -79,7 +80,7 @@ export const unrealAdapter: EngineAdapter = {
       { path: `${root}Content/${DATA}Translations.csv`, content: translationSheet(story.project, theme, options.translationLanguages ?? []) },
       ...pictures.files,
       { path: `${root}Config/DefaultGame.ini`, content: defaultGameIni(story) },
-      { path: `${root}Config/DefaultEngine.ini`, content: defaultEngineIni(theme, options.includeDemo) },
+      { path: `${root}Config/DefaultEngine.ini`, content: defaultEngineIni(name, theme, options.includeDemo) },
       { path: `${plugin}${MODULE}.uplugin`, content: json(uplugin()) },
       { path: `${src}${MODULE}.Build.cs`, content: buildCs(MODULE) },
       { path: `${src}${MODULE}.cpp`, content: `#include "Modules/ModuleManager.h"\n\nIMPLEMENT_MODULE(FDefaultGameModuleImpl, ${MODULE});\n` },
@@ -219,7 +220,7 @@ ProjectName=${story.project.project.title.replace(/\n/g, ' ')}
 `;
 }
 
-function defaultEngineIni(theme: ReturnType<typeof normaliseUnityTheme>, demo: boolean): string {
+function defaultEngineIni(name: string, theme: ReturnType<typeof normaliseUnityTheme>, demo: boolean): string {
   // Scale the UI with the screen as the theme was designed (its reference resolution, matched by width, height or both).
   const rule = theme.matchWidthOrHeight <= 0.25 ? 'Horizontal' : theme.matchWidthOrHeight >= 0.75 ? 'Vertical' : 'ShortestSide';
   const reference = rule === 'Horizontal' ? theme.referenceWidth : theme.referenceHeight;
@@ -232,7 +233,9 @@ ${demo ? `
 GlobalDefaultGameMode=/Script/${MODULE}.NarrativeDemoGameMode
 EditorStartupMap=/Engine/Maps/Entry
 GameDefaultMap=/Engine/Maps/Entry
-` : ''}`;
+` : ''}
+; Blueprints and assets saved by an earlier export of this project refer to its types as /Script/${name}.<Name>, which moved to the plugin.
+${coreRedirectsIni(name)}`;
 }
 
 function setupSh(o: ExportOptions) {
@@ -287,6 +290,15 @@ ${setupSteps(o, name).map((s, i) => `${i + 1}. ${s}`).join('\n')}
 ## Requirements
 - Unreal Engine ${o.engineVersion} (Inkpot documents 5.7+), a C++ toolchain (Visual Studio 2022 "Game development with C++" on Windows, Xcode on macOS),
   and a .NET runtime for Inkpot's Inklecate-based import (without one, the story asset is made from \`MainStory.compiled.json\`).
+
+## Use it in a game you already have
+1. Copy \`Plugins/NarrativeBridge/\` (and install Inkpot with the setup script) into your project's \`Plugins/\`.
+2. Open the project, then choose *Tools → Narrative Bridge → Import Pen to Ink Story…* and pick this exported folder. It copies
+   \`StorySource/\` and \`Content/NarrativeBridge/Data/\` in and imports the story. Export the story again later and import again:
+   the assets are replaced in place, so Blueprints that refer to them keep working.
+3. A project that used an earlier export of this story (when its code was a module called \`${name}\`) keeps its Blueprints
+   working through the \`[CoreRedirects]\` in \`Config/DefaultEngine.ini\`: copy that section into your project's.
+4. To skip the C++ toolchain, export with a prebuilt plugin: \`narrative-bridge export … --engine unreal --plugin NarrativeBridge-<version>-UE<engine>.zip\`.
 
 ## Layout
 - \`StorySource/MainStory.ink\` — canonical validated Ink; the editor imports it as the Inkpot story asset \`Content/NarrativeBridge/MainStory\`.

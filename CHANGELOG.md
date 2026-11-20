@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- **Unreal: use the plugin in a game you already have.** *Tools → Narrative Bridge → Import Pen to Ink Story…* brings an
+  exported folder into an existing project (`NarrativeBridge.ImportFolder <folder>` does it from the console): it copies
+  the story's files in and imports them again, replacing the assets in place so Blueprints that use them keep working,
+  and warns when the export was made with another plugin version. Exports now include `[CoreRedirects]` in
+  `Config/DefaultEngine.ini`, so Blueprints saved against an earlier export (`/Script/<ProjectName>.…`) find their types
+  in the plugin. `narrative-bridge export --engine unreal --plugin <NarrativeBridge-…-UE….zip>` puts a prebuilt plugin
+  into the export (warning if its version or engine doesn't match), so the project opens without a C++ toolchain.
 - **Unreal: a script that builds the plugin's binaries.** `npm run build:unreal-plugin` runs `RunUAT BuildPlugin` for the
   machine's platform (Win64 or Mac) for each engine version and writes `NarrativeBridge-<version>-UE<engine>.zip`
   holding the binaries of every platform built, so a Mac and a Windows machine can each add theirs. A manual

@@ -14,6 +14,8 @@ import { base64ToBytes, type AudioAssets } from '../core/audio';
 import { BINARY_EXTENSIONS, prepareInput } from '../core/parsing/convert';
 import { formatEntry, LEVELS, log, logbook, type LogLevel } from '../core/log';
 import { processProject } from '../core/pipeline';
+import { overlayPluginZip } from '../core/export/unrealPlugin';
+import { GENERATOR_VERSION } from '../core/version';
 
 const HELP = `Pen to Ink — screenplays and prose → Ink → Unity / Unreal
 
@@ -30,6 +32,8 @@ Usage:
   narrative-bridge export <files... | project.nbproj.json> --engine unity|unreal|web|twine|renpy|script --out <dir>
                                       [--name ProjectName] [--engine-version 2022.3.62f1] [--ref <tag|sha>] [--no-demo]
                                       Unity: a package for an existing game; [--unity-project] for a new project, [--package-version 1.0.0]
+                                      Unreal: [--plugin NarrativeBridge-<version>-UE<engine>.zip]  (a prebuilt plugin, from npm run build:unreal-plugin,
+                                       put into the project's Plugins/ so it opens without a C++ toolchain)
                                       [--story-only]  (twine: just passages, text and links; no code, styling or variables)
                                       [--suggest …] [--approve-all] [--approve-model]  as for convert
   narrative-bridge doctor [--engine unity|unreal]
@@ -271,6 +275,15 @@ async function main() {
           audio: audioAssets,
           originals: audioAssets,
         });
+        // Unreal: a prebuilt plugin replaces the plugin's source, so the project opens without compiling it.
+        if (typeof args.plugin === 'string') {
+          if (engine !== 'unreal') usage('--plugin is for --engine unreal');
+          const overlay = await overlayPluginZip(result.files, result.rootName, readFileSync(resolve(args.plugin)), basename(args.plugin), { engineVersion: typeof args['engine-version'] === 'string' ? args['engine-version'] : adapter.defaultEngineVersion, pluginVersion: GENERATOR_VERSION });
+          result.files = overlay.files;
+          result.report.filesCreated = overlay.files.map((f) => f.path);
+          result.report.warnings.push(...overlay.warnings);
+          for (const w of overlay.warnings) console.error(`Warning: ${w}`);
+        }
         const outDir = resolve(args.out);
         for (const f of result.files) {
           const target = join(outDir, f.path);
