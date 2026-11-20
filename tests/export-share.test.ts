@@ -237,19 +237,24 @@ describe('translations brought back in', () => {
     expect(file('NarrativeTheme.h')).not.toContain('TEXT("night")');
     // Float literals always have a decimal point (1.0f; 1f isn't C++).
     expect(file('NarrativeTheme.h')).not.toMatch(/[^.\d\w]\d+f[;,)]/);
-    // Three modules: the project's own, the runtime (the same for every story) and its editor tools, which hold the tests.
+    // Blueprint-only: no code in the project itself. All of it is in the NarrativeBridge plugin, which has a runtime and an editor module.
     const uproject = JSON.parse(file('Archive.uproject'));
-    expect(uproject.Modules.map((m: { Name: string; Type: string }) => m.Name + ':' + m.Type)).toEqual(['Archive:Runtime', 'NarrativeBridge:Runtime', 'NarrativeBridgeEditor:Editor']);
-    expect(file('ArchiveEditor.Target.cs')).toContain('ExtraModuleNames.Add("NarrativeBridgeEditor");');
+    expect(uproject.Modules).toBeUndefined();
+    expect(uproject.Plugins.map((p: { Name: string }) => p.Name)).toEqual(['NarrativeBridge', 'Inkpot']);
+    expect(r.files.some((f) => f.path.startsWith('Archive/Source/'))).toBe(false);
+    const plugin = JSON.parse(file('Plugins/NarrativeBridge/NarrativeBridge.uplugin'));
+    expect(plugin.Modules.map((m: { Name: string; Type: string }) => m.Name + ':' + m.Type)).toEqual(['NarrativeBridge:Runtime', 'NarrativeBridgeEditor:Editor']);
+    expect(plugin.Plugins).toEqual([{ Name: 'Inkpot', Enabled: true }]);
     expect(file('NarrativeBridge.Build.cs')).toContain('"UMG"');
-    expect(file('Archive.Build.cs')).toContain('"NarrativeBridge"');
+    expect(file('NarrativeBridgeEditor.Build.cs')).toContain('"NarrativeBridge"');
+    expect(r.files.filter((f) => /\.(h|cpp|cs)$/.test(f.path)).every((f) => f.path.startsWith('Archive/Plugins/NarrativeBridge/Source/'))).toBe(true);
     expect(JSON.parse(file('StorySource/PlaythroughRoutes.json')).routes.length).toBeGreaterThan(0);
     const tests = file('NarrativeBridgeTests.cpp');
     for (const t of ['"NarrativeBridge.Playthrough"', '"NarrativeBridge.StartAtEveryPassage"', '"NarrativeBridge.Saves"', '"NarrativeBridge.TranslationKeys"']) expect(tests).toContain(t);
     const keys = JSON.parse(file('StorySource/TestData.json')).translationKeys;
     expect(keys[0]).toEqual({ text: 'The lamp is out.', key: expect.stringMatching(/^nb_/) });
     // Press Play: the demo game mode, and the story's files cooked and staged with the game.
-    expect(file('Config/DefaultEngine.ini')).toContain('GlobalDefaultGameMode=/Script/Archive.NarrativeDemoGameMode');
+    expect(file('Config/DefaultEngine.ini')).toContain('GlobalDefaultGameMode=/Script/NarrativeBridge.NarrativeDemoGameMode');
     expect(file('Config/DefaultGame.ini')).toContain('+DirectoriesToAlwaysCook=(Path="/Game/NarrativeBridge")');
     for (const f of ['NarrativeStoryWidget.cpp', 'NarrativeStoryPanel.cpp', 'NarrativeCuePlayer.cpp', 'NarrativeLocalization.cpp', 'NarrativeSettings.cpp', 'NarrativeStoryTrigger.cpp', 'NarrativeSimpleInventory.h', 'NarrativeDemoGameMode.cpp']) expect(file(f), f).toBeTruthy();
     for (const f of r.files.filter((x) => /\.(h|cpp)$/.test(x.path))) {
@@ -258,7 +263,8 @@ describe('translations brought back in', () => {
       expect(src, f.path).not.toContain('__API__');
     }
     const plain = await ADAPTERS.unreal.export(processProject(await archive()), { ...opts, includeDemo: false });
-    expect(plain.files.some((f) => f.path.endsWith('NarrativeDemoGameMode.cpp'))).toBe(false);
+    // The plugin is the same either way; the demo game mode is only switched on in the project's config.
+    expect(plain.files.some((f) => f.path.endsWith('NarrativeDemoGameMode.cpp'))).toBe(true);
     expect(plain.files.find((f) => f.path.endsWith('Config/DefaultEngine.ini'))!.content).not.toContain('GlobalDefaultGameMode');
   });
 
@@ -309,19 +315,20 @@ describe('the Unreal export’s story data', () => {
 });
 
 describe('the Unreal export’s generic runtime', () => {
-  it('gives every story the same runtime and editor modules, byte for byte', async () => {
+  it('gives every story the same plugin, byte for byte', async () => {
     const out = new Map<string, Map<string, string>>();
     for (const id of ['archive', 'lighthouse']) {
       const sample = SAMPLES.find((x) => x.id === id)!;
       const { project } = await buildStory([{ fileName: sample.fileName, text: sample.text }], { mode: sample.mode });
       reviewAll(project, 'approved');
       const r = await ADAPTERS.unreal.export(processProject(project), { engine: 'unreal', projectName: id === 'archive' ? 'Archive' : 'Lighthouse', engineVersion: '5.7', integrationRef: 'v1.42.21-release', includeDemo: true });
-      out.set(id, new Map(r.files.filter((f) => /\/Source\/NarrativeBridge(Editor)?\//.test(f.path)).map((f) => [f.path.replace(/^[^/]+\//, ''), String(f.content)])));
+      out.set(id, new Map(r.files.filter((f) => /\/Plugins\/NarrativeBridge\//.test(f.path)).map((f) => [f.path.replace(/^[^/]+\//, ''), String(f.content)])));
     }
     const [a, b] = [out.get('archive')!, out.get('lighthouse')!];
     expect([...a.keys()].length).toBeGreaterThan(30);
     expect([...b.keys()]).toEqual([...a.keys()]);
     for (const [path, text] of a) expect(b.get(path), path).toBe(text);
+    expect([...a.keys()]).toContain('Plugins/NarrativeBridge/NarrativeBridge.uplugin');
     // Nothing in them is the story's: no story or project names, and no reference to the old per-story header.
     for (const [path, text] of a) {
       expect(text, path).not.toContain('NarrativeBridgeStoryInfo');

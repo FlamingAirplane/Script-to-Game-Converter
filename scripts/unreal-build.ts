@@ -1,5 +1,5 @@
 // Builds the Unreal export with a real Unreal Engine: exports a sample story as an Unreal project, installs Inkpot
-// at the export's pinned ref into its Plugins folder, and compiles the editor target with UnrealBuildTool. With
+// at the export's pinned ref into its Plugins folder, and compiles the editor with the project's plugins using UnrealBuildTool. With
 // --test it then runs the export's automation tests (the playthrough routes and the story component's checks)
 // headless in the editor. Unlike `npm run test:unreal` (clang against stand-in headers) this proves the project
 // builds, but it needs Unreal Engine and a C++ toolchain, so it isn't part of CI.
@@ -66,7 +66,7 @@ if (result.report.errors.length) {
 const name = result.rootName;
 const root = join(out, name);
 // Keep Intermediate/ and Binaries/ from an earlier run in the same --out folder, so a rebuild is quick.
-for (const dir of ['Source', 'Config', 'StorySource', 'Content/NarrativeBridge']) rmSync(join(root, dir), { recursive: true, force: true });
+for (const dir of ['Plugins/NarrativeBridge', 'Config', 'StorySource', 'Content/NarrativeBridge']) rmSync(join(root, dir), { recursive: true, force: true });
 for (const f of result.files) {
   const path = join(out, f.path);
   mkdirSync(dirname(path), { recursive: true });
@@ -90,8 +90,10 @@ if (!existsSync(join(plugin, 'Inkpot.uplugin'))) {
 const uproject = join(root, `${name}.uproject`);
 const build = windows ? join(engine, 'Engine/Build/BatchFiles/Build.bat') : join(engine, 'Engine/Build/BatchFiles/Mac/Build.sh');
 const platform = windows ? 'Win64' : 'Mac';
-console.log(`Building ${name}Editor with ${engine} (project in ${root})…`);
-const buildArgs = [`${name}Editor`, platform, 'Development', `-Project=${uproject}`, '-WaitMutex', '-NoHotReloadFromIDE'];
+// The project is Blueprint-only (all the code is in Plugins/NarrativeBridge), so it has no editor target of its own: build the
+// engine's editor target with the project, which builds the project's plugins too.
+console.log(`Building the editor with the ${name} project's plugins, with ${engine} (project in ${root})…`);
+const buildArgs = ['UnrealEditor', platform, 'Development', `-Project=${uproject}`, '-WaitMutex', '-NoHotReloadFromIDE'];
 // A .bat needs cmd.exe, which wants the whole line quoted once more (the engine is usually under "Program Files").
 const b = windows
   ? spawnSync('cmd.exe', ['/d', '/s', '/c', `"${[build, ...buildArgs].map((a) => `"${a}"`).join(' ')}"`], { stdio: 'inherit', windowsVerbatimArguments: true })
