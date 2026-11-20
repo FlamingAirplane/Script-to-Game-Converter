@@ -312,7 +312,7 @@ async function main() {
         console.log(cyan(`\n${adapter.label}`));
         for (const r of adapter.requirements({ engine: e, projectName: 'x', engineVersion: adapter.defaultEngineVersion, integrationRef: adapter.integration.defaultRef, includeDemo: true })) {
           const ok = probe(r.probe);
-          if (ok === false) missing++;
+          if (ok === false && !r.optional) missing++;
           console.log(`  ${ok === true ? green('✔') : ok === false ? red('✘') : yellow('?')} ${r.label}${dim(` — ${r.detail}`)}`);
         }
       }

@@ -1,3 +1,4 @@
+import { plainText } from './emphasis';
 import { slugify, type Passage, type StoryProject } from './isr';
 import { forPlayers } from './players';
 
@@ -32,7 +33,11 @@ export function passageLineLabels(p: Passage): string[] {
   const out: string[] = [];
   for (const b of p.content) {
     if (b.type !== 'dialogue') continue;
-    const base = `line_${slugify(`${b.speakerId} ${b.text}`).slice(0, LABEL_LENGTH).replace(/_+$/, '') || 'line'}`;
+    // From the words as read: emphasis tags (<i>storm</i>) would otherwise turn into stray "i" words in the label.
+    const words = slugify(`${b.speakerId} ${plainText(b.text)}`)
+      .slice(0, LABEL_LENGTH)
+      .replace(/_+$/, '');
+    const base = `line_${words || 'line'}`;
     let label = base;
     for (let n = 2; used.has(label); n++) label = `${base}_${n}`;
     used.add(label);
@@ -50,7 +55,8 @@ export function lineEntries(story: StoryProject): LineEntry[] {
     const labels = passageLineLabels(p);
     const lines = p.content.flatMap((b) => (b.type === 'dialogue' ? [b] : []));
     return lines.map((b, i) => {
-      const text = b.text.replace(/\s+/g, ' ').trim();
+      // Menus (the Inspector's line picker, StoryInfo's LineTexts) show plain text.
+      const text = plainText(b.text).replace(/\s+/g, ' ').trim();
       const display = `${(names.get(b.speakerId) ?? b.speakerId).toUpperCase()}: ${text.length > 60 ? `${text.slice(0, 59)}…` : text}`;
       return { passageId: p.id, label: labels[i], path: `${p.id}.${labels[i]}`, entryKnot: `${p.id}__${labels[i]}`, display };
     });

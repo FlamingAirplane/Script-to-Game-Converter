@@ -11,7 +11,7 @@ import { itemVarNames, storyVersion } from './common';
 
 // What the Unreal export knows about a story, as plain data: its passages, lines, acts, items, cues and the conditions
 // of its locked choices. Written to StorySource/StoryInfo.json (schemas/unreal-story-info.schema.json); the runtime's
-// UNarrativeStoryData reads it, and the same data still fills NarrativeBridgeStoryInfo.h until the runtime reads it only.
+// UNarrativeStoryData reads it (the editor imports it as Content/NarrativeBridge/StoryData), so no C++ is generated per story.
 
 /** Bumped when a field changes meaning or goes. The runtime reads any version up to its own and ignores fields it doesn't know. */
 export const STORY_INFO_SCHEMA_VERSION = 1;

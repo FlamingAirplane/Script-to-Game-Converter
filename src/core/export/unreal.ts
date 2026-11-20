@@ -15,15 +15,20 @@ import { coreRedirectsIni } from './unrealPlugin';
 import { DEMO_CPP, DEMO_H, PANEL_CPP, PANEL_H, THEME_CPP, themeH, unrealThemeJson, WIDGET_CPP, WIDGET_H } from './unrealUi';
 
 // Unreal adapter. Uses The Chinese Room's Inkpot plugin, provisioned at a pinned ref by the included setup script (never
-// vendored). The export is a complete Unreal project with two C++ modules:
-// - the game module: the story component (a port of the Unity package's NarrativeController), its translations, the
-//   player's reading settings, the cue player, a themed story panel (UMG, built in C++ from the same look as the Unity
-//   story panel), and helpers for hooking the story into a game (see unrealRuntime.ts, unrealComponent.ts, unrealCues.ts,
+// vendored). The export is a Blueprint-only Unreal project (no Source/ of its own) with all the code in one plugin,
+// Plugins/NarrativeBridge, which is the same for every story (so a prebuilt copy can replace it; see unrealPlugin.ts):
+// - its runtime module, NarrativeBridge: the story component (a port of the Unity package's NarrativeController), the
+//   story's data (UNarrativeStoryData, read from StorySource/StoryInfo.json; see unrealStoryData.ts), the Ink runtime
+//   boundary (NarrativeBridgeInk*, the only files that call Inkpot; see unrealBoundary.ts), translations, the player's
+//   reading settings, the cue player, a themed story panel (UMG, built in C++ from the same look as the Unity story
+//   panel), and helpers for hooking the story into a game (see unrealRuntime.ts, unrealComponent.ts, unrealCues.ts,
 //   unrealUi.ts);
-// - the editor module: it imports the story files the first time the project opens, adds Tools → Narrative Bridge, and
-//   holds the automation tests (see unrealEditor.ts).
-// The canonical .ink lives in StorySource/ and Inkpot imports it as a native story asset. `npm run test:unreal:build`
-// builds the export with a real Unreal Engine and Inkpot; `npm run test:unreal` checks its C++ against stand-in headers.
+// - its editor module, NarrativeBridgeEditor: it imports the story files the first time the project opens, adds
+//   Tools → Narrative Bridge (including importing a story into an existing project), and holds the automation tests
+//   (see unrealEditor.ts).
+// The story itself is data: the canonical .ink, its compiled JSON and StoryInfo.json in StorySource/, imported into
+// Content/NarrativeBridge/. `npm run test:unreal:build` builds the export with a real Unreal Engine and Inkpot;
+// `npm run test:unreal` checks the condition evaluator and the Ink boundary against stand-in headers.
 
 /** The runtime module's name: the same for every story. (The editor module is NarrativeBridgeEditor.) */
 const MODULE = 'NarrativeBridge';
@@ -42,8 +47,8 @@ export const unrealAdapter: EngineAdapter = {
   },
   requirements: (o) => [
     { id: 'unreal', label: `Unreal Engine ${o.engineVersion}`, detail: 'Built and tested with Unreal Engine 5.7; Inkpot documents 5.7 and 5.8. Newer engines (5.9) may need a fix in Inkpot. Install via the Epic Games Launcher.', probe: { paths: ['/Users/Shared/Epic Games', 'C:\\Program Files\\Epic Games'] } },
-    { id: 'toolchain', label: 'C++ toolchain', detail: 'Visual Studio 2022 with "Game development with C++" on Windows, or Xcode on macOS.', probe: { command: 'xcodebuild -version' } },
-    { id: 'dotnet', label: '.NET runtime (for Inklecate-based import)', detail: 'Inkpot imports .ink through Inklecate, which needs a .NET runtime. Without it the story is imported from its compiled JSON instead.', probe: { command: 'dotnet --list-runtimes' } },
+    { id: 'toolchain', label: 'C++ toolchain', detail: 'Visual Studio 2022 with "Game development with C++" on Windows, or Xcode on macOS. It builds Inkpot, which comes as source code, and the Narrative Bridge plugin unless the export carries a prebuilt one (the CLI\'s --plugin).', probe: { command: 'xcodebuild -version' } },
+    { id: 'dotnet', label: '.NET runtime (optional)', detail: 'Only for Inkpot importing .ink through Inklecate. Without it, the editor makes the story asset from MainStory.compiled.json instead, and the story plays the same.', probe: { command: 'dotnet --list-runtimes' }, optional: true },
     { id: 'git', label: 'Git on PATH', detail: 'The setup script clones Inkpot at the pinned ref.', probe: { command: 'git --version' } },
   ],
   async export(story, options) {
@@ -270,7 +275,7 @@ function setupSteps(o: ExportOptions, name: string): string[] {
   return [
     `Use Unreal Engine 5.7 or 5.8: the project is built and tested with 5.7, and Inkpot @ ${o.integrationRef} documents 5.7 and 5.8. On 5.9 that Inkpot release may not compile until one line is fixed (see the README's integration notes).`,
     `Run Scripts/setup_inkpot.sh (or .ps1 on Windows) to clone Inkpot @ ${o.integrationRef} into Plugins/Inkpot.`,
-    `Open ${name}.uproject and accept the rebuild prompt: the project has no code of its own, only the Narrative Bridge plugin in Plugins/NarrativeBridge, which needs a C++ toolchain to build once (prebuilt binaries will remove that).`,
+    `Open ${name}.uproject and accept the rebuild prompt: the project has no code of its own, only the Narrative Bridge plugin in Plugins/NarrativeBridge and Inkpot in Plugins/Inkpot. A C++ toolchain builds them once (the Narrative Bridge plugin needs none when the export carries a prebuilt one; Inkpot comes as source code, so it always does).`,
     'Open the project: the first time, the editor imports StorySource/MainStory.ink (as an Inkpot story asset) and the voice clips into Content/NarrativeBridge.',
     o.includeDemo
       ? 'Press Play: the story runs in its themed story panel. To put it in your own level, use Tools → Narrative Bridge → Add … to the Level.'
@@ -288,8 +293,10 @@ Generated by Narrative Bridge. Story version \`${storyVersion(story)}\`.
 ${setupSteps(o, name).map((s, i) => `${i + 1}. ${s}`).join('\n')}
 
 ## Requirements
-- Unreal Engine ${o.engineVersion} (Inkpot documents 5.7+), a C++ toolchain (Visual Studio 2022 "Game development with C++" on Windows, Xcode on macOS),
-  and a .NET runtime for Inkpot's Inklecate-based import (without one, the story asset is made from \`MainStory.compiled.json\`).
+- Unreal Engine ${o.engineVersion} (Inkpot documents 5.7+), a C++ toolchain (Visual Studio 2022 "Game development with C++" on Windows, Xcode on macOS)
+  to build Inkpot, which comes as source code, and Git for the setup script.
+- Optional: a .NET runtime, for Inkpot's Inklecate-based import. Without one, the story asset is made from \`MainStory.compiled.json\`
+  and plays the same.
 
 ## Use it in a game you already have
 1. Copy \`Plugins/NarrativeBridge/\` (and install Inkpot with the setup script) into your project's \`Plugins/\`.
@@ -298,7 +305,8 @@ ${setupSteps(o, name).map((s, i) => `${i + 1}. ${s}`).join('\n')}
    the assets are replaced in place, so Blueprints that refer to them keep working.
 3. A project that used an earlier export of this story (when its code was a module called \`${name}\`) keeps its Blueprints
    working through the \`[CoreRedirects]\` in \`Config/DefaultEngine.ini\`: copy that section into your project's.
-4. To skip the C++ toolchain, export with a prebuilt plugin: \`narrative-bridge export … --engine unreal --plugin NarrativeBridge-<version>-UE<engine>.zip\`.
+4. To skip compiling the Narrative Bridge plugin, export with a prebuilt one: \`narrative-bridge export … --engine unreal --plugin NarrativeBridge-<version>-UE<engine>.zip\`.
+   Inkpot still comes as source code, so the project needs a C++ toolchain once for Inkpot until it is prebuilt too.
 
 ## Layout
 - \`StorySource/MainStory.ink\` — canonical validated Ink; the editor imports it as the Inkpot story asset \`Content/NarrativeBridge/MainStory\`.

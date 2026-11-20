@@ -617,3 +617,29 @@ describe('choices taken before', () => {
     expect(cpp).toContain('Story->WasChosen(i)');
   });
 });
+
+describe('undo copies', () => {
+  it('share the original scripts and copy everything an edit can change', async () => {
+    const { editableCopy } = await import('../src/ui/projectOps');
+    const { project } = await build('INT. A - DAY\n\nMIRA\nHi.\n');
+    const copy = editableCopy(project);
+    // The scripts never change after import: one copy is enough, however many undo steps there are.
+    expect(copy.sources).toBe(project.sources);
+    expect(copy.passages).not.toBe(project.passages);
+    copy.passages[0].title = 'Changed';
+    copy.characters[0].displayName = 'Changed';
+    expect(project.passages[0].title).not.toBe('Changed');
+    expect(project.characters[0].displayName).not.toBe('Changed');
+    expect(copy).toEqual({ ...structuredClone(project), passages: copy.passages, characters: copy.characters });
+  });
+});
+
+describe('line labels', () => {
+  it('come from the words as read, not their emphasis tags', async () => {
+    const { lineEntries } = await import('../src/core/lines');
+    const { project } = await build('INT. LAMP ROOM - NIGHT\n\nTOMAS\nThe *storm* took the lens.\n');
+    const [entry] = lineEntries(project);
+    expect(entry.label).toBe('line_tomas_the_storm_took_the_lens');
+    expect(entry.display).toBe('TOMAS: The storm took the lens.');
+  });
+});

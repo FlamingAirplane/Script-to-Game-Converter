@@ -266,6 +266,16 @@ export function movePassage(p: StoryProject, id: string, dir: -1 | 1): boolean {
   return true;
 }
 
+/**
+ * The copy an edit is applied to. The original scripts (`sources`, their full text) never change once imported, so the
+ * copy shares them instead of cloning them: every undo step would otherwise hold its own copy of every script.
+ * Edits must never change `sources` in place.
+ */
+export function editableCopy(p: StoryProject): StoryProject {
+  const { sources, ...rest } = p;
+  return { ...structuredClone(rest), sources };
+}
+
 /** An edit to the project (see App.update): applied to a copy, one undo step unless grouped. */
 export type Update = (fn: (draft: StoryProject) => void, group?: string) => void;
 

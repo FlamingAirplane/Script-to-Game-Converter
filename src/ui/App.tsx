@@ -7,7 +7,8 @@ import type { ConversionState } from '../core/pipeline';
 import { validateSchema } from '../core/schema';
 import { DiagnosticsPanel, type PanelView } from './DiagnosticsPanel';
 import { ImportView, SITE } from './ImportView';
-import { passageForEntity, STORY_SETTINGS } from './projectOps';
+import { editableCopy, passageForEntity, STORY_SETTINGS } from './projectOps';
+import { sweepUnusedMediaOnce } from './mediaSweep';
 import { packProject, unpackProject } from './projectFile';
 import { LINK_PREFIX, readStoryLink } from './storyLink';
 import { ProjectsSheet } from './ProjectsSheet';
@@ -103,6 +104,8 @@ function loadSaved(): Saved | null {
 
 /** Projects larger than this are autosaved to IndexedDB only (localStorage holds about 5 MB in all). */
 const QUICK_COPY_LIMIT = 1_500_000;
+/** How long autosave waits for typing to pause (closing or hiding the page saves at once). */
+const AUTOSAVE_DELAY_MS = 500;
 
 /** "just now", "5 min ago", "2 h ago", or a date. */
 function ago(at: number): string {
@@ -210,39 +213,60 @@ export function App() {
           setTab('review');
           setAutosave('saved');
         }
+        // Clear out media no story here uses any more; an autosave that can't be read skips it, keeping everything.
+        void sweepUnusedMediaOnce(s === undefined || valid(s) ? [s?.project, initial?.project] : null);
       })
-      .catch(() => {})
+      .catch(() => void sweepUnusedMediaOnce(null))
       .finally(() => (loaded.current = true));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+  // The latest edit's save, while it waits for typing to pause; run at once if the page is closing.
+  const pendingSave = useRef<(() => void) | null>(null);
+  useEffect(() => {
+    const flush = () => pendingSave.current?.();
+    const onHidden = () => document.visibilityState === 'hidden' && flush();
+    window.addEventListener('pagehide', flush);
+    document.addEventListener('visibilitychange', onHidden);
+    return () => {
+      window.removeEventListener('pagehide', flush);
+      document.removeEventListener('visibilitychange', onHidden);
+    };
+  }, []);
   useEffect(() => {
     if (!project || !loaded.current) return;
-    const saved: Saved = { project, parseDiagnostics, savedAt: Date.now() };
-    const json = JSON.stringify(saved);
-    let quick = false;
-    try {
-      if (json.length < QUICK_COPY_LIMIT) {
-        localStorage.setItem(STORAGE_KEY, json);
-        quick = true;
-      } else localStorage.removeItem(STORAGE_KEY); // too big: IndexedDB holds the only copy
-    } catch {
-      /* full: IndexedDB below */
-    }
-    void kvSet(STORAGE_KEY, saved)
-      .then(() => true)
-      .catch(() => quick)
-      .then(async (ok) => {
-        const use = ok ? await storageUse() : null;
-        const next = !ok ? 'failed' : use !== null && use > 0.85 ? 'low' : 'saved';
-        setAutosave((was) => {
-          if (was !== next) {
-            if (next === 'failed') appLog.warn('Autosave failed: browser storage is full or unavailable');
-            else if (next === 'low') appLog.warn('Browser storage is almost full', { used: Math.round((use ?? 0) * 100) });
-            else if (was === 'failed' || was === 'low') appLog.info('Autosave works again');
-          }
-          return next;
+    // Saved once typing pauses, not on every keystroke: a long story is a large write.
+    const save = () => {
+      pendingSave.current = null;
+      const saved: Saved = { project, parseDiagnostics, savedAt: Date.now() };
+      const json = JSON.stringify(saved);
+      let quick = false;
+      try {
+        if (json.length < QUICK_COPY_LIMIT) {
+          localStorage.setItem(STORAGE_KEY, json);
+          quick = true;
+        } else localStorage.removeItem(STORAGE_KEY); // too big: IndexedDB holds the only copy
+      } catch {
+        /* full: IndexedDB below */
+      }
+      void kvSet(STORAGE_KEY, saved)
+        .then(() => true)
+        .catch(() => quick)
+        .then(async (ok) => {
+          const use = ok ? await storageUse() : null;
+          const next = !ok ? 'failed' : use !== null && use > 0.85 ? 'low' : 'saved';
+          setAutosave((was) => {
+            if (was !== next) {
+              if (next === 'failed') appLog.warn('Autosave failed: browser storage is full or unavailable');
+              else if (next === 'low') appLog.warn('Browser storage is almost full', { used: Math.round((use ?? 0) * 100) });
+              else if (was === 'failed' || was === 'low') appLog.info('Autosave works again');
+            }
+            return next;
+          });
         });
-      });
+    };
+    pendingSave.current = save;
+    const timer = setTimeout(save, AUTOSAVE_DELAY_MS);
+    return () => clearTimeout(timer);
   }, [project, parseDiagnostics]);
   // Closing the page while autosave is failing would lose work: let the browser ask first.
   useEffect(() => {
@@ -323,7 +347,7 @@ export function App() {
     lastEdit.current = group ? { group, at: now } : null;
     setProject((cur) => {
       if (!cur) return cur;
-      const next = structuredClone(cur);
+      const next = editableCopy(cur);
       fn(next);
       if (!merge) {
         undoStack.current.push(cur);
