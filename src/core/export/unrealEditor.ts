@@ -6,8 +6,8 @@
 
 import type { StoryRoute } from './routes';
 import { translationKey } from './translations';
-import { EDITOR_MODULE_CPP } from './templates.generated';
-export { EDITOR_MODULE_CPP };
+import { EDITOR_INK_IMPORT_CPP, EDITOR_INK_IMPORT_H, EDITOR_MODULE_CPP } from './templates.generated';
+export { EDITOR_INK_IMPORT_CPP, EDITOR_INK_IMPORT_H, EDITOR_MODULE_CPP };
 
 export function editorBuildCs(module: string): string {
   return `using UnrealBuildTool;
@@ -18,6 +18,7 @@ public class ${module}Editor : ModuleRules
     {
         PCHUsage = PCHUsageMode.UseExplicitOrSharedPCHs;
         PrivateDependencyModuleNames.AddRange(new string[] { "Core", "CoreUObject", "Engine", "UnrealEd", "AssetTools", "AssetRegistry", "ToolMenus", "Slate", "SlateCore", "Json", "Inkpot", "InkPlusPlus", "${module}" });
+        // Only NarrativeBridgeInkImport.cpp uses Inkpot and InkPlusPlus; the rest of this module reaches the story through ${module}.
     }
 }
 `;
@@ -76,10 +77,7 @@ export function testsCpp(samples: [string, string][]): string {
 
 #if WITH_DEV_AUTOMATION_TESTS
 
-#include "Asset/InkpotStoryAsset.h"
 #include "Dom/JsonObject.h"
-#include "Ink/Choice.h"
-#include "Inkpot/InkpotStory.h"
 #include "Misc/FileHelper.h"
 #include "Misc/Paths.h"
 #include "Serialization/JsonReader.h"
@@ -87,6 +85,8 @@ export function testsCpp(samples: [string, string][]): string {
 #include "Serialization/JsonWriter.h"
 #include "UObject/StrongObjectPtr.h"
 #include "NarrativeBridgeComponent.h"
+#include "NarrativeBridgeInk.h"
+#include "NarrativeBridgeInkImport.h"
 #include "NarrativeBridgeRoutes.h"
 #include "NarrativeBridgeStoryInfo.h"
 #include "NarrativeLocalization.h"
@@ -99,7 +99,7 @@ namespace NarrativeBridgeTests
     /** A story component playing the compiled story, outside any level. */
     struct FPlay
     {
-        TStrongObjectPtr<UInkpotStoryAsset> Asset;
+        TStrongObjectPtr<UObject> Asset;
         TStrongObjectPtr<UNarrativeBridgeComponent> Story;
 
         explicit FPlay(FAutomationTestBase& Test)
@@ -110,8 +110,7 @@ namespace NarrativeBridgeTests
                 Test.AddError(TEXT("Couldn't read StorySource/MainStory.compiled.json."));
                 return;
             }
-            Asset.Reset(NewObject<UInkpotStoryAsset>(GetTransientPackage()));
-            Asset->SetCompiledJSON(Json);
+            Asset.Reset(NarrativeBridgeInkImport::MakeTransientStoryAsset(Json));
             Story.Reset(NewObject<UNarrativeBridgeComponent>(GetTransientPackage()));
             Story->StoryAsset = Asset.Get();
             Story->bAutosave = false;
@@ -122,8 +121,8 @@ namespace NarrativeBridgeTests
         TArray<FString> Offered() const
         {
             TArray<FString> Out;
-            if (UInkpotStory* Ink = Story->GetInkpotStory())
-                for (const TSharedPtr<Ink::FChoice>& C : Ink->GetStoryInternal()->GetCurrentChoices()) Out.Add(C->GetText());
+            if (const FNarrativeInk* Ink = Story->GetInk())
+                for (const FNarrativeInkChoice& C : Ink->CurrentChoices()) Out.Add(C.Text);
             return Out;
         }
 
@@ -175,7 +174,7 @@ bool FNarrativeBridgePlaythroughTest::RunTest(const FString& Parameters)
         Play.Story->Choose(Index);
     }
     TestTrue(TEXT("The story ends"), Play.Story->HasEnded());
-    if (Route.Ending) TestTrue(FString::Printf(TEXT("It reaches %s"), Route.Ending), Play.Story->GetInkpotStory()->VisitCountAtPathString(Route.Ending) > 0);
+    if (Route.Ending) TestTrue(FString::Printf(TEXT("It reaches %s"), Route.Ending), Play.Story->GetInk()->VisitCount(Route.Ending) > 0);
     TestEqual(TEXT("The last line"), Play.LastLine(), FString(Route.LastLine));
     return true;
 }

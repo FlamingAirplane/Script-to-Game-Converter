@@ -109,3 +109,56 @@ struct FNarrativeSlotInfo
     UPROPERTY(BlueprintReadOnly, Category = "Narrative Bridge")
     bool bOtherVersion = false;
 };
+
+/** What kind of value a story variable holds. */
+UENUM(BlueprintType)
+enum class ENarrativeValueType : uint8
+{
+    None,
+    Bool,
+    Int,
+    Float,
+    String,
+};
+
+/** A story variable's value: a bool, an int, a float or a string. Ours, so Blueprints don't depend on the Ink runtime. */
+USTRUCT(BlueprintType)
+struct FNarrativeValue
+{
+    GENERATED_BODY()
+
+    UPROPERTY(BlueprintReadWrite, Category = "Narrative Bridge")
+    ENarrativeValueType Type = ENarrativeValueType::None;
+
+    UPROPERTY(BlueprintReadWrite, Category = "Narrative Bridge")
+    bool bValue = false;
+
+    UPROPERTY(BlueprintReadWrite, Category = "Narrative Bridge")
+    int32 IntValue = 0;
+
+    UPROPERTY(BlueprintReadWrite, Category = "Narrative Bridge")
+    float FloatValue = 0.f;
+
+    UPROPERTY(BlueprintReadWrite, Category = "Narrative Bridge")
+    FString StringValue;
+
+    static FNarrativeValue FromBool(bool V) { FNarrativeValue R; R.Type = ENarrativeValueType::Bool; R.bValue = V; return R; }
+    static FNarrativeValue FromInt(int32 V) { FNarrativeValue R; R.Type = ENarrativeValueType::Int; R.IntValue = V; return R; }
+    static FNarrativeValue FromFloat(float V) { FNarrativeValue R; R.Type = ENarrativeValueType::Float; R.FloatValue = V; return R; }
+    static FNarrativeValue FromString(const FString& V) { FNarrativeValue R; R.Type = ENarrativeValueType::String; R.StringValue = V; return R; }
+
+    bool IsSet() const { return Type != ENarrativeValueType::None; }
+
+    /** "true", "3", "2.5" or the text itself; empty when it holds nothing. */
+    FString ToString() const
+    {
+        switch (Type)
+        {
+        case ENarrativeValueType::Bool: return bValue ? TEXT("true") : TEXT("false");
+        case ENarrativeValueType::Int: return FString::FromInt(IntValue);
+        case ENarrativeValueType::Float: return FString::SanitizeFloat(FloatValue);
+        case ENarrativeValueType::String: return StringValue;
+        default: return FString();
+        }
+    }
+};

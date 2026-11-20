@@ -3,6 +3,7 @@ import { reviewAll } from '../src/core/adapt';
 import { analyze } from '../src/core/analyzer';
 import { buildStory } from '../src/core/builder';
 import { ADAPTERS } from '../src/core/export';
+import { boundaryViolations } from '../src/core/export/unrealBoundary';
 import { processProject } from '../src/core/pipeline';
 import { SAMPLES } from '../src/samples';
 import { build } from './helpers';
@@ -251,5 +252,19 @@ describe('translations brought back in', () => {
     const plain = await ADAPTERS.unreal.export(processProject(await archive()), { ...opts, includeDemo: false });
     expect(plain.files.some((f) => f.path.endsWith('NarrativeDemoGameMode.cpp'))).toBe(false);
     expect(plain.files.find((f) => f.path.endsWith('Config/DefaultEngine.ini'))!.content).not.toContain('GlobalDefaultGameMode');
+  });
+
+  it('calls Inkpot only from the NarrativeBridgeInk files', async () => {
+    const opts = { engine: 'unreal' as const, projectName: 'Archive', engineVersion: '5.7', integrationRef: 'v1.42.21-release', includeDemo: true };
+    const r = await ADAPTERS.unreal.export(processProject(await archive()), opts);
+    expect(boundaryViolations(r.files)).toEqual([]);
+    const names = r.files.map((f) => f.path.split('/').pop());
+    for (const n of ['NarrativeBridgeInk.h', 'NarrativeBridgeInk.cpp', 'NarrativeBridgeInkCompat.h', 'NarrativeBridgeInkImport.cpp']) expect(names).toContain(n);
+    const h = r.files.find((f) => f.path.endsWith('NarrativeBridgeInk.h'))!.content as string;
+    for (const fn of ['Begin(', 'End()', 'CanContinue()', 'Continue()', 'CurrentTags()', 'CurrentChoices()', 'Choose(', 'GoTo(', 'CurrentPath()', 'IsDefined(', 'Get(', 'Set(', 'Observe(', 'ToJson()', 'LoadJson(', 'Reset()']) expect(h).toContain(fn);
+    // A file that reaches past the backend is reported.
+    expect(boundaryViolations([{ path: 'X/Source/X/Foo.cpp', content: '#include "Inkpot/InkpotStory.h"\n' }])).toHaveLength(1);
+    expect(boundaryViolations([{ path: 'X/Source/X/Foo.cpp', content: 'TSharedPtr<Ink::FChoice> C;\n' }])).toHaveLength(1);
+    expect(boundaryViolations([{ path: 'X/Source/X/NarrativeBridgeComponent.cpp', content: '// uses Inkpot\n' }])).toHaveLength(1);
   });
 });

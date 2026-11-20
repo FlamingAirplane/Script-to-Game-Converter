@@ -514,7 +514,7 @@ describe('starting at a line of dialogue', () => {
     expect(r('NarrativeBridgeStoryInfo.h')).toContain('static const TCHAR* Passages[] = { TEXT("garden") };');
     expect(r('NarrativeBridgeStoryInfo.h')).toContain('static const int32 NumLines = 4;');
     expect(r('NarrativeEnterDialogueTrigger.h')).toContain('meta = (GetOptions = "GetLineOptions")');
-    expect(r('NarrativeBridgeComponent.cpp')).toContain('InkStory->ChoosePath(InkPathOf(Name));');
+    expect(r('NarrativeBridgeComponent.cpp')).toContain('Ink->GoTo(InkPathOf(Name));');
   });
 });
 
