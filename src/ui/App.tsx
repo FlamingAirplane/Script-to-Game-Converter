@@ -10,7 +10,7 @@ import { ImportView, SITE } from './ImportView';
 import { editableCopy, passageForEntity, STORY_SETTINGS } from './projectOps';
 import { sweepUnusedMediaOnce } from './mediaSweep';
 import { packProject, unpackProject } from './projectFile';
-import { LINK_PREFIX, readStoryLink } from './storyLink';
+import { LINK_PREFIX, PLAY_PREFIX, readStoryLink } from './storyLink';
 import { ProjectsSheet } from './ProjectsSheet';
 import { errorData, log } from '../core/log';
 import { Logo, Wordmark } from './Logo';
@@ -631,6 +631,8 @@ export function App() {
   openLinkRef.current = (text) => openProjectText(text, 'link');
   useEffect(() => {
     const open = () => {
+      // A play link pasted into a tab where the app is open: start again as the story's reader view (see main.tsx).
+      if (location.hash.startsWith(PLAY_PREFIX)) return location.reload();
       if (!location.hash.startsWith(LINK_PREFIX)) return;
       const hash = location.hash;
       history.replaceState(null, '', location.pathname + location.search);

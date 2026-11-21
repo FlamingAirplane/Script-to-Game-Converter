@@ -61,11 +61,17 @@ interface Preview {
   problems: string[];
 }
 
+/** Past this many characters the preview waits for the writer to ask, so typing in a whole novel stays quick. */
+export const PREVIEW_LIMIT = 60_000;
+
 /** A live outline of the story the pasted script makes in Structured mode, updating as the writer types. */
 export function MarkerPreview({ text, fileName }: { text: string; fileName: string }) {
   const [preview, setPreview] = useState<Preview | null>(null);
+  // For a long script, the text the writer last asked to preview (it updates by itself again once they ask).
+  const [asked, setAsked] = useState(false);
+  const long = text.length > PREVIEW_LIMIT;
   useEffect(() => {
-    if (!text.trim()) return setPreview(null);
+    if (!text.trim() || (long && !asked)) return setPreview(null);
     let live = true;
     const t = setTimeout(async () => {
       try {
@@ -77,13 +83,22 @@ export function MarkerPreview({ text, fileName }: { text: string; fileName: stri
       } catch {
         if (live) setPreview(null);
       }
-    }, 350);
+    }, long ? 900 : 350);
     return () => {
       live = false;
       clearTimeout(t);
     };
-  }, [text, fileName]);
+  }, [text, fileName, long, asked]);
 
+  if (long && !asked)
+    return (
+      <p className="marker-preview small muted">
+        This script is long, so the preview waits until you ask.{' '}
+        <button type="button" className="link small" onClick={() => setAsked(true)}>
+          Show the preview
+        </button>
+      </p>
+    );
   if (!preview) return null;
   const { project, problems } = preview;
   const title = (id: string) => (id === 'END' ? 'the end' : (project.passages.find((p) => p.id === id)?.title ?? `“${id}” (not written yet)`));

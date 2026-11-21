@@ -1,3 +1,4 @@
+import { plainText } from '../core/emphasis';
 import { isActive, uniqueId, type Choice, type Passage, type StoryProject } from '../core/isr';
 
 /** The id Review uses for Story settings in its contents list. */
@@ -78,7 +79,8 @@ export function canBecomeChoice(b: { type: string }): boolean {
 
 /** The text a choice made from this line starts with: the line itself, trimmed to a button's length. */
 export function choiceTextFor(text: string): string {
-  const t = text.replace(/\s+/g, ' ').trim().replace(/^[“"']+|[”"']+$/g, '');
+  // The words only: a button doesn't carry the line's bold or italics.
+  const t = plainText(text).replace(/\s+/g, ' ').trim().replace(/^[“"']+|[”"']+$/g, '');
   if (t.length <= 80) return t;
   const cut = t.slice(0, 80);
   return `${cut.slice(0, Math.max(cut.lastIndexOf(' '), 40)).replace(/[,;:\s]+$/, '')}…`;

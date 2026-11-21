@@ -71,6 +71,15 @@ for (const [name, type] of [['WebKit', webkit], ['Chromium', chromium]]) {
       await page.getByRole('button', { name: /Theme:/ }).click(); // dark → auto (system light in tests)
       await page.keyboard.press('Escape'); // close the Menu
     });
+    await step('the marker preview follows a short paste, and waits to be asked for a long one', async () => {
+      const box = page.getByLabel('Script text');
+      await box.fill(['@passage hall The Hall', 'The hall is dark.', '+ [Go down] -> cellar', '@passage cellar The Cellar', 'Cold stone.', '@end', ''].join('\n'));
+      await page.locator('.marker-preview', { hasText: '2 passages · 1 choice' }).waitFor({ timeout: 5000 });
+      await box.fill(`@passage hall The Hall\n${'The hall is dark and very long. '.repeat(2500)}`);
+      await page.getByRole('button', { name: 'Show the preview' }).click();
+      await page.locator('.marker-preview', { hasText: '1 passage' }).waitFor({ timeout: 10000 });
+      await box.fill('');
+    });
     await step('converts a sample', async () => {
       await page.getByText('The Locked Archive').first().click();
       await page.getByRole('button', { name: /Archive Entrance/ }).waitFor();
@@ -197,6 +206,17 @@ for (const [name, type] of [['WebKit', webkit], ['Chromium', chromium]]) {
       await page.locator('.passage-item', { hasText: 'Archive Entrance' }).click();
       await page.waitForFunction(() => [...document.querySelectorAll('textarea')].some((t) => t.value === 'Reader note: Why is it locked?'), null, { timeout: 5000 });
       await page.locator('button[title^="Undo"]').click(); // leave the sample as it was
+    });
+    await step('a play link pasted into the open app opens the story to read', async () => {
+      await page.getByRole('button', { name: /Export/ }).click();
+      const more = page.locator('.feedback-more');
+      if (!(await more.evaluate((d) => d.open))) await more.locator('summary').click();
+      await page.getByRole('button', { name: 'Copy a play link' }).click();
+      const link = await page.getByLabel('Play link').inputValue();
+      await page.evaluate((h) => (location.hash = h), link.slice(link.indexOf('#')));
+      await page.frameLocator('iframe.play-link-frame').getByRole('button', { name: 'Begin' }).waitFor({ timeout: 10000 });
+      await page.goto(url); // back to the writing app, with the story still there
+      await page.getByRole('button', { name: /Archive Entrance/ }).waitFor({ timeout: 5000 });
     });
     await step('restores the project after a reload', async () => {
       await page.reload();

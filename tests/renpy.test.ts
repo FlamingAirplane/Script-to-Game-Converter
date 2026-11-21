@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { reviewAll } from '../src/core/adapt';
 import { buildStory } from '../src/core/builder';
-import { buildRenpy, conditionToPython, effectToPython, renpyText, renpyVar } from '../src/core/export/renpy';
+import { buildRenpy, conditionToPython, effectToPython, renpyRich, renpyText, renpyVar } from '../src/core/export/renpy';
 import { processProject } from '../src/core/pipeline';
 import { SAMPLES } from '../src/samples';
 
@@ -72,6 +72,8 @@ describe('Ren’Py export', () => {
   it('escapes text so Ren’Py shows it as written', () => {
     expect(renpyText('She said "go" [now] {quietly} \\ ok')).toBe('She said \\"go\\" [[now] {{quietly} \\\\ ok');
     expect(renpyText('one\ntwo')).toBe('one\\ntwo');
+    // The script's emphasis becomes Ren'Py text tags; the writer's own braces stay escaped.
+    expect(renpyRich('<b>MIRA</b> lifts a <i>lantern</i> {softly}')).toBe('{b}MIRA{/b} lifts a {i}lantern{/i} {{softly}');
   });
 
   it('plays cutscenes by themselves and hands exits and cues to the game', async () => {

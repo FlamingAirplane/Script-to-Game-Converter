@@ -38,8 +38,9 @@ Tick items off here in the same pull request that does them.
   - [x] Split `tests/pipeline.test.ts` (about 160 KB) by area (#65)
   - [x] Keep the C# and C++ in real template files that tools can check (#64): `unity.ts` went from 3,700 lines to
         600
-  - [ ] Split the largest UI files: `ReviewView.tsx` is done (#68, 1,370 → 570 lines); `App.tsx` and
-        `GraphView.tsx` are left
+  - [ ] Split the largest UI files: `ReviewView.tsx` (#68, 1,370 → 570 lines) and `GraphView.tsx` (#72, 1,005 →
+        800) are done. `App.tsx` (about 1,000 lines) is left: most of it is one component's state, so it needs its
+        hooks pulled out (saving, drafts, links, keyboard shortcuts) rather than a cut-and-paste split.
 - [x] Easier moving between devices: a small story as a link (#62)
 - [ ] Prove the engine packages automatically: add a Unity licence secret so `.github/workflows/unity.yml` runs
       (owner only); a short clip of a story running in each engine
@@ -54,8 +55,9 @@ Tick items off here in the same pull request that does them.
       `src/suggest/`)
 - [x] A complete mini-game web export (#71): the playable story has pictures, sound, saved progress, an "Endings
       found" tally and a text size setting, and downloads as a .zip ready for itch.io or any web host.
-- [x] More engines: Ren'Py (#62). **Still open:** Godot. It needs a Godot install to test against (there was none on
-      the development machine); `src/core/export/renpy.ts` is the model to follow.
+- [x] More engines: Ren'Py (#62, emphasis fixed in #73). The .rpy hasn't been opened in Ren'Py itself yet: doing that
+      once with a sample is the next check. **Still open:** Godot. It needs a Godot install to test against (there was
+      none on the development machine); `src/core/export/renpy.ts` is the model to follow.
 - [ ] Reading scanned PDFs (OCR in the browser)
 - [x] Sharing for feedback (#70): a play link opens just the story with a Note button; readers download their notes,
       and the writer brings them into Review beside the lines they are about.
@@ -68,3 +70,18 @@ Tick items off here in the same pull request that does them.
   and the e2e scripts now also run on Windows.
 - Dependabot's React 19 and Vite 8 upgrades (#44, #45) were blocked; they're done together in #63.
 - #52 (Enter Dialogue Trigger) was brought up to date with main and merged.
+- A double-check of the merged work (#73) found and fixed: play links pasted into an open tab, the marker preview on
+  very long pastes, Ren'Py showing emphasis as raw tags, and choice labels carrying markup. The live site was checked
+  after the merges: title and structured data, the marker toolbar, Ren'Py and feedback controls, and a play link.
+
+## Where to pick up
+
+Everything above that is ticked is merged. In rough order of value, what is left:
+
+1. Open a Ren'Py export in Ren'Py once (needs Ren'Py installed), and the Unreal export in 5.7.
+2. `App.tsx`: pull its state into hooks (see above).
+3. The formatter: run `npm run format` in one PR when nothing else is open, then add `format:check` to CI.
+4. The bigger bets still open: OCR for scanned PDFs, translating the screens, a desktop edition, Godot, and AI
+   suggestions once a model beats the rules on `npm run eval:adapt` (held-out scripts included).
+5. Owner-only: tag 0.5.0, the Unity licence secret, the repository description and topics, Search Console, and
+   watching a few writers use it.
