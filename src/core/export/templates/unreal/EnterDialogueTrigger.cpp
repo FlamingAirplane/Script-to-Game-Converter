@@ -85,9 +85,9 @@ TArray<FString> UNarrativeEnterDialogueTriggerComponent::GetLineOptions() const
     TArray<FString> Options;
     Options.Add(FString());
     const FString Prefix = Passage + TEXT(".");
-    for (const FNarrativeStoryLine& Line : UNarrativeStoryData::DefaultInfo().Lines)
+    for (const FNarrativeStoryLine& StoryLine : UNarrativeStoryData::DefaultInfo().Lines)
     {
-        const FString& Name = Line.Path;
+        const FString& Name = StoryLine.Path;
         if (!Passage.IsEmpty() && Name.StartsWith(Prefix, ESearchCase::CaseSensitive)) Options.Add(Name.Mid(Prefix.Len()));
     }
     return Options;

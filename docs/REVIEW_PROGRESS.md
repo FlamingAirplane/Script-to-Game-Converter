@@ -68,3 +68,20 @@ Tick items off here in the same pull request that does them.
   and the e2e scripts now also run on Windows.
 - Dependabot's React 19 and Vite 8 upgrades (#44, #45) were blocked; they're done together in #63.
 - #52 (Enter Dialogue Trigger) was brought up to date with main and merged.
+
+## The structure review (20 November 2026)
+
+The second review, *Pen to Ink: How It Works and Where Its Structure Is Weak*, lists ten structural flaws and an order
+for fixing them.
+
+- [x] "This week" fixes (#85): lighter saving, a media sweep, clean line labels, accurate Unreal requirements
+- [x] Whole-story Ink round-trip test over every sample (flaw 5)
+- [ ] Cross-reader conformance fixtures (flaw 1)
+- [ ] One typed TypeScript reader shared by Playtest and the playable page (flaws 1 and 9)
+- [ ] Stable ids for lines and choices (flaw 2)
+- [ ] Ink as the single source for locks and story info (flaw 4)
+- [ ] Display names vs compatibility names for "Narrative Bridge" (flaw 6)
+- [ ] Rename `presentation.unity`; merge or redefine faithful/structured (flaw 8)
+- [x] Real Unreal build on 5.7 (flaw 7): it found two compile errors in the plugin (an include-order rule in
+      `InkCompat.cpp` and a shadowed `Line` in the Enter Dialogue Trigger), now fixed; the archive sample builds and all
+      10 automation tests pass (`npm run test:unreal:build -- --test`). Tried 5.9: the only compile error is in Inkpot's own `NativeFunctionCall.cpp` (line 133, a `%d` log format), as the export's README already says, so it is not ours to fix here. 5.6 not tried.
