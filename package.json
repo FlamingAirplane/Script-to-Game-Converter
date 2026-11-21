@@ -49,7 +49,7 @@
     "@huggingface/transformers-structured-output": "^4.3.2",
     "inkjs": "^2.4.0",
     "jszip": "^3.10.2",
-    "lucide-react": "^1.73.0",
+    "lucide-react": "^1.74.0",
     "pdfjs-dist": "6.5.438",
     "react": "^19.3.1",
     "react-dom": "^19.3.1"
