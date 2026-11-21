@@ -643,3 +643,17 @@ describe('line labels', () => {
     expect(entry.display).toBe('TOMAS: The storm took the lens.');
   });
 });
+
+describe('Ink round trip over whole stories', () => {
+  const strip = (x: string) => x.replace(/ \(source line \d+\)/g, '');
+  it.each(SAMPLES.map((s) => [s.id, s] as const))('%s: generateInk, buildStory, generateInk gives the same Ink', async (_id, s) => {
+    const { inkUnsupported } = await import('../src/core/parsing/ink');
+    const { project } = await build(s.text, s.fileName, 'structured');
+    const ink = generateInk(project).ink;
+    expect(inkUnsupported(ink)).toEqual([]);
+    const back = (await build(ink, 's.ink', 'structured')).project;
+    expect(back.inkPassthrough).toBeUndefined();
+    back.project.mode = project.project.mode;
+    expect(strip(generateInk(back).ink)).toBe(strip(ink));
+  });
+});
