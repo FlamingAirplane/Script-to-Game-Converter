@@ -27,8 +27,7 @@ const OFFLINE_COPY_AVAILABLE = import.meta.env.PROD && typeof location !== 'unde
 const FEATURED = SAMPLES.find((s) => s.id === 'lighthouse') ?? SAMPLES[0];
 
 const MODES: { id: ConversionMode; name: string; desc: string; when: string; recommended?: boolean }[] = [
-  { id: 'structured', name: 'Structured import', desc: 'Builds the story exactly as you mark it: markers you type into the script, like @passage, @item and choices, set out the passages, branches and items. A script without markers still converts scene by scene.', when: 'Use this for any script: add markers as you plan the branches (see the marker reference below).', recommended: true },
-  { id: 'faithful', name: 'Faithful conversion', desc: 'Keeps your story exactly as written: each scene becomes a passage (a page of the story) and nothing is invented.', when: 'Use this when your script is finished and you want it playable as it is.' },
+  { id: 'structured', name: 'Structured import', desc: 'Keeps your story exactly as written and builds it as you mark it: each scene becomes a passage (a page of the story), and markers you type into the script, like @passage, @item and choices, set out the branches and items. A script without markers converts scene by scene, nothing invented.', when: 'Use this for any script, finished or not: add markers as you plan the branches (see the marker reference below).', recommended: true },
   { id: 'adaptation', name: 'Interactive adaptation', desc: 'Also suggests choices, and paths that need an item (like a key), drawn from your text. You accept or reject each one.', when: 'Use this when you want help turning a linear script into one with choices.' },
 ];
 

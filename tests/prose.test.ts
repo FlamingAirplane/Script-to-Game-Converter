@@ -5,7 +5,7 @@ import { conditionInWords, describeNeed, effectInWords } from '../src/core/gatin
 import { processProject } from '../src/core/pipeline';
 import { SAMPLES } from '../src/samples';
 
-const build = (text: string, fileName = 'story.txt') => buildStory([{ fileName, text }], { mode: 'faithful' });
+const build = (text: string, fileName = 'story.txt') => buildStory([{ fileName, text }], { mode: 'structured' });
 const spoken = (p: Awaited<ReturnType<typeof build>>['project']) =>
   p.passages.flatMap((x) => x.content).flatMap((b) => (b.type === 'dialogue' ? [`${p.characters.find((c) => c.id === b.speakerId)?.displayName}: ${b.text}`] : []));
 

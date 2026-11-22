@@ -160,7 +160,7 @@ describe('exits to the game', () => {
     s.ChooseChoiceIndex(0);
     expect(s.ContinueMaximally()).toContain('The last wolf runs.');
     // Ink that Pen to Ink wrote comes back with its exit.
-    const again = await build(story.generated.ink, 'x.ink', 'faithful');
+    const again = await build(story.generated.ink, 'x.ink', 'structured');
     expect(again.project.passages.find((p) => p.id === 'camp')!.content.find((b) => b.type === 'exit')).toMatchObject({ name: 'wolf_fight', note: 'The player fights the wolves' });
   });
 

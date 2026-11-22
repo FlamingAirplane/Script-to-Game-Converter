@@ -18,7 +18,7 @@ const script = [
   'A lamp burns.',
   '',
 ].join('\n');
-const load = async () => (await buildStory([{ fileName: 'x.fountain', text: script }], { mode: 'faithful' })).project;
+const load = async () => (await buildStory([{ fileName: 'x.fountain', text: script }], { mode: 'structured' })).project;
 
 describe('turning a line into a choice (Review)', () => {
   it('moves what follows into a new scene the choice leads to', async () => {

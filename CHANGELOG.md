@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- **Two conversion modes, not three.** Faithful conversion and Structured import converted a script exactly alike (a
+  script without markers converts scene by scene, nothing invented, in both), so they are now one: **Structured import**.
+  Interactive adaptation is unchanged. Projects, files and `--mode faithful` that say "faithful" still work and are read
+  as structured.
 - **Unreal: use the plugin in a game you already have.** *Tools → Narrative Bridge → Import Pen to Ink Story…* brings an
   exported folder into an existing project (`NarrativeBridge.ImportFolder <folder>` does it from the console): it copies
   the story's files in and imports them again, replacing the assets in place so Blueprints that use them keep working,

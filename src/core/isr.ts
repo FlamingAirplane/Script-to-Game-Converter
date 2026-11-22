@@ -11,7 +11,18 @@ export const SCHEMA_VERSION = '1.0';
 
 export type Provenance = 'source' | 'transformed' | 'generated' | 'user_authored';
 export type ReviewStatus = 'approved' | 'pending' | 'rejected';
-export type ConversionMode = 'faithful' | 'adaptation' | 'structured';
+/**
+ * How a script is converted: structured (the default: markers like @passage build the story as the writer marks it, and
+ * a script without markers converts scene by scene, nothing invented) or adaptation (which also suggests choices).
+ */
+export type ConversionMode = 'structured' | 'adaptation';
+/** What a saved project may say: also the retired "faithful" mode, which converted exactly as structured does. */
+export type SavedMode = ConversionMode | 'faithful';
+
+/** The mode a saved project's mode means now: "faithful" (retired) is structured. */
+export function conversionMode(mode: string | undefined): ConversionMode {
+  return mode === 'adaptation' ? 'adaptation' : 'structured';
+}
 
 /**
  * The mode a conversion uses unless told otherwise (Import page and CLI). Structured: markers like @passage and
@@ -194,7 +205,7 @@ export interface StoryProject {
     title: string;
     author?: string;
     startPassage: string;
-    mode: ConversionMode;
+    mode: SavedMode;
   };
   sources: SourceDocument[];
   characters: Character[];

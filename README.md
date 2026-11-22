@@ -56,7 +56,7 @@ whole app offline in any modern browser. Nothing is installed and nothing is upl
 CLI:
 
 ```bash
-npm run cli -- convert script.fountain --out story.ink      # structured by default; --mode faithful|adaptation
+npm run cli -- convert script.fountain --out story.ink      # structured by default; --mode adaptation suggests choices
 npm run cli -- convert my-story.twee --out story.ink        # open a Twine story (also .html) or Ink (.ink)
 npm run cli -- validate story.md
 npm run cli -- export script.fountain --mode adaptation --approve-all --engine unity --out ./build
@@ -208,12 +208,10 @@ markers throughout).
 
 ## Conversion modes
 
-- **Structured import** (default) — explicit markers drive the structure, as above. Without markers, scenes (or Markdown
-  headings) become passages in source order, just as in Faithful conversion.
-- **Faithful conversion** — scenes become passages in source order; nothing is invented. Every dialogue line, action, parenthetical, transition and note is preserved (notes and unsupported constructs become Ink comments). Markers work here too.
+- **Structured import** (default) — keeps the story exactly as written and builds it as you mark it. Explicit markers drive the structure, as above; without markers, scenes (or Markdown headings) become passages in source order and nothing is invented. Every dialogue line, action, parenthetical, transition and note is preserved (notes and unsupported constructs become Ink comments). *This was two modes, Structured and Faithful, which converted exactly alike; projects, files and CLI calls that say "faithful" still work and are read as structured.*
 - **Interactive adaptation** — deterministic, local heuristics propose branches grounded in the text (e.g. an optional item pickup and a later item-gated path with a way back). Proposals are marked `generated` and are **not emitted to Ink until approved**. Markers work here too.
 
-CLI: `--mode structured|faithful|adaptation` (default `structured`).
+CLI: `--mode structured|adaptation` (default `structured`; `faithful` is still accepted as structured).
 
 Every suggester (the heuristics, the cheap rules in `src/core/rules.ts`, a model) returns the same data, a *proposal*:
 a group of choices for one passage, pointing at the line of the script that prompted it (see
