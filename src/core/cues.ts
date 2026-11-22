@@ -1,23 +1,13 @@
 import type { AudioRef } from './audio';
-import { cueTag, RESERVED_TAGS, type StoryProject } from './isr';
+import { cueTag, type StoryProject } from './isr';
 
 // Cues and their sounds. A cue is an Ink tag (#music:calm); a writer can attach a sound to it in Review,
 // and every cue with the same name and value then plays that sound: in Playtest, the playable web page,
 // and the Unity package (NarrativeCuePlayer). What a cue does follows from its name, the same way in all
 // of them (and as NarrativeCuePlayer.Guess sets it up in Unity).
 
-export type CueKind = 'music' | 'ambience' | 'stop_music' | 'stop_ambience' | 'shake' | 'sound';
-
-/** What a cue does, from its name: music and ambience loop (one track each), stop_… stops them, shake shakes, anything else is a sound. */
-export function cueKind(name: string): CueKind {
-  const n = name.toLowerCase();
-  if (n.includes('stop_music') || n === 'silence') return 'stop_music';
-  if (n.includes('stop_ambience')) return 'stop_ambience';
-  if (n.includes('music') || n === 'song' || n === 'track') return 'music';
-  if (n.includes('ambien') || n === 'weather') return 'ambience';
-  if (n.includes('shake') || n === 'rumble') return 'shake';
-  return 'sound';
-}
+export { cueKind, cuesIn, type CueKind, type ParsedCue } from './readerCore';
+import { cueKind, type ParsedCue } from './readerCore';
 
 /** Whether a cue of this name can have a sound (music, ambience and sounds; not stops or shakes). */
 export function cueTakesSound(name: string): boolean {
@@ -29,26 +19,6 @@ export function cueTakesSound(name: string): boolean {
 export function cueWantsSound(name: string, value: string | undefined): boolean {
   const k = cueKind(name);
   return k === 'sound' || ((k === 'music' || k === 'ambience') && !!value);
-}
-
-export interface ParsedCue {
-  name: string;
-  value: string;
-  /** The tag as Ink has it, e.g. "music:calm". */
-  tag: string;
-}
-
-/** The cues among a line's tags (the ones that aren't Pen to Ink's own, such as speaker: or audio:). */
-export function cuesIn(tags: string[]): ParsedCue[] {
-  const out: ParsedCue[] = [];
-  for (const raw of tags) {
-    const tag = raw.trim();
-    const colon = tag.indexOf(':');
-    const name = (colon < 0 ? tag : tag.slice(0, colon)).trim();
-    if (!name || RESERVED_TAGS.has(name)) continue;
-    out.push({ name, value: colon < 0 ? '' : tag.slice(colon + 1).trim(), tag });
-  }
-  return out;
 }
 
 /** The sound attached to each cue tag (the first one, when cues with the same tag disagree). */

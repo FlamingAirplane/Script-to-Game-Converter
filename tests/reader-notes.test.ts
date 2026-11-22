@@ -96,10 +96,9 @@ describe('the playable story as a small web game', () => {
     const html = buildPlayableHtml(story, runtime);
     expect(meta(html).endings.total).toBe(2);
     expect(html).toContain('id="larger"');
-    // The page's own endingKey matches the export's (the regex survives being written into the page).
-    const fn = /function endingKey\(text\) \{ ([^\n]*) \}/.exec(html)![1];
-    const pageKey = new Function('text', fn) as (t: string) => string;
-    const { endingKey } = await import('../src/core/export/playable');
-    for (const t of ['You step back into the rain.', '“Every <i>story</i> we ever lost.”', 'Où est-il ?']) expect(pageKey(t)).toBe(endingKey(t));
+    // The page runs the very code the export uses (readerCore.ts), not its own copy of endingKey.
+    const { READER_CORE_JS } = await import('../src/core/readerCore.generated');
+    expect(html).toContain(READER_CORE_JS);
+    expect(html).not.toMatch(/function endingKey\(text\) \{ [^\n]*replace/);
   });
 });

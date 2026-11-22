@@ -2,24 +2,19 @@ import type { ProcessedStory } from '../pipeline';
 import { audioFileName, bytesToBase64, referencedAudio, type AudioAssets } from '../audio';
 import { imageFileName, portraitFiles, referencedImages } from '../images';
 import { log } from '../log';
-import { EXIT_PREFIX, fileBase, RESERVED_TAGS } from '../isr';
+import { EXIT_PREFIX, fileBase } from '../isr';
 import { cueSounds } from '../cues';
 import { describeNeed } from '../gating';
 import { isActive } from '../isr';
 import { isForcing } from '../forced';
 import { translationEntries } from './translations';
 import { assertExportable, storyVersion } from './common';
-import { plainText } from '../emphasis';
 import { forPlayers } from '../players';
 import { PAGE_FLIPS } from '../pageFlips';
+import { READER_CORE_JS } from '../readerCore.generated';
 
-/** A line's text reduced to letters and digits, the same way the player reduces what it shows (endingKey in PLAYER_JS). */
-export function endingKey(text: string): string {
-  return plainText(text)
-    .toLowerCase()
-    .replace(/[^\p{L}\p{N}]+/gu, ' ')
-    .trim();
-}
+export { endingKey } from '../readerCore';
+import { endingKey } from '../readerCore';
 
 /**
  * The story's endings, for the "Endings found" tally: each ending passage, known by the last line a player reads in it.
@@ -117,7 +112,6 @@ export function buildPlayableHtml(story: ProcessedStory, inkRuntimeJs: string, a
       voices,
       hasClips: hasVoiceClips,
       cueSounds: cueFiles,
-      storyTags: [...RESERVED_TAGS],
       translations,
       gated,
     }),
@@ -231,6 +225,8 @@ padding:10px 8px 10px 30px;cursor:pointer}.choice:before{content:'❧';position:
 
 const PLAYER_JS = `
 (function () {
+  // The reader's rules (cueKind, cuesIn, exitOf, chosenKey, cutsceneSeconds, endingKey…), compiled from core/readerCore.ts.
+  ${READER_CORE_JS}
   var meta = JSON.parse(document.getElementById('story-meta').textContent);
   var json = document.getElementById('story-json').textContent;
   var $ = function (id) { return document.getElementById(id); };
@@ -248,7 +244,6 @@ const PLAYER_JS = `
   // A cutscene (lines tagged #cutscene) plays one line at a time, going on by itself: how many lines show so far
   // (null: all of them), and the timer for the next. Times as in players.ts: 1.2 s + 0.055 s a letter, 2 to 9 s.
   var reveal = null, cutTimer = null;
-  function cutSeconds(text) { return Math.min(9, Math.max(2, 1.2 + String(text).length * 0.055)); }
   function nextShown(n) {
     var i = n;
     while (i < lines.length && lines[i].cue) i++;
@@ -258,7 +253,7 @@ const PLAYER_JS = `
   function playCutscene() {
     clearTimeout(cutTimer);
     if (reveal === null) return;
-    cutTimer = setTimeout(function () { reveal = nextShown(reveal); render(); playCutscene(); }, cutSeconds(lines[reveal - 1].text) * 1000);
+    cutTimer = setTimeout(function () { reveal = nextShown(reveal); render(); playCutscene(); }, cutsceneSeconds(String(lines[reveal - 1].text)) * 1000);
   }
   document.title = meta.title;
   $('title').textContent = meta.title;
@@ -294,7 +289,7 @@ const PLAYER_JS = `
   // its passage and its text as written (see core/chosen.ts); Read again keeps them. ----
   var chosenBefore = {};
   try { (JSON.parse(localStorage.getItem(meta.chosenKey) || '[]') || []).forEach(function (k) { chosenBefore[k] = 1; }); } catch (e) {}
-  function choiceKey(c) { return String(c.sourcePath || '').split('.')[0] + '|' + String(c.text).trim(); }
+  function choiceKey(c) { return chosenKey(String(c.sourcePath || ''), String(c.text)); }
   function rememberChosen(c) {
     var k = choiceKey(c);
     if (chosenBefore[k]) return;
@@ -307,10 +302,7 @@ const PLAYER_JS = `
     story.onError = function (m) { console.error(m); };
   }
 
-  function tag(tags, name) {
-    for (var i = 0; i < tags.length; i++) if (tags[i].indexOf(name + ':') === 0) return tags[i].slice(name.length + 1).trim();
-    return null;
-  }
+  var tag = tagValue;
 
   // ---- Translations: a text's key is its words with spaces tidied, hashed (as in the translation sheet) ----
   var language = '';
@@ -396,23 +388,6 @@ const PLAYER_JS = `
   }
 
   // ---- Cue sounds: music and ambience loop (one track each, faded), any other cue with a sound plays once ----
-  function cueKind(name) {
-    var n = name.toLowerCase();
-    if (n.indexOf('stop_music') >= 0 || n === 'silence') return 'stop_music';
-    if (n.indexOf('stop_ambience') >= 0) return 'stop_ambience';
-    if (n.indexOf('music') >= 0 || n === 'song' || n === 'track') return 'music';
-    if (n.indexOf('ambien') >= 0 || n === 'weather') return 'ambience';
-    if (n.indexOf('shake') >= 0 || n === 'rumble') return 'shake';
-    return 'sound';
-  }
-  function cuesIn(tags) {
-    var out = [];
-    tags.forEach(function (raw) {
-      var t = raw.trim(), colon = t.indexOf(':'), name = (colon < 0 ? t : t.slice(0, colon)).trim();
-      if (name && meta.storyTags.indexOf(name) < 0) out.push({ name: name, value: colon < 0 ? '' : t.slice(colon + 1).trim(), tag: t });
-    });
-    return out;
-  }
   var tracks = { music: null, ambience: null };
   function fadeTo(a, to, done) {
     var from = a.volume, start = Date.now();
@@ -513,10 +488,10 @@ const PLAYER_JS = `
       // Cues for the game (#music:calm) come before the line they're on, or alone at the end of a passage.
       cuesIn(tags).forEach(function (c) { lines.push({ cue: c.tag }); });
       if (!raw) continue;
-      var line = { text: raw, scene: tag(tags, 'scene'), transition: tags.indexOf('transition') >= 0, audio: tag(tags, 'audio'), image: tag(tags, 'image'), who: tag(tags, 'speaker'), cut: tags.indexOf('cutscene') >= 0 };
-      if (tag(tags, 'speaker') !== null) {
-        var i = raw.indexOf(': ');
-        if (i > 0) { line.speaker = raw.slice(0, i); line.text = raw.slice(i + 2); }
+      var read = readLine(raw, tags);
+      var line = { text: read.text, scene: tag(tags, 'scene'), transition: tags.indexOf('transition') >= 0, audio: tag(tags, 'audio'), image: tag(tags, 'image'), who: read.who, cut: tags.indexOf('cutscene') >= 0 };
+      if (read.who !== null) {
+        if (read.speaker) line.speaker = read.speaker;
         line.paren = tag(tags, 'paren');
       }
       lines.push(line);
@@ -679,13 +654,12 @@ const PLAYER_JS = `
   // An exit to the game (see inkgen.ts): its name, or null.
   function exitName() {
     var c = story.currentChoices;
-    return c.length === 1 && c[0].text.indexOf('${EXIT_PREFIX}') === 0 ? c[0].text.slice(${EXIT_PREFIX.length}) : null;
+    return c.length === 1 ? exitOf(c[0].text) : null;
   }
 
   // A Continue break: the only thing to do is go on (see inkgen.ts).
   function isPause() {
-    var c = story.currentChoices;
-    return c.length === 1 && c[0].text === 'Continue';
+    return isContinueOnly(story.currentChoices.map(function (c) { return c.text; }));
   }
 
   function notice(text) {
@@ -859,7 +833,6 @@ const PLAYER_JS = `
     };
   }
   // Endings found: which of the story's endings this reader has reached, known by the last line read before The End.
-  function endingKey(text) { return String(text || '').replace(/<[^>]+>/g, '').toLowerCase().replace(/[^\\p{L}\\p{N}]+/gu, ' ').trim(); }
   var endingsFound = {};
   try { (JSON.parse(localStorage.getItem(meta.endingsKey) || '[]') || []).forEach(function (k) { endingsFound[k] = 1; }); } catch (e) {}
   function endingsLabel() {

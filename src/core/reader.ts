@@ -1,5 +1,6 @@
 import type { Story } from 'inkjs';
 import { cuesIn } from './cues';
+import { readLine } from './readerCore';
 import { CONTINUE_TEXT, exitOf } from './isr';
 
 // The TypeScript reader of the Ink conventions: what Playtest does with a compiled story. The playable page, Unity and
@@ -34,11 +35,8 @@ export function readOn(s: Story, prefix: Line[]): Line[] {
     for (const c of cuesIn(tags)) out.push({ text: c.tag, tags: [c.tag], kind: 'cue' });
     if (!raw) continue;
     const passage = knotOf(s) || undefined;
-    const speakerTag = tags.find((t) => t.startsWith('speaker:'));
-    if (speakerTag) {
-      const i = raw.indexOf(': ');
-      out.push({ speaker: i > 0 ? raw.slice(0, i) : speakerTag.slice(8), text: i > 0 ? raw.slice(i + 2) : raw, tags, kind: 'text', passage });
-    } else out.push({ text: raw, tags, kind: 'text', passage });
+    const { text, speaker, who } = readLine(raw, tags);
+    out.push({ ...(speaker ?? who ? { speaker: speaker ?? who! } : {}), text, tags, kind: 'text', passage });
   }
   return out;
 }

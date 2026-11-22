@@ -16,9 +16,7 @@ export function dialogueOnly(project: Pick<StoryProject, 'presentation'>): boole
 }
 
 /** Seconds a cutscene line stays before the next: time to read it, at least 2 and at most 9. */
-export function cutsceneSeconds(text: string): number {
-  return Math.min(9, Math.max(2, 1.2 + text.length * 0.055));
-}
+export { cutsceneSeconds } from './readerCore';
 
 function onlyDialogue(p: Passage): Passage {
   const content: ContentBlock[] = [];
