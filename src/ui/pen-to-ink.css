@@ -488,3 +488,110 @@ input[type='checkbox'], input[type='radio'] { accent-color: var(--olive); }
   .pti-grid span, .pti-label { animation: none; }
   .pti-label { color: var(--ink-2); background: none; }
 }
+
+/* ---------- Apple HIG pass: clarity, deference, depth (developer.apple.com/design/human-interface-guidelines) ----------
+   Targets big enough to hit, disabled things that stay readable, feedback for every press, and touch that
+   behaves like touch. Nothing here changes layout on a mouse beyond a few pixels of hit area. */
+html { -webkit-text-size-adjust: 100%; }
+button, a, summary, select, .tab, .mode, .sample { -webkit-tap-highlight-color: transparent; touch-action: manipulation; }
+
+/* Pointer devices: no control is shorter than 28px, and radios and checkboxes are readable at a glance. */
+.btn.tiny, .btn.small { min-height: 28px; }
+.icon { min-width: 28px; min-height: 28px; display: inline-flex; align-items: center; justify-content: center; }
+input[type='checkbox'], input[type='radio'] { width: 16px; height: 16px; }
+.tab { min-height: 32px; }
+.tab:active:not(:disabled) { background: rgba(254, 250, 224, 0.12); }
+.icon:active { background: color-mix(in srgb, var(--ink) 12%, transparent); }
+.diag-toggle:active, .mode:active, .engine-card:active { filter: brightness(0.97); }
+
+/* A disabled chapter still reads as a chapter: dimmer, not nearly invisible, and it explains itself on focus. */
+.tab:disabled { opacity: 0.62; }
+.btn:disabled { opacity: 0.5; }
+
+/* Keyboard focus follows each control's own corners instead of a square box. */
+:where(.btn, .tab, .icon, .input, .textarea, .mode, .sample, .engine-card, .diag-toggle):focus-visible { outline-offset: 2px; border-radius: var(--radius); }
+.tab:focus-visible { outline-color: var(--cover-gold); }
+.topbar :focus-visible { outline-color: var(--cover-gold); }
+
+/* Touch: 44px targets (HIG), roomier rows, and no accidental zoom when a field gains focus. */
+@media (pointer: coarse) {
+  .btn, .btn.small, .btn.tiny, .tab, .diag-toggle, select.input, .icon, summary { min-height: 44px; }
+  .icon { min-width: 44px; }
+  .btn.tiny, .btn.small { padding-left: 14px; padding-right: 14px; }
+  .input, .textarea, select.input { font-size: 16px; min-height: 44px; }
+  .input.small { font-size: 16px; padding: 6px 10px; }
+  input[type='checkbox'], input[type='radio'] { width: 22px; height: 22px; }
+  .passage-item { min-height: 44px; }
+  .hero-links a { min-height: 40px; }
+  .block-actions { gap: 2px; }
+  .btn:hover:not(:disabled), .sample:hover, .engine-card:hover { transform: none; }
+}
+
+/* ---------- Review: the passage editor ---------- */
+/* Blocks: the text gets the full column. Each block's tools float over its top-right corner and appear
+   on hover or keyboard focus (always shown on touch and in the narrow layout, where they sit below). */
+.block { position: relative; padding: 12px 8px 12px 0; border-bottom: 1px solid var(--rule); border-radius: var(--radius); transition: background-color var(--ui-time) var(--ease-out-strong); }
+.block:last-of-type { border-bottom-color: transparent; }
+.block-gutter { gap: 4px; align-items: flex-end; }
+.block-type { font-size: 12px; color: var(--ink-2); }
+.block-gutter .badge { font-size: 10.5px; padding: 0 6px; }
+.icon-danger:hover { color: var(--err); background: color-mix(in srgb, var(--err) 10%, transparent); }
+.block-actions .icon .lucide { vertical-align: middle; }
+@media (hover: hover) and (min-width: 761px) {
+  .block { grid-template-columns: 78px minmax(0, 1fr); }
+  .block:hover, .block:focus-within { background: color-mix(in srgb, var(--ink) 3.5%, transparent); }
+  .block-actions {
+    position: absolute; top: -13px; right: 6px; z-index: 2;
+    padding: 2px; gap: 1px; border-radius: var(--radius); background: var(--paper-hi); box-shadow: var(--sh-raised);
+    opacity: 0; transform: translateY(3px);
+    transition: opacity var(--ui-time) var(--ease-out-strong), transform var(--ui-time) var(--ease-out-strong);
+  }
+  .block:hover .block-actions, .block:focus-within .block-actions { opacity: 1; transform: none; }
+  .block-actions .icon { color: var(--ink-2); }
+}
+@media (hover: none), (max-width: 760px) {
+  .block-actions { opacity: 1; padding-top: 2px; }
+  .block-actions .icon { color: var(--ink-2); }
+}
+
+/* Add a block: one quiet row under the content instead of a pile of buttons. */
+.add-bar { margin-top: 14px; padding: 8px 10px; border: 1px dashed var(--rule-2); border-radius: var(--radius-card); gap: 6px; align-items: center; flex-wrap: wrap; }
+.add-bar-label { font-size: 12px; font-weight: 600; color: var(--faded); margin-right: 2px; }
+.add-bar .btn.tiny { background: transparent; box-shadow: 0 0 0 1px var(--ring); }
+.add-bar .btn.tiny:hover:not(:disabled) { background: var(--paper-glow); }
+
+/* Section headings in the editor read as headings, with room above. */
+.blocks > h3, .flow > h3 { font-size: 13px; color: var(--ink); margin: 18px 0 4px; padding-bottom: 6px; border-bottom: 1px solid var(--rule); }
+.flow { margin-top: 8px; }
+.flow .choice { margin-bottom: 10px; }
+.made-choice { padding: 6px 10px; border-radius: var(--radius); background: color-mix(in srgb, var(--ok) 10%, transparent); }
+
+/* The scene heading under the title, and the source toggle, stay out of the way. */
+.line-to-choice { margin: 4px 0 8px 88px; padding: 12px 14px; border-radius: var(--radius-card); background: var(--paper-hi); box-shadow: var(--sh-card); }
+@media (max-width: 760px) { .line-to-choice { margin-left: 0; } }
+@media (hover: hover) and (min-width: 761px) {
+  /* The floating tools never cover a block's own controls. */
+  .block-dialogue .block-body > .row:first-child, .block-effect .block-body > .row, .block-exit .exit-block > .row, .block-cue .exit-block > .row:first-of-type { padding-right: 124px; }
+}
+
+/* Choices: each is a card with the player's words first, where it leads second, and its rules underneath. */
+.choice { padding: 12px 14px; gap: 10px; background: var(--paper-hi); box-shadow: var(--sh-card); }
+.choice:focus-within { box-shadow: 0 0 0 1.5px var(--pen), var(--sh-card); }
+.choice > .row:first-child { gap: 8px; }
+.choice .choice-text { font-size: 17px; font-style: normal; }
+.choice-logic { padding-top: 10px; border-top: 1px solid var(--rule); align-items: center; }
+.chip-x { min-width: 22px; min-height: 22px; border-radius: 999px; line-height: 1; }
+.chip-x:hover { color: var(--err); background: color-mix(in srgb, var(--err) 10%, transparent); }
+.chip { align-items: center; }
+.choice .check { display: inline-flex; align-items: center; gap: 6px; min-height: 28px; }
+.flow > .btn.tiny { align-self: flex-start; }
+.then { padding-top: 14px; border-top: 1px solid var(--rule); margin-top: 18px; }
+.choice-logic select.tiny-select { width: auto; max-width: 11.5em; flex: 0 0 auto; }
+
+/* The source pane: lines outside the open passage are dimmed with colour, not opacity, so they stay readable;
+   the lines the passage came from are full strength with a marker down the edge. */
+.src-line { opacity: 1; color: var(--faded); }
+.src-line .ln { color: var(--faded); }
+.src-line.in { color: var(--ink); box-shadow: inset 2px 0 0 var(--copper); }
+.src-line.focus { color: var(--ink); }
+.source-lines:focus-visible { outline-offset: -2px; }

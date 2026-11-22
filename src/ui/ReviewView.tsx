@@ -238,7 +238,7 @@ function SourcePane({ project, passage, focusLine }: { project: StoryProject; pa
         <span className="mono small">{doc.fileName}</span>
         <span className="muted small">original, read-only</span>
       </div>
-      <div className="source-lines mono" ref={ref}>
+      <div className="source-lines mono" ref={ref} tabIndex={0} role="region" aria-label="Original script, with the lines for this passage highlighted">
         {doc.text.split('\n').map((l, i) => {
           const n = i + 1;
           const inRange = n >= start && n <= end;
@@ -452,7 +452,8 @@ function PassageEditor({
           )}
           </div>
         )))}
-        <div className="row">
+        <div className="row add-bar" role="group" aria-label="Add to this passage">
+          <span className="add-bar-label">Add</span>
           <button className="btn tiny" onClick={() => edit((p) => p.content.push({ type: 'action', text: 'New line of narration.', origin: 'user_authored' }))}>
             + Narration
           </button>

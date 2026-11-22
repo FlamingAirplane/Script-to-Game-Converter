@@ -1,4 +1,5 @@
 import { conditionToInk, effectToInk } from '../../core/inkgen';
+import { ArrowUpRight, Trash2 } from 'lucide-react';
 import { type Choice, type CompareOp, type Condition, type Effect, type StoryProject } from '../../core/isr';
 import { Badge, ProvenanceBadge } from '../common';
 import { conditionInWords, describeCondition, effectInWords } from '../../core/gating';
@@ -24,10 +25,10 @@ export function ChoiceEditor({
   return (
     <div className={`choice choice-${choice.review}`}>
       <div className="row">
-        <span className="bullet mono">{choice.once ? '*' : '+'}</span>
+        <span className="bullet mono" aria-hidden title={choice.once ? 'Once only' : 'Can be picked every time'}>{choice.once ? '*' : '+'}</span>
         <input className="input choice-text" value={choice.text} onChange={(e) => onChange((c) => (c.text = e.target.value))} aria-label="Choice text" />
         <span className="muted">→</span>
-        <select className="input small target" value={choice.target} onChange={(e) => (e.target.value === '__new' ? onNewTarget() : onChange((c) => (c.target = e.target.value)))}>
+        <select className="input small target" aria-label="Where this choice leads" value={choice.target} onChange={(e) => (e.target.value === '__new' ? onNewTarget() : onChange((c) => (c.target = e.target.value)))}>
           {!project.passages.some((p) => p.id === choice.target) && choice.target !== 'END' && <option value={choice.target}>⚠ {choice.target || '(none)'}</option>}
           {project.passages.map((p) => (
             <option key={p.id} value={p.id}>
@@ -37,8 +38,8 @@ export function ChoiceEditor({
           <option value="END">— End —</option>
           <option value="__new">+ A new scene…</option>
         </select>
-        <button className="icon" title="Open destination" onClick={onGo}>
-          ↗
+        <button className="icon" title="Open the scene this leads to" aria-label="Open the scene this leads to" disabled={choice.target === 'END'} onClick={onGo}>
+          <ArrowUpRight size={15} aria-hidden />
         </button>
       </div>
       <div className="row wrap choice-logic">
@@ -54,7 +55,7 @@ export function ChoiceEditor({
         {choice.conditions.map((cond, i) => (
           <span key={`c${i}`} className="chip cond" title={`Condition: the choice only appears when this is true. In Ink: ${conditionToInk(cond)}`}>
             if {conditionInWords(cond, project)}
-            <button className="chip-x" onClick={() => onChange((c) => c.conditions.splice(i, 1))}>
+            <button className="chip-x" aria-label="Remove this condition" title="Remove this condition" onClick={() => onChange((c) => c.conditions.splice(i, 1))}>
               ×
             </button>
           </span>
@@ -62,7 +63,7 @@ export function ChoiceEditor({
         {choice.effects.map((e, i) => (
           <span key={`e${i}`} className="chip effect" title={`Effect: what happens when the player picks this choice. In Ink: ${effectToInk(e).replace(/^~ /, '')}`}>
             {effectInWords(e, project)}
-            <button className="chip-x" onClick={() => onChange((c) => c.effects.splice(i, 1))}>
+            <button className="chip-x" aria-label="Remove this effect" title="Remove this effect" onClick={() => onChange((c) => c.effects.splice(i, 1))}>
               ×
             </button>
           </span>
@@ -100,8 +101,8 @@ export function ChoiceEditor({
             Restore
           </button>
         )}
-        <button className="icon" title="Delete choice" onClick={onDelete}>
-          ×
+        <button className="icon icon-danger" title="Delete this choice" aria-label="Delete this choice" onClick={onDelete}>
+          <Trash2 size={15} aria-hidden />
         </button>
       </div>
     </div>
@@ -121,7 +122,7 @@ function AddCondition({ project, onAdd }: { project: StoryProject; onAdd: (c: Co
   ];
   if (!options.length) return null;
   return (
-    <select className="input tiny-select" value="" onChange={(e) => e.target.value && onAdd(options[+e.target.value].cond)}>
+    <select className="input tiny-select" aria-label="Add a condition: show this choice only when…" value="" onChange={(e) => e.target.value && onAdd(options[+e.target.value].cond)}>
       <option value="">+ condition</option>
       {options.map((o, i) => (
         <option key={i} value={i}>
@@ -144,7 +145,7 @@ function AddEffect({ project, onAdd }: { project: StoryProject; onAdd: (e: Effec
   ];
   if (!options.length) return null;
   return (
-    <select className="input tiny-select" value="" onChange={(e) => e.target.value && onAdd(options[+e.target.value].e)}>
+    <select className="input tiny-select" aria-label="Add an effect: what happens when picked" value="" onChange={(e) => e.target.value && onAdd(options[+e.target.value].e)}>
       <option value="">+ effect</option>
       {options.map((o, i) => (
         <option key={i} value={i}>

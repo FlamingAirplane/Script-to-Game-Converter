@@ -679,6 +679,14 @@ export function App() {
     if (processed.state === 'ReviewRequired') return 1;
     return 4;
   })();
+  // Deference: a story that built cleanly opens with the Diagnostics panel out of the way; one with
+  // problems opens with it showing. Decided once per story, so the writer's own toggling sticks.
+  const diagDecided = useRef('');
+  useEffect(() => {
+    if (!processed || !project || diagDecided.current === project.project.id) return;
+    diagDecided.current = project.project.id;
+    setShowDiag(processed.diagnostics.some((d) => d.severity === 'error' || d.severity === 'warning'));
+  }, [processed, project]);
   const counts = processed
     ? { error: processed.diagnostics.filter((d) => d.severity === 'error').length, warning: processed.diagnostics.filter((d) => d.severity === 'warning').length, review: processed.diagnostics.filter((d) => d.severity === 'review').length }
     : null;
