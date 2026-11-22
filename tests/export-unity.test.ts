@@ -39,6 +39,19 @@ describe('engine exports', () => {
   });
 });
 
+describe('Unity saves and ink state', () => {
+  it('loads ink state in one place that puts back the invisible fallback choice ink does not save', async () => {
+    const s = SAMPLES.find((x) => x.id === 'lighthouse')!;
+    const { project } = await build(s.text, s.fileName, 'structured');
+    const res = await ADAPTERS.unity.export(processProject(project), { engine: 'unity', projectName: 'Loads', engineVersion: ADAPTERS.unity.defaultEngineVersion, integrationRef: 'v1.2.3', includeDemo: true });
+    const controller = res.files.find((f) => f.path.endsWith('NarrativeController.cs'))!.content as string;
+    // Ink's JSON leaves out which choice is the fallback, so it would load as an empty choice: only LoadInkState may load state.
+    expect(controller.match(/Story\.state\.LoadJson\(/g)).toHaveLength(1);
+    expect(controller).toContain('if (string.IsNullOrEmpty(c.text)) c.isInvisibleDefault = true;');
+    expect(controller).toContain('LoadInkState(data.inkState);');
+  });
+});
+
 describe('Unity story UI', () => {
   const unity = async (project: StoryProject) =>
     ADAPTERS.unity.export(processProject(project), { engine: 'unity', projectName: 'UI', engineVersion: ADAPTERS.unity.defaultEngineVersion, integrationRef: 'v1.2.3', includeDemo: true });

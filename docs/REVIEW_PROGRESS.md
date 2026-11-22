@@ -123,3 +123,7 @@ for fixing them.
 - [x] Real Unreal build on 5.7 (flaw 7): it found two compile errors in the plugin (an include-order rule in
       `InkCompat.cpp` and a shadowed `Line` in the Enter Dialogue Trigger), now fixed; the archive sample builds and all
       10 automation tests pass (`npm run test:unreal:build -- --test`). Tried 5.9: the only compile error is in Inkpot's own `NativeFunctionCall.cpp` (line 133, a `%d` log format), as the export's README already says, so it is not ours to fix here. 5.6 not tried.
+- [x] Unity: loading a save no longer shows an empty extra choice (found by the Lighthouse Keeper smoke test, which
+      failed on main): ink's saved state leaves out which choice is the invisible fallback, so the controller puts the flag
+      back after every load (`LoadInkState`). **Not checked:** the Unreal plugin's Inkpot port may do the same; there is no
+      Unreal Engine here to try it.
