@@ -139,3 +139,8 @@ for fixing them.
       failed on main): ink's saved state leaves out which choice is the invisible fallback, so the controller puts the flag
       back after every load (`LoadInkState`). **Not checked:** the Unreal plugin's Inkpot port may do the same; there is no
       Unreal Engine here to try it.
+- [x] Small quirks (flaw 10): emphasis tags are out of line labels (earlier); Fountain and plain-text scripts already
+      parse transitions alike (checked: both give the same passages for `FADE IN:`, `CUT TO:`, `FADE OUT.` and
+      `THE END`); and Review now says why a passage goes where it does when the conversion decided it
+      (`Passage.flowDefault`: scripts flow on to the next passage, Ink and Twine end a passage that says nowhere to go),
+      until the writer sets "Then". Browser-only storage is a privacy strength and stays as it is.

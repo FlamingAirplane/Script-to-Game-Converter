@@ -399,3 +399,27 @@ export function addScene(p: StoryProject, s: NewScene): Passage | string {
   if (s.at) p.layout = { ...p.layout, [id]: { x: Math.round(s.at.x), y: Math.round(s.at.y) } };
   return scene;
 }
+
+/** What the "Then" of a passage can be set to: to end the story, to nothing, or to go on to a passage. */
+export type ThenChoice = '__end' | '__none' | string;
+
+/** The writer sets where a passage goes: it stops being a decision the conversion made (see Passage.flowDefault). */
+export function setThen(p: Passage, value: ThenChoice): void {
+  p.isEnding = value === '__end';
+  p.divert = value.startsWith('__') ? undefined : value;
+  delete p.flowDefault;
+}
+
+/** Why a passage goes where it does, when the conversion decided it (so the writer isn't surprised), else null. */
+export function flowNote(p: Passage): string | null {
+  switch (p.flowDefault) {
+    case 'next_passage':
+      return 'Goes on to the next passage because the script doesn’t say where it goes: scripts read from one passage to the next. Change it here if it should go elsewhere.';
+    case 'last_passage':
+      return 'Ends the story because it is the last passage and the script doesn’t say where it goes.';
+    case 'source_ends':
+      return 'Ends the story because Ink and Twine stories spell out where each passage goes, and this one doesn’t. Choose a passage here to continue into one.';
+    default:
+      return null;
+  }
+}
