@@ -1,13 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { pendingSuggestions } from '../core/adapt';
 import { isPinnedRef, pascalCase } from '../core/export/common';
-import { ADAPTERS, buildPlayableHtml, buildRecordingScript, buildRenpy, renpyFileName, recordingScriptFileName, buildTwee, ExportBlockedError, playableFileName, twineFileName, unityTarball, unityTarballName, zipExport, type EngineTarget, type ExportResult, type TwineKind } from '../core/export';
+import { ADAPTERS, ExportBlockedError, unityTarball, unityTarballName, zipExport, type EngineTarget, type ExportResult } from '../core/export';
 import { SEMVER, unityPackageId } from '../core/export/unityPackage';
-import { languageName } from './language';
-import { importTranslations, removeLanguage, translationCoverage, translationSheet } from '../core/export/translations';
-import {normaliseUnityTheme, panelThemeOf } from '../core/export/unityTheme';
-// The engine-only Ink runtime (~125 KB), embedded in playable-story exports.
-import inkRuntime from '../../node_modules/inkjs/dist/ink.js?raw';
 import { referencedAudio } from '../core/audio';
 import { referencedImages } from '../core/images';
 import { fileBase, referencedOriginals } from '../core/isr';
@@ -20,19 +15,38 @@ import type { StoryProject } from '../core/isr';
 import type { Update } from './projectOps';
 import { UnityThemeEditor } from './UnityThemeEditor';
 import { DialogueOnlySetting } from './DialogueOnlySetting';
-import { INK_COMPILER } from '../core/version';
-
-const INKJS_VERSION = INK_COMPILER.version;
-import { RecordingsImport } from './RecordingsImport';
-import { addReaderNotes, parseReaderNotes } from '../core/readerNotes';
-import { PLAY_PREFIX, storyLink } from './storyLink';
+import { ShareSection } from './export/ShareSection';
+import { PackageContents } from './export/PackageContents';
+import { languageList, Pass, previewText } from './export/helpers';
 
 // `stale`: an edit is still being processed, so exports wait for it rather than packaging the previous version.
-export function ExportView({ processed, stale, onState, project, update, onReview }: { processed: ProcessedStory; stale: boolean; onState: (s: 'Exporting' | 'Succeeded' | 'Failed' | null) => void; project: StoryProject; update: Update; onReview?: () => void }) {
+export function ExportView({
+  processed,
+  stale,
+  onState,
+  project,
+  update,
+  onReview,
+}: {
+  processed: ProcessedStory;
+  stale: boolean;
+  onState: (s: 'Exporting' | 'Succeeded' | 'Failed' | null) => void;
+  project: StoryProject;
+  update: Update;
+  onReview?: () => void;
+}) {
   const [engine, setEngine] = useState<EngineTarget>('unity');
   const adapter = ADAPTERS[engine];
   const defaultName = pascalCase(processed.project.project.title) || 'NarrativeProject';
-  const [opts, setOpts] = useState({ projectName: defaultName, engineVersion: adapter.defaultEngineVersion, integrationRef: adapter.integration.defaultRef, includeDemo: true, unityLayout: 'package' as 'package' | 'project', packageVersion: '1.0.0', unityAddressables: false });
+  const [opts, setOpts] = useState({
+    projectName: defaultName,
+    engineVersion: adapter.defaultEngineVersion,
+    integrationRef: adapter.integration.defaultRef,
+    includeDemo: true,
+    unityLayout: 'package' as 'package' | 'project',
+    packageVersion: '1.0.0',
+    unityAddressables: false,
+  });
   const [sheetLanguages, setSheetLanguages] = useState('');
   const [result, setResult] = useState<ExportResult | null>(null);
   const [zip, setZip] = useState<Uint8Array | null>(null);
@@ -79,7 +93,9 @@ export function ExportView({ processed, stale, onState, project, update, onRevie
       onState(r.report.errors.length ? 'Failed' : 'Succeeded');
       if (!r.report.errors.length) sfx.stamp();
       // The result (file list and download) is below the settings: bring it into view.
-      requestAnimationFrame(() => resultRef.current?.scrollIntoView({ behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth', block: 'start' }));
+      requestAnimationFrame(() =>
+        resultRef.current?.scrollIntoView({ behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth', block: 'start' }),
+      );
     } catch (e) {
       setError(e instanceof ExportBlockedError ? `Export blocked — ${e.message}` : String(e));
       onState('Failed');
@@ -142,14 +158,26 @@ export function ExportView({ processed, stale, onState, project, update, onRevie
             <fieldset className="modes layout-choice">
               <legend className="muted small">What to build</legend>
               <label className={`mode ${opts.unityLayout === 'package' ? 'selected' : ''}`}>
-                <input type="radio" name="unity-layout" checked={opts.unityLayout === 'package'} onChange={() => setOpts({ ...opts, unityLayout: 'package' })} />
+                <input
+                  type="radio"
+                  name="unity-layout"
+                  checked={opts.unityLayout === 'package'}
+                  onChange={() => setOpts({ ...opts, unityLayout: 'package' })}
+                />
                 <span>
                   <strong>A package for a game you already have</strong>
-                  <span className="muted small">Add it to any Unity project with Package Manager (or drop it in Packages/). Nothing in the project is replaced.</span>
+                  <span className="muted small">
+                    Add it to any Unity project with Package Manager (or drop it in Packages/). Nothing in the project is replaced.
+                  </span>
                 </span>
               </label>
               <label className={`mode ${opts.unityLayout === 'project' ? 'selected' : ''}`}>
-                <input type="radio" name="unity-layout" checked={opts.unityLayout === 'project'} onChange={() => setOpts({ ...opts, unityLayout: 'project' })} />
+                <input
+                  type="radio"
+                  name="unity-layout"
+                  checked={opts.unityLayout === 'project'}
+                  onChange={() => setOpts({ ...opts, unityLayout: 'project' })}
+                />
                 <span>
                   <strong>A complete new Unity project</strong>
                   <span className="muted small">The same package inside a ready-to-open project, to try the story on its own.</span>
@@ -159,7 +187,11 @@ export function ExportView({ processed, stale, onState, project, update, onRevie
           )}
           <label className="field">
             <span className="muted small">{asPackage ? 'Story name' : 'Project name'}</span>
-            <input className="input" value={opts.projectName} onChange={(e) => setOpts({ ...opts, projectName: e.target.value.replace(/[^\p{L}\p{N}_\- ]/gu, '') })} />
+            <input
+              className="input"
+              value={opts.projectName}
+              onChange={(e) => setOpts({ ...opts, projectName: e.target.value.replace(/[^\p{L}\p{N}_\- ]/gu, '') })}
+            />
             {engine === 'unity' && (
               <span className="muted small">
                 Package <code>{pkgId.name}</code> · C# namespace <code>{pkgId.namespace}</code>
@@ -169,36 +201,50 @@ export function ExportView({ processed, stale, onState, project, update, onRevie
           {asPackage && (
             <label className="field">
               <span className="muted small">Package version {versionOk ? null : <Badge tone="warning">use numbers like 1.2.0</Badge>}</span>
-              <input className={`input mono ${versionOk ? '' : 'invalid'}`} value={opts.packageVersion} onChange={(e) => setOpts({ ...opts, packageVersion: e.target.value.trim() })} />
+              <input
+                className={`input mono ${versionOk ? '' : 'invalid'}`}
+                value={opts.packageVersion}
+                onChange={(e) => setOpts({ ...opts, packageVersion: e.target.value.trim() })}
+              />
             </label>
           )}
           <details className="advanced">
             <summary>Advanced: versions{engine === 'unity' ? ' and loading' : ''}</summary>
-          <label className="field">
-            <span className="muted small">{asPackage ? 'Unity version you build with (the package works in 2022.3 and later)' : `${adapter.label} version`}</span>
-            <input className="input mono" value={opts.engineVersion} onChange={(e) => setOpts({ ...opts, engineVersion: e.target.value })} />
-          </label>
-          <label className="field">
-            <span className="muted small">
-              {adapter.integration.name} ref (tag or commit) {pinned ? <Badge tone="ok">pinned</Badge> : <Badge tone="warning">branch — not reproducible</Badge>}
-            </span>
-            <input className="input mono" value={opts.integrationRef} onChange={(e) => setOpts({ ...opts, integrationRef: e.target.value.trim() })} />
-          </label>
-          {engine === 'unity' && (
-            <div className="field">
-              <label className="check">
-                <input type="checkbox" checked={opts.unityAddressables} onChange={(e) => setOpts({ ...opts, unityAddressables: e.target.checked })} aria-describedby="addressables-help" />
-                Load voice clips and pictures on demand (Addressables)
-              </label>
-              <span className="muted small" id="addressables-help">
-                For long or heavily voiced stories: they aren’t all built into the game. The package sets up the Addressables group itself.
+            <label className="field">
+              <span className="muted small">
+                {asPackage ? 'Unity version you build with (the package works in 2022.3 and later)' : `${adapter.label} version`}
               </span>
-            </div>
-          )}
-          <label className="field">
-            <span className="muted small">Translation sheet: language columns to add (e.g. fr, de). Every export has the sheet; translators fill the columns in.</span>
-            <input className="input mono" value={sheetLanguages} placeholder="e.g. fr, de" onChange={(e) => setSheetLanguages(e.target.value)} />
-          </label>
+              <input className="input mono" value={opts.engineVersion} onChange={(e) => setOpts({ ...opts, engineVersion: e.target.value })} />
+            </label>
+            <label className="field">
+              <span className="muted small">
+                {adapter.integration.name} ref (tag or commit){' '}
+                {pinned ? <Badge tone="ok">pinned</Badge> : <Badge tone="warning">branch — not reproducible</Badge>}
+              </span>
+              <input className="input mono" value={opts.integrationRef} onChange={(e) => setOpts({ ...opts, integrationRef: e.target.value.trim() })} />
+            </label>
+            {engine === 'unity' && (
+              <div className="field">
+                <label className="check">
+                  <input
+                    type="checkbox"
+                    checked={opts.unityAddressables}
+                    onChange={(e) => setOpts({ ...opts, unityAddressables: e.target.checked })}
+                    aria-describedby="addressables-help"
+                  />
+                  Load voice clips and pictures on demand (Addressables)
+                </label>
+                <span className="muted small" id="addressables-help">
+                  For long or heavily voiced stories: they aren’t all built into the game. The package sets up the Addressables group itself.
+                </span>
+              </div>
+            )}
+            <label className="field">
+              <span className="muted small">
+                Translation sheet: language columns to add (e.g. fr, de). Every export has the sheet; translators fill the columns in.
+              </span>
+              <input className="input mono" value={sheetLanguages} placeholder="e.g. fr, de" onChange={(e) => setSheetLanguages(e.target.value)} />
+            </label>
           </details>
           {!asPackage && (
             <label className="check">
@@ -222,7 +268,10 @@ export function ExportView({ processed, stale, onState, project, update, onRevie
                 </>
               ) : (
                 <>
-                  <Pass ok={!!processed.smoke && !processed.smoke.runtimeErrors.length} /> {processed.smoke ? `${processed.smoke.completedRuns}/${processed.smoke.runs} automated playthroughs reached an ending` : 'Story smoke test not run'}
+                  <Pass ok={!!processed.smoke && !processed.smoke.runtimeErrors.length} />{' '}
+                  {processed.smoke
+                    ? `${processed.smoke.completedRuns}/${processed.smoke.runs} automated playthroughs reached an ending`
+                    : 'Story smoke test not run'}
                 </>
               )}
             </li>
@@ -232,7 +281,11 @@ export function ExportView({ processed, stale, onState, project, update, onRevie
               </li>
             )}
           </ul>
-          <button className="btn primary big" disabled={busy || stale || blocking.length > 0 || !!processed.smokePending || (asPackage && !versionOk)} onClick={build}>
+          <button
+            className="btn primary big"
+            disabled={busy || stale || blocking.length > 0 || !!processed.smokePending || (asPackage && !versionOk)}
+            onClick={build}
+          >
             {busy ? 'Building…' : engine === 'unity' ? (asPackage ? 'Build Unity package' : 'Build Unity project') : `Build ${adapter.label} package`}
           </button>
           {result && zip && !busy && (
@@ -255,7 +308,10 @@ export function ExportView({ processed, stale, onState, project, update, onRevie
         <section className="card">
           <p className="for-dev small">For your developer</p>
           <h2>What their computer needs</h2>
-          <p className="muted small">Writers can skip this. The browser can’t check a computer, so your developer can run <code>npm run cli -- doctor --engine {engine}</code> to check these automatically.</p>
+          <p className="muted small">
+            Writers can skip this. The browser can’t check a computer, so your developer can run <code>npm run cli -- doctor --engine {engine}</code> to check
+            these automatically.
+          </p>
           <ul className="checklist">
             {requirements.map((r) => (
               <li key={r.id}>
@@ -288,16 +344,25 @@ export function ExportView({ processed, stale, onState, project, update, onRevie
               {tree.length} files{metas ? ` (+ ${metas} Unity .meta)` : ''} · {zip ? `${(zip.length / 1024).toFixed(1)} KB` : ''}
             </span>
             {tgz && (
-              <button className="btn" title="For Package Manager → + → Install package from tarball…" onClick={() => download(unityTarballName(result), tgz, 'application/gzip')}>
+              <button
+                className="btn"
+                title="For Package Manager → + → Install package from tarball…"
+                onClick={() => download(unityTarballName(result), tgz, 'application/gzip')}
+              >
                 Download .tgz
               </button>
             )}
-            <button className="btn primary" disabled={!zip} onClick={() => zip && download(`${fileBase(processed.project)}-${engine}.zip`, zip, 'application/zip')}>
+            <button
+              className="btn primary"
+              disabled={!zip}
+              onClick={() => zip && download(`${fileBase(processed.project)}-${engine}.zip`, zip, 'application/zip')}
+            >
               Download .zip
             </button>
           </div>
           <p className="muted small">
-            Checked here: every file the package needs is in it and the story compiles. It hasn’t been opened or built in {adapter.label}; that happens on your developer’s computer.
+            Checked here: every file the package needs is in it and the story compiles. It hasn’t been opened or built in {adapter.label}; that happens on your
+            developer’s computer.
           </p>
           {result.report.diagnostics.length > 0 && (
             <ul className="inline-diags">
@@ -323,382 +388,5 @@ export function ExportView({ processed, stale, onState, project, update, onRevie
         </section>
       )}
     </div>
-  );
-}
-
-/** Bring a filled-in translation sheet back into the story, and see how much of each language is done. */
-/** Brings a reader's notes file into the story: each note goes in as a note line after the line it was written on. */
-function ReaderNotesIn({ update }: { update: Update }) {
-  const [message, setMessage] = useState('');
-  return (
-    <div className="reader-notes-in">
-      <label className="btn small">
-        Bring in readers' notes…
-        <input
-          type="file"
-          accept=".json,application/json"
-          hidden
-          aria-label="Readers' notes file"
-          onChange={async (e) => {
-            const file = e.target.files?.[0];
-            e.target.value = '';
-            if (!file) return;
-            const parsed = parseReaderNotes(await file.text());
-            if ('error' in parsed) return setMessage(parsed.error);
-            let result = { placed: 0, unplaced: 0, duplicates: 0 };
-            update((d) => {
-              result = addReaderNotes(d, parsed.notes);
-            });
-            const parts = [
-              `${result.placed} note${result.placed === 1 ? '' : 's'} from ${file.name} went in beside the lines they're about, as notes in Review`,
-              result.unplaced ? `${result.unplaced} on lines the script no longer has went at the start of the story` : '',
-              result.duplicates ? `${result.duplicates} were already there` : '',
-            ].filter(Boolean);
-            setMessage(`${parts.join('; ')}. Readers don't see notes.`);
-          }}
-        />
-      </label>
-      {message && (
-        <p className="small note-text" role="status">
-          {message}
-        </p>
-      )}
-    </div>
-  );
-}
-
-function TranslationsIn({ project, update }: { project: StoryProject; update: Update }) {
-  const [message, setMessage] = useState('');
-  const [error, setError] = useState('');
-  const coverage = translationCoverage(project);
-  const read = async (file: File) => {
-    setError('');
-    setMessage('');
-    try {
-      const text = await file.text();
-      // Read it into a copy first: a wrong file changes nothing, and this says what it brings.
-      const f = importTranslations(structuredClone(project), text);
-      update((d) => void importTranslations(d, text));
-      setMessage(
-        `Brought in ${f.languages.map((l) => `${languageName(l.code)} (${l.translated} of ${f.total})`).join(', ')}.` +
-          (f.stale ? ` ${f.stale} row(s) were for text that has changed since the sheet was made, so they were left out.` : ''),
-      );
-    } catch (e) {
-      setError(e instanceof Error ? e.message : String(e));
-    }
-  };
-  return (
-    <div className="translations-in">
-      <label className="btn small file-btn">
-        Bring in a translated sheet…
-        <input type="file" accept=".csv,text/csv,text/plain" hidden onChange={(e) => (e.target.files?.[0] && void read(e.target.files[0]), (e.target.value = ''))} />
-      </label>
-      {coverage.languages.length > 0 && (
-        <ul className="small translation-coverage" aria-label="Translations in this story">
-          {coverage.languages.map((l) => (
-            <li key={l.code}>
-              <strong>{languageName(l.code)}</strong> <span className="muted">({l.code})</span>: {l.translated} of {coverage.total} translated
-              {l.translated < coverage.total && <span className="muted"> · download the sheet to see what’s missing</span>}{' '}
-              <button className="link small" onClick={() => update((d) => removeLanguage(d, l.code))} aria-label={`Remove ${languageName(l.code)}`}>
-                Remove
-              </button>
-            </li>
-          ))}
-        </ul>
-      )}
-      {message && (
-        <p className="small" role="status">
-          {message} Playtest and the playable story can now show it; the Unity package includes it.
-        </p>
-      )}
-      {error && <p className="error-text small">{error}</p>}
-    </div>
-  );
-}
-
-/** "fr, de" → ["fr", "de"]: language codes for the translation sheet's columns. */
-function languageList(text: string): string[] {
-  return [...new Set(text.split(/[\s,;]+/).map((x) => x.trim()).filter((x) => /^[A-Za-z]{2,3}(-[A-Za-z0-9]{2,8})*$/.test(x)))];
-}
-
-function Pass({ ok }: { ok: boolean }) {
-  return <span className={`sev ${ok ? 'sev-ok' : 'sev-error'}`}>{ok ? '✓' : '●'}</span>;
-}
-
-/** Exports that need no game engine (or a ready-made one): a playable web page for readers, a Twine project, a Ren'Py script. */
-function ShareSection({ processed, stale, project, update }: { processed: ProcessedStory; stale: boolean; project: StoryProject; update: Update }) {
-  const [error, setError] = useState('');
-  const [twineKind, setTwineKind] = useState<TwineKind>('sugarcube');
-  // A copy for feedback: readers get a Note button, and send their notes back as a file.
-  const [feedback, setFeedback] = useState(false);
-  const [playLink, setPlayLink] = useState<{ url?: string; note?: string }>({});
-  const [languages, setLanguages] = useState('');
-  const blocked = processed.diagnostics.some((d) => d.exportBlocked) || stale;
-  const run = async (fn: () => void | Promise<void>) => {
-    setError('');
-    try {
-      await fn();
-    } catch (e) {
-      setError(e instanceof ExportBlockedError ? e.message : String(e));
-    }
-  };
-  return (
-    <>
-      <h2 className="section-title">Share without a game engine</h2>
-      <section className="share-grid">
-        <div className="card share-card">
-          <h2>Playable story</h2>
-          <p className="muted small">
-            One web page anyone can open to read and play your story, on a computer or phone. Send it by email or put it online. Readers' progress is saved
-            in their browser.
-          </p>
-          <button
-            className="btn primary"
-            disabled={blocked}
-            onClick={() =>
-              run(async () => {
-                const audio = await renderClips(referencedAudio(processed.project));
-                const images = await collectClips(referencedImages(processed.project));
-                download(playableFileName(processed), buildPlayableHtml(processed, inkRuntime, audio, images, { feedback }), 'text/html');
-              })
-            }
-          >
-            Download playable story (.html)
-          </button>{' '}
-          <button
-            className="btn"
-            disabled={blocked}
-            title="The same story as a .zip with an index.html, the way itch.io and similar game sites take an HTML game"
-            onClick={() =>
-              run(async () => {
-                const audio = await renderClips(referencedAudio(processed.project));
-                const images = await collectClips(referencedImages(processed.project));
-                const { default: JSZip } = await import('jszip');
-                const zip = new JSZip();
-                zip.file('index.html', buildPlayableHtml(processed, inkRuntime, audio, images, { feedback }));
-                const bytes = await zip.generateAsync({ type: 'uint8array', compression: 'DEFLATE', compressionOptions: { level: 6 } });
-                download(playableFileName(processed).replace(/\.html$/, '-web.zip'), bytes, 'application/zip');
-              })
-            }
-          >
-            For itch.io (.zip)
-          </button>
-          <p className="muted small">
-            To publish it as a game: on <a href="https://itch.io/game/new" target="_blank" rel="noopener noreferrer">itch.io</a>, make a new project, set
-            its kind to <em>HTML</em>, upload the .zip and tick <em>This file will be played in the browser</em>. Any web host works the same way.
-          </p>
-          <label className="check small feedback-check">
-            <input type="checkbox" checked={feedback} onChange={(e) => setFeedback(e.target.checked)} /> For feedback: readers can leave notes as they read, and
-            download them to send back to you
-          </label>
-          <details className="feedback-more">
-            <summary className="small">Share for feedback with a link, or bring readers' notes in</summary>
-            <p className="muted small">
-              A play link opens just the story, with notes on, in any browser: nothing to download. The story is inside the link (after the #), so it isn't
-              uploaded anywhere, but anyone with the link can read it. Pictures and recordings aren't included.
-            </p>
-            <button
-              className="btn"
-              disabled={blocked}
-              onClick={() =>
-                run(async () => {
-                  const r = await storyLink(processed.project, location.href, PLAY_PREFIX);
-                  if ('error' in r) return setPlayLink({ note: r.error });
-                  try {
-                    await navigator.clipboard.writeText(r.url);
-                    setPlayLink({ url: r.url, note: 'Play link copied. Paste it into a message to your readers.' });
-                  } catch {
-                    setPlayLink({ url: r.url, note: 'Copy the play link below.' });
-                  }
-                })
-              }
-            >
-              Copy a play link
-            </button>
-            {playLink.note && (
-              <p className="small note-text" role="status">
-                {playLink.note}
-              </p>
-            )}
-            {playLink.url && <input className="input mono small story-link" readOnly value={playLink.url} onFocus={(e) => e.target.select()} aria-label="Play link" />}
-            <ReaderNotesIn update={update} />
-          </details>
-        </div>
-        <div className="card share-card">
-          <h2>Recording script</h2>
-          <p className="muted small">
-            Every line of dialogue in story order, by character, with the file name each recording should be saved as. Opens in Excel, Numbers or
-            Google Sheets, ready for a voice session.
-          </p>
-          <button className="btn" disabled={stale} onClick={() => run(() => download(recordingScriptFileName(processed.project), buildRecordingScript(processed.project), 'text/csv'))}>
-            Download recording script (.csv)
-          </button>
-          <RecordingsImport project={project} update={update} />
-        </div>
-        <div className="card share-card">
-          <h2>Translation sheet</h2>
-          <p className="muted small">
-            Every line, choice, name and button the player sees, one per row, for translators: add a column per language (for example <code>fr</code> or{' '}
-            <code>de</code>) and fill it in. The Unity and Unreal exports show the story in any language the sheet has.
-          </p>
-          <label className="field">
-            <span className="muted small">Language columns to start with (optional)</span>
-            <input className="input mono" value={languages} placeholder="e.g. fr, de" onChange={(e) => setLanguages(e.target.value)} aria-label="Language columns to start with" />
-          </label>
-          <button
-            className="btn"
-            disabled={stale}
-            onClick={() =>
-              run(() => download(`${fileBase(processed.project)}-translations.csv`, translationSheet(processed.project, normaliseUnityTheme(panelThemeOf(processed.project)), languageList(languages)), 'text/csv'))
-            }
-          >
-            Download translation sheet (.csv)
-          </button>
-          <TranslationsIn project={project} update={update} />
-        </div>
-        <div className="card share-card">
-          <h2>Twine</h2>
-          <p className="muted small">
-            A Twine project to keep editing the story visually. In Twine 2, choose <em>Library → Import</em> and pick the file.
-          </p>
-          <fieldset className="twine-kind">
-            <legend className="muted small">What to include</legend>
-            <label>
-              <input type="radio" name="twine-kind" checked={twineKind === 'sugarcube'} onChange={() => setTwineKind('sugarcube')} />
-              <span>
-                <strong>Story and game logic</strong>
-                <span className="muted small">Choices that need items, effects and a book style, for the SugarCube format.</span>
-              </span>
-            </label>
-            <label>
-              <input type="radio" name="twine-kind" checked={twineKind === 'plain'} onChange={() => setTwineKind('plain')} />
-              <span>
-                <strong>Story only</strong>
-                <span className="muted small">Just passages, their text and links. Nothing added, so it works in any Twine format; every choice is always shown.</span>
-              </span>
-            </label>
-          </fieldset>
-          <button className="btn" disabled={blocked} onClick={() => run(() => download(twineFileName(processed, twineKind), buildTwee(processed, twineKind)))}>
-            Download for Twine (.twee)
-          </button>
-        </div>
-        <div className="card share-card">
-          <h2>Ren’Py</h2>
-          <p className="muted small">
-            The story as a visual novel for <a href="https://www.renpy.org" target="_blank" rel="noopener noreferrer">Ren’Py</a>, the free engine for
-            dialogue-heavy games: characters, choices, items and endings. Make a project in the Ren’Py launcher, put this file in its <code>game</code>{' '}
-            folder, delete the <code>script.rpy</code> the launcher made, and launch it. Add pictures and music there.
-          </p>
-          <button className="btn" disabled={blocked} onClick={() => run(() => download(renpyFileName(processed), buildRenpy(processed)))}>
-            Download for Ren’Py (.rpy)
-          </button>
-          <p className="muted small">Checked against the story here; not yet opened in Ren’Py itself.</p>
-        </div>
-      </section>
-      {blocked && !stale && <p className="error-text small">Fix the items marked “must fix” in Diagnostics to enable these downloads.</p>}
-      {error && <p className="error-text">{error}</p>}
-    </>
-  );
-}
-
-function previewText(content: string | Uint8Array | undefined): string {
-  if (content === undefined) return '';
-  if (typeof content === 'string') return content.slice(0, 20000);
-  return `(audio file, ${(content.length / 1024).toFixed(1)} KB)`;
-}
-
-/** What a developer gets in the .zip, what they still do, and which versions it targets, in plain words. */
-function PackageContents({ engine, layout }: { engine: EngineTarget; layout: 'package' | 'project' }) {
-  const a = ADAPTERS[engine];
-  const unity = engine === 'unity';
-  return (
-    <details className="card package-contents" open>
-      <summary>
-        <h2>What your developer gets</h2>
-      </summary>
-      <div className="contents-grid">
-        <div>
-          <h3>In the .zip</h3>
-          <ul className="small">
-            <li>
-              <strong>Your story in Ink</strong>, the scripting language for game stories (<code>.ink</code>), checked and compiled, ready to run.
-            </li>
-            {unity ? (
-              <>
-                <li>
-                  {layout === 'package' ? (
-                    <>
-                      <strong>A Unity package</strong> they add to the game they already have: nothing in their project is replaced.
-                    </>
-                  ) : (
-                    <>
-                      <strong>A complete Unity project</strong> that opens to a demo scene, with the same package inside.
-                    </>
-                  )}
-                </li>
-                <li>
-                  <strong>Ready-made code</strong> that plays the story: lines, choices, Continue breaks, exits to the game, saves, and items (C#).
-                </li>
-                <li>
-                  <strong>A story panel</strong> styled with the Story UI settings below, which they can change in Unity.
-                </li>
-              </>
-            ) : (
-              <>
-                <li>
-                  <strong>An Unreal project</strong> with no code of its own: all the C++ is in one NarrativeBridge plugin (the same for every story), next to a script that fetches the Inkpot plugin it uses.
-                </li>
-                <li>
-                  <strong>Ready-made code</strong> that plays the story: lines, choices, Continue breaks, exits to the game, saves, items and translations (C++, usable from Blueprints).
-                </li>
-                <li>
-                  <strong>A story panel</strong> styled with the Story UI settings below, and tests that replay every ending.
-                </li>
-              </>
-            )}
-            <li>Your recordings, scene pictures and portraits, your original script, and a report of every check that passed.</li>
-          </ul>
-        </div>
-        <div>
-          <h3>What they still do</h3>
-          <ul className="small">
-            {unity ? (
-              <>
-                <li>Add the package (or open the project) in Unity. It offers to install Ink Unity Integration if the game doesn’t have it.</li>
-                <li>Put the story where it belongs in the game (a menu adds it to a scene), and connect it to their gameplay: the README in the package explains how.</li>
-                <li>Swap in the game’s own art, fonts and sounds if they want.</li>
-              </>
-            ) : (
-              <>
-                <li>Run the setup script (it fetches Inkpot), then open the project in Unreal and let it build the plugin (a toolchain is needed once, unless you export with a prebuilt plugin from the command line).</li>
-                <li>Already have a game? Copy the plugin into it, then use Tools → Import Pen to Ink Story to bring the story in. Importing again replaces it in place, so Blueprints keep working.</li>
-                <li>Put the story where it belongs in the game (a menu adds it to a level), and connect it to their gameplay: the README explains how.</li>
-              </>
-            )}
-          </ul>
-        </div>
-        <div>
-          <h3>Versions</h3>
-          <ul className="small">
-            {unity ? (
-              <>
-                <li>Unity 6 (recommended) or 2022.3 LTS and later</li>
-                <li>
-                  {a.integration.name} {a.integration.defaultRef}
-                </li>
-              </>
-            ) : (
-              <>
-                <li>Unreal Engine {a.defaultEngineVersion} (what it’s built and tested with) or 5.8; on 5.9 the Inkpot plugin needs a one-line fix, given in the export’s README</li>
-                <li>
-                  {a.integration.name} {a.integration.defaultRef}, which the setup script fetches (changeable under Advanced)
-                </li>
-              </>
-            )}
-            <li>Ink compiled with inkjs {INKJS_VERSION}</li>
-          </ul>
-        </div>
-      </div>
-    </details>
   );
 }
