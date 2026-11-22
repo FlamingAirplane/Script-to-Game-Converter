@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { createHistory, UNDO_LIMIT } from '../src/ui/editHistory';
 import { autosaveState, LOW_STORAGE } from '../src/ui/useAutosave';
 import { shortcutFor } from '../src/ui/useShortcuts';
+import { ago, COPY_FRESH_MS, REMIND_AFTER_MS, saveReminderDue } from '../src/ui/useProjectFiles';
 
 describe('edit history', () => {
   it('steps back and forward through edits, and an edit clears what could be redone', () => {
@@ -81,5 +82,24 @@ describe('shortcuts', () => {
     expect(shortcutFor(key({ key: 'd' }, true), ctx)).toBeNull();
     expect(shortcutFor(key({ key: '?' }, true), ctx)).toBeNull();
     expect(shortcutFor(key({ key: '?' }), ctx)).toEqual({ do: 'help' });
+  });
+});
+
+describe('the reminder to save a copy', () => {
+  const now = 10_000_000;
+  it('waits for unsaved work to last a while, and for a stale or missing copy', () => {
+    const base = { unsaved: true, unsavedSince: now - REMIND_AFTER_MS - 1, remindLater: 0, now };
+    expect(saveReminderDue(base)).toBe(true);
+    expect(saveReminderDue({ ...base, unsaved: false })).toBe(false);
+    expect(saveReminderDue({ ...base, unsavedSince: now - 1000 })).toBe(false); // work only just began
+    expect(saveReminderDue({ ...base, copyAt: now - 1000 })).toBe(false); // saved a moment ago
+    expect(saveReminderDue({ ...base, copyAt: now - COPY_FRESH_MS - 1 })).toBe(true);
+    expect(saveReminderDue({ ...base, remindLater: now + 1000 })).toBe(false); // "Later" was pressed
+  });
+
+  it('says how long ago in plain words', () => {
+    expect(ago(now, now)).toBe('just now');
+    expect(ago(now - 5 * 60_000, now)).toBe('5 min ago');
+    expect(ago(now - 2 * 3_600_000, now)).toBe('2 h ago');
   });
 });
