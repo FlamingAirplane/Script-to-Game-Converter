@@ -1,7 +1,7 @@
 import { forPlayers } from '../players';
 import { describeNeed } from '../gating';
 import { isActive, type StoryProject, type UnityTheme } from '../isr';
-import { normaliseUnityTheme } from './unityTheme';
+import {normaliseUnityTheme, panelThemeOf } from './unityTheme';
 
 // Translations for the Unity package: every piece of text a player can see (lines, choices, speaker names,
 // scene headings, stage directions, what a locked choice needs, and the story panel's own words), each with
@@ -51,7 +51,8 @@ export function interfaceWords(theme?: UnityTheme): string[] {
   const t = theme;
   return [
     ...(t ? [t.continueLabel, t.endLabel, t.restartLabel, t.saveLabel, t.loadLabel, t.settingsLabel, t.lockedLabel] : []),
-    // NarrativeView.SettingsWords (keep in step with unityUi.ts).
+    // The words of both story panels (Unity's NarrativeView.SettingsWords, Unreal's FNarrativePanelWords): tests/panel-words.test.ts
+    // fails if either panel gets a word this list doesn't have, or this list one neither panel has.
     'Settings', 'Text size', 'Typing speed', 'Go on by itself', 'High contrast', 'Voice volume', 'Language',
     'Slow', 'Normal', 'Fast', 'Instant', 'As designed', 'On', 'Off', 'Reset', 'Close',
     'Save to a slot', 'Load a save', 'Slot', 'Autosave', 'empty', 'earlier version', 'Skip',
@@ -59,7 +60,7 @@ export function interfaceWords(theme?: UnityTheme): string[] {
 }
 
 /** Every piece of text a player can see, once each, in story order. The panel's words come from the story's Unity look. */
-export function translationEntries(story: StoryProject, theme: UnityTheme = normaliseUnityTheme(story.presentation?.unity)): TranslationEntry[] {
+export function translationEntries(story: StoryProject, theme: UnityTheme = normaliseUnityTheme(panelThemeOf(story))): TranslationEntry[] {
   // When players see only the dialogue, the narration needn't be translated.
   const project = forPlayers(story);
   const out: TranslationEntry[] = [];

@@ -5,7 +5,7 @@ import { ADAPTERS, buildPlayableHtml, buildRecordingScript, buildRenpy, renpyFil
 import { SEMVER, unityPackageId } from '../core/export/unityPackage';
 import { languageName } from './language';
 import { importTranslations, removeLanguage, translationCoverage, translationSheet } from '../core/export/translations';
-import { normaliseUnityTheme } from '../core/export/unityTheme';
+import {normaliseUnityTheme, panelThemeOf } from '../core/export/unityTheme';
 // The engine-only Ink runtime (~125 KB), embedded in playable-story exports.
 import inkRuntime from '../../node_modules/inkjs/dist/ink.js?raw';
 import { referencedAudio } from '../core/audio';
@@ -549,7 +549,7 @@ function ShareSection({ processed, stale, project, update }: { processed: Proces
             className="btn"
             disabled={stale}
             onClick={() =>
-              run(() => download(`${fileBase(processed.project)}-translations.csv`, translationSheet(processed.project, normaliseUnityTheme(processed.project.presentation?.unity), languageList(languages)), 'text/csv'))
+              run(() => download(`${fileBase(processed.project)}-translations.csv`, translationSheet(processed.project, normaliseUnityTheme(panelThemeOf(processed.project)), languageList(languages)), 'text/csv'))
             }
           >
             Download translation sheet (.csv)

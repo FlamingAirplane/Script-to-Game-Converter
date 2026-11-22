@@ -99,7 +99,10 @@ for fixing them.
       no line entries, since none were added to it. **Not done:** portraits and cue sounds (attached files, not Ink)
       still come from the model, and Twine and Ren'Py are still built from the model, not from the Ink output.
 - [ ] Display names vs compatibility names for "Narrative Bridge" (flaw 6)
-- [ ] Rename `presentation.unity`; merge or redefine faithful/structured (flaw 8)
+- [x] `presentation.unity` is now `presentation.panel` (flaw 8, first part): the editor writes the new key and drops the
+      old one, and everything reads either (`panelThemeOf`), so older projects and files still open. A test keeps the
+      panel words in the Unity panel, the Unreal panel and the translation sheet's list from drifting apart.
+- [ ] Merge or redefine faithful/structured (flaw 8, second part): needs a decision on what *faithful* should mean
 - [x] Real Unreal build on 5.7 (flaw 7): it found two compile errors in the plugin (an include-order rule in
       `InkCompat.cpp` and a shadowed `Line` in the Enter Dialogue Trigger), now fixed; the archive sample builds and all
       10 automation tests pass (`npm run test:unreal:build -- --test`). Tried 5.9: the only compile error is in Inkpot's own `NativeFunctionCall.cpp` (line 133, a `%d` log format), as the export's README already says, so it is not ours to fix here. 5.6 not tried.

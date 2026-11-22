@@ -8,7 +8,7 @@ import { storyRoutes, type StoryRoute } from './routes';
 import { cueSounds } from '../cues';
 import { audioFileName } from '../audio';
 import { translationSheet } from './translations';
-import { normaliseUnityTheme, unityThemeJson } from './unityTheme';
+import {normaliseUnityTheme, unityThemeJson, panelThemeOf } from './unityTheme';
 import { SETTINGS_CS, THEME_CS, VIEW_CS } from './unityUi';
 import { ADDRESSABLES_SETUP_CS, CONTROLLER_CS, CUE_PLAYER_CS, DEBUGGER_CS, EDITOR_CS, GATED_CHOICE_CS, INVENTORY_CS, LOCALIZATION_CS, LOCALIZATION_TABLES_CS, PLAY_TESTS_CS, ROUTES_RUNNER_CS, ROUTE_TESTS_CS, SAVE_STORAGE_CS, TMP_SETUP_CS } from './templates.generated';
 import {
@@ -97,9 +97,9 @@ export const unityAdapter: EngineAdapter = {
       { path: `${pkg}Runtime/NarrativeSettings.cs`, content: cs(SETTINGS_CS) },
       { path: `${res}MainStory.compiled.json`, content: story.compile.json! },
       // The look chosen on the Export page; NarrativeTheme reads it (see unityTheme.ts).
-      { path: `${res}Theme.json`, content: json(unityThemeJson(normaliseUnityTheme(options.unityTheme ?? story.project.presentation?.unity))) },
+      { path: `${res}Theme.json`, content: json(unityThemeJson(normaliseUnityTheme(options.unityTheme ?? panelThemeOf(story.project)))) },
       // Every piece of text the player sees, keyed, for translators (NarrativeLocalization reads it).
-      { path: `${res}Translations.csv`, content: translationSheet(story.project, normaliseUnityTheme(options.unityTheme ?? story.project.presentation?.unity), options.translationLanguages ?? []) },
+      { path: `${res}Translations.csv`, content: translationSheet(story.project, normaliseUnityTheme(options.unityTheme ?? panelThemeOf(story.project)), options.translationLanguages ?? []) },
       ...voice.files,
       ...pictures.files,
       { path: `${pkg}Editor/${id.namespace}.Editor.asmdef`, content: json(editorAsmdef(id)) },

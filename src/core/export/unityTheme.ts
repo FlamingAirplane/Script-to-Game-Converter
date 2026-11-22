@@ -198,6 +198,11 @@ export const DEFAULT_UNITY_THEME: UnityTheme = UNITY_THEME_PRESETS.book;
 
 const HEX = /^#[0-9a-f]{6}$/i;
 
+/** The story panel's saved look: `presentation.panel`, or the old `presentation.unity` in a project saved before the rename. */
+export function panelThemeOf(project: { presentation?: { panel?: UnityTheme; unity?: UnityTheme } }): UnityTheme | undefined {
+  return project.presentation?.panel ?? project.presentation?.unity;
+}
+
 /** A complete, valid theme from whatever was saved (older projects, hand-edited files). */
 export function normaliseUnityTheme(t: Partial<UnityTheme> | undefined): UnityTheme {
   // Missing fields come from the theme's own preset, so { preset: 'night' } is the whole night theme.
