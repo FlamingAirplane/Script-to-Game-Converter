@@ -38,8 +38,10 @@ Tick items off here in the same pull request that does them.
   - [x] Split `tests/pipeline.test.ts` (about 160 KB) by area (#65)
   - [x] Keep the C# and C++ in real template files that tools can check (#64): `unity.ts` went from 3,700 lines to
         600
-  - [ ] Split the largest UI files: `ReviewView.tsx` is done (#68, 1,370 → 570 lines); `App.tsx` and
-        `GraphView.tsx` are left
+  - [x] Split the largest UI files: `ReviewView.tsx` (#68, 1,370 → 570 lines), `App.tsx` (hooks, 1,060 → 740),
+        `PlaytestView.tsx` (809 → 540: toolbar, transcript, choices, inspector, smoke report and a pure `state.ts` in
+        `src/ui/playtest/`) and `GraphView.tsx` (807 → 630: pointer gestures, routes, cards and minimap in `src/ui/graph/`).
+        Left: the Graph toolbar (35 values deep) and `ExportView.tsx`
 - [x] Easier moving between devices: a small story as a link (#62)
 - [ ] Prove the engine packages automatically: add a Unity licence secret so `.github/workflows/unity.yml` runs
       (owner only); a short clip of a story running in each engine
