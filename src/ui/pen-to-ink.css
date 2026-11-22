@@ -488,3 +488,41 @@ input[type='checkbox'], input[type='radio'] { accent-color: var(--olive); }
   .pti-grid span, .pti-label { animation: none; }
   .pti-label { color: var(--ink-2); background: none; }
 }
+
+/* ---------- Apple HIG pass: clarity, deference, depth (developer.apple.com/design/human-interface-guidelines) ----------
+   Targets big enough to hit, disabled things that stay readable, feedback for every press, and touch that
+   behaves like touch. Nothing here changes layout on a mouse beyond a few pixels of hit area. */
+html { -webkit-text-size-adjust: 100%; }
+button, a, summary, select, .tab, .mode, .sample { -webkit-tap-highlight-color: transparent; touch-action: manipulation; }
+
+/* Pointer devices: no control is shorter than 28px, and radios and checkboxes are readable at a glance. */
+.btn.tiny, .btn.small { min-height: 28px; }
+.icon { min-width: 28px; min-height: 28px; display: inline-flex; align-items: center; justify-content: center; }
+input[type='checkbox'], input[type='radio'] { width: 16px; height: 16px; }
+.tab { min-height: 32px; }
+.tab:active:not(:disabled) { background: rgba(254, 250, 224, 0.12); }
+.icon:active { background: color-mix(in srgb, var(--ink) 12%, transparent); }
+.diag-toggle:active, .mode:active, .engine-card:active { filter: brightness(0.97); }
+
+/* A disabled chapter still reads as a chapter: dimmer, not nearly invisible, and it explains itself on focus. */
+.tab:disabled { opacity: 0.62; }
+.btn:disabled { opacity: 0.5; }
+
+/* Keyboard focus follows each control's own corners instead of a square box. */
+:where(.btn, .tab, .icon, .input, .textarea, .mode, .sample, .engine-card, .diag-toggle):focus-visible { outline-offset: 2px; border-radius: var(--radius); }
+.tab:focus-visible { outline-color: var(--cover-gold); }
+.topbar :focus-visible { outline-color: var(--cover-gold); }
+
+/* Touch: 44px targets (HIG), roomier rows, and no accidental zoom when a field gains focus. */
+@media (pointer: coarse) {
+  .btn, .btn.small, .btn.tiny, .tab, .diag-toggle, select.input, .icon, summary { min-height: 44px; }
+  .icon { min-width: 44px; }
+  .btn.tiny, .btn.small { padding-left: 14px; padding-right: 14px; }
+  .input, .textarea, select.input { font-size: 16px; min-height: 44px; }
+  .input.small { font-size: 16px; padding: 6px 10px; }
+  input[type='checkbox'], input[type='radio'] { width: 22px; height: 22px; }
+  .passage-item { min-height: 44px; }
+  .hero-links a { min-height: 40px; }
+  .block-actions { gap: 2px; }
+  .btn:hover:not(:disabled), .sample:hover, .engine-card:hover { transform: none; }
+}
