@@ -1,0 +1,7 @@
+{
+  "description": "A lone 'Back to the game: Name' choice is an exit to the game, named Name.",
+  "steps": [
+    { "lines": [{ "text": "You reach the bridge." }], "choices": ["Back to the game: CrossBridge"], "stop": "exit", "exit": "CrossBridge" },
+    { "choose": "Back to the game: CrossBridge", "lines": [{ "text": "You are across." }], "choices": [], "stop": "end" }
+  ]
+}

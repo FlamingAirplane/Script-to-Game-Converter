@@ -14,6 +14,7 @@ import { spawnSync } from 'node:child_process';
 import { cpSync, existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { homedir, tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
+import { Compiler } from 'inkjs/full';
 import { reviewAll } from '../src/core/adapt';
 import { buildStory } from '../src/core/builder';
 import { ADAPTERS } from '../src/core/export';
@@ -71,6 +72,21 @@ for (const f of result.files) {
   const path = join(out, f.path);
   mkdirSync(dirname(path), { recursive: true });
   writeFileSync(path, f.content);
+}
+
+// The reader conformance fixtures (tests/fixtures/conformance), compiled, for the NarrativeBridge.Conformance automation tests.
+const fixtures = resolve(import.meta.dirname, '../tests/fixtures/conformance');
+const conformance = join(root, 'StorySource', 'Conformance');
+rmSync(conformance, { recursive: true, force: true });
+mkdirSync(conformance, { recursive: true });
+// Their story info: the export's, without the sample's own passages, lines, variables and gated choices (a fixture declares none).
+const info = JSON.parse(readFileSync(join(root, 'StorySource', 'StoryInfo.json'), 'utf8'));
+for (const k of ['passages', 'acts', 'lines', 'itemVariables', 'variables', 'exits', 'cues', 'cueTags', 'cueSounds', 'portraits', 'gatedChoices']) info[k] = Array.isArray(info[k]) ? [] : {};
+for (const f of readdirSync(fixtures).filter((n) => n.endsWith('.ink'))) {
+  const name = f.slice(0, -4);
+  writeFileSync(join(conformance, name + '.ink.json'), new Compiler(readFileSync(join(fixtures, f), 'utf8')).Compile().ToJson()!);
+  writeFileSync(join(conformance, name + '.info.json'), JSON.stringify(info));
+  cpSync(join(fixtures, name + '.steps.json'), join(conformance, name + '.steps.json'));
 }
 
 // Inkpot at the pinned ref, as Scripts/setup_inkpot does (a local checkout with --inkpot).

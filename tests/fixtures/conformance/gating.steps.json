@@ -1,0 +1,8 @@
+{
+  "description": "Gated choices appear when their condition holds; once-only choices go after use.",
+  "steps": [
+    { "lines": [{ "text": "A locked door." }], "choices": ["Search the room", "Leave"], "stop": "choices" },
+    { "choose": "Search the room", "lines": [{ "text": "A locked door." }], "choices": ["Open the door", "Leave"], "stop": "choices" },
+    { "choose": "Open the door", "lines": [], "choices": [], "stop": "end" }
+  ]
+}

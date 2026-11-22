@@ -33,18 +33,19 @@ namespace NarrativeBridgeTests
         TStrongObjectPtr<UNarrativeStoryData> Data;
         TStrongObjectPtr<UNarrativeBridgeComponent> Story;
 
-        explicit FPlay(FAutomationTestBase& Test)
+        /** StoryFile and InfoFile: a compiled story and its info under the project folder, to play instead of the main one (the conformance fixtures). */
+        explicit FPlay(FAutomationTestBase& Test, const FString& StoryFile = TEXT("StorySource/MainStory.compiled.json"), const FString& InfoFile = TEXT("StorySource/StoryInfo.json"))
         {
             FString Json;
-            if (!FFileHelper::LoadFileToString(Json, *(FPaths::ProjectDir() / TEXT("StorySource/MainStory.compiled.json"))))
+            if (!FFileHelper::LoadFileToString(Json, *(FPaths::ProjectDir() / StoryFile)))
             {
-                Test.AddError(TEXT("Couldn't read StorySource/MainStory.compiled.json."));
+                Test.AddError(FString::Printf(TEXT("Couldn't read %s."), *StoryFile));
                 return;
             }
             FString InfoJson;
-            if (!FFileHelper::LoadFileToString(InfoJson, *(FPaths::ProjectDir() / TEXT("StorySource/StoryInfo.json"))))
+            if (!FFileHelper::LoadFileToString(InfoJson, *(FPaths::ProjectDir() / InfoFile)))
             {
-                Test.AddError(TEXT("Couldn't read StorySource/StoryInfo.json."));
+                Test.AddError(FString::Printf(TEXT("Couldn't read %s."), *InfoFile));
                 return;
             }
             Asset.Reset(NarrativeBridgeInkImport::MakeTransientStoryAsset(Json));
@@ -137,6 +138,96 @@ bool FNarrativeBridgePlaythroughTest::RunTest(const FString& Parameters)
     TestTrue(TEXT("The story ends"), Play.Story->HasEnded());
     if (!Ending.IsEmpty()) TestTrue(FString::Printf(TEXT("It reaches %s"), *Ending), Play.Story->GetInk()->VisitCount(Ending) > 0);
     TestEqual(TEXT("The last line"), Play.LastLine(), Route->GetStringField(TEXT("lastLine")));
+    return true;
+}
+
+/**
+ * The reader conformance fixtures (StorySource/Conformance/<name>.ink.json, with the transcript it must produce in
+ * <name>.steps.json): the same stories and transcripts the TypeScript readers are held to, so the story component
+ * reads the Ink conventions the way Playtest and the playable page do. Absent in a normal export: no tests then.
+ * Cue lines aren't in the transcript (the component announces them through OnCue), so they're left out here.
+ */
+static TArray<FString> ConformanceNames()
+{
+    TArray<FString> Files;
+    IFileManager::Get().FindFiles(Files, *(FPaths::ProjectDir() / TEXT("StorySource/Conformance/*.steps.json")), true, false);
+    for (FString& F : Files) F = F.LeftChop(FCString::Strlen(TEXT(".steps.json")));
+    return Files;
+}
+
+IMPLEMENT_COMPLEX_AUTOMATION_TEST(FNarrativeBridgeConformanceTest, "NarrativeBridge.Conformance", Flags)
+
+void FNarrativeBridgeConformanceTest::GetTests(TArray<FString>& OutBeautifiedNames, TArray<FString>& OutTestCommands) const
+{
+    for (const FString& Name : ConformanceNames())
+    {
+        OutBeautifiedNames.Add(Name);
+        OutTestCommands.Add(Name);
+    }
+}
+
+bool FNarrativeBridgeConformanceTest::RunTest(const FString& Name)
+{
+    FString Text;
+    TSharedPtr<FJsonObject> Fixture;
+    if (!FFileHelper::LoadFileToString(Text, *(FPaths::ProjectDir() / FString::Printf(TEXT("StorySource/Conformance/%s.steps.json"), *Name))) ||
+        !FJsonSerializer::Deserialize(TJsonReaderFactory<>::Create(Text), Fixture) || !Fixture.IsValid())
+    {
+        AddError(TEXT("Couldn't read the fixture."));
+        return false;
+    }
+    FPlay Play(*this, FString::Printf(TEXT("StorySource/Conformance/%s.ink.json"), *Name), FString::Printf(TEXT("StorySource/Conformance/%s.info.json"), *Name));
+    if (!Play.Story) return false;
+    Play.Story->StartStory();
+    if (!TestTrue(TEXT("The story starts"), Play.Story->IsStarted())) return false;
+
+    int32 Seen = 0;
+    int32 StepNumber = 0;
+    for (const TSharedPtr<FJsonValue>& StepValue : Fixture->GetArrayField(TEXT("steps")))
+    {
+        const TSharedPtr<FJsonObject> Step = StepValue->AsObject();
+        ++StepNumber;
+        const FString Where = FString::Printf(TEXT("%s, step %d"), *Name, StepNumber);
+        FString Choose;
+        if (Step->TryGetStringField(TEXT("choose"), Choose))
+        {
+            if (Choose.StartsWith(TEXT("Back to the game: "))) Play.Story->Resume();
+            else
+            {
+                const int32 Index = Play.Offered().IndexOfByKey(Choose);
+                if (!TestTrue(FString::Printf(TEXT("%s: the choice \"%s\" is offered"), *Where, *Choose), Index != INDEX_NONE)) return false;
+                Play.Story->Choose(Index);
+            }
+        }
+
+        // The lines read since the last step (cues aren't in the transcript; choices the player made aren't lines).
+        TArray<FString> Expected;
+        for (const TSharedPtr<FJsonValue>& L : Step->GetArrayField(TEXT("lines")))
+        {
+            const TSharedPtr<FJsonObject> Line = L->AsObject();
+            if (Line->HasField(TEXT("cue"))) continue;
+            FString Speaker;
+            Line->TryGetStringField(TEXT("speaker"), Speaker);
+            bool bCut = false;
+            Line->TryGetBoolField(TEXT("cutscene"), bCut);
+            Expected.Add(FString::Printf(TEXT("%s|%s|%d"), *Speaker, *Line->GetStringField(TEXT("text")), bCut ? 1 : 0));
+        }
+        TArray<FString> Got;
+        const TArray<FNarrativeLine>& Transcript = Play.Story->GetTranscript();
+        for (; Seen < Transcript.Num(); ++Seen)
+            if (!Transcript[Seen].bIsChoice) Got.Add(FString::Printf(TEXT("%s|%s|%d"), *Transcript[Seen].SourceSpeaker, *Transcript[Seen].SourceText, Transcript[Seen].bIsCutscene ? 1 : 0));
+        TestEqual(FString::Printf(TEXT("%s: lines"), *Where), FString::Join(Got, TEXT(" // ")), FString::Join(Expected, TEXT(" // ")));
+
+        TArray<FString> ExpectedChoices;
+        for (const TSharedPtr<FJsonValue>& C : Step->GetArrayField(TEXT("choices"))) ExpectedChoices.Add(C->AsString());
+        TestEqual(FString::Printf(TEXT("%s: choices"), *Where), FString::Join(Play.Offered(), TEXT(" | ")), FString::Join(ExpectedChoices, TEXT(" | ")));
+
+        const FString Stop = Step->GetStringField(TEXT("stop"));
+        const FString Actual = Play.Story->HasEnded() ? TEXT("end") : Play.Story->IsAtExit() ? TEXT("exit") : Play.Story->IsWaitingForContinue() ? TEXT("pause") : TEXT("choices");
+        TestEqual(FString::Printf(TEXT("%s: stop"), *Where), Actual, Stop);
+        FString Exit;
+        if (Step->TryGetStringField(TEXT("exit"), Exit)) TestEqual(FString::Printf(TEXT("%s: exit"), *Where), Play.Story->GetCurrentExit(), Exit);
+    }
     return true;
 }
 
