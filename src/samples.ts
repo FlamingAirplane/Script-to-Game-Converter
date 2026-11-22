@@ -160,7 +160,7 @@ export const SAMPLES: Sample[] = [
     id: 'motel',
     name: 'Room Six',
     fileName: 'room_six.txt',
-    mode: 'faithful',
+    mode: 'structured',
     blurb: 'Plain-text screenplay converted faithfully: scenes in order, nothing invented.',
     text: MOTEL,
   },

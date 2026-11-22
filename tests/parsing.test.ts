@@ -278,7 +278,7 @@ describe('Final Draft and Word import', () => {
     const input = await prepareInput('archive.fdx', readFileSync('tests/fixtures/archive.fdx', 'utf8'));
     expect(input.format).toBe('fountain');
     expect(input.text).toMatch(/^Title: The Locked Archive\nAuthor: A. Writer/);
-    const { project, diagnostics } = await buildStory([input], { mode: 'faithful' });
+    const { project, diagnostics } = await buildStory([input], { mode: 'structured' });
     expect(diagnostics.map((d) => d.code)).toContain('INPUT_CONVERTED');
     expect(project.project.title).toBe('The Locked Archive');
     expect(project.passages.map((p) => p.sceneHeading)).toEqual(['INT. ARCHIVE - NIGHT', 'EXT. CLIFF PATH - DAWN']);
@@ -309,7 +309,7 @@ describe('Final Draft and Word import', () => {
     ]);
     const input = await prepareInput('script.docx', bytes);
     expect(input.format).toBe('fountain');
-    const { project } = await buildStory([input], { mode: 'faithful' });
+    const { project } = await buildStory([input], { mode: 'structured' });
     expect(project.passages[0].sceneHeading).toBe('INT. LIGHTHOUSE - NIGHT');
     expect(project.passages[0].content).toContainEqual(expect.objectContaining({ type: 'dialogue', parenthetical: 'weakly', text: 'The lens is gone.' }));
     expect(project.passages[0].content).toContainEqual(expect.objectContaining({ type: 'transition', text: 'FADE OUT.' }));
@@ -326,7 +326,7 @@ describe('Final Draft and Word import', () => {
     ]);
     const input = await prepareInput('novel.docx', bytes);
     expect(input.format).toBe('md');
-    const { project } = await buildStory([input], { mode: 'faithful' });
+    const { project } = await buildStory([input], { mode: 'structured' });
     expect(project.project.title).toBe('The Long Road');
     expect(project.passages.map((p) => p.title)).toEqual(['Morning', 'Evening']);
     expect(project.passages[1].content[0]).toMatchObject({ type: 'action', text: '# not a heading, just text' });
@@ -396,7 +396,7 @@ describe('PDF import', () => {
     const { prepareInput } = await import('../src/core/parsing/convert');
     const script = await prepareInput('lighthouse.pdf', new Uint8Array(readFileSync('tests/fixtures/lighthouse.pdf')));
     expect(script).toMatchObject({ format: 'fountain', convertedFrom: 'pdf' });
-    const { project, diagnostics } = await buildStory([script], { mode: 'faithful' });
+    const { project, diagnostics } = await buildStory([script], { mode: 'structured' });
     expect(project.project.title).toBe('THE LIGHTHOUSE KEEPER');
     expect(project.characters.map((c) => c.displayName).sort()).toEqual(['KEEPER', 'MARA']);
     expect(project.passages.map((p) => p.sceneHeading)).toEqual(['EXT. LIGHTHOUSE - NIGHT', 'INT. LAMP ROOM - CONTINUOUS']);
@@ -412,7 +412,7 @@ describe('PDF import', () => {
 
     const novel = await prepareInput('novel.pdf', new Uint8Array(readFileSync('tests/fixtures/novel.pdf')));
     expect(novel.format).toBe('md');
-    const story = await buildStory([novel], { mode: 'faithful' });
+    const story = await buildStory([novel], { mode: 'structured' });
     expect(story.project.passages.map((p) => p.title)).toEqual(['Chapter One', 'Chapter Two']);
     // Paragraphs that run onto the next page stay whole.
     expect(novel.text).not.toMatch(/\n\n(?!#|The keeper|Mara|The lamp)/);
@@ -434,7 +434,7 @@ describe('original files', () => {
     expect(input.originalBytes).toBe(bytes);
     // The same file is the same original.
     expect((await prepareInput('copy.pdf', bytes)).original!.id).toBe(input.original!.id);
-    const { project } = await buildStory([input], { mode: 'faithful' });
+    const { project } = await buildStory([input], { mode: 'structured' });
     expect(project.sources[0].original).toEqual(input.original);
     expect(JSON.stringify(project)).not.toContain('originalBytes');
     const files = storyFiles(project).filter((f) => f.kind === 'script');

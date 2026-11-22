@@ -15,7 +15,8 @@ import {
   type Choice,
   type Condition,
   type ContentBlock,
-  type ConversionMode,
+  conversionMode,
+  type SavedMode,
   type OriginalFile,
   type Effect,
   type Item,
@@ -57,7 +58,8 @@ export interface SourceInput {
 const CONVERTED_LABEL = { fdx: 'Final Draft', docx: 'Word', pdf: 'PDF', twine: "Twine's web page format" } as const;
 
 export interface BuildOptions {
-  mode: ConversionMode;
+  /** The retired "faithful" is read as structured. */
+  mode: SavedMode;
   title?: string;
   /** Interactive adaptation: run the built-in heuristic suggester (default true). The CLI's --suggest model turns it off. */
   heuristics?: boolean;
@@ -524,7 +526,7 @@ function assemble(
       title,
       author,
       startPassage: start || passages[0].id,
-      mode: options.mode,
+      mode: conversionMode(options.mode),
     },
     sources: [],
     characters: [...characters.values()],

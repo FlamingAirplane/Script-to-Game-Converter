@@ -9,7 +9,7 @@ import { applyProposals } from '../core/proposals';
 import { buildStory } from '../core/builder';
 import { sortDiagnostics, type Diagnostic } from '../core/diagnostics';
 import { ADAPTERS, buildPlayableHtml, buildRecordingScript, recordingScriptFileName, buildTwee, buildRenpy, ExportBlockedError, playableFileName, renpyFileName, twineFileName, type EngineTarget } from '../core/export';
-import { DEFAULT_MODE, type ConversionMode, type StoryProject } from '../core/isr';
+import { conversionMode, DEFAULT_MODE, type ConversionMode, type StoryProject } from '../core/isr';
 import { base64ToBytes, type AudioAssets } from '../core/audio';
 import { BINARY_EXTENSIONS, prepareInput } from '../core/parsing/convert';
 import { formatEntry, LEVELS, log, logbook, type LogLevel } from '../core/log';
@@ -20,7 +20,7 @@ import { GENERATOR_VERSION } from '../core/version';
 const HELP = `Pen to Ink — screenplays and prose → Ink → Unity / Unreal
 
 Usage:
-  narrative-bridge convert <files...>          (.fountain .txt .md .fdx .docx .pdf, or a story: .ink .twee .tw .html) [--mode structured|faithful|adaptation] [--approve-all]
+  narrative-bridge convert <files...>          (.fountain .txt .md .fdx .docx .pdf, or a story: .ink .twee .tw .html) [--mode structured|adaptation] [--approve-all]
                                       (default: structured; markers such as @passage build the story, a script without them converts scene by scene)
                                       [--suggest heuristic|model|all]  (adaptation: who suggests choices; default heuristic, today's rules.
                                        model: a small on-device model, downloaded once from Hugging Face; --model <repo>, --model-dir <folder> for a local copy)
@@ -106,8 +106,10 @@ async function load(args: Args) {
   // Ink: editable when possible unless told otherwise (see SourceInput.inkMode).
   const inkMode = args['keep-ink'] ? 'keep' : args['edit-ink'] ? 'edit' : undefined;
   if (inkMode) for (const i of inputs) if (/\.ink$/i.test(i.fileName)) i.inkMode = inkMode;
-  const mode = (args.mode as ConversionMode) ?? DEFAULT_MODE;
-  if (!['faithful', 'adaptation', 'structured'].includes(mode)) usage(`Unknown mode ${mode}`);
+  const asked = (args.mode as string | undefined) ?? DEFAULT_MODE;
+  // "faithful" (retired) converted exactly as structured does: still accepted.
+  if (!['faithful', 'adaptation', 'structured'].includes(asked)) usage(`Unknown mode ${asked}`);
+  const mode: ConversionMode = conversionMode(asked);
   if (suggest !== 'heuristic' && mode !== 'adaptation') usage(`--suggest ${suggest} needs --mode adaptation`);
   // --suggest model: the model alone, without today's rules.
   const { project, diagnostics } = await buildStory(inputs, { mode, title: typeof args.title === 'string' ? args.title : undefined, heuristics: suggest !== 'model' });

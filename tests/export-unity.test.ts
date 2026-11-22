@@ -292,7 +292,7 @@ describe('Unity export features', () => {
     const story = processProject(project);
     expect(stripIds(story.generated.ink)).toContain('# music:calm\nThe hall is dark.\n# shake\n');
     expect(story.state).toBe('Succeeded');
-    const back = await buildStory([{ fileName: 'b.ink', text: story.generated.ink }], { mode: 'faithful' });
+    const back = await buildStory([{ fileName: 'b.ink', text: story.generated.ink }], { mode: 'structured' });
     expect(back.project.inkPassthrough).toBeUndefined();
     expect(back.project.passages[0].content.map((b) => (b.type === 'cue' ? `${b.name}:${b.value ?? ''}` : b.type))).toEqual(['music:calm', 'action', 'shake:']);
     const r = await unity(story);

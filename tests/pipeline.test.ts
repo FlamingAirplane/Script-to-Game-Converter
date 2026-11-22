@@ -7,19 +7,19 @@ import { compareProjects, diffLines } from '../src/core/compare';
 import { buildStory } from '../src/core/builder';
 import { ADAPTERS, ExportBlockedError } from '../src/core/export';
 import { escapeInk, generateInk } from '../src/core/inkgen';
-import { DEFAULT_MODE, type StoryProject } from '../src/core/isr';
+import { DEFAULT_MODE, type SavedMode, type StoryProject } from '../src/core/isr';
 import { processProject } from '../src/core/pipeline';
 import { countWords, formatMinutes, storyStats } from '../src/core/stats';
 import { compileInk } from '../src/core/validate';
 import { SAMPLES } from '../src/samples';
 
-const build = async (text: string, fileName = 'x.fountain', mode: 'faithful' | 'adaptation' | 'structured' = 'faithful') =>
+const build = async (text: string, fileName = 'x.fountain', mode: SavedMode = 'structured') =>
   buildStory([{ fileName, text }], { mode });
 
-describe('faithful conversion', () => {
+describe('converting a script as it is written', () => {
   it('preserves every dialogue line and keeps scene order', async () => {
     const sample = SAMPLES.find((s) => s.id === 'lighthouse')!;
-    const { project } = await build(sample.text, sample.fileName, 'faithful');
+    const { project } = await build(sample.text, sample.fileName, 'structured');
     const dialogue = project.passages.flatMap((p) => p.content.filter((c) => c.type === 'dialogue'));
     const cues = sample.text.match(/^\s*(MIRA|TOMAS)( \([^)]*\))?\s*$/gm)!;
     expect(dialogue.length).toBe(cues.length);
@@ -31,13 +31,28 @@ describe('faithful conversion', () => {
 });
 
 describe('default mode', () => {
-  it('is structured, and converts a script without markers just as faithful conversion does', async () => {
+  it('is structured: a script without markers converts scene by scene, nothing invented', async () => {
     expect(DEFAULT_MODE).toBe('structured');
     for (const s of SAMPLES.filter((x) => x.id !== 'archive')) {
-      const structured = (await build(s.text, s.fileName, DEFAULT_MODE)).project;
+      const { project } = await build(s.text, s.fileName, DEFAULT_MODE);
+      expect(project.project.mode).toBe('structured');
+      expect(project.passages.every((p) => p.origin !== 'generated')).toBe(true);
+    }
+  });
+
+  it('reads the retired "faithful" mode as structured: the same story, and a saved project that says it still opens', async () => {
+    for (const s of SAMPLES.filter((x) => x.id !== 'archive')) {
       const faithful = (await build(s.text, s.fileName, 'faithful')).project;
-      expect(structured.project.mode).toBe('structured');
-      expect({ ...structured, project: { ...structured.project, mode: 'faithful' } }).toEqual(faithful);
+      const structured = (await build(s.text, s.fileName, 'structured')).project;
+      expect(faithful).toEqual(structured);
+      expect(faithful.project.mode).toBe('structured');
+      // A project file saved before the modes were merged says "faithful": it is valid, and its Ink says structured.
+      const old = structuredClone(structured);
+      old.project.mode = 'faithful';
+      const story = processProject(old, [], { skipSmoke: true });
+      expect(story.diagnostics.some((d) => d.severity === 'error')).toBe(false);
+      expect(story.generated.ink).toContain('(structured conversion)');
+      expect(story.generated.ink).toBe(processProject(structured, [], { skipSmoke: true }).generated.ink);
     }
   });
 
@@ -145,7 +160,7 @@ describe('background processing', () => {
 
   it('a linear story needs only one playthrough', () => {
     const s = SAMPLES.find((x) => x.id === 'motel')!;
-    return build(s.text, s.fileName, 'faithful').then(({ project }) => {
+    return build(s.text, s.fileName, 'structured').then(({ project }) => {
       const r = processProject(project);
       expect(r.smoke).toMatchObject({ runs: 1, completedRuns: 1, stopReason: 'deterministic' });
     });

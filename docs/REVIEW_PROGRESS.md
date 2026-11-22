@@ -120,7 +120,9 @@ for fixing them.
       the cloud or a story link; Save and Save as), the "only in this browser" reminder and files the system opens with
       the installed app. `App.tsx` is now about 740 lines (it was 1,060). **Not done:** drafts (`restoreDraft`) and
       converting a script are still in `App.tsx`; `GraphView.tsx` and `PlaytestView.tsx` are still large.
-- [ ] Merge or redefine faithful/structured (flaw 8, second part): needs a decision on what *faithful* should mean
+- [x] Faithful merged into structured (flaw 8, second part): the two converted exactly alike (tested), so there are now
+      two modes, Structured import and Interactive adaptation. `conversionMode()` reads the retired "faithful" as
+      structured, so older project files, drafts, autosaves and `--mode faithful` still work.
 - [x] Real Unreal build on 5.7 (flaw 7): it found two compile errors in the plugin (an include-order rule in
       `InkCompat.cpp` and a shadowed `Line` in the Enter Dialogue Trigger), now fixed; the archive sample builds and all
       10 automation tests pass (`npm run test:unreal:build -- --test`). Tried 5.9: the only compile error is in Inkpot's own `NativeFunctionCall.cpp` (line 133, a `%d` log format), as the export's README already says, so it is not ours to fix here. 5.6 not tried.
