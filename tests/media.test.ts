@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { stripIds } from '../src/core/ids';
 import { analyze } from '../src/core/analyzer';
 import { ADAPTERS } from '../src/core/export';
 import { processProject } from '../src/core/pipeline';
@@ -61,7 +62,7 @@ describe('scene pictures and recordings', () => {
     project.passages[0].image = { id: 'img_hall_1', name: 'hall.png', mime: 'image/png', width: 4, height: 3, alt: 'A dark hall' };
     const story = processProject(project);
     expect(story.compile.ok).toBe(true);
-    expect(story.generated.ink).toMatch(/^The hall is dark\. #image:img_hall_1\.png$/m);
+    expect(stripIds(story.generated.ink)).toMatch(/^The hall is dark\. #image:img_hall_1\.png$/m);
     // Re-importing that Ink keeps the story and does not count the tag as something it lost.
     const { inkUnsupported } = await import('../src/core/parsing/ink');
     expect(inkUnsupported(story.generated.ink)).toEqual([]);

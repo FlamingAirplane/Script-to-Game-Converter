@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { stripIds } from '../src/core/ids';
 import { reviewAll } from '../src/core/adapt';
 import { buildStory } from '../src/core/builder';
 import { generateInk } from '../src/core/inkgen';
@@ -136,8 +137,8 @@ describe('the model suggester', () => {
     reviewAll(project, 'approved', 'model');
     const r = processProject(project);
     expect(r.state).toBe('Succeeded');
-    expect(r.generated.ink).toContain("[It's Mira]");
-    expect(r.generated.ink).toContain('+ {has_brass_key} [Use the brass key]');
+    expect(stripIds(r.generated.ink)).toContain("[It's Mira]");
+    expect(stripIds(r.generated.ink)).toContain('+ {has_brass_key} [Use the brass key]');
   });
 
   it('builds a gate the model names from the item list, with the way back to the model’s own pickup', async () => {

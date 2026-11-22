@@ -199,6 +199,48 @@ export function translate(project: Pick<StoryProject, 'translations'>, language:
   return project.translations?.strings[translationKey(text)]?.[language] ?? text;
 }
 
+/** The texts a story's lines and choices say, by id: a line's paragraphs, or a choice's words. */
+function textsById(project: StoryProject): Map<string, string[]> {
+  const out = new Map<string, string[]>();
+  for (const p of project.passages) {
+    for (const b of p.content) {
+      if (!('id' in b) || !b.id) continue;
+      if (b.type === 'action') out.set(b.id, b.text.split('\n'));
+      else if (b.type === 'dialogue' || b.type === 'transition') out.set(b.id, [b.text]);
+    }
+    for (const c of p.choices) out.set(c.id, [c.text]);
+  }
+  return out;
+}
+
+/**
+ * After an edit: a line or choice whose words changed keeps the translations it had. Translations are found by a
+ * hash of the text, so without this a fixed typo would leave the translation behind. Matches lines and choices by id;
+ * returns how many translations moved. The old text's translation stays where it is when another line still says it.
+ */
+export function carryTranslations(before: StoryProject, after: StoryProject): number {
+  const t = after.translations;
+  if (!t) return 0;
+  const was = textsById(before);
+  const now = textsById(after);
+  const stillUsed = new Set(translationEntries(after).map((e) => e.key));
+  let moved = 0;
+  for (const [id, texts] of now) {
+    const old = was.get(id);
+    if (!old || old.length !== texts.length) continue;
+    texts.forEach((text, i) => {
+      if (normaliseText(old[i]) === normaliseText(text) || !normaliseText(text)) return;
+      const from = translationKey(old[i]);
+      const to = translationKey(text);
+      if (!t.strings[from] || t.strings[to]) return;
+      t.strings[to] = { ...t.strings[from] };
+      if (!stillUsed.has(from)) delete t.strings[from];
+      moved++;
+    });
+  }
+  return moved;
+}
+
 /** Takes a language out of the story's translations. */
 export function removeLanguage(project: StoryProject, code: string): void {
   const t = project.translations;

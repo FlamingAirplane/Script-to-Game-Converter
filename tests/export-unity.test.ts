@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { stripIds } from '../src/core/ids';
 import { reviewAll } from '../src/core/adapt';
 import { buildStory } from '../src/core/builder';
 import { ADAPTERS, type ExportResult } from '../src/core/export';
@@ -275,7 +276,7 @@ describe('Unity export features', () => {
     const { project } = await build('@passage hall Hall\n@cue music calm\nThe hall is dark.\n@cue shake\n@end\n', 'c.md', 'structured');
     expect(project.passages[0].content.map((b) => b.type)).toEqual(['cue', 'action', 'cue']);
     const story = processProject(project);
-    expect(story.generated.ink).toContain('# music:calm\nThe hall is dark.\n# shake\n');
+    expect(stripIds(story.generated.ink)).toContain('# music:calm\nThe hall is dark.\n# shake\n');
     expect(story.state).toBe('Succeeded');
     const back = await buildStory([{ fileName: 'b.ink', text: story.generated.ink }], { mode: 'faithful' });
     expect(back.project.inkPassthrough).toBeUndefined();

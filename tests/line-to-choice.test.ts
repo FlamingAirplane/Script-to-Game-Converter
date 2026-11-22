@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { stripIds } from '../src/core/ids';
 import { buildStory } from '../src/core/builder';
 import { processProject } from '../src/core/pipeline';
 import { addChoice, choiceTextFor, lineToChoice } from '../src/ui/projectOps';
@@ -43,7 +44,7 @@ describe('turning a line into a choice (Review)', () => {
     const story = processProject(p);
     expect(story.compile.ok).toBe(true);
     expect(story.analysis.graph.nodes.every((n) => n.reachable)).toBe(true);
-    expect(story.generated.ink).toMatch(/\+ \[Step through the door\]\s+-> hall_step_through_the_door/);
+    expect(stripIds(story.generated.ink)).toMatch(/\+ \[Step through the door\]\s+-> hall_step_through_the_door/);
   });
 
   it('carries the passage’s own choices on into the new scene', async () => {

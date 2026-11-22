@@ -522,7 +522,7 @@ namespace __NAMESPACE__
         }
 
         static bool IsStoryTag(string t) =>
-            t == "transition" || t == "cutscene" || t.StartsWith("speaker:") || t.StartsWith("scene:") || t.StartsWith("paren:") || t.StartsWith("ext:") || t.StartsWith("image:") || t.StartsWith("audio:");
+            t == "transition" || t == "cutscene" || t.StartsWith("speaker:") || t.StartsWith("scene:") || t.StartsWith("paren:") || t.StartsWith("ext:") || t.StartsWith("image:") || t.StartsWith("audio:") || t.StartsWith("id:");
 
         // ---- Voice clips: lines tagged #audio:<file> play in order --------------------------
 

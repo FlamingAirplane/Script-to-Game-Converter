@@ -85,7 +85,12 @@ for fixing them.
       `src/core/readerCore.ts`; the exports import it and the page has it compiled in (`npm run reader-core`).
       **Not done:** the page's rendering and choice handling is still its own code; Unity and Unreal keep their
       own copies, checked by the fixtures.
-- [ ] Stable ids for lines and choices (flaw 2)
+- [x] Stable ids for lines and choices, web side (flaw 2): lines get `id` in the model (`src/core/ids.ts`), every
+      line carries `#id:…` in the Ink and every choice `[text #id:…]`; the importer reads them back; Playtest and the
+      playable page remember chosen choices and replay saves by id, falling back to the words; a reworded line or choice
+      keeps its translation (`carryTranslations`). Unity and Unreal ignore `#id` (not a cue) but still match by text.
+      **Not done:** the engine readers matching by id, the translation sheet keyed by id, reader notes and recording
+      matching by id, and showing ids to writers.
 - [ ] Ink as the single source for locks and story info (flaw 4)
 - [ ] Display names vs compatibility names for "Narrative Bridge" (flaw 6)
 - [ ] Rename `presentation.unity`; merge or redefine faithful/structured (flaw 8)

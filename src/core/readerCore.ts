@@ -14,7 +14,7 @@ export const CONTINUE_TEXT = 'Continue';
 export const EXIT_PREFIX = 'Back to the game: ';
 
 /** Tags that are Pen to Ink's own, never cues. */
-export const RESERVED_TAG_NAMES: string[] = ['speaker', 'scene', 'paren', 'ext', 'image', 'audio', 'transition', 'title', 'author', 'choice', 'cutscene'];
+export const RESERVED_TAG_NAMES: string[] = ['speaker', 'scene', 'paren', 'ext', 'image', 'audio', 'transition', 'title', 'author', 'choice', 'cutscene', 'id'];
 
 /** The exit's name when this choice text hands over to the game, else null. */
 export function exitOf(choiceText: string): string | null {
@@ -59,9 +59,22 @@ export function cuesIn(tags: string[]): ParsedCue[] {
   return out;
 }
 
-/** How a choice is remembered as "chosen before": its passage (Ink knot) and its text as written, "knot|text". */
+/** The legacy way a choice is remembered as "chosen before": its passage (Ink knot) and its text as written, "knot|text". */
 export function chosenKey(sourcePath: string, text: string): string {
   return `${sourcePath.split('.')[0] ?? ''}|${text.trim()}`;
+}
+
+/**
+ * How a choice is remembered now: by the id Pen to Ink gave it (the choice's #id tag), which survives rewording;
+ * "knot|text" for a story written before ids, or Ink Pen to Ink didn't make.
+ */
+export function chosenId(id: string | null, sourcePath: string, text: string): string {
+  return id ? 'id:' + id : chosenKey(sourcePath, text);
+}
+
+/** Whether a choice was taken before, by its id or, for older remembered choices, by its words. */
+export function wasChosen(known: { [key: string]: unknown }, id: string | null, sourcePath: string, text: string): boolean {
+  return (!!id && !!known['id:' + id]) || !!known[chosenKey(sourcePath, text)];
 }
 
 /** How long a cutscene line stays up: 1.2 s plus 0.055 s a letter, between 2 and 9 s. */
@@ -85,6 +98,11 @@ export interface ReadLine {
   speaker?: string;
   /** The #speaker tag's value, when the line has that tag. */
   who: string | null;
+}
+
+/** The id Pen to Ink gave a line or choice (its #id tag), or null for Ink without ids. */
+export function idOf(tags: string[]): string | null {
+  return tagValue(tags, 'id');
 }
 
 /** The value of a tag like "speaker:Ana" among a line's tags, or null. */

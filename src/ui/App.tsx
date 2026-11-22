@@ -1,4 +1,6 @@
 import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { carryTranslations } from '../core/export/translations';
+import { ensureIds, withIds } from '../core/ids';
 import { reviewAll } from '../core/adapt';
 import { buildStory, type SourceInput } from '../core/builder';
 import type { Diagnostic } from '../core/diagnostics';
@@ -348,7 +350,10 @@ export function App() {
     setProject((cur) => {
       if (!cur) return cur;
       const next = editableCopy(cur);
+      ensureIds(next); // lines get their ids before the edit changes their words, and again for any the edit adds
       fn(next);
+      ensureIds(next);
+      if (next.translations) carryTranslations(withIds(cur), next); // reworded lines and choices keep their translations
       if (!merge) {
         undoStack.current.push(cur);
         if (undoStack.current.length > 100) undoStack.current.shift();

@@ -1,4 +1,5 @@
 import { analyze, type Analysis } from './analyzer';
+import { withIds } from './ids';
 import { buildStory, type BuildOptions, type SourceInput } from './builder';
 import { blocksExport, diag, type Diagnostic } from './diagnostics';
 import { generateInk, type GeneratedInk } from './inkgen';
@@ -53,7 +54,8 @@ export function attachSmoke(p: ProcessedStory, r: SmokeResult): ProcessedStory {
  * Analyse → generate → compile → smoke test. Pure and synchronous. With `skipSmoke` it returns the
  * fast part only (the UI then runs playthroughs separately, see attachSmoke).
  */
-export function processProject(project: StoryProject, parseDiagnostics: Diagnostic[] = [], opts: { smokeRuns?: number; skipSmoke?: boolean } = {}): ProcessedStory {
+export function processProject(input: StoryProject, parseDiagnostics: Diagnostic[] = [], opts: { smokeRuns?: number; skipSmoke?: boolean } = {}): ProcessedStory {
+  const project = withIds(input); // a project from before ids gets them (the same ones every time) so its Ink carries them
   const total = logger.time('Processed story');
   let t = logger.time('Validated schema');
   const schemaDiagnostics = validateSchema(project);
