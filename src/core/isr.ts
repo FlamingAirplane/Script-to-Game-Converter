@@ -209,6 +209,9 @@ export interface StoryProject {
   layout?: Record<string, { x: number; y: number }>;
   /** How the story looks when played in a game engine (absent = defaults). */
   presentation?: {
+    /** The story panel's look in every engine (Unity and Unreal share it). */
+    panel?: UnityTheme;
+    /** The old name of `panel` (projects saved before it was renamed): still read, never written. See panelThemeOf. */
     unity?: UnityTheme;
     /** Players see only the dialogue: narration, transitions, scene headings and parentheticals are left out of what they get (see players.ts). */
     dialogueOnly?: boolean;
@@ -227,7 +230,7 @@ export interface StoryProject {
  * (the developer can change it further in Unity's Inspector). Colours are #rrggbb.
  */
 /**
- * The Unity story UI's look and behaviour (presentation.unity). Every field is described, with its
+ * The story panel's look and behaviour, in Unity and Unreal (presentation.panel). Every field is described, with its
  * range and default, in UNITY_THEME_FIELDS (src/core/export/unityTheme.ts), which also checks saved
  * values; the generated NarrativeTheme (C#) has the same fields.
  */

@@ -5,7 +5,7 @@ import { translationSheet } from './translations';
 import { assertExportable, audioFiles, buildManifest, imageFiles, commonFiles, isPinnedRef, json, pascalCase, sourceFiles, storyVersion } from './common';
 import type { EngineAdapter, ExportFile, ExportOptions, ExportResult } from './types';
 import { finalize } from './unity';
-import { normaliseUnityTheme } from './unityTheme';
+import {normaliseUnityTheme, panelThemeOf } from './unityTheme';
 import { COMPONENT_CPP, COMPONENT_H } from './unrealComponent';
 import { CUE_PLAYER_CPP, CUE_PLAYER_H, ENTER_DIALOGUE_TRIGGER_CPP, ENTER_DIALOGUE_TRIGGER_H, INVENTORY_COMPONENT_H, TRIGGER_CPP, TRIGGER_H } from './unrealCues';
 import { EDITOR_INK_IMPORT_CPP, EDITOR_INK_IMPORT_H, EDITOR_MODULE_CPP, EDITOR_STORY_DATA_TESTS_CPP, EDITOR_TESTS_CPP, editorBuildCs, keySamples } from './unrealEditor';
@@ -62,7 +62,7 @@ export const unrealAdapter: EngineAdapter = {
     const src = `${plugin}Source/${MODULE}/`;
     const ed = `${plugin}Source/${MODULE}Editor/`;
     const manifest = await buildManifest(story, options, this);
-    const theme = normaliseUnityTheme(options.unityTheme ?? story.project.presentation?.unity);
+    const theme = normaliseUnityTheme(options.unityTheme ?? panelThemeOf(story.project));
     // Voice clips and cue sounds are imported as Sound Waves by the editor module (into Content/NarrativeBridge/Audio).
     const voice = audioFiles(story, options.audio, `${root}StorySource/VoiceClips/`);
     // Pictures are decoded at run time from their PNG/JPEG bytes (as in the Unity package): no import settings needed.

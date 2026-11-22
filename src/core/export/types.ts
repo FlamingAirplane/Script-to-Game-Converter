@@ -21,7 +21,7 @@ export interface ExportOptions {
   images?: AudioAssets;
   /** The original Word, PDF, Final Draft or Twine files the scripts were taken from (SourceDocument.original). */
   originals?: AudioAssets;
-  /** Unity story UI look; defaults to the project's (presentation.unity), then to the Book preset. */
+  /** Unity story UI look; defaults to the project's (presentation.panel), then to the Book preset. */
   unityTheme?: UnityTheme;
   /**
    * Unity: "package" (the default) is a Unity package to add to an existing game; "project" wraps the

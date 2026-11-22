@@ -1,12 +1,12 @@
 import { useState, type CSSProperties } from 'react';
-import { DEFAULT_UNITY_THEME, normaliseUnityTheme, panelRect, THEME_GROUPS, UNITY_THEME_FIELDS, UNITY_THEME_PRESETS, type ThemeField, type ThemeGroup } from '../core/export/unityTheme';
+import {DEFAULT_UNITY_THEME, normaliseUnityTheme, panelRect, THEME_GROUPS, UNITY_THEME_FIELDS, UNITY_THEME_PRESETS, type ThemeField, type ThemeGroup, panelThemeOf } from '../core/export/unityTheme';
 import type { StoryProject, UnityTheme } from '../core/isr';
 import { usePicture } from './pictures';
 import type { Update } from './projectOps';
 
 // The Export page's "Story UI" card: how the generated Unity panel looks and behaves, with a preview
 // drawn to scale. Its controls come from UNITY_THEME_FIELDS, so every setting the export knows about is
-// here. The theme is saved with the project (presentation.unity), so it travels with the story file.
+// here. The theme is saved with the project (presentation.panel), so it travels with the story file.
 
 const PRESET_NAMES: Record<Exclude<UnityTheme['preset'], 'custom'>, string> = { book: 'Book', night: 'Night', minimal: 'Minimal' };
 const COLOUR_KEYS = UNITY_THEME_FIELDS.filter((f) => f.kind === 'colour').map((f) => f.key);
@@ -40,10 +40,13 @@ function describe(f: ThemeField, v: unknown): string {
 
 export function UnityThemeEditor({ project, update, engine = 'unity' }: { project: StoryProject; update: Update; engine?: 'unity' | 'unreal' }) {
   const engineName = engine === 'unreal' ? 'Unreal' : 'Unity';
-  const saved = project.presentation?.unity;
+  const saved = panelThemeOf(project);
   const theme = normaliseUnityTheme(saved);
   const [open, setOpen] = useState<Set<ThemeGroup>>(() => new Set(OPEN_AT_FIRST));
-  const save = (next: UnityTheme, group?: string) => update((d) => void (d.presentation = { ...d.presentation, unity: next }), group);
+  const save = (next: UnityTheme, group?: string) => update((d) => {
+      const { unity: _old, ...rest } = d.presentation ?? {}; // the old key goes: the look is saved as presentation.panel
+      d.presentation = { ...rest, panel: next };
+    }, group);
   const set = (f: ThemeField, value: unknown) =>
     save(
       // A colour of your own makes the look Custom. (Text is kept as typed, so a label can be cleared and
