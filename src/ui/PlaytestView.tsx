@@ -9,6 +9,7 @@ import { lockedChoices } from '../core/gating';
 import { portraitFiles, referencedImages } from '../core/images';
 import { usePictures } from './pictures';
 import { CONTINUE_TEXT, exitOf, itemVar } from '../core/isr';
+import { isPause, knotOf, readOn, type Line } from '../core/reader';
 import type { ProcessedStory } from '../core/pipeline';
 import { audioFileName, referencedAudio } from '../core/audio';
 import { Badge, Empty } from './common';
@@ -25,23 +26,6 @@ import { chosenKey } from '../core/chosen';
 const VOICES_KEY = 'narrative-bridge.voices';
 const CUE_SOUNDS_KEY = 'narrative-bridge.cue-sounds';
 const LANGUAGE_KEY = 'narrative-bridge.playtest-language';
-
-interface Line {
-  text: string;
-  speaker?: string;
-  tags: string[];
-  /** cue: a cue for the game (#music:calm), shown as a small marker; its text is the tag. */
-  kind: 'text' | 'choice' | 'system' | 'cue';
-  /** A Continue break was taken here (a choice line that isn't shown). */
-  pause?: boolean;
-  /** The passage (Ink knot) the line was read in. */
-  passage?: string;
-}
-
-/** The passage (Ink knot) the reader is in: where the story last read from, even when it offers no choices. */
-const knotOf = (s: Story) => (s.state.previousPointer?.path?.toString() ?? s.currentChoices[0]?.sourcePath ?? '').split('.')[0];
-/** A Continue break: the story offers only "Continue" (see inkgen.ts). */
-const isPause = (s: Story) => s.currentChoices.length === 1 && s.currentChoices[0].text === CONTINUE_TEXT;
 
 /** Story state at the start of the current stretch of text, so a state change can replay it. */
 interface Segment {
@@ -76,25 +60,6 @@ const offered = (s: Story) => s.currentChoices.map((c) => ({ text: c.text, index
 
 /** The cues among these lines, in order. */
 const cuesOf = (lines: Line[]): ParsedCue[] => lines.filter((l) => l.kind === 'cue').flatMap((l) => cuesIn(l.tags));
-
-/** Reads on until the next choice (or the end), appending the new lines to `prefix`. */
-function readOn(s: Story, prefix: Line[]): Line[] {
-  const out = [...prefix];
-  while (s.canContinue) {
-    const raw = (s.Continue() ?? '').trim();
-    const tags = s.currentTags ?? [];
-    // Cues come before the line they're on (or alone, at the end of a passage).
-    for (const c of cuesIn(tags)) out.push({ text: c.tag, tags: [c.tag], kind: 'cue' });
-    if (!raw) continue;
-    const passage = knotOf(s) || undefined;
-    const speakerTag = tags.find((t) => t.startsWith('speaker:'));
-    if (speakerTag) {
-      const i = raw.indexOf(': ');
-      out.push({ speaker: i > 0 ? raw.slice(0, i) : speakerTag.slice(8), text: i > 0 ? raw.slice(i + 2) : raw, tags, kind: 'text', passage });
-    } else out.push({ text: raw, tags, kind: 'text', passage });
-  }
-  return out;
-}
 
 /**
  * Brings a save from another version of the story forward: plays the new version from the start

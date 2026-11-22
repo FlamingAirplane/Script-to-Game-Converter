@@ -1,0 +1,11 @@
+{
+  "description": "Speaker tags split a line into speaker and text; narration stays plain.",
+  "steps": [
+    {
+      "lines": [{ "text": "Rain on the glass." }, { "speaker": "MIRA", "text": "Are you coming?" }, { "speaker": "OLD MAN (V.O.)", "text": "Not tonight." }],
+      "choices": ["Follow her", "Stay"],
+      "stop": "choices"
+    },
+    { "choose": "Stay", "lines": [{ "text": "The room is quiet." }], "choices": [], "stop": "end" }
+  ]
+}

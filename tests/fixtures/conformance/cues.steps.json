@@ -1,0 +1,10 @@
+{
+  "description": "Cues come before their line; #cutscene is carried on the line.",
+  "steps": [
+    {
+      "lines": [{ "cue": "music:calm" }, { "text": "The harbour wakes." }, { "cue": "shake" }, { "text": "The ground trembles.", "cutscene": true }, { "speaker": "MIRA", "text": "Hold on!", "cutscene": true }],
+      "choices": [],
+      "stop": "end"
+    }
+  ]
+}

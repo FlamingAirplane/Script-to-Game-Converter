@@ -14,6 +14,7 @@
     "test:e2e": "npm run build:single && node tests/e2e/writer-file.mjs",
     "test:a11y": "npm run build:single && node tests/e2e/a11y.mjs",
     "test:overflow": "npm run build:single && node tests/e2e/overflow.mjs",
+    "test:conformance:playable": "tsx tests/e2e/conformance-playable.ts",
     "test:offline": "npm run build && node tests/e2e/offline.mjs",
     "test:admin": "node tests/e2e/admin.mjs",
     "icons": "node scripts/icons.mjs",

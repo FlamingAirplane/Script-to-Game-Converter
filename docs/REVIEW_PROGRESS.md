@@ -76,7 +76,10 @@ for fixing them.
 
 - [x] "This week" fixes (#85): lighter saving, a media sweep, clean line labels, accurate Unreal requirements
 - [x] Whole-story Ink round-trip test over every sample (flaw 5)
-- [ ] Cross-reader conformance fixtures (flaw 1)
+- [x] Cross-reader conformance fixtures (flaw 1): five fixtures in `tests/fixtures/conformance` hold Playtest
+      (`tests/conformance.test.ts`), the playable page (`npm run test:conformance:playable`) and Unreal
+      (`NarrativeBridge.Conformance`) to the same transcripts. **Still open:** Unity's runner; fixtures for
+      translations, saves, chosen-before and locked choices.
 - [ ] One typed TypeScript reader shared by Playtest and the playable page (flaws 1 and 9)
 - [ ] Stable ids for lines and choices (flaw 2)
 - [ ] Ink as the single source for locks and story info (flaw 4)

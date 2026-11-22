@@ -1,0 +1,7 @@
+{
+  "description": "A lone Continue choice is a pause, not a decision.",
+  "steps": [
+    { "lines": [{ "text": "First part." }], "choices": ["Continue"], "stop": "pause" },
+    { "choose": "Continue", "lines": [{ "text": "Second part." }], "choices": [], "stop": "end" }
+  ]
+}
