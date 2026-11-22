@@ -14,40 +14,40 @@ VAR curiosity = 0
 
 === archive_entry ===
 // Archive Entrance (source line 6)
-Rows of shelves vanish into the dark. A steel door blocks the inner vault.
-- (line_mira_the_archive_is_locked) MIRA: The archive is locked. #speaker:mira
-+ {has_archive_key} [Open the archive]
+Rows of shelves vanish into the dark. A steel door blocks the inner vault. #id:l_3f5288
+- (line_mira_the_archive_is_locked) MIRA: The archive is locked. #speaker:mira #id:l_7423ec
++ {has_archive_key} [Open the archive #id:archive_entry_open_the_archive]
     ~ has_archive_key = false
     -> archive_inside
-+ [Search the reading room]
++ [Search the reading room #id:archive_entry_search_the_reading_room]
     -> find_key
-+ [Leave]
++ [Leave #id:archive_entry_leave]
     -> outside
 
 === find_key ===
 // Reading Room (source line 16)
-Dust motes drift over a long oak table.
+Dust motes drift over a long oak table. #id:l_48425a
 ~ curiosity += 1
-+ {(not has_archive_key)} [Lift the loose floorboard]
++ {(not has_archive_key)} [Lift the loose floorboard #id:find_key_lift_the_loose_floorboard]
     -> found_key
-+ [Return to the entrance]
++ [Return to the entrance #id:find_key_return_to_the_entrance]
     -> archive_entry
 
 === found_key ===
 // Under the Floorboard (source line 25)
-Wrapped in oilcloth: a heavy iron key.
+Wrapped in oilcloth: a heavy iron key. #id:l_e83c76
 ~ has_archive_key = true
 -> find_key
 
 === archive_inside ===
 // The Vault (source line 33)
-The archive door opens. Inside, a single ledger glows faintly.
-- (line_mira_every_story_we_ever_lost) MIRA: Every story we ever lost. #speaker:mira
+The archive door opens. Inside, a single ledger glows faintly. #id:l_6d6b3e
+- (line_mira_every_story_we_ever_lost) MIRA: Every story we ever lost. #speaker:mira #id:l_9bf36f
 -> END
 
 === outside ===
 // Outside (source line 41)
-You step back into the rain. Some doors are better left closed.
+You step back into the rain. Some doors are better left closed. #id:l_c4bf2c
 -> END
 
 // Where a game can start the story at a line of dialogue: StartAt("passage.line_…") chooses one of these.

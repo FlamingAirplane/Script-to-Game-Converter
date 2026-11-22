@@ -1,4 +1,5 @@
 import { readFileSync } from 'node:fs';
+import { stripIds } from '../src/core/ids';
 import { describe, expect, it } from 'vitest';
 import { reviewAll } from '../src/core/adapt';
 import { emphasisHtml, markupToTags, plainText, tagsToFountain } from '../src/core/emphasis';
@@ -115,7 +116,7 @@ describe('Ink import', () => {
     expect(hall.choices[2].effects).toEqual([{ type: 'give_item', itemId: 'k' }, { type: 'add_var', variableId: 'trust', amount: 1 }]);
     // Editing now changes the story.
     hall.choices[0].text = 'Unlock it';
-    expect(processProject(project).generated.ink).toContain('* {has_k} [Unlock it]');
+    expect(stripIds(processProject(project).generated.ink)).toContain('* {has_k} [Unlock it]');
   });
 
   it('still knows Ink written under the old name, Narrative Bridge, as its own', async () => {

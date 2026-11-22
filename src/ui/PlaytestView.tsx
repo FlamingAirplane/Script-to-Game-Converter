@@ -22,6 +22,7 @@ import { CuePlayer } from './cueAudio';
 import { translate } from '../core/export/translations';
 import { languageName } from './language';
 import { chosenKey } from '../core/chosen';
+import { chosenId, idOf } from '../core/readerCore';
 
 const VOICES_KEY = 'narrative-bridge.voices';
 const CUE_SOUNDS_KEY = 'narrative-bridge.cue-sounds';
@@ -56,38 +57,53 @@ function nextShown(ls: Line[], n: number): number {
 const reducedMotion = () => typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches;
 
 /** The choices on offer, each with how it's remembered once taken (see core/chosen.ts). */
-const offered = (s: Story) => s.currentChoices.map((c) => ({ text: c.text, index: c.index, key: chosenKey(c.sourcePath, c.text) }));
+const offered = (s: Story): OfferedChoice[] =>
+  s.currentChoices.map((c) => {
+    const id = idOf(c.tags ?? []);
+    return { text: c.text, index: c.index, id: id ?? undefined, key: chosenId(id, c.sourcePath, c.text), legacy: chosenKey(c.sourcePath, c.text) };
+  });
+
+/** A choice on offer: its id when the Ink has ids, how it's remembered once taken, and how older stories remembered it. */
+interface OfferedChoice {
+  text: string;
+  index: number;
+  id?: string;
+  key: string;
+  legacy: string;
+}
 
 /** The cues among these lines, in order. */
 const cuesOf = (lines: Line[]): ParsedCue[] => lines.filter((l) => l.kind === 'cue').flatMap((l) => cuesIn(l.tags));
 
 /**
  * Brings a save from another version of the story forward: plays the new version from the start
- * making the same choices (by their text), so its text and variables apply. Stops at the first
+ * making the same choices (by their id when both versions have ids, else by their text), so its text and variables apply. Stops at the first
  * choice the new version no longer offers. The playable story export does the same for readers.
  */
-function replayChoices(s: Story, chosen: string[]): { lines: Line[]; history: Snapshot[]; segment: Segment; followed: number } {
+function replayChoices(s: Story, chosen: { text: string; id?: string }[]): { lines: Line[]; history: Snapshot[]; segment: Segment; followed: number } {
   let segment: Segment = { state: s.state.toJson(), prefix: [], overrides: {} };
   let lines = readOn(s, []);
   const history: Snapshot[] = [];
   let followed = 0;
-  const take = (c: { index: number; text: string }) => {
+  const take = (c: { index: number; text: string; tags?: string[] | null }) => {
     history.push({ state: s.state.toJson(), lines, segment });
     const pause = isPause(s);
     s.ChooseChoiceIndex(c.index);
-    const prefix: Line[] = [...lines, { text: c.text, tags: [], kind: 'choice', pause }];
+    const choiceId = idOf(c.tags ?? []) ?? undefined;
+    const prefix: Line[] = [...lines, { text: c.text, tags: [], kind: 'choice', pause, ...(choiceId ? { choiceId } : {}) }];
     segment = { state: s.state.toJson(), prefix, overrides: {} };
     lines = readOn(s, prefix);
   };
   // Continue breaks added or removed since the save don't stop it: take or skip them.
   for (let i = 0, steps = 0; i < chosen.length && steps < 10000; steps++) {
-    const c = s.currentChoices.find((x) => x.text === chosen[i]);
+    const want = chosen[i];
+    const c = (want.id ? s.currentChoices.find((x) => idOf(x.tags ?? []) === want.id) : undefined) ?? s.currentChoices.find((x) => x.text === want.text);
     if (c) {
       take(c);
       i++;
       followed++;
     } else if (isPause(s)) take(s.currentChoices[0]);
-    else if (chosen[i] === CONTINUE_TEXT) {
+    else if (want.text === CONTINUE_TEXT) {
       i++;
       followed++;
     } else break;
@@ -121,7 +137,7 @@ export function PlaytestView({
   const version = fnv1a(processed.generated.ink);
   const story = useRef<Story | null>(null);
   const [lines, setLines] = useState<Line[]>([]);
-  const [choices, setChoices] = useState<{ text: string; index: number; key: string }[]>([]);
+  const [choices, setChoices] = useState<OfferedChoice[]>([]);
   const [vars, setVars] = useState<Record<string, unknown>>({});
   const [history, setHistory] = useState<Snapshot[]>([]);
   // The save slot is kept per story, so it survives going to Review to edit and coming back.
@@ -382,11 +398,11 @@ export function PlaytestView({
     sfx.choice();
     const pause = isPause(s);
     const taken = choices.find((c) => c.index === i);
-    if (taken && !pause && !exitOf(taken.text) && !chosenBefore.has(taken.key)) keepChosen(new Set([...chosenBefore, taken.key]));
+    if (taken && !pause && !exitOf(taken.text) && !chosenBefore.has(taken.key) && !chosenBefore.has(taken.legacy)) keepChosen(new Set([...chosenBefore, taken.key]));
     s.ChooseChoiceIndex(i);
     newFrom.current = lines.length;
     setFreshFrom(lines.length);
-    advance([...lines, { text, tags: [], kind: 'choice', pause }]);
+    advance([...lines, { text, tags: [], kind: 'choice', pause, ...(taken?.id ? { choiceId: taken.id } : {}) }]);
   };
 
   const undo = () => {
@@ -612,7 +628,7 @@ export function PlaytestView({
           ) : (
             choices.map((c, n) => {
               const goOn = choices.length === 1 && c.text === CONTINUE_TEXT;
-              const before = !goOn && chosenBefore.has(c.key);
+              const before = !goOn && (chosenBefore.has(c.key) || chosenBefore.has(c.legacy));
               return (
               <button
                 key={c.index}
@@ -714,7 +730,7 @@ export function PlaytestView({
                 if (!slot) return;
                 voiceQueue.current.stop();
                 if (slot.version !== version) {
-                  const chosen = slot.lines.filter((l) => l.kind === 'choice').map((l) => l.text);
+                  const chosen = slot.lines.filter((l) => l.kind === 'choice').map((l) => ({ text: l.text, id: l.choiceId }));
                   const s = freshStory();
                   const r = replayChoices(s, chosen);
                   segment.current = r.segment;

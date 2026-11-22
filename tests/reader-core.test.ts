@@ -30,7 +30,11 @@ describe('reader core', () => {
   });
 
   it('the page gets exactly the same code, running as plain JavaScript', () => {
-    const page = new Function(`${READER_CORE_JS}; return { exitOf, cuesIn, chosenKey, cutsceneSeconds, endingKey, cueKind };`)();
+    const page = new Function(`${READER_CORE_JS}; return { exitOf, cuesIn, chosenKey, cutsceneSeconds, endingKey, cueKind, idOf, chosenId, wasChosen };`)();
+    expect(page.idOf(['speaker:Ana', 'id:l_1'])).toBe('l_1');
+    expect(page.wasChosen({ 'id:c_1': 1 }, 'c_1', 'a.0', 'New words')).toBe(true);
+    expect(page.wasChosen({ 'a|Old words': 1 }, 'c_1', 'a.0', 'Old words')).toBe(true);
+    expect(page.chosenId(null, 'a.0', ' x ')).toBe('a|x');
     expect(page.exitOf('Back to the game: fight')).toBe('fight');
     expect(page.cuesIn(['speaker:Ana', 'music:calm']).map((c: { tag: string }) => c.tag)).toEqual(['music:calm']);
     expect(page.chosenKey('a.b', ' x ')).toBe('a|x');

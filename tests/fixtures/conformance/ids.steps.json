@@ -1,0 +1,7 @@
+{
+  "description": "#id tags on lines and choices are invisible: no cue, no text, and the choice's words are just its words.",
+  "steps": [
+    { "lines": [{ "speaker": "ANA", "text": "Hello there." }, { "text": "Rain on the glass." }], "choices": ["Stay", "Leave"], "stop": "choices" },
+    { "choose": "Stay", "lines": [], "choices": [], "stop": "end" }
+  ]
+}

@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { stripIds } from '../src/core/ids';
 import { gateProposals, heuristicSuggester, isModelSuggestion, pickupProposals, reviewAll } from '../src/core/adapt';
 import { buildStory } from '../src/core/builder';
 import { generateInk } from '../src/core/inkgen';
@@ -48,7 +49,7 @@ describe('applyProposals', () => {
     // Pending, so not in the Ink until approved.
     expect(generateInk(p).ink).not.toContain('Only me');
     reviewAll(p, 'approved');
-    expect(generateInk(p).ink).toContain('[Only me]');
+    expect(stripIds(generateInk(p).ink)).toContain('[Only me]');
   });
 
   it('declares new items and variables with the choices, and suffixes a taken choice id', () => {

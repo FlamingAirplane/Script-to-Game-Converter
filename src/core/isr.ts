@@ -94,9 +94,9 @@ export type Effect =
   | { type: 'add_var'; variableId: string; amount: number };
 
 export type ContentBlock =
-  | { type: 'dialogue'; speakerId: string; text: string; parenthetical?: string; /** How the voice is heard: V.O. (voice-over), O.S. (off screen) or O.C. (off camera). */ extension?: string; audio?: AudioRef; origin: Provenance; source?: SourceRef }
-  | { type: 'action'; text: string; origin: Provenance; source?: SourceRef }
-  | { type: 'transition'; text: string; origin: Provenance; source?: SourceRef }
+  | { type: 'dialogue'; /** A stable id (see ids.ts), written into the Ink as #id:… so readers can tell lines apart even when their words change. */ id?: string; speakerId: string; text: string; parenthetical?: string; /** How the voice is heard: V.O. (voice-over), O.S. (off screen) or O.C. (off camera). */ extension?: string; audio?: AudioRef; origin: Provenance; source?: SourceRef }
+  | { type: 'action'; id?: string; text: string; origin: Provenance; source?: SourceRef }
+  | { type: 'transition'; id?: string; text: string; origin: Provenance; source?: SourceRef }
   | { type: 'note'; text: string; origin: Provenance; source?: SourceRef } // preserved, emitted as Ink comment
   | { type: 'effect'; effect: Effect; origin: Provenance; review?: ReviewStatus; source?: SourceRef }
   | { type: 'unsupported'; text: string; reason: string; origin: Provenance; source?: SourceRef }

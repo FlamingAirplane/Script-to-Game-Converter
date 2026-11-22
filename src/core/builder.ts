@@ -1,4 +1,5 @@
 import { diag, type Diagnostic } from './diagnostics';
+import { ensureIds } from './ids';
 import { sha256Hex } from './hash';
 import { log } from './log';
 import { markupToTags, plainText } from './emphasis';
@@ -334,15 +335,15 @@ function assemble(
     const s = src(doc, b);
     switch (b.kind) {
       case 'action':
-        return { type: 'action', text: b.text, origin: origin(b), source: s };
+        return { type: 'action', ...(b.id ? { id: b.id } : {}), text: b.text, origin: origin(b), source: s };
       case 'dialogue': {
         const cue = b.character + (b.extension ? ` (${b.extension})` : '');
         const c = characterFor(cue);
         const extension = voiceExtension(cue);
-        return { type: 'dialogue', speakerId: c.id, text: b.text, parenthetical: b.parenthetical, ...(extension ? { extension } : {}), origin: origin(b), source: s };
+        return { type: 'dialogue', ...(b.id ? { id: b.id } : {}), speakerId: c.id, text: b.text, parenthetical: b.parenthetical, ...(extension ? { extension } : {}), origin: origin(b), source: s };
       }
       case 'transition':
-        return { type: 'transition', text: b.text, origin: 'source', source: s };
+        return { type: 'transition', ...(b.id ? { id: b.id } : {}), text: b.text, origin: 'source', source: s };
       case 'scene':
         return { type: 'action', text: b.text, origin: 'transformed', source: s };
       case 'section':
@@ -394,7 +395,8 @@ function assemble(
           case 'effect':
             return { type: 'effect', effect: m.effect, origin: 'source', review: 'approved', source: s };
           case 'choice': {
-            const choiceId = uniqueId(`${p.id}_${m.text}`, choiceIds, 'choice');
+            // Ink that already carries the choice's id (#id inside its brackets) keeps it; anything else gets a new one.
+            const choiceId = m.id && !choiceIds.has(m.id) ? (choiceIds.add(m.id), m.id) : uniqueId(`${p.id}_${m.text}`, choiceIds, 'choice');
             const choice: Choice = {
               id: choiceId,
               text: m.text,
@@ -515,7 +517,7 @@ function assemble(
   const firstDoc = parsed[0]?.doc;
   if (!title) title = firstDoc ? titleCase(firstDoc.fileName.replace(/\.[^.]+$/, '').replace(/[_-]+/g, ' ')) : 'Untitled Story';
 
-  return {
+  const story: StoryProject = {
     schemaVersion: SCHEMA_VERSION,
     project: {
       id: slugify(title) || (/[\p{L}\p{N}]/u.test(title) ? `story_${nameCode(title)}` : 'story'),
@@ -532,6 +534,8 @@ function assemble(
     ...(acts.size ? { acts: [...acts.values()].map(({ id, title }) => ({ id, title })) } : {}),
     inkPassthrough: isInk ? parsed.map((p) => p.doc.text).join('\n') : undefined,
   };
+  ensureIds(story);
+  return story;
 }
 
 /** A line that only says the story is over: "THE END", "The End.", "END", "FIN". */

@@ -1,6 +1,6 @@
 import type { Story } from 'inkjs';
 import { cuesIn } from './cues';
-import { readLine } from './readerCore';
+import { idOf, readLine } from './readerCore';
 import { CONTINUE_TEXT, exitOf } from './isr';
 
 // The TypeScript reader of the Ink conventions: what Playtest does with a compiled story. The playable page, Unity and
@@ -13,8 +13,12 @@ export interface Line {
   tags: string[];
   /** cue: a cue for the game (#music:calm), shown as a small marker; its text is the tag. */
   kind: 'text' | 'choice' | 'system' | 'cue';
+  /** For a choice line: the id of the choice that was taken, so a save can find it again when its words change. */
+  choiceId?: string;
   /** A Continue break was taken here (a choice line that isn't shown). */
   pause?: boolean;
+  /** The line's id (its #id tag), when the Ink has them. */
+  id?: string;
   /** The passage (Ink knot) the line was read in. */
   passage?: string;
 }
@@ -37,6 +41,8 @@ export function readOn(s: Story, prefix: Line[]): Line[] {
     const passage = knotOf(s) || undefined;
     const { text, speaker, who } = readLine(raw, tags);
     out.push({ ...(speaker ?? who ? { speaker: speaker ?? who! } : {}), text, tags, kind: 'text', passage });
+    const id = idOf(tags);
+    if (id) out[out.length - 1].id = id;
   }
   return out;
 }

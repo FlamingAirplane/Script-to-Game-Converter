@@ -289,10 +289,12 @@ const PLAYER_JS = `
   // its passage and its text as written (see core/chosen.ts); Read again keeps them. ----
   var chosenBefore = {};
   try { (JSON.parse(localStorage.getItem(meta.chosenKey) || '[]') || []).forEach(function (k) { chosenBefore[k] = 1; }); } catch (e) {}
-  function choiceKey(c) { return chosenKey(String(c.sourcePath || ''), String(c.text)); }
+  function choiceId(c) { return idOf(c.tags || []); }
+  function choiceKey(c) { return chosenId(choiceId(c), String(c.sourcePath || ''), String(c.text)); }
+  function wasTaken(c) { return wasChosen(chosenBefore, choiceId(c), String(c.sourcePath || ''), String(c.text)); }
   function rememberChosen(c) {
     var k = choiceKey(c);
-    if (chosenBefore[k]) return;
+    if (wasTaken(c)) return;
     chosenBefore[k] = 1;
     try { localStorage.setItem(meta.chosenKey, JSON.stringify(Object.keys(chosenBefore))); } catch (e) {}
   }
@@ -605,7 +607,7 @@ const PLAYER_JS = `
       return;
     }
     choices.forEach(function (c, n) {
-      var before = !pause && chosenBefore[choiceKey(c)];
+      var before = !pause && wasTaken(c);
       var b = el('button', pause ? 'choice continue' : before ? 'choice chosen' : 'choice', tr(c.text));
       if (before) { b.title = 'You’ve chosen this before'; b.setAttribute('aria-label', tr(c.text) + ' (chosen before)'); }
       if (!pause && choices.length > 1 && n < 9) { var k = el('span', 'key', String(n + 1)); k.setAttribute('aria-hidden', 'true'); b.appendChild(k); }
@@ -627,7 +629,7 @@ const PLAYER_JS = `
   // choices, so the new version's text and variables apply. Stops at the first choice the new
   // version no longer offers. Returns true if every choice was found.
   function replay(saved) {
-    var chosen = (saved.lines || []).filter(function (l) { return l.chosen; }).map(function (l) { return l.chosen; });
+    var chosen = (saved.lines || []).filter(function (l) { return l.chosen; }); // each with its text and, when the story had ids, the choice's id (cid)
     newStory(); lines = []; history = [];
     replaying = true;
     var take = function (c) {
@@ -635,16 +637,18 @@ const PLAYER_JS = `
       if (history.length > 50) history.shift();
       var pause = isPause();
       story.ChooseChoiceIndex(c.index);
-      lines.push(pause ? { chosen: c.text, pause: true } : { chosen: c.text });
+      var taken = { chosen: c.text }; if (choiceId(c)) taken.cid = choiceId(c); if (pause) taken.pause = true;
+      lines.push(taken);
       continueStory();
     };
     try {
       continueStory();
       for (var i = 0, steps = 0; i < chosen.length && steps < 10000; steps++) {
-        var match = story.currentChoices.filter(function (c) { return c.text === chosen[i]; })[0];
+        var want = chosen[i];
+        var match = (want.cid && story.currentChoices.filter(function (c) { return choiceId(c) === want.cid; })[0]) || story.currentChoices.filter(function (c) { return c.text === want.chosen; })[0];
         if (match) { take(match); i++; }
         else if (isPause()) take(story.currentChoices[0]); // a Continue break added since the save
-        else if (chosen[i] === 'Continue') i++; // a Continue break removed since the save
+        else if (want.chosen === 'Continue') i++; // a Continue break removed since the save
         else return false;
       }
       return true;
@@ -676,9 +680,11 @@ const PLAYER_JS = `
     pageTurn();
     var pause = isPause();
     if (!pause && !exitName()) story.currentChoices.forEach(function (c) { if (c.index === index) rememberChosen(c); });
+    var cid = null; story.currentChoices.forEach(function (c) { if (c.index === index) cid = choiceId(c); });
     story.ChooseChoiceIndex(index);
     var from = lines.length;
-    lines.push(pause ? { chosen: text, pause: true } : { chosen: text });
+    var taken = { chosen: text }; if (cid) taken.cid = cid; if (pause) taken.pause = true;
+    lines.push(taken);
     freshFrom = from;
     continueStory();
     render();

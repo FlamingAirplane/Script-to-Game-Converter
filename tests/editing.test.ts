@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { stripIds } from '../src/core/ids';
 import { analyze } from '../src/core/analyzer';
 import { buildStory } from '../src/core/builder';
 import { ADAPTERS } from '../src/core/export';
@@ -55,7 +56,7 @@ describe('Continue breaks', () => {
     const { project } = await build(src, 's.md', 'structured');
     expect(kinds(project)).toEqual(['action,pause,action,effect,pause,dialogue', 'action,pause,action']);
     const story = processProject(project);
-    expect(story.generated.ink).toContain('The hall is dark.\n+ [Continue]\n-\nA light flickers.');
+    expect(stripIds(story.generated.ink)).toContain('The hall is dark.\n+ [Continue]\n-\nA light flickers.');
     expect(story.compile.ok).toBe(true);
     expect(story.smoke?.endingsReached).toMatchObject({ room: expect.any(Number) });
     // A linear story with breaks is still one playthrough.
@@ -110,7 +111,7 @@ describe('Continue breaks', () => {
     expect(countBreaks(project.passages[0])).toBe(2);
     removeBreak(project, 'a', 1);
     expect(kinds(project)).toEqual(['action,action,pause,action']);
-    expect(processProject(project).generated.ink).toContain('Two.\n+ [Continue]\n-\nThree.');
+    expect(stripIds(processProject(project).generated.ink)).toContain('Two.\n+ [Continue]\n-\nThree.');
   });
 });
 
@@ -202,7 +203,7 @@ describe('new scenes from the Graph', () => {
     expect(p.passages[0].divert).toBe('the_stairs');
     const story = processProject(p);
     expect(story.compile.ok).toBe(true);
-    expect(story.generated.ink).toMatch(/=== the_stairs ===[\s\S]*The steps creak\. #scene:INT\. STAIRS - NIGHT\n-> room/);
+    expect(stripIds(story.generated.ink)).toMatch(/=== the_stairs ===[\s\S]*The steps creak\. #scene:INT\. STAIRS - NIGHT\n-> room/);
     // After the last passage, the new scene becomes the ending.
     const end = addScene(p, { title: 'Roof', from: 'attic', link: 'continue' });
     expect(end).toMatchObject({ isEnding: true });
@@ -329,8 +330,8 @@ Dust.
     expect(project.passages.find((p) => p.id === 'hall')!.choices.map((c) => !!c.forced)).toEqual([true, false, false]);
     const s = processProject(project);
     expect(s.compile.ok).toBe(true);
-    expect(s.generated.ink).toContain('+ {has_brass_key} [Open the door with the key] // forced');
-    expect(s.generated.ink).toContain('+ {not has_brass_key} [Climb the stairs]');
+    expect(stripIds(s.generated.ink)).toContain('+ {has_brass_key} [Open the door with the key] // forced');
+    expect(stripIds(s.generated.ink)).toContain('+ {not has_brass_key} [Climb the stairs]');
     const play = (pick: number) => {
       const st = new Story(s.compile.json!);
       st.ContinueMaximally();
@@ -552,8 +553,8 @@ Look.
     expect(after.cutscene).toBeUndefined();
     const s = processProject(project);
     expect(s.compile.ok).toBe(true);
-    expect(s.generated.ink).toContain('MARA: Did you hear that? #speaker:mara #cutscene');
-    expect(s.generated.ink).toContain('// Players don’t see this: Rain lashes the glass.');
+    expect(stripIds(s.generated.ink)).toContain('MARA: Did you hear that? #speaker:mara #cutscene');
+    expect(stripIds(s.generated.ink)).toContain('// Players don’t see this: Rain lashes the glass.');
     const st = new Story(s.compile.json!);
     const text = st.ContinueMaximally();
     // No Continue break inside the cutscene, the scene after it as written.

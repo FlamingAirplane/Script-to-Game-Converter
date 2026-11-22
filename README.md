@@ -228,7 +228,7 @@ ships in the web app only once it beats the heuristics there.
 ## Ink conventions
 
 - Items are Booleans: `VAR has_<item> = false`. Conditions compile from an expression tree (never raw strings).
-- Dialogue: `NAME: text #speaker:<id>`; a voice-over or off-screen line shows it after the name and adds a tag, `NAME (V.O.): text #speaker:<id> #ext:V.O.` (also `O.S.` and `O.C.`); parentheticals add `#paren:…`; recorded lines add `#audio:<file>`; the first line of a scene carries `#scene:<heading>` and, if the passage has a picture, `#image:<file>` (PNG or JPEG); transitions carry `#transition`.
+- Dialogue: `NAME: text #speaker:<id>`; a voice-over or off-screen line shows it after the name and adds a tag, `NAME (V.O.): text #speaker:<id> #ext:V.O.` (also `O.S.` and `O.C.`); parentheticals add `#paren:…`; recorded lines add `#audio:<file>`; the first line of a scene carries `#scene:<heading>` and, if the passage has a picture, `#image:<file>` (PNG or JPEG); transitions carry `#transition`. Every line carries a stable `#id:l_…` and every choice one inside its brackets (`[Go on #id:hall_go]`): the id stays through edits, so a reworded choice keeps its translation, its "chosen before" mark and a saved game's place. Readers match by id and fall back to the words for older stories.
 - Every dialogue line is a labelled gather, `- (line_<speaker>_<first words>) NAME: text …`, and gets an entry knot at the
   end of the file, `=== passage__line_… ===` / `-> passage.line_…`, so a game can start the story at that line:
   `StartAt("passage.line_…")`, `EnterAt` (keeps the story's variables) or `ResumeAt`, and the Unity and Unreal **Enter
