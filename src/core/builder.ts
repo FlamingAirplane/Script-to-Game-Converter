@@ -443,8 +443,13 @@ function assemble(
   // Linear flow: passages without explicit control flow continue to the next passage.
   passages.forEach((p, i) => {
     if (p.choices.length || p.divert || p.isEnding) return;
-    if (i + 1 < passages.length && !explicitFlow) p.divert = passages[i + 1].id;
-    else p.isEnding = true;
+    if (i + 1 < passages.length && !explicitFlow) {
+      p.divert = passages[i + 1].id;
+      p.flowDefault = 'next_passage';
+    } else {
+      p.isEnding = true;
+      p.flowDefault = explicitFlow ? 'source_ends' : 'last_passage';
+    }
   });
   // A script's own "THE END" is the ending, which every reader already marks: kept as a note, not shown twice.
   for (const p of passages) {

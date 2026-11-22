@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- **Review says why a passage goes where it does.** A script flows from one passage to the next, while in Ink and Twine a
+  passage that says nowhere to go is an ending. When the conversion applied either rule, the passage now says so under
+  "Then" (and the project remembers it, as `flowDefault`), until you set "Then" yourself.
 - **Two conversion modes, not three.** Faithful conversion and Structured import converted a script exactly alike (a
   script without markers converts scene by scene, nothing invented, in both), so they are now one: **Structured import**.
   Interactive adaptation is unchanged. Projects, files and `--mode faithful` that say "faithful" still work and are read

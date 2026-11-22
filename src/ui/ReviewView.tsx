@@ -7,7 +7,7 @@ import { friendly } from './friendly';
 import { setCueSound } from '../core/cues';
 import { ScenePicture } from './ScenePicture';
 import type { SceneRequest } from './NewScene';
-import { type Update, STORY_SETTINGS, addChoice, canBecomeChoice, choiceTextFor, deletePassage, lineToChoice, movePassage, renamePassage } from './projectOps';
+import { type Update, STORY_SETTINGS, addChoice, canBecomeChoice, choiceTextFor, deletePassage, flowNote, lineToChoice, movePassage, renamePassage, setThen } from './projectOps';
 import { BlockRow, LineToChoice } from './review/ContentBlocks';
 import { ChoiceEditor } from './review/ChoiceEditor';
 import { StorySettings } from './review/StorySettings';
@@ -559,11 +559,7 @@ function PassageEditor({
                       retarget: { passageId: pid },
                       then: activeChoices.length ? undefined : (passage.divert ?? (passage.isEnding ? 'END' : undefined)),
                     })
-                  : edit((p) => {
-                  const v = e.target.value;
-                  p.isEnding = v === '__end';
-                  p.divert = v.startsWith('__') ? undefined : v;
-                })
+                  : edit((p) => setThen(p, e.target.value))
               }
             >
               <option value="__end">End the story here</option>
@@ -584,6 +580,7 @@ function PassageEditor({
             </button>
           )}
         </div>
+        {flowNote(passage) && <p className="muted small flow-note">{flowNote(passage)}</p>}
       </section>
     </div>
   );

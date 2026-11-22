@@ -184,6 +184,7 @@
         "choices": { "type": "array", "items": { "$ref": "#/$defs/choice" } },
         "divert": { "type": "string" },
         "isEnding": { "type": "boolean" },
+        "flowDefault": { "enum": ["next_passage", "last_passage", "source_ends"], "description": "Set when the conversion decided where the passage goes (a script flows on to the next passage; in Ink and Twine a passage with nowhere to go ends). Cleared when the writer sets it." },
         "cutscene": { "type": "boolean", "description": "A cutscene: players see only its dialogue, one line at a time, going on by itself." },
         "act": { "$ref": "#/$defs/identifier", "description": "The act the passage is in (an id in acts)." },
         "origin": { "$ref": "#/$defs/provenance" },

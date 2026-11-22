@@ -187,6 +187,12 @@ export interface Passage {
   choices: Choice[];
   divert?: string; // unconditional continuation when there are no choices
   isEnding: boolean;
+  /**
+   * Set when the conversion, not the source or the writer, decided where this passage goes (see flowNote): a script
+   * flows from one passage to the next, while in Ink and Twine a passage that says nowhere to go is an ending.
+   * Cleared when the writer sets "Then" themselves.
+   */
+  flowDefault?: 'next_passage' | 'last_passage' | 'source_ends';
   origin: Provenance;
   review: ReviewStatus;
   source?: SourceRef;
