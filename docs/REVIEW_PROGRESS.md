@@ -107,6 +107,11 @@ for fixing them.
 - [x] `presentation.unity` is now `presentation.panel` (flaw 8, first part): the editor writes the new key and drops the
       old one, and everything reads either (`panelThemeOf`), so older projects and files still open. A test keeps the
       panel words in the Unity panel, the Unreal panel and the translation sheet's list from drifting apart.
+- [x] `App.tsx` split into hooks (flaw 9, part): undo and redo (`editHistory.ts`), autosave (`useAutosave.ts`) and
+      keyboard shortcuts (`useShortcuts.ts`) are their own files, with their pure parts tested (`tests/app-hooks.test.ts`),
+      and `App.tsx` is about 140 lines shorter. It also fixes undo and redo in development, where React ran each state
+      update twice and left a stray redo step. **Not done:** `useProjectFiles` (opening, saving, drafts, links) is still
+      in `App.tsx`; `GraphView.tsx` and `PlaytestView.tsx` are still large.
 - [ ] Merge or redefine faithful/structured (flaw 8, second part): needs a decision on what *faithful* should mean
 - [x] Real Unreal build on 5.7 (flaw 7): it found two compile errors in the plugin (an include-order rule in
       `InkCompat.cpp` and a shadowed `Line` in the Enter Dialogue Trigger), now fixed; the archive sample builds and all

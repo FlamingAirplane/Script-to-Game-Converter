@@ -1,16 +1,15 @@
 import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { carryTranslations } from '../core/export/translations';
-import { ensureIds, withIds } from '../core/ids';
 import { reviewAll } from '../core/adapt';
 import { buildStory, type SourceInput } from '../core/builder';
 import type { Diagnostic } from '../core/diagnostics';
 import { fileBase, type ConversionMode, type StoryProject } from '../core/isr';
 import type { ConversionState } from '../core/pipeline';
-import { validateSchema } from '../core/schema';
 import { DiagnosticsPanel, type PanelView } from './DiagnosticsPanel';
 import { ImportView, SITE } from './ImportView';
-import { editableCopy, passageForEntity, STORY_SETTINGS } from './projectOps';
-import { sweepUnusedMediaOnce } from './mediaSweep';
+import { passageForEntity, STORY_SETTINGS } from './projectOps';
+import { useEditHistory } from './editHistory';
+import { loadSaved, useAutosave } from './useAutosave';
+import { useShortcuts } from './useShortcuts';
 import { packProject, unpackProject } from './projectFile';
 import { LINK_PREFIX, readStoryLink } from './storyLink';
 import { ProjectsSheet } from './ProjectsSheet';
@@ -21,7 +20,7 @@ import { ArrowLeftRight, BookOpen, Code2, FilePlus2, FileUp, FolderOpen, Keyboar
 import type { LucideIcon } from 'lucide-react';
 import { designSetting, useWord } from './design/design';
 import { getDraft, keepDraft } from './draftStore';
-import { canUseFiles, kvGet, kvSet, pickProjectFile, rememberRecent, requestPersistence, saveFile, storageUse, writeToHandle, type FileHandle } from './platform';
+import { canUseFiles, pickProjectFile, rememberRecent, requestPersistence, saveFile, writeToHandle, type FileHandle } from './platform';
 
 const appLog = log('app');
 
@@ -37,7 +36,7 @@ const InkView = lazy(() => loadInk().then((m) => ({ default: m.InkView })));
 const ExportView = lazy(() => import('./ExportView').then((m) => ({ default: m.ExportView })));
 const PlaytestView = lazy(() => import('./PlaytestView').then((m) => ({ default: m.PlaytestView })));
 import { sfx } from './sfx';
-import { IS_MAC, isTyping, MOD, modKey, plainKey, ShortcutSheet } from './Shortcuts';
+import { IS_MAC, MOD, ShortcutSheet } from './Shortcuts';
 import { ThemeToggle } from './ThemeToggle';
 import { NewSceneSheet, type SceneRequest } from './NewScene';
 import { useProcessedStory } from './useProcessedStory';
@@ -81,33 +80,6 @@ const STATE_WORDS: Record<ConversionState, string> = {
   Failed: 'Needs fixes',
   Cancelled: 'Stopped',
 };
-
-const STORAGE_KEY = 'narrative-bridge.project.v1';
-
-interface Saved {
-  project: StoryProject;
-  parseDiagnostics: Diagnostic[];
-  /** When it was autosaved (ms); the newer of the two autosaved copies wins on start-up. */
-  savedAt?: number;
-}
-
-const valid = (s: Saved | null | undefined): s is Saved => !!s?.project && !validateSchema(s.project).some((d) => d.severity === 'error');
-
-/** The quick copy in localStorage (kept while the project is small), read synchronously on start-up. */
-function loadSaved(): Saved | null {
-  try {
-    const raw = localStorage.getItem(STORAGE_KEY);
-    const s = raw ? (JSON.parse(raw) as Saved) : null;
-    return valid(s) ? s : null;
-  } catch {
-    return null;
-  }
-}
-
-/** Projects larger than this are autosaved to IndexedDB only (localStorage holds about 5 MB in all). */
-const QUICK_COPY_LIMIT = 1_500_000;
-/** How long autosave waits for typing to pause (closing or hiding the page saves at once). */
-const AUTOSAVE_DELAY_MS = 500;
 
 /** "just now", "5 min ago", "2 h ago", or a date. */
 function ago(at: number): string {
@@ -192,91 +164,23 @@ export function App() {
   const [showDiag, setShowDiag] = useState(true);
   const [busy, setBusy] = useState(false);
   const [exportState, setExportState] = useState<'Exporting' | 'Succeeded' | 'Failed' | null>(null);
-  const undoStack = useRef<StoryProject[]>([]);
-  const redoStack = useRef<StoryProject[]>([]);
-  const [, force] = useState(0);
   const openRef = useRef<HTMLInputElement>(null);
 
   // Processed in a background worker; `stale` while a newer edit is being processed.
   const { processed, stale } = useProcessedStory(project, parseDiagnostics);
 
-  // Autosave to this browser: IndexedDB (room for large projects), plus a quick copy in localStorage
-  // while the project is small. If both fail, say so: the writer must save a project file instead.
-  const [autosave, setAutosave] = useState<'saved' | 'low' | 'failed' | null>(initial ? 'saved' : null);
-  const loaded = useRef(false);
-  useEffect(() => {
-    // On start-up, a newer or larger autosave in IndexedDB replaces the quick copy.
-    void kvGet<Saved>(STORAGE_KEY)
-      .then((s) => {
-        if (valid(s) && (!initial || (s.savedAt ?? 0) > (initial.savedAt ?? 0))) {
-          setParseDiagnostics(s.parseDiagnostics ?? []);
-          setProject(s.project);
-          setSelected(s.project.project.startPassage);
-          setTab('review');
-          setAutosave('saved');
-        }
-        // Clear out media no story here uses any more; an autosave that can't be read skips it, keeping everything.
-        void sweepUnusedMediaOnce(s === undefined || valid(s) ? [s?.project, initial?.project] : null);
-      })
-      .catch(() => void sweepUnusedMediaOnce(null))
-      .finally(() => (loaded.current = true));
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-  // The latest edit's save, while it waits for typing to pause; run at once if the page is closing.
-  const pendingSave = useRef<(() => void) | null>(null);
-  useEffect(() => {
-    const flush = () => pendingSave.current?.();
-    const onHidden = () => document.visibilityState === 'hidden' && flush();
-    window.addEventListener('pagehide', flush);
-    document.addEventListener('visibilitychange', onHidden);
-    return () => {
-      window.removeEventListener('pagehide', flush);
-      document.removeEventListener('visibilitychange', onHidden);
-    };
-  }, []);
-  useEffect(() => {
-    if (!project || !loaded.current) return;
-    // Saved once typing pauses, not on every keystroke: a long story is a large write.
-    const save = () => {
-      pendingSave.current = null;
-      const saved: Saved = { project, parseDiagnostics, savedAt: Date.now() };
-      const json = JSON.stringify(saved);
-      let quick = false;
-      try {
-        if (json.length < QUICK_COPY_LIMIT) {
-          localStorage.setItem(STORAGE_KEY, json);
-          quick = true;
-        } else localStorage.removeItem(STORAGE_KEY); // too big: IndexedDB holds the only copy
-      } catch {
-        /* full: IndexedDB below */
-      }
-      void kvSet(STORAGE_KEY, saved)
-        .then(() => true)
-        .catch(() => quick)
-        .then(async (ok) => {
-          const use = ok ? await storageUse() : null;
-          const next = !ok ? 'failed' : use !== null && use > 0.85 ? 'low' : 'saved';
-          setAutosave((was) => {
-            if (was !== next) {
-              if (next === 'failed') appLog.warn('Autosave failed: browser storage is full or unavailable');
-              else if (next === 'low') appLog.warn('Browser storage is almost full', { used: Math.round((use ?? 0) * 100) });
-              else if (was === 'failed' || was === 'low') appLog.info('Autosave works again');
-            }
-            return next;
-          });
-        });
-    };
-    pendingSave.current = save;
-    const timer = setTimeout(save, AUTOSAVE_DELAY_MS);
-    return () => clearTimeout(timer);
-  }, [project, parseDiagnostics]);
-  // Closing the page while autosave is failing would lose work: let the browser ask first.
-  useEffect(() => {
-    if (autosave !== 'failed') return;
-    const warn = (e: BeforeUnloadEvent) => e.preventDefault();
-    window.addEventListener('beforeunload', warn);
-    return () => window.removeEventListener('beforeunload', warn);
-  }, [autosave]);
+  // Autosave to this browser (see useAutosave.ts); a newer autosave than the quick copy replaces it on start-up.
+  const autosave = useAutosave({
+    initial,
+    project,
+    parseDiagnostics,
+    onRestore: (s) => {
+      setParseDiagnostics(s.parseDiagnostics ?? []);
+      setProject(s.project);
+      setSelected(s.project.project.startPassage);
+      setTab('review');
+    },
+  });
 
   // Files the system opens with the installed app (manifest file_handlers, Chrome/Edge): project files
   // open straight away; scripts and stories go to the Import page's file list.
@@ -338,101 +242,31 @@ export function App() {
     }
   };
 
-  const lastEdit = useRef<{ group: string; at: number } | null>(null);
-  /**
-   * Applies an edit to a copy of the project. Edits sharing a `group` (e.g. keystrokes in one text
-   * field) within two seconds of each other become a single undo step.
-   */
-  const update = useCallback((fn: (draft: StoryProject) => void, group?: string) => {
-    const now = Date.now();
-    const merge = !!group && lastEdit.current?.group === group && now - lastEdit.current.at < 2000;
-    lastEdit.current = group ? { group, at: now } : null;
-    setProject((cur) => {
-      if (!cur) return cur;
-      const next = editableCopy(cur);
-      ensureIds(next); // lines get their ids before the edit changes their words, and again for any the edit adds
-      fn(next);
-      ensureIds(next);
-      if (next.translations) carryTranslations(withIds(cur), next); // reworded lines and choices keep their translations
-      if (!merge) {
-        undoStack.current.push(cur);
-        if (undoStack.current.length > 100) undoStack.current.shift();
-      }
-      redoStack.current = [];
-      return next;
-    });
-    setExportState(null);
-  }, []);
+  // Edit history (see editHistory.ts): `update` applies an edit to a copy; edits in one group within two seconds are one undo step.
+  const onEdit = useCallback(() => setExportState(null), []);
+  const { update, undo, redo, reset: resetHistory, keep: keepInHistory, canUndo, canRedo } = useEditHistory(setProject, onEdit);
 
-  const undo = useCallback(() => {
-    lastEdit.current = null;
-    const prev = undoStack.current.pop();
-    if (!prev) return;
-    setProject((cur) => {
-      if (cur) redoStack.current.push(cur);
-      return prev;
-    });
-    force((n) => n + 1);
-  }, []);
-  const redo = useCallback(() => {
-    const next = redoStack.current.pop();
-    if (!next) return;
-    setProject((cur) => {
-      if (cur) undoStack.current.push(cur);
-      return next;
-    });
-    force((n) => n + 1);
-  }, []);
-
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      const mod = modKey(e);
-      const typing = isTyping(e);
-      const k = e.key.toLowerCase();
-      const h = keys.current;
-      if (modKey(e, { shift: true }) && k === 'z' && !typing) {
-        e.preventDefault();
-        if (e.shiftKey) redo();
-        else undo();
-      } else if (mod && /^[1-6]$/.test(e.key) && project) {
-        e.preventDefault();
-        setTab(TABS[+e.key - 1].id);
-      } else if (mod && k === 's' && project) {
-        e.preventDefault();
-        void h.save();
-      } else if (modKey(e, { shift: true }) && e.shiftKey && k === 's' && project && canUseFiles()) {
-        e.preventDefault();
-        void h.saveAs();
-      } else if (mod && k === 'o') {
-        e.preventDefault();
-        h.open();
-      } else if (mod && k === 'f' && project) {
-        e.preventDefault();
-        h.find();
-      } else if (mod && k === 'l') {
-        e.preventDefault();
+  useShortcuts(
+    { project: !!project, tab },
+    {
+      undo,
+      redo,
+      tab: (n) => setTab(TABS[n - 1].id),
+      save: () => keys.current.save(),
+      saveAs: () => keys.current.saveAs(),
+      open: () => keys.current.open(),
+      find: () => keys.current.find(),
+      log: () => {
         setPanelView('log');
         setShowDiag(true);
-      } else if (mod && e.key === '.' && project) {
-        e.preventDefault();
-        setShowDiag((v) => !v);
-      } else if (e.key === '?' && !typing && !e.metaKey && !e.ctrlKey && !e.altKey) {
-        e.preventDefault();
-        setShowKeys(true);
-      } else if (e.key.toLowerCase() === 'd' && plainKey(e) && (h.tab === 'review' || h.tab === 'play')) {
-        e.preventDefault();
-        h.dialogueOnly();
-      } else if (e.key.toLowerCase() === 'g' && plainKey(e) && (h.tab === 'play' || h.tab === 'graph') && project) {
-        e.preventDefault();
-        h.showGated();
-      } else if ((e.key === '[' || e.key === ']') && plainKey(e) && h.tab === 'review' && project) {
-        e.preventDefault();
-        h.step(e.key === ']' ? 1 : -1);
-      }
-    };
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
-  }, [undo, redo, project]);
+      },
+      toggleDiagnostics: () => setShowDiag((v) => !v),
+      help: () => setShowKeys(true),
+      dialogueOnly: () => keys.current.dialogueOnly(),
+      showGated: () => keys.current.showGated(),
+      step: (dir) => keys.current.step(dir),
+    },
+  );
 
   /** Keeps the open story as an automatic draft before something replaces it (never blocks the change). */
   const keepBeforeReplacing = async (label: string) => {
@@ -452,11 +286,9 @@ export function App() {
     await keepBeforeReplacing(replacing ? 'Before opening another story' : `Before restoring “${d.label}”`);
     if (project && !replacing) {
       // Restoring is one undoable step within the same story.
-      undoStack.current.push(project);
-      redoStack.current = [];
+      keepInHistory(project);
     } else {
-      undoStack.current = [];
-      redoStack.current = [];
+      resetHistory();
     }
     setParseDiagnostics(d.parseDiagnostics);
     setProject(d.project);
@@ -511,8 +343,7 @@ export function App() {
       await keepBeforeReplacing('Before converting a new script');
       setReplaced(project?.passages.length ? { project, parseDiagnostics, file: projectFile } : null);
       setNewNote(false);
-      undoStack.current = [];
-      redoStack.current = [];
+      resetHistory();
       setParseDiagnostics(diagnostics);
       setProject(p);
       setProjectFile(null); // a new story isn't saved anywhere yet
@@ -530,8 +361,7 @@ export function App() {
   const bringBack = async () => {
     if (!replaced) return;
     await keepBeforeReplacing('Before bringing back the previous story');
-    undoStack.current = [];
-    redoStack.current = [];
+    resetHistory();
     setParseDiagnostics(replaced.parseDiagnostics);
     setProject(replaced.project);
     setProjectFile(replaced.file);
@@ -611,7 +441,7 @@ export function App() {
       const p = unpacked.project;
       appLog.info(from === 'cloud' ? 'Opened project from the cloud' : from === 'link' ? 'Opened story link' : 'Opened project file', { files: unpacked.files });
       await keepBeforeReplacing(from === 'cloud' ? 'Before opening a project from the cloud' : from === 'link' ? 'Before opening a story link' : 'Before opening a project file');
-      undoStack.current = [];
+      resetHistory();
       setParseDiagnostics(unpacked.parseDiagnostics);
       setProject(p);
       baseline.current = p;
@@ -733,10 +563,10 @@ export function App() {
           </>
         )}
         <span className="spacer" />
-        <button className="btn tiny ghost" onClick={undo} disabled={!undoStack.current.length} title="Undo your last change (⌘Z)" aria-label="Undo">
+        <button className="btn tiny ghost" onClick={undo} disabled={!canUndo()} title="Undo your last change (⌘Z)" aria-label="Undo">
           <Undo2 size={15} aria-hidden /> <span className="tb-word">Undo</span>
         </button>
-        <button className="btn tiny ghost" onClick={redo} disabled={!redoStack.current.length} title="Redo (⇧⌘Z)" aria-label="Redo">
+        <button className="btn tiny ghost" onClick={redo} disabled={!canRedo()} title="Redo (⇧⌘Z)" aria-label="Redo">
           <Redo2 size={15} aria-hidden /> <span className="tb-word">Redo</span>
         </button>
         {project && (
