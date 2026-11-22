@@ -1,7 +1,8 @@
 import { actsOf, actTitleLine } from './acts';
 import { paragraphId } from './ids';
 import { audioFileName } from './audio';
-import { choiceGuards, isForcing } from './forced';
+import { passageFlow } from './flow';
+import { isForcing } from './forced';
 import { describeNeed } from './gating';
 import { imageFileName } from './images';
 import { lineEntries, passageLineLabels } from './lines';
@@ -280,25 +281,23 @@ function idTag(id: string | undefined, paragraph = 0): string {
 }
 
 function emitFlow(project: StoryProject, p: Passage, emit: (line: string, passageId?: string, entityId?: string) => void, gated: GatedChoiceInfo[]) {
-  const choices = p.choices.filter((c) => isActive(c.review));
-  if (choices.length === 0) {
-    emit(p.divert ? `-> ${p.divert}` : '-> END', p.id);
+  const flow = passageFlow(p);
+  if (flow.choices.length === 0) {
+    emit(`-> ${flow.then}`, p.id);
     return;
   }
-  const guards = choiceGuards(p);
-  for (const c of choices) {
+  for (const { choice: c, guards } of flow.choices) {
     const bullet = c.once ? '*' : '+';
     const cond = c.conditions.length ? ` {${c.conditions.map(wrap).join(' && ')}}` : '';
     // Kept out while a forced choice of this passage applies (each its own {…}, so the Ink importer can tell them apart).
-    const guard = (guards.get(c.id) ?? []).map((g) => ` {${conditionToInk(g)}}`).join('');
+    const guard = guards.map((g) => ` {${conditionToInk(g)}}`).join('');
     emit(`${bullet}${cond}${guard} [${escapeInk(c.text)}${idTag(c.id)}]${isForcing(c) ? ' // forced' : ''}`, p.id, c.id);
     if (c.conditions.length) gated.push(gatedInfo(project, p, c));
     for (const e of c.effects) emit(`    ${effectToInk(e)}`, p.id, c.id);
     emit(`    -> ${c.target || 'END'}`, p.id, c.id);
   }
   // Invisible fallback: taken automatically only when no other choice is available.
-  if (p.divert) emit(`+ -> ${p.divert}`, p.id);
-  else if (p.isEnding) emit('+ -> END', p.id);
+  if (flow.then) emit(`+ -> ${flow.then}`, p.id);
 }
 
 /** What readers need to know about a choice that has conditions. */

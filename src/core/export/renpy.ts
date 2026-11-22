@@ -1,4 +1,4 @@
-import { choiceGuards } from '../forced';
+import { passageFlow } from '../flow';
 import { log } from '../log';
 import { cutsceneSeconds, forPlayers } from '../players';
 import { fileBase, isActive, itemVar, type Choice, type Condition, type Effect, type Passage, type StoryProject } from '../isr';
@@ -181,16 +181,15 @@ function passageLines(p: Passage, speakers: Map<string, string>): string[] {
     }
   }
 
-  // A forced choice keeps the others out while it applies, as in Ink: they get its condition, negated.
-  const guards = choiceGuards(p);
-  const choices = p.choices.filter((c) => isActive(c.review)).map((c) => ({ ...c, conditions: [...c.conditions, ...(guards.get(c.id) ?? [])] }));
+  // The same flow as the Ink (flow.ts): a forced choice keeps the others out while it applies.
+  const flow = passageFlow(p);
+  const choices = flow.choices.map((f) => ({ ...f.choice, conditions: f.conditions }));
   if (choices.length) {
     lines.push('    menu:');
     for (const c of choices) lines.push(...choiceLines(c));
   }
   // Ren'Py goes on past a menu none of whose choices can be taken: the passage's "then", as Ink's fallback does.
-  const then = p.divert ?? (p.isEnding || !choices.length ? 'END' : undefined);
-  if (then) lines.push(`    jump ${label(then)}`);
+  if (flow.then) lines.push(`    jump ${label(flow.then)}`);
   else lines.push('    return  # nowhere to go: the story stops here');
   // Markup was kept apart from the writer's text (which has its braces doubled); put it back.
   return lines.map((l) => l.replace(/\u0000/g, '{').replace(/\u0001/g, '}'));
