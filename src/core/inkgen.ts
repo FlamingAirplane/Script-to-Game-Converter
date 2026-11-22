@@ -7,7 +7,7 @@ import { imageFileName } from './images';
 import { lineEntries, passageLineLabels } from './lines';
 import { forPlayers } from './players';
 import { GENERATOR_VERSION } from './version';
-import { CONTINUE_TEXT, cueTag, EXIT_PREFIX, exitName, isActive, itemVar, type Choice, type Condition, type Effect, type Passage, type StoryProject } from './isr';
+import { CONTINUE_TEXT, cueName, cueTag, EXIT_PREFIX, exitName, isActive, itemVar, type Choice, type Condition, type Effect, type Passage, type StoryProject } from './isr';
 
 // Deterministic, template-based Ink generation. Same ISR in → byte-identical Ink out.
 //
@@ -56,6 +56,21 @@ export interface GatedChoiceInfo {
 export interface ReaderInfo {
   /** The choices with conditions: shown greyed out, with what they need, while the reader can't take them yet. */
   gated: GatedChoiceInfo[];
+  /** The passages (Ink knots) a game can start the story at, each with its title and its act ("" for none). */
+  passages: { id: string; title: string; act: string }[];
+  /** The story's acts, in order, with titles as one line. */
+  acts: { id: string; title: string }[];
+  /** Each line of dialogue a game can start at ("passage.line_…") and how it reads in a menu. */
+  lines: { path: string; display: string }[];
+  /** The Ink variables that mirror inventory items (has_<item>): exactly the ones the Ink declares. */
+  itemVariables: string[];
+  /** The story's own variables, as the Ink declares them. */
+  variables: string[];
+  /** The exits to the game, by name. */
+  exits: string[];
+  /** The cues the writer added (#music:calm → "music"), and each one as it appears, with its value ("music:calm"). */
+  cues: string[];
+  cueTags: string[];
 }
 
 export interface GeneratedInk {
@@ -129,6 +144,10 @@ export function generateInk(story: StoryProject): GeneratedInk {
   const lines: string[] = [];
   const sourceMap: SourceMapEntry[] = [];
   const gated: GatedChoiceInfo[] = [];
+  const passageInfo: ReaderInfo['passages'] = [];
+  const exits = new Set<string>();
+  const cues = new Set<string>();
+  const cueTags = new Set<string>();
   const emit = (line: string, passageId = '', entityId = '') => {
     lines.push(line);
     if (passageId) sourceMap.push({ line: lines.length, passageId, entityId: entityId || passageId });
@@ -151,6 +170,7 @@ export function generateInk(story: StoryProject): GeneratedInk {
   }
   const items = project.items.filter((i) => i.origin !== 'generated' || referencedItems.has(i.id));
   if (items.length) emit('// Inventory: one Boolean per item (the host game may mirror these; see NarrativeController).');
+  const itemVariables = items.map((i) => itemVar(i.id));
   for (const i of items) emit(`VAR ${itemVar(i.id)} = false // ${i.displayName.replace(/\n/g, ' ')}${i.consumable ? ' (consumable)' : ''}`);
   for (const v of project.variables) emit(`VAR ${v.id} = ${literal(v.initial)}`);
   if (items.length || project.variables.length) emit('');
@@ -168,6 +188,7 @@ export function generateInk(story: StoryProject): GeneratedInk {
       emit(act ? `// @act ${act} ${actTitleLine(acts.get(act)!.title)}` : '// @act');
     }
     emit(`=== ${p.id} ===`, p.id);
+    passageInfo.push({ id: p.id, title: p.title || p.id, act: pAct ?? '' });
     if (p.title && p.title !== p.id) emit(`// ${p.title.replace(/\n/g, ' ')}${p.source ? ` (source line ${p.source.line})` : ''}`, p.id);
     const labels = passageLineLabels(p);
     let lineIndex = 0;
@@ -215,10 +236,13 @@ export function generateInk(story: StoryProject): GeneratedInk {
         case 'cue':
           // A tag on its own line: Ink attaches it to the next line (or, with no text after it, to an empty line).
           emit(`# ${cueTag(b.name, b.value)}`, p.id);
+          cues.add(cueName(b.name));
+          cueTags.add(cueTag(b.name, b.value));
           break;
         case 'exit':
           // An exit to the game: a lone choice the game takes when it resumes the story (players
           // without a game show it as a Resume button), then a gather.
+          exits.add(exitName(b.name));
           emit(`+ [${escapeInk(EXIT_PREFIX + exitName(b.name))}]${b.note ? ` // ${b.note.replace(/\s+/g, ' ')}` : ''}`, p.id);
           emit('-', p.id);
           break;
@@ -236,7 +260,18 @@ export function generateInk(story: StoryProject): GeneratedInk {
     }
   }
   emit('');
-  return { ink: lines.join('\n'), sourceMap, info: { gated } };
+  const info: ReaderInfo = {
+    gated,
+    passages: passageInfo,
+    acts: actsOf(project).map((a) => ({ id: a.id, title: actTitleLine(a.title) })),
+    lines: entries.map((l) => ({ path: l.path, display: l.display })),
+    itemVariables,
+    variables: project.variables.map((v) => v.id),
+    exits: [...exits],
+    cues: [...cues],
+    cueTags: [...cueTags],
+  };
+  return { ink: lines.join('\n'), sourceMap, info };
 }
 
 /** A line's or choice's id as an Ink tag (nothing for one made before ids; ensureIds gives those theirs). */
@@ -288,6 +323,21 @@ function passthrough(project: StoryProject): GeneratedInk {
   });
   // Kept Ink is the writer's own: its choices are the model's best reading of it, limited to the passages it really has.
   const knots = new Set(sourceMap.map((e) => e.passageId));
-  const gated = project.passages.filter((p) => knots.has(p.id)).flatMap((p) => p.choices.filter((c) => isActive(c.review) && c.conditions.length).map((c) => gatedInfo(project, p, c)));
-  return { ink, sourceMap, info: { gated } };
+  const here = project.passages.filter((p) => knots.has(p.id));
+  const gated = here.flatMap((p) => p.choices.filter((c) => isActive(c.review) && c.conditions.length).map((c) => gatedInfo(project, p, c)));
+  const blocks = here.flatMap((p) => p.content);
+  const cueBlocks = blocks.flatMap((b) => (b.type === 'cue' ? [b] : []));
+  const actIds = new Set(actsOf(project).map((a) => a.id));
+  const info: ReaderInfo = {
+    gated,
+    passages: here.map((p) => ({ id: p.id, title: p.title || p.id, act: p.act && actIds.has(p.act) ? p.act : '' })),
+    acts: actsOf(project).map((a) => ({ id: a.id, title: actTitleLine(a.title) })),
+    lines: [], // no entry knots were added to the writer's Ink, so a game cannot start at a line
+    itemVariables: project.items.map((i) => itemVar(i.id)).filter((v) => ink.includes(`VAR ${v} `)),
+    variables: project.variables.map((v) => v.id),
+    exits: [...new Set(blocks.flatMap((b) => (b.type === 'exit' ? [exitName(b.name)] : [])))],
+    cues: [...new Set(cueBlocks.map((b) => cueName(b.name)))],
+    cueTags: [...new Set(cueBlocks.map((b) => cueTag(b.name, b.value)))],
+  };
+  return { ink, sourceMap, info };
 }

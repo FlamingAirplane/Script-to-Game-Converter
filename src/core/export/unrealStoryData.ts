@@ -1,12 +1,10 @@
-import { actsOf, actTitleLine } from '../acts';
 import { audioFileName } from '../audio';
 import { cueSounds } from '../cues';
 import { conditionHolds } from '../gating';
 import { portraitFiles } from '../images';
-import { cueName, cueTag, exitName, itemVar, RESERVED_TAGS, type Condition } from '../isr';
-import { lineEntries } from '../lines';
+import { itemVar, RESERVED_TAGS, type Condition } from '../isr';
 import type { ProcessedStory } from '../pipeline';
-import { itemVarNames, storyVersion } from './common';
+import { storyVersion } from './common';
 
 // What the Unreal export knows about a story, as plain data: its passages, lines, acts, items, cues and the conditions
 // of its locked choices. Written to StorySource/StoryInfo.json (schemas/unreal-story-info.schema.json); the runtime's
@@ -50,14 +48,9 @@ export interface StoryInfoData {
 }
 
 export function storyInfoData(story: ProcessedStory, saveFolder: string): StoryInfoData {
-  const lines = lineEntries(story.project);
-  const entryKnots = new Set(lines.map((l) => l.entryKnot));
-  const passageIds = [...story.generated.ink.matchAll(/^=== (\w+) ===$/gm)].map((m) => m[1]).filter((k) => !entryKnots.has(k));
-  const knots = new Set(passageIds);
-  const acts = actsOf(story.project);
-  const actIds = new Set(acts.map((a) => a.id));
-  const blocks = story.project.passages.flatMap((p) => p.content);
-  const cueBlocks = blocks.flatMap((b) => (b.type === 'cue' ? [b] : []));
+  // What the story is made of comes from the pass that wrote the Ink (generateInk's ReaderInfo), not from the model again.
+  const info = story.generated.info;
+  const knots = new Set(info.passages.map((p) => p.id));
   return {
     schemaVersion: STORY_INFO_SCHEMA_VERSION,
     title: story.project.project.title,
@@ -65,17 +58,14 @@ export function storyInfoData(story: ProcessedStory, saveFolder: string): StoryI
     storyVersion: storyVersion(story),
     sourceLanguage: 'en',
     saveFolder,
-    passages: passageIds.map((id) => {
-      const p = story.project.passages.find((x) => x.id === id);
-      return { id, title: p?.title || id, act: actIds.has(p?.act ?? '') ? p!.act! : '' };
-    }),
-    acts: acts.map((a) => ({ id: a.id, title: actTitleLine(a.title) })),
-    lines: lines.map((l) => ({ path: l.path, text: l.display })),
-    itemVariables: itemVarNames(story),
-    variables: story.project.variables.map((v) => v.id),
-    exits: [...new Set(blocks.flatMap((b) => (b.type === 'exit' ? [exitName(b.name)] : [])))],
-    cues: [...new Set(cueBlocks.map((b) => cueName(b.name)))],
-    cueTags: [...new Set(cueBlocks.map((b) => cueTag(b.name, b.value)))],
+    passages: info.passages,
+    acts: info.acts,
+    lines: info.lines.map((l) => ({ path: l.path, text: l.display })),
+    itemVariables: info.itemVariables,
+    variables: info.variables,
+    exits: info.exits,
+    cues: info.cues,
+    cueTags: info.cueTags,
     cueSounds: [...cueSounds(story.project)].map(([tag, ref]) => ({ tag, file: audioFileName(ref) })),
     portraits: Object.entries(portraitFiles(story.project)).map(([speaker, file]) => ({ speaker, file })),
     reservedTags: [...RESERVED_TAGS],

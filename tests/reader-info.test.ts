@@ -39,4 +39,31 @@ describe('reader info from the Ink pass', () => {
     const generated = generateInk(project);
     expect(generated.info.gated.map((g) => g.text)).toEqual(['Open it']);
   });
+
+  it.each(SAMPLES.map((s) => s.id))('the story info for %s describes exactly what the Ink has', async (id) => {
+    const s = SAMPLES.find((x) => x.id === id)!;
+    const { project } = await build(s.text, s.fileName, 'structured');
+    const { ink, info } = generateInk(project);
+    const knots = [...ink.matchAll(/^=== (\w+) ===$/gm)].map((m) => m[1]);
+    const entryKnots = info.lines.map((l) => l.path.replace('.', '__'));
+    expect(info.passages.map((p) => p.id)).toEqual(knots.filter((k) => !entryKnots.includes(k)));
+    for (const l of info.lines) {
+      const [passage, label] = l.path.split('.');
+      expect(ink).toContain(`=== ${passage}__${label} ===\n-> ${l.path}`); // a game can start there
+      expect(ink).toContain(`- (${label}) `);
+    }
+    for (const v of info.itemVariables) expect(ink).toContain(`VAR ${v} `);
+    for (const v of info.variables) expect(ink).toContain(`VAR ${v} = `);
+    for (const t of info.cueTags) expect(ink).toContain(`# ${t}\n`);
+    for (const e of info.exits) expect(ink).toContain(`[Back to the game: ${e}]`);
+  });
+
+  it('kept Ink has no line entries to start at, since none were added to it', async () => {
+    const ink = '-> hall\n=== hall ===\nANA: Hi. #speaker:ana\n{&one|two}\n-> END\n';
+    const { project } = await build(ink, 'k.ink', 'structured');
+    expect(project.inkPassthrough).toBeDefined();
+    const info = generateInk(project).info;
+    expect(info.lines).toEqual([]);
+    expect(info.passages.map((p) => p.id)).toEqual(['hall']);
+  });
 });
