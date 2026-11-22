@@ -2,11 +2,12 @@ import { actsOf, actTitleLine } from './acts';
 import { paragraphId } from './ids';
 import { audioFileName } from './audio';
 import { choiceGuards, isForcing } from './forced';
+import { describeNeed } from './gating';
 import { imageFileName } from './images';
 import { lineEntries, passageLineLabels } from './lines';
 import { forPlayers } from './players';
 import { GENERATOR_VERSION } from './version';
-import { CONTINUE_TEXT, cueTag, EXIT_PREFIX, exitName, isActive, itemVar, type Condition, type Effect, type Passage, type StoryProject } from './isr';
+import { CONTINUE_TEXT, cueTag, EXIT_PREFIX, exitName, isActive, itemVar, type Choice, type Condition, type Effect, type Passage, type StoryProject } from './isr';
 
 // Deterministic, template-based Ink generation. Same ISR in → byte-identical Ink out.
 //
@@ -35,9 +36,32 @@ export interface SourceMapEntry {
   entityId: string;
 }
 
+/** A choice that needs something, as the readers need to know it. */
+export interface GatedChoiceInfo {
+  passage: string;
+  /** The choice's id (the #id tag inside its brackets in the Ink). */
+  choiceId: string;
+  text: string;
+  /** While its conditions hold it's the only choice in the passage (see forced.ts). */
+  forced: boolean;
+  /** One per condition: in plain words, and as data a reader can check. */
+  requirements: { words: string; condition: Condition }[];
+}
+
+/**
+ * What the readers need to know about the story beyond what the Ink says, collected in the same pass that writes the
+ * Ink, from the same choices, so the two cannot disagree. The playable page, Playtest and the engine exports use
+ * this instead of working it out from the model again.
+ */
+export interface ReaderInfo {
+  /** The choices with conditions: shown greyed out, with what they need, while the reader can't take them yet. */
+  gated: GatedChoiceInfo[];
+}
+
 export interface GeneratedInk {
   ink: string;
   sourceMap: SourceMapEntry[];
+  info: ReaderInfo;
 }
 
 /** Words Ink reads as a statement when a line starts with them. */
@@ -104,6 +128,7 @@ export function generateInk(story: StoryProject): GeneratedInk {
 
   const lines: string[] = [];
   const sourceMap: SourceMapEntry[] = [];
+  const gated: GatedChoiceInfo[] = [];
   const emit = (line: string, passageId = '', entityId = '') => {
     lines.push(line);
     if (passageId) sourceMap.push({ line: lines.length, passageId, entityId: entityId || passageId });
@@ -199,7 +224,7 @@ export function generateInk(story: StoryProject): GeneratedInk {
           break;
       }
     }
-    emitFlow(p, emit);
+    emitFlow(project, p, emit, gated);
   }
   const entries = lineEntries(project);
   if (entries.length) {
@@ -211,7 +236,7 @@ export function generateInk(story: StoryProject): GeneratedInk {
     }
   }
   emit('');
-  return { ink: lines.join('\n'), sourceMap };
+  return { ink: lines.join('\n'), sourceMap, info: { gated } };
 }
 
 /** A line's or choice's id as an Ink tag (nothing for one made before ids; ensureIds gives those theirs). */
@@ -219,7 +244,7 @@ function idTag(id: string | undefined, paragraph = 0): string {
   return id ? ` #id:${paragraphId(id, paragraph)}` : '';
 }
 
-function emitFlow(p: Passage, emit: (line: string, passageId?: string, entityId?: string) => void) {
+function emitFlow(project: StoryProject, p: Passage, emit: (line: string, passageId?: string, entityId?: string) => void, gated: GatedChoiceInfo[]) {
   const choices = p.choices.filter((c) => isActive(c.review));
   if (choices.length === 0) {
     emit(p.divert ? `-> ${p.divert}` : '-> END', p.id);
@@ -232,12 +257,18 @@ function emitFlow(p: Passage, emit: (line: string, passageId?: string, entityId?
     // Kept out while a forced choice of this passage applies (each its own {…}, so the Ink importer can tell them apart).
     const guard = (guards.get(c.id) ?? []).map((g) => ` {${conditionToInk(g)}}`).join('');
     emit(`${bullet}${cond}${guard} [${escapeInk(c.text)}${idTag(c.id)}]${isForcing(c) ? ' // forced' : ''}`, p.id, c.id);
+    if (c.conditions.length) gated.push(gatedInfo(project, p, c));
     for (const e of c.effects) emit(`    ${effectToInk(e)}`, p.id, c.id);
     emit(`    -> ${c.target || 'END'}`, p.id, c.id);
   }
   // Invisible fallback: taken automatically only when no other choice is available.
   if (p.divert) emit(`+ -> ${p.divert}`, p.id);
   else if (p.isEnding) emit('+ -> END', p.id);
+}
+
+/** What readers need to know about a choice that has conditions. */
+function gatedInfo(project: StoryProject, p: Passage, c: Choice): GatedChoiceInfo {
+  return { passage: p.id, choiceId: c.id, text: c.text.trim(), forced: isForcing(c), requirements: c.conditions.map((x) => ({ words: describeNeed(x, project), condition: x })) };
 }
 
 function collectItems(c: Condition, out: Set<string>) {
@@ -255,5 +286,8 @@ function passthrough(project: StoryProject): GeneratedInk {
     if (m) current = m[1];
     if (current) sourceMap.push({ line: i + 1, passageId: current, entityId: current });
   });
-  return { ink, sourceMap };
+  // Kept Ink is the writer's own: its choices are the model's best reading of it, limited to the passages it really has.
+  const knots = new Set(sourceMap.map((e) => e.passageId));
+  const gated = project.passages.filter((p) => knots.has(p.id)).flatMap((p) => p.choices.filter((c) => isActive(c.review) && c.conditions.length).map((c) => gatedInfo(project, p, c)));
+  return { ink, sourceMap, info: { gated } };
 }

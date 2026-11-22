@@ -125,17 +125,17 @@ describe('gated choices', () => {
     );
     const vars: Record<string, unknown> = { has_key: false, has_lamp: false, trust: 0 };
     const read = (n: string) => vars[n];
-    const locked = lockedChoices(project, 'a', read, ['Wait']);
-    expect(locked.map((l) => [l.choice.text, l.needs])).toEqual([
+    const locked = lockedChoices(generateInk(project).info.gated, 'a', read, ['Wait']);
+    expect(locked.map((l) => [l.text, l.needs])).toEqual([
       ['Unlock', ['Brass Key']],
       ['Trust her', ['trust at least 2 and no Lamp']],
     ]);
     vars.has_key = true;
     vars.trust = 3;
-    expect(lockedChoices(project, 'a', read, ['Wait', 'Unlock']).map((l) => l.choice.text)).toEqual([]);
+    expect(lockedChoices(generateInk(project).info.gated, 'a', read, ['Wait', 'Unlock']).map((l) => l.text)).toEqual([]);
     // A choice already on offer is never listed twice, even if the condition reads as false.
     vars.has_key = false;
-    expect(lockedChoices(project, 'a', read, ['Unlock']).map((l) => l.choice.text)).toEqual([]);
+    expect(lockedChoices(generateInk(project).info.gated, 'a', read, ['Unlock']).map((l) => l.text)).toEqual([]);
     expect(conditionHolds({ type: 'or', conditions: [{ type: 'has_item', itemId: 'lamp' }, { type: 'compare', variableId: 'trust', op: '!=', value: 3 }] }, read)).toBe(false);
     expect(describeCondition({ type: 'not', condition: { type: 'compare', variableId: 'trust', op: '<', value: 1 } }, project)).toBe('not trust below 1');
   });
@@ -376,8 +376,8 @@ Dust.
     const hall = project.passages.find((p) => p.id === 'hall')!;
     hall.choices[2].conditions = [{ type: 'has_item', itemId: 'brass_key' }, { type: 'compare', variableId: 'x', op: '>', value: 1 }];
     const read = (n: string) => (n === 'has_brass_key' ? true : 0);
-    expect(lockedChoices(project, 'hall', read, ['Open the door with the key'])).toEqual([]);
-    expect(lockedChoices(project, 'hall', read, ['Climb the stairs']).map((l) => l.choice.text)).toEqual(['Wait']);
+    expect(lockedChoices(generateInk(project).info.gated, 'hall', read, ['Open the door with the key'])).toEqual([]);
+    expect(lockedChoices(generateInk(project).info.gated, 'hall', read, ['Climb the stairs']).map((l) => l.text)).toEqual(['Wait']);
     hall.choices[0].conditions = [];
     expect(processProject(project).diagnostics.some((d) => d.code === 'FORCED_WITHOUT_CONDITION')).toBe(true);
     expect(processProject(project).analysis.graph.edges.find((e) => e.id === hall.choices[0].id)?.forced).toBeUndefined();

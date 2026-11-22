@@ -91,7 +91,12 @@ for fixing them.
       keeps its translation (`carryTranslations`). Unity and Unreal ignore `#id` (not a cue) but still match by text.
       **Not done:** the engine readers matching by id, the translation sheet keyed by id, reader notes and recording
       matching by id, and showing ids to writers.
-- [ ] Ink as the single source for locks and story info (flaw 4)
+- [x] Locked choices come from the Ink pass (flaw 4, first part): `generateInk` returns `info.gated` from the same
+      loop that writes the choices; the playable page, Playtest, the Unity `StoryInfo.cs` and the Unreal
+      `StoryInfo.json` read it instead of working it out from the model again, and the page matches offered choices to it
+      by id. A test checks every locked choice is a choice the Ink has. **Not done:** the rest of the story info (line
+      entries, exits, cues, acts, portraits) still comes from the model, and Twine and Ren'Py are still built from the
+      model, not from the Ink output.
 - [ ] Display names vs compatibility names for "Narrative Bridge" (flaw 6)
 - [ ] Rename `presentation.unity`; merge or redefine faithful/structured (flaw 8)
 - [x] Real Unreal build on 5.7 (flaw 7): it found two compile errors in the plugin (an include-order rule in

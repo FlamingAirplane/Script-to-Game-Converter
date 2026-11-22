@@ -1,10 +1,9 @@
 import { actsOf, actTitleLine } from '../acts';
 import { audioFileName } from '../audio';
 import { cueSounds } from '../cues';
-import { isForcing } from '../forced';
-import { describeNeed, conditionHolds } from '../gating';
+import { conditionHolds } from '../gating';
 import { portraitFiles } from '../images';
-import { cueName, cueTag, exitName, isActive, itemVar, RESERVED_TAGS, type Condition } from '../isr';
+import { cueName, cueTag, exitName, itemVar, RESERVED_TAGS, type Condition } from '../isr';
 import { lineEntries } from '../lines';
 import type { ProcessedStory } from '../pipeline';
 import { itemVarNames, storyVersion } from './common';
@@ -80,19 +79,10 @@ export function storyInfoData(story: ProcessedStory, saveFolder: string): StoryI
     cueSounds: [...cueSounds(story.project)].map(([tag, ref]) => ({ tag, file: audioFileName(ref) })),
     portraits: Object.entries(portraitFiles(story.project)).map(([speaker, file]) => ({ speaker, file })),
     reservedTags: [...RESERVED_TAGS],
-    gatedChoices: story.project.passages.flatMap((p) =>
-      knots.has(p.id)
-        ? p.choices
-            .filter((c) => isActive(c.review) && c.conditions.length)
-            .map((c) => ({
-              passage: p.id,
-              text: c.text.trim(),
-              needs: c.conditions.map((x) => describeNeed(x, story.project)).join(', '),
-              forced: isForcing(c),
-              requirements: c.conditions.map((x) => ({ words: describeNeed(x, story.project), condition: x })),
-            }))
-        : [],
-    ),
+    // From the pass that wrote the Ink (generateInk's ReaderInfo), not from the model again.
+    gatedChoices: story.generated.info.gated
+      .filter((g) => knots.has(g.passage))
+      .map((g) => ({ passage: g.passage, text: g.text, needs: g.requirements.map((r) => r.words).join(', '), forced: g.forced, requirements: g.requirements })),
   };
 }
 
