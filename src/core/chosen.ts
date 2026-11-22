@@ -9,7 +9,4 @@ export function knotOfPath(path: string): string {
   return path.split('.')[0] ?? '';
 }
 
-/** How a choice is remembered: "knot|text". */
-export function chosenKey(sourcePath: string, text: string): string {
-  return `${knotOfPath(sourcePath)}|${text.trim()}`;
-}
+export { chosenKey } from './readerCore';

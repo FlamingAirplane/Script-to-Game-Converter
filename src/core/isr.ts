@@ -4,6 +4,7 @@
 import type { AudioRef, VoiceSettings } from './audio';
 import { fnv1a } from './hash';
 import type { ImageRef } from './images';
+import { RESERVED_TAG_NAMES } from './readerCore';
 import type { SessionRef } from './session';
 
 export const SCHEMA_VERSION = '1.0';
@@ -115,11 +116,8 @@ export type ContentBlock =
    */
   | { type: 'cue'; name: string; value?: string; audio?: AudioRef; origin: Provenance; source?: SourceRef };
 
-/** The choice text of a Continue break, in Ink and every reader. */
-export const CONTINUE_TEXT = 'Continue';
-
-/** An exit to the game is, in Ink, a lone choice with this text before the exit's name. */
-export const EXIT_PREFIX = 'Back to the game: ';
+/** The choice text of a Continue break, the exit prefix and exitOf live in readerCore.ts, shared with the playable page. */
+export { CONTINUE_TEXT, EXIT_PREFIX, exitOf } from './readerCore';
 
 /** An exit's name made safe for code: letters, digits and underscores. */
 export function exitName(name: string): string {
@@ -127,7 +125,7 @@ export function exitName(name: string): string {
 }
 
 /** Tags Pen to Ink writes itself, which a cue can't be called. */
-export const RESERVED_TAGS = new Set(['speaker', 'scene', 'paren', 'ext', 'image', 'audio', 'transition', 'title', 'author', 'choice', 'cutscene']);
+export const RESERVED_TAGS = new Set(RESERVED_TAG_NAMES);
 
 /** A cue's name made safe for a tag (letters, digits and underscores), never one of Pen to Ink's own tags. */
 export function cueName(name: string): string {
@@ -145,11 +143,6 @@ export function cueValue(value: string | undefined): string | undefined {
 export function cueTag(name: string, value?: string): string {
   const v = cueValue(value);
   return v ? `${cueName(name)}:${v}` : cueName(name);
-}
-
-/** The exit named by a choice's text, or null when it isn't an exit. */
-export function exitOf(choiceText: string): string | null {
-  return choiceText.startsWith(EXIT_PREFIX) ? choiceText.slice(EXIT_PREFIX.length).trim() || null : null;
 }
 
 export interface Choice {
