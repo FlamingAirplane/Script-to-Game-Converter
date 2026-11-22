@@ -999,6 +999,18 @@ namespace __NAMESPACE__
             });
         }
 
+        /// <summary>
+        /// Loads ink's saved state. Ink's JSON leaves out which choice is its invisible fallback (a "+ -> passage" with no
+        /// text, taken by itself when nothing else is on offer), so it would come back as an empty choice next to the real
+        /// ones: this puts the flag back. A choice the story offers always has some text.
+        /// </summary>
+        void LoadInkState(string json)
+        {
+            Story.state.LoadJson(json);
+            foreach (var c in Story.state.currentChoices)
+                if (string.IsNullOrEmpty(c.text)) c.isInvisibleDefault = true;
+        }
+
         public bool TryLoadState(string saveJson, out string error)
         {
             error = null;
@@ -1021,7 +1033,7 @@ namespace __NAMESPACE__
                 ReplayChoices(data.choicePath, data.storyVersion);
                 return true;
             }
-            Story.state.LoadJson(data.inkState);
+            LoadInkState(data.inkState);
             choicePath.Clear();
             if (data.choicePath != null) choicePath.AddRange(data.choicePath);
             transcript.Clear();
@@ -1086,7 +1098,7 @@ namespace __NAMESPACE__
                         followed++;
                         i++;
                     }
-                    else { Story.state.LoadJson(before); break; }
+                    else { LoadInkState(before); break; }
                 }
             }
             finally { syncing = false; silent = false; }

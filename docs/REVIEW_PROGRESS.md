@@ -40,8 +40,9 @@ Tick items off here in the same pull request that does them.
         600
   - [x] Split the largest UI files: `ReviewView.tsx` (#68, 1,370 → 570 lines), `App.tsx` (hooks, 1,060 → 740),
         `PlaytestView.tsx` (809 → 540: toolbar, transcript, choices, inspector, smoke report and a pure `state.ts` in
-        `src/ui/playtest/`) and `GraphView.tsx` (807 → 630: pointer gestures, routes, cards and minimap in `src/ui/graph/`).
-        Left: the Graph toolbar (35 values deep) and `ExportView.tsx`
+        `src/ui/playtest/`), `GraphView.tsx` (807 → 490: pointer gestures, routes, cards, minimap and toolbar in
+        `src/ui/graph/`) and `ExportView.tsx` (704 → 390: the share cards, package contents, reader-notes and
+        translations panels in `src/ui/export/`). Nothing over 750 lines is left in `src/ui`
 - [x] Easier moving between devices: a small story as a link (#62)
 - [ ] Prove the engine packages automatically: add a Unity licence secret so `.github/workflows/unity.yml` runs
       (owner only); a short clip of a story running in each engine
@@ -132,3 +133,7 @@ for fixing them.
       translating the *Ink* into Twine and Ren'Py. They need the story's structure (speakers, scene headings, once-only
       flags, cutscene timing, Twine's passage names and positions), which the Ink flattens or drops, so they still render
       from the model; the shared flow and the test keep them from drifting.
+- [x] Unity: loading a save no longer shows an empty extra choice (found by the Lighthouse Keeper smoke test, which
+      failed on main): ink's saved state leaves out which choice is the invisible fallback, so the controller puts the flag
+      back after every load (`LoadInkState`). **Not checked:** the Unreal plugin's Inkpot port may do the same; there is no
+      Unreal Engine here to try it.
