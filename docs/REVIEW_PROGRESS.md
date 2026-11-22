@@ -124,6 +124,15 @@ for fixing them.
 - [x] Real Unreal build on 5.7 (flaw 7): it found two compile errors in the plugin (an include-order rule in
       `InkCompat.cpp` and a shadowed `Line` in the Enter Dialogue Trigger), now fixed; the archive sample builds and all
       10 automation tests pass (`npm run test:unreal:build -- --test`). Tried 5.9: the only compile error is in Inkpot's own `NativeFunctionCall.cpp` (line 133, a `%d` log format), as the export's README already says, so it is not ours to fix here. 5.6 not tried.
+- [x] Twine and Ren'Py share the Ink's flow rules (flaw 4, the last part): which choices a passage offers, the extra
+      conditions a forced choice gives the others, where the story goes when none can be taken, and whether that
+      fallback can ever be reached are decided once in `src/core/flow.ts` (`passageFlow`); `inkgen.ts`, `twine.ts` and
+      `renpy.ts` only write the answer in their own language. The output is byte-identical to before for the samples and
+      for forced-choice, fallback, Continue-break and exit stories, and `tests/flow.test.ts` checks, for every sample, that
+      the Ink, the SugarCube file and the Ren'Py script end each passage the way the flow says. **Not done, on purpose:**
+      translating the *Ink* into Twine and Ren'Py. They need the story's structure (speakers, scene headings, once-only
+      flags, cutscene timing, Twine's passage names and positions), which the Ink flattens or drops, so they still render
+      from the model; the shared flow and the test keep them from drifting.
 - [x] Unity: loading a save no longer shows an empty extra choice (found by the Lighthouse Keeper smoke test, which
       failed on main): ink's saved state leaves out which choice is the invisible fallback, so the controller puts the flag
       back after every load (`LoadInkState`). **Not checked:** the Unreal plugin's Inkpot port may do the same; there is no

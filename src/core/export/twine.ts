@@ -3,7 +3,7 @@ import { cutsceneSeconds, forPlayers } from '../players';
 import { fnv1a } from '../hash';
 import { storyLayout } from '../layout';
 import { log } from '../log';
-import { choiceGuards } from '../forced';
+import { passageFlow } from '../flow';
 import { EXIT_PREFIX, fileBase, isActive, itemVar, type Choice, type Condition, type Effect, type Passage, type StoryProject } from '../isr';
 import type { ProcessedStory } from '../pipeline';
 import { GENERATOR_VERSION } from '../version';
@@ -259,17 +259,17 @@ function sugarBody(p: Passage, speakers: Map<string, string>, nameOf: (id: strin
   // Effects and notes after the last paragraph sit just above the links.
   flushSilent();
 
-  // A forced choice keeps the others out while it applies, as in Ink: they get its condition, negated.
-  const guards = choiceGuards(p);
-  const choices = p.choices.filter((c) => isActive(c.review)).map((c) => ({ ...c, conditions: [...c.conditions, ...(guards.get(c.id) ?? [])] }));
+  // The same flow as the Ink (flow.ts): a forced choice keeps the others out while it applies, and the "then" is a fallback.
+  const flow = passageFlow(p);
+  const choices = flow.choices.map((f) => ({ ...f.choice, conditions: f.conditions }));
   if (choices.length === 0) {
-    blocks.push(p.divert && p.divert !== 'END' ? `[[Continue->${nameOf(p.divert)}]]` : END_MARKUP);
+    blocks.push(flow.then && flow.then !== 'END' ? `[[Continue->${nameOf(flow.then)}]]` : END_MARKUP);
     return p.cutscene ? cutsceneBlocks(blocks) : joinBlocks(blocks);
   }
   const links = choices.map((c) => choiceLink(c, nameOf));
   // Ink's invisible fallback: offered only when every choice is conditional and none is available.
-  const fallback = p.divert ?? (p.isEnding ? 'END' : undefined);
-  if (fallback && choices.every((c) => c.conditions.length || c.once)) {
+  const fallback = flow.then;
+  if (fallback && flow.thenIsReachable) {
     const none = choices.map((c) => negate(guard(c))).join(' and ');
     links.push(`<<if ${none}>>${fallback === 'END' ? END_MARKUP : `[[Continue->${nameOf(fallback)}]]`}<</if>>`);
   }
