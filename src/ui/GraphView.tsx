@@ -4,15 +4,19 @@ import { plainKey } from './Shortcuts';
 import type { StoryGraph } from '../core/analyzer';
 import { errorData, log } from '../core/log';
 import { CARD, loopRoutes, storyLayout, type Position } from '../core/layout';
-import { foldGraph, isGroupNode, sceneGroups, traceRoutes } from '../core/scenes';
+import { foldGraph, sceneGroups, traceRoutes } from '../core/scenes';
 import { StoryOutline } from './StoryOutline';
 import { routeEdges } from '../core/edgeRouting';
 import { fileBase, type StoryProject } from '../core/isr';
 import { PassageInspector } from './PassageInspector';
 import { NewSceneSheet, sceneFix, type SceneRequest } from './NewScene';
 import { countBreaks, type Update } from './projectOps';
-import { EdgeLabel, Compass, tagWidth, NodeTag, RouteSign, BreakSign, MapKey, type TagKind } from './graph/MapParts';
+import { Compass, MapKey } from './graph/MapParts';
 import { mapSvg, svgToPng } from './graph/mapImage';
+import { useMapGestures } from './graph/useMapGestures';
+import { MapEdges } from './graph/MapEdges';
+import { MapNodes } from './graph/MapNodes';
+import { MiniMap } from './graph/MiniMap';
 
 // The story map. Passages are laid out in columns by distance from the start (ordered to reduce
 // crossings), can be dragged to new places (remembered in the project), searched, and navigated
@@ -21,8 +25,6 @@ import { mapSvg, svgToPng } from './graph/mapImage';
 const { W, H } = CARD;
 
 const mapLog = log('map');
-
-const clampLane = (offset: number) => Math.max(-H / 2 + 8, Math.min(H / 2 - 8, offset));
 
 const KEY_STORE = 'narrative-bridge.map-key';
 /** The smallest zoom at which a card's title can still be read on a phone (see fit). */
@@ -120,7 +122,10 @@ export function GraphView({
   // The New scene form: after a passage, or on its own (at a place on the map when the map was double-clicked).
   const [sceneForm, setSceneForm] = useState<SceneRequest | null>(null);
   const breaks = useMemo(() => new Map(project.passages.map((p) => [p.id, countBreaks(p)])), [project]);
-  const exits = useMemo(() => new Map(project.passages.map((p) => [p.id, p.content.filter((b) => b.type === 'exit').map((b) => (b.type === 'exit' ? b.name : ''))])), [project]);
+  const exits = useMemo(
+    () => new Map(project.passages.map((p) => [p.id, p.content.filter((b) => b.type === 'exit').map((b) => (b.type === 'exit' ? b.name : ''))])),
+    [project],
+  );
   const auto = useMemo(() => storyLayout(graph, start), [graph, start]);
   // What's lit: a traced route, or the selected passage and its neighbours; everything else is dimmed.
   const lit = useMemo(() => {
@@ -151,8 +156,6 @@ export function GraphView({
 
   const [view, setView] = useState({ x: 40, y: 40, k: 1 });
   const [size, setSize] = useState({ w: 800, h: 500 });
-  const pan = useRef<{ x: number; y: number; vx: number; vy: number } | null>(null);
-  const nodeDrag = useRef<{ id: string; sx: number; sy: number; ox: number; oy: number; moved: boolean } | null>(null);
   const svg = useRef<SVGSVGElement>(null);
   const [hover, setHover] = useState<string | null>(null);
   const [hoverEdge, setHoverEdge] = useState<string | null>(null);
@@ -165,7 +168,11 @@ export function GraphView({
   // Parallel edges between the same two passages get their own lane so they don't draw on top of each other.
   // Each arrow leaves and enters its cards by whichever sides make the least clutter (see edgeRouting.ts).
   const routes = useMemo(
-    () => routeEdges(new Map([...placed].map(([id, p]) => [id, { x: p.x, y: p.y, w: W, h: H }])), edges.filter((e) => placed.has(e.to) && !isLoop(e)).map((e) => ({ id: e.id, from: e.from, to: e.to }))),
+    () =>
+      routeEdges(
+        new Map([...placed].map(([id, p]) => [id, { x: p.x, y: p.y, w: W, h: H }])),
+        edges.filter((e) => placed.has(e.to) && !isLoop(e)).map((e) => ({ id: e.id, from: e.from, to: e.to })),
+      ),
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [placed, edges, loops],
   );
@@ -182,9 +189,6 @@ export function GraphView({
 
   // Whether the reader has panned or zoomed since the last fit; if not, the map refits on resize.
   const moved = useRef(false);
-  /** Fingers on the map, and a two-finger pinch in progress (its starting spread, midpoint and view). */
-  const touches = useRef(new Map<number, { x: number; y: number }>());
-  const pinch = useRef<{ dist: number; mx: number; my: number; view: { x: number; y: number; k: number } } | null>(null);
   /** Whether the map last opened at a readable size on a small screen, rather than showing all of it. */
   const [readable, setReadable] = useState(false);
   /**
@@ -340,26 +344,38 @@ export function GraphView({
   const mm = (p: Position) => ({ x: mox + (p.x - bounds.minX) * mk, y: moy + (p.y - bounds.minY) * mk });
   const vp = mm({ x: -view.x / view.k, y: -view.y / view.k });
 
+  const gestures = useMapGestures({ svg, view, setView, placed, dragging, setDragging, moved, unfold, inspect, onMove, setSceneForm });
+
   return (
     <div className="view graph-view">
       <div className="graph-toolbar">
         <span className="tool-group" role="group" aria-label="Show the story as">
-          <button className={`btn tiny ${mode === 'map' ? 'ok' : ''}`} aria-pressed={mode === 'map'} onClick={() => setMode('map')} title="The story as a map of passages and routes">
+          <button
+            className={`btn tiny ${mode === 'map' ? 'ok' : ''}`}
+            aria-pressed={mode === 'map'}
+            onClick={() => setMode('map')}
+            title="The story as a map of passages and routes"
+          >
             Map
           </button>
-          <button className={`btn tiny ${mode === 'outline' ? 'ok' : ''}`} aria-pressed={mode === 'outline'} onClick={() => setMode('outline')} title="The story as an indented list that reads like a branching script">
+          <button
+            className={`btn tiny ${mode === 'outline' ? 'ok' : ''}`}
+            aria-pressed={mode === 'outline'}
+            onClick={() => setMode('outline')}
+            title="The story as an indented list that reads like a branching script"
+          >
             Outline
           </button>
         </span>
         {mode === 'map' && (
-        <input
-          className="input small graph-search"
-          placeholder="Find a passage…"
-          value={query}
-          aria-label="Find a passage on the map"
-          onChange={(e) => setQuery(e.target.value)}
-          onKeyDown={(e) => e.key === 'Enter' && matches[0] && centerOn(matches[0])}
-        />
+          <input
+            className="input small graph-search"
+            placeholder="Find a passage…"
+            value={query}
+            aria-label="Find a passage on the map"
+            onChange={(e) => setQuery(e.target.value)}
+            onKeyDown={(e) => e.key === 'Enter' && matches[0] && centerOn(matches[0])}
+          />
         )}
         {mode === 'map' && query && <span className="muted small">{matches.length ? `${matches.length} found · Enter to go` : 'none found'}</span>}
         <button
@@ -372,21 +388,31 @@ export function GraphView({
         <span className="spacer" />
         {mode === 'map' && (
           <>
-            <select className="input small trace-select" value={trace} onChange={(e) => setTrace(e.target.value)} aria-label="Show every way to a passage" title="Light up every route from the start to one passage; the rest of the map dims">
+            <select
+              className="input small trace-select"
+              value={trace}
+              onChange={(e) => setTrace(e.target.value)}
+              aria-label="Show every way to a passage"
+              title="Light up every route from the start to one passage; the rest of the map dims"
+            >
               <option value="">Trace the ways to…</option>
               <optgroup label="Endings">
-                {fullGraph.nodes.filter((n) => n.isEnding).map((n) => (
-                  <option key={n.id} value={n.id}>
-                    {n.title}
-                  </option>
-                ))}
+                {fullGraph.nodes
+                  .filter((n) => n.isEnding)
+                  .map((n) => (
+                    <option key={n.id} value={n.id}>
+                      {n.title}
+                    </option>
+                  ))}
               </optgroup>
               <optgroup label="Any passage">
-                {fullGraph.nodes.filter((n) => !n.isEnding).map((n) => (
-                  <option key={n.id} value={n.id}>
-                    {n.title}
-                  </option>
-                ))}
+                {fullGraph.nodes
+                  .filter((n) => !n.isEnding)
+                  .map((n) => (
+                    <option key={n.id} value={n.id}>
+                      {n.title}
+                    </option>
+                  ))}
               </optgroup>
             </select>
             {trace && (
@@ -412,7 +438,12 @@ export function GraphView({
             </button>
             {groups.length > 1 && (
               <span className="scenes-menu">
-                <button className={`btn tiny ${folded.size ? 'ok' : ''}`} aria-expanded={showScenes} onClick={() => setShowScenes(!showScenes)} title="Fold a scene's passages into one card">
+                <button
+                  className={`btn tiny ${folded.size ? 'ok' : ''}`}
+                  aria-expanded={showScenes}
+                  onClick={() => setShowScenes(!showScenes)}
+                  title="Fold a scene's passages into one card"
+                >
                   Scenes{folded.size ? ` (${folded.size} folded)` : ''}
                 </button>
                 {showScenes && (
@@ -458,350 +489,147 @@ export function GraphView({
         )}
         {mode === 'map' && (
           <>
-        <span className="tool-group" role="group" aria-label="Zoom">
-          <button className="btn tiny" aria-label="Zoom out" title="Zoom out (−)" onClick={() => zoomBy(1 / 1.2)}>
-            −
-          </button>
-          <button className="btn tiny" aria-label="Zoom in" title="Zoom in (+)" onClick={() => zoomBy(1.2)}>
-            +
-          </button>
-          <button className="btn tiny" onClick={() => fit(true)} title="Show the whole map (F)">
-            Fit
-          </button>
-        </span>
-        {readable && <span className="muted small map-hint">Shown at a size you can read: drag to move around, or Fit to see it all.</span>}
-        {layout && Object.keys(layout).length > 0 && (
-          <button className="btn tiny" onClick={onResetLayout} title="Forget dragged positions and arrange automatically">
-            Reset layout
-          </button>
-        )}
-        <span className="tool-group" role="group" aria-label="Save the map">
-          <button className="btn tiny" onClick={() => saveMap('svg')} title="Save the whole map as a scalable image (SVG)">
-            Save map
-          </button>
-          <button className="btn tiny" onClick={() => saveMap('png')} title="Save the whole map as a picture (PNG)">
-            PNG
-          </button>
-        </span>
-        <button
-          className={`btn tiny ${showGated ? 'ok' : ''}`}
-          aria-pressed={showGated}
-          onClick={() => onShowGated(!showGated)}
-          title="Locked routes are choices that need an item or a value first (like a key). Show or hide them (G)"
-        >
-          🔒 Locked routes
-        </button>
-        <button className="btn tiny" aria-pressed={showKey} onClick={toggleKey} title="Show or hide what the marks on the map mean">
-          Key
-        </button>
+            <span className="tool-group" role="group" aria-label="Zoom">
+              <button className="btn tiny" aria-label="Zoom out" title="Zoom out (−)" onClick={() => zoomBy(1 / 1.2)}>
+                −
+              </button>
+              <button className="btn tiny" aria-label="Zoom in" title="Zoom in (+)" onClick={() => zoomBy(1.2)}>
+                +
+              </button>
+              <button className="btn tiny" onClick={() => fit(true)} title="Show the whole map (F)">
+                Fit
+              </button>
+            </span>
+            {readable && <span className="muted small map-hint">Shown at a size you can read: drag to move around, or Fit to see it all.</span>}
+            {layout && Object.keys(layout).length > 0 && (
+              <button className="btn tiny" onClick={onResetLayout} title="Forget dragged positions and arrange automatically">
+                Reset layout
+              </button>
+            )}
+            <span className="tool-group" role="group" aria-label="Save the map">
+              <button className="btn tiny" onClick={() => saveMap('svg')} title="Save the whole map as a scalable image (SVG)">
+                Save map
+              </button>
+              <button className="btn tiny" onClick={() => saveMap('png')} title="Save the whole map as a picture (PNG)">
+                PNG
+              </button>
+            </span>
+            <button
+              className={`btn tiny ${showGated ? 'ok' : ''}`}
+              aria-pressed={showGated}
+              onClick={() => onShowGated(!showGated)}
+              title="Locked routes are choices that need an item or a value first (like a key). Show or hide them (G)"
+            >
+              🔒 Locked routes
+            </button>
+            <button className="btn tiny" aria-pressed={showKey} onClick={toggleKey} title="Show or hide what the marks on the map mean">
+              Key
+            </button>
           </>
         )}
       </div>
       {mode === 'outline' ? (
         <StoryOutline project={project} onOpen={onOpen} selected={selected} />
       ) : (
-      <>
-      <div className="map-frame">
-        <div className="map-canvas">
-        <svg
-          ref={svg}
-          className="graph"
-          role="group"
-          aria-label={`Story map: ${graph.nodes.length} passages and ${edges.length} links${edges.length < graph.edges.length ? ` (${graph.edges.length - edges.length} locked routes hidden)` : ''}. Tab moves between passages, Space shows a passage's lines, Enter opens it in Review, N adds a new scene. Drag a passage to move it.`}
-          onDoubleClick={(e) => {
-            if ((e.target as Element).closest('.node')) return;
-            const r = svg.current!.getBoundingClientRect();
-            setSceneForm({ at: { x: (e.clientX - r.left - view.x) / view.k - W / 2, y: (e.clientY - r.top - view.y) / view.k - H / 2 } });
-          }}
-          onWheel={(e) => {
-            const r = svg.current!.getBoundingClientRect();
-            const mx = e.clientX - r.left;
-            const my = e.clientY - r.top;
-            const f = e.deltaY < 0 ? 1.1 : 1 / 1.1;
-            moved.current = true;
-            setView((v) => {
-              const k = Math.min(2.5, Math.max(0.2, v.k * f));
-              return { k, x: mx - ((mx - v.x) * k) / v.k, y: my - ((my - v.y) * k) / v.k };
-            });
-          }}
-          onPointerDown={(e) => {
-            if (e.pointerType === 'touch') {
-              touches.current.set(e.pointerId, { x: e.clientX, y: e.clientY });
-              if (touches.current.size === 2) {
-                // Two fingers: pinch to zoom, about the point between them (no dragging a card meanwhile).
-                const [a, b] = [...touches.current.values()];
-                const r = svg.current!.getBoundingClientRect();
-                nodeDrag.current = null;
-                pan.current = null;
-                setDragging(null);
-                pinch.current = { dist: Math.hypot(a.x - b.x, a.y - b.y) || 1, mx: (a.x + b.x) / 2 - r.left, my: (a.y + b.y) / 2 - r.top, view };
-                return;
-              }
-            }
-            const node = (e.target as Element).closest('.node');
-            const id = node?.getAttribute('data-id');
-            (e.target as Element).setPointerCapture?.(e.pointerId);
-            if (id && isGroupNode(id)) return;
-            if (id) {
-              const p = placed.get(id)!;
-              nodeDrag.current = { id, sx: e.clientX, sy: e.clientY, ox: p.x, oy: p.y, moved: false };
-            } else pan.current = { x: e.clientX, y: e.clientY, vx: view.x, vy: view.y };
-          }}
-          onClick={(e) => {
-            const id = (e.target as Element).closest('.node')?.getAttribute('data-id');
-            if (id && isGroupNode(id)) unfold(id);
-          }}
-          onPointerMove={(e) => {
-            if (touches.current.has(e.pointerId)) touches.current.set(e.pointerId, { x: e.clientX, y: e.clientY });
-            const pz = pinch.current;
-            if (pz && touches.current.size >= 2) {
-              const [a, b] = [...touches.current.values()];
-              const k = Math.min(2.5, Math.max(0.2, (pz.view.k * Math.hypot(a.x - b.x, a.y - b.y)) / pz.dist));
-              const r = svg.current!.getBoundingClientRect();
-              const mx = (a.x + b.x) / 2 - r.left;
-              const my = (a.y + b.y) / 2 - r.top;
-              moved.current = true;
-              setView({ k, x: mx - ((pz.mx - pz.view.x) * k) / pz.view.k, y: my - ((pz.my - pz.view.y) * k) / pz.view.k });
-              return;
-            }
-            const nd = nodeDrag.current;
-            if (nd) {
-              const dx = (e.clientX - nd.sx) / view.k;
-              const dy = (e.clientY - nd.sy) / view.k;
-              if (!nd.moved && Math.hypot(dx, dy) * view.k < 4) return;
-              nd.moved = true;
-              setDragging({ id: nd.id, pos: { x: Math.round(nd.ox + dx), y: Math.round(nd.oy + dy) } });
-              return;
-            }
-            if (!pan.current) return;
-            const d = pan.current;
-            moved.current = true;
-            setView((v) => ({ ...v, x: d.vx + e.clientX - d.x, y: d.vy + e.clientY - d.y }));
-          }}
-          onPointerCancel={(e) => {
-            touches.current.delete(e.pointerId);
-            if (touches.current.size < 2) pinch.current = null;
-            nodeDrag.current = null;
-            pan.current = null;
-            setDragging(null);
-          }}
-          onPointerUp={(e) => {
-            touches.current.delete(e.pointerId);
-            if (pinch.current) {
-              // Lifting a finger ends the pinch; the other finger doesn't start a drag or open a card.
-              if (touches.current.size < 2) pinch.current = null;
-              return;
-            }
-            const nd = nodeDrag.current;
-            nodeDrag.current = null;
-            pan.current = null;
-            if (!nd) return;
-            if (nd.moved && dragging) onMove(nd.id, dragging.pos);
-            else inspect(nd.id);
-            setDragging(null);
-          }}
-        >
-          <defs>
-            {['edge', 'cond', 'forced', 'pending', 'fallback', 'hl'].map((k) => (
-              <marker key={k} id={`arrow-${k}`} viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
-                <path d="M0,0 L10,5 L0,10 z" className={`arrowhead ${k}`} />
-              </marker>
-            ))}
-          </defs>
-          <g transform={`translate(${view.x},${view.y}) scale(${view.k})`}>
-            {edges.map((e) => {
-              const a = placed.get(e.from);
-              const b = placed.get(e.to);
-              if (!a) return null;
-              const kind = e.pending ? 'pending' : e.kind === 'fallback' || e.kind === 'divert' ? 'fallback' : e.forced ? 'forced' : e.conditional ? 'cond' : 'edge';
-              const hl = hover === e.from || hover === e.to || hoverEdge === e.id || (!!lit && lit.edges.has(e.id) && !trace);
-              const shade = lit && !lit.edges.has(e.id) ? 'dim' : straight === 'faint' && kind === 'fallback' && !hl ? 'faint' : '';
-              const showLabel = !!e.label && (hoverEdge === e.id || hover === e.from);
-              const { i, n } = lanes.get(e.id)!;
-              const lane = i - (n - 1) / 2; // 0 for a lone edge; spreads parallel edges apart
-              if (b && isLoop(e)) {
-                // A loop back to an earlier passage: a short stub that names it (click to go there), not a long arrow.
-                const x1 = a.x + W;
-                const y1 = a.y + H / 2 + clampLane(lane * 10) + 8;
-                const name = graph.nodes.find((n) => n.id === e.to)?.title ?? e.to;
-                return (
-                  <g key={e.id} className={`loop-stub ${shade}`} onPointerEnter={() => setHoverEdge(e.id)} onPointerLeave={() => setHoverEdge(null)}>
-                    <line x1={x1} y1={y1} x2={x1 + 26} y2={y1} className={`edge loop ${kind} ${hl ? 'hl' : ''}`} markerEnd={`url(#arrow-${hl ? 'hl' : kind})`} />
-                    <text
-                      x={x1 + 30}
-                      y={y1 + 4}
-                      className="edge-end loop"
-                      role="button"
-                      tabIndex={0}
-                      aria-label={`Loops back to ${name}. Go there`}
-                      onPointerDown={(ev) => ev.stopPropagation()}
-                      onClick={() => centerOn(e.to)}
-                      onKeyDown={(k) => (k.key === 'Enter' || k.key === ' ') && (k.preventDefault(), centerOn(e.to))}
-                    >
-                      ↩ {name.length > 22 ? `${name.slice(0, 21)}…` : name}
-                    </text>
-                    {showLabel && <EdgeLabel x={x1 + 20} y={y1 - 14} text={e.label} />}
-                  </g>
-                );
-              }
-              if (!b) {
-                // END or missing destination
-                const x1 = a.x + W;
-                const y1 = a.y + H / 2 + clampLane(lane * 10);
-                const missing = e.to !== 'END';
-                return (
-                  <g key={e.id} className={shade} onPointerEnter={() => setHoverEdge(e.id)} onPointerLeave={() => setHoverEdge(null)}>
-                    <line x1={x1} y1={y1} x2={x1 + 40} y2={y1} className={`edge ${missing ? 'missing' : kind} ${hl ? 'hl' : ''}`} markerEnd={`url(#arrow-${hl ? 'hl' : kind})`} />
-                    <text
-                      x={x1 + 44}
-                      y={y1 + 4}
-                      className={`edge-end ${missing ? 'missing' : ''}`}
-                      {...(missing && fixMissing(e.to, e.from)
-                        ? {
-                            role: 'button',
-                            tabIndex: 0,
-                            'aria-label': `${e.to} doesn’t exist yet. Create it`,
-                            onClick: () => setSceneForm(fixMissing(e.to, e.from)!),
-                            onKeyDown: (k: React.KeyboardEvent) => (k.key === 'Enter' || k.key === ' ') && (k.preventDefault(), setSceneForm(fixMissing(e.to, e.from)!)),
-                          }
-                        : {})}
-                    >
-                      {missing ? `⚠ Missing: ${e.to}${fixMissing(e.to, e.from) ? ' (click to create it)' : ''}` : 'The End'}
-                    </text>
-                    {(kind === 'cond' || kind === 'pending' || kind === 'forced') && !missing && <RouteSign kind={kind} x={x1 + 20} y={y1} />}
-                    {showLabel && <EdgeLabel x={x1 + 20} y={y1 - 14} text={e.label} />}
-                  </g>
-                );
-              }
-              const route = routes.get(e.id)!;
-              const d = route.d;
-              const [mx, my] = route.mid;
-              return (
-                <g key={e.id} className={shade} onPointerEnter={() => setHoverEdge(e.id)} onPointerLeave={() => setHoverEdge(null)}>
-                  <path d={d} className="edge-hit" />
-                  <path d={d} className={`edge ${kind} ${hl ? 'hl' : ''}`} markerEnd={`url(#arrow-${hl ? 'hl' : kind})`} />
-                  {(kind === 'cond' || kind === 'pending' || kind === 'forced') && !showLabel && <RouteSign kind={kind} x={mx} y={my} />}
-                  {showLabel && <EdgeLabel x={mx} y={my} text={e.kind === 'fallback' ? 'otherwise' : e.label} />}
+        <>
+          <div className="map-frame">
+            <div className="map-canvas">
+              <svg
+                ref={svg}
+                className="graph"
+                role="group"
+                aria-label={`Story map: ${graph.nodes.length} passages and ${edges.length} links${edges.length < graph.edges.length ? ` (${graph.edges.length - edges.length} locked routes hidden)` : ''}. Tab moves between passages, Space shows a passage's lines, Enter opens it in Review, N adds a new scene. Drag a passage to move it.`}
+                {...gestures}
+              >
+                <defs>
+                  {['edge', 'cond', 'forced', 'pending', 'fallback', 'hl'].map((k) => (
+                    <marker key={k} id={`arrow-${k}`} viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+                      <path d="M0,0 L10,5 L0,10 z" className={`arrowhead ${k}`} />
+                    </marker>
+                  ))}
+                </defs>
+                <g transform={`translate(${view.x},${view.y}) scale(${view.k})`}>
+                  <MapEdges
+                    graph={graph}
+                    edges={edges}
+                    placed={placed}
+                    lanes={lanes}
+                    routes={routes}
+                    hover={hover}
+                    hoverEdge={hoverEdge}
+                    setHoverEdge={setHoverEdge}
+                    lit={lit}
+                    trace={trace}
+                    straight={straight}
+                    isLoop={isLoop}
+                    fixMissing={fixMissing}
+                    centerOn={centerOn}
+                    setSceneForm={setSceneForm}
+                  />
+                  <MapNodes
+                    graph={graph}
+                    placed={placed}
+                    lit={lit}
+                    groups={groups}
+                    sceneOf={sceneOf}
+                    endingsReached={endingsReached}
+                    breaks={breaks}
+                    exits={exits}
+                    selected={selected}
+                    matches={matches}
+                    dragging={dragging}
+                    setHover={setHover}
+                    unfold={unfold}
+                    onOpen={onOpen}
+                    inspect={inspect}
+                  />
                 </g>
-              );
-            })}
-            {graph.nodes.map((n) => {
-              const p = placed.get(n.id)!;
-              const reached = endingsReached?.[n.id];
-              const tags: TagKind[] = [...(n.isStart ? ['start' as const] : []), ...(n.isEnding ? ['ending' as const] : []), ...(n.reachable ? [] : ['unreachable' as const])];
-              const out = graph.edges.filter((e) => e.from === n.id && !e.pending).length;
-              const group = isGroupNode(n.id);
-              const scene = sceneOf.get(group ? n.id.slice(6) : n.id);
-              const about = [
-                group ? 'A folded scene: click to unfold it.' : '',
-                n.isStart ? 'The story begins here.' : '',
-                n.isEnding ? 'The story can end here.' : '',
-                n.reachable ? '' : 'No route leads here yet.',
-                out ? `${out} route${out === 1 ? '' : 's'} lead${out === 1 ? 's' : ''} on.` : '',
-                reached ? `Reached in ${reached} automated test play${reached === 1 ? '' : 's'}.` : '',
-                breaks.get(n.id) ? `${breaks.get(n.id)} Continue break${breaks.get(n.id) === 1 ? '' : 's'}.` : '',
-                exits.get(n.id)?.length ? `Exits to the game: ${exits.get(n.id)!.join(', ')}.` : '',
-              ]
-                .filter(Boolean)
-                .join(' ');
-              let tagX = 10;
-              return (
-                <g
-                  key={n.id}
-                  data-id={n.id}
-                  className={`node ${group ? 'folded' : ''} ${lit && !lit.nodes.has(n.id) ? 'dim' : ''} ${n.isStart ? 'start' : ''} ${n.isEnding ? 'ending' : ''} ${n.reachable ? '' : 'unreachable'} ${selected === n.id ? 'selected' : ''} ${matches.includes(n.id) ? 'match' : ''} ${dragging?.id === n.id ? 'dragging' : ''} origin-${n.origin}`}
-                  transform={`translate(${p.x},${p.y})`}
-                  onKeyDown={(e) => {
-                    if (group && (e.key === 'Enter' || e.key === ' ')) {
-                      e.preventDefault();
-                      unfold(n.id);
-                    } else if (e.key === 'Enter') {
-                      e.preventDefault();
-                      onOpen(n.id);
-                    } else if (e.key === ' ') {
-                      e.preventDefault();
-                      inspect(n.id);
-                    }
-                  }}
-                  onDoubleClick={() => !group && onOpen(n.id)}
-                  onFocus={() => setHover(n.id)}
-                  onBlur={() => setHover(null)}
-                  tabIndex={0}
-                  role="button"
-                  aria-description={about}
-                  onPointerEnter={() => setHover(n.id)}
-                  onPointerLeave={() => setHover(null)}
-                >
-                  <title>{group ? `${n.title} — ${about}` : `${n.title}${about ? ` — ${about}` : ''}${scene !== undefined && groups.length > 1 ? ` Scene: ${groups[scene].title}.` : ''} Click to see its lines, double-click to edit, drag to move.`}</title>
-                  <rect width={W} height={H} rx={3} />
-                  <rect x={3} y={3} width={W - 6} height={H - 6} rx={2} className="node-inner" />
-                  {scene !== undefined && groups.length > 1 && <rect x={0} y={0} width={4} height={H} className={`scene-stripe scene-c${scene % 6}`} />}
-                  <text x={12} y={tags.length ? 26 : 24} className="node-title">
-                    {(group ? groups[scene ?? 0]?.title ?? n.title : n.title).replace(/^(.{23}).+$/, '$1…')}
-                  </text>
-                  <text x={12} y={tags.length ? 43 : 41} className="node-id">
-                    {group ? `${groups[scene ?? 0]?.members.length ?? ''} passages folded · click to open` : n.id.length > 26 ? n.id.slice(0, 25) + '…' : n.id}
-                  </text>
-                  {tags.map((t) => {
-                    const x = tagX;
-                    tagX += tagWidth(t) + 5;
-                    return <NodeTag key={t} kind={t} x={x} />;
-                  })}
-                  {!!breaks.get(n.id) && <BreakSign count={breaks.get(n.id)!} x={W - 46} y={H - 9} />}
-                  {!!exits.get(n.id)?.length && <BreakSign count={exits.get(n.id)!.length} x={breaks.get(n.id) ? W - 92 : W - 46} y={H - 9} exit />}
-                </g>
-              );
-            })}
-          </g>
-        </svg>
-        {size.w >= 560 && size.h >= 300 && <Compass />}
-        <div className="cartouche" aria-hidden>
-          <span className="cartouche-kicker">A Map of</span>
-          <span className="cartouche-title">{title}</span>
-        </div>
-        {size.w >= 520 && size.h >= 400 && (
-        <svg
-          className="minimap"
-          width={MW}
-          height={MH}
-          role="img"
-          aria-label="Minimap. Click to move the view."
-          onPointerDown={(e) => {
-            const r = (e.currentTarget as SVGSVGElement).getBoundingClientRect();
-            const x = (e.clientX - r.left - mox) / mk + bounds.minX;
-            const y = (e.clientY - r.top - moy) / mk + bounds.minY;
-            moved.current = true;
-            setView((v) => ({ ...v, x: size.w / 2 - x * v.k, y: size.h / 2 - y * v.k }));
-          }}
-        >
-          {graph.nodes.map((n) => {
-            const p = mm(placed.get(n.id)!);
-            return <rect key={n.id} x={p.x} y={p.y} width={Math.max(2, W * mk)} height={Math.max(2, H * mk)} className={`mini-node ${n.isStart ? 'start' : ''} ${n.isEnding ? 'ending' : ''} ${matches.includes(n.id) ? 'match' : ''}`} />;
-          })}
-          <rect x={vp.x} y={vp.y} width={(size.w / view.k) * mk} height={(size.h / view.k) * mk} className="mini-view" />
-        </svg>
-        )}
-        </div>
-        {inspecting && selected && project.passages.some((p) => p.id === selected) && (
-          <PassageInspector project={project} passageId={selected} update={update} onOpen={onOpen} onClose={closeInspector} onAddScene={(link) => setSceneForm({ from: selected, link })} />
-        )}
-      </div>
-      {showKey && <MapKey hiddenGated={graph.edges.length - edges.length} />}
-      </>
+              </svg>
+              {size.w >= 560 && size.h >= 300 && <Compass />}
+              <div className="cartouche" aria-hidden>
+                <span className="cartouche-kicker">A Map of</span>
+                <span className="cartouche-title">{title}</span>
+              </div>
+              {size.w >= 520 && size.h >= 400 && (
+                <MiniMap
+                  graph={graph}
+                  placed={placed}
+                  view={view}
+                  setView={setView}
+                  size={size}
+                  moved={moved}
+                  matches={matches}
+                  geometry={{ MW, MH, mk, mox, moy, bounds, mm, vp }}
+                />
+              )}
+            </div>
+            {inspecting && selected && project.passages.some((p) => p.id === selected) && (
+              <PassageInspector
+                project={project}
+                passageId={selected}
+                update={update}
+                onOpen={onOpen}
+                onClose={closeInspector}
+                onAddScene={(link) => setSceneForm({ from: selected, link })}
+              />
+            )}
+          </div>
+          {showKey && <MapKey hiddenGated={graph.edges.length - edges.length} />}
+        </>
       )}
-        {sceneForm && (
-          <NewSceneSheet
-            project={project}
-            update={update}
-            request={sceneForm}
-            onCreated={(id) => {
-              moved.current = true;
-              onSelect(id);
-              setInspecting(true);
-            }}
-            onClose={() => setSceneForm(null)}
-          />
-        )}
+      {sceneForm && (
+        <NewSceneSheet
+          project={project}
+          update={update}
+          request={sceneForm}
+          onCreated={(id) => {
+            moved.current = true;
+            onSelect(id);
+            setInspecting(true);
+          }}
+          onClose={() => setSceneForm(null)}
+        />
+      )}
     </div>
   );
 }

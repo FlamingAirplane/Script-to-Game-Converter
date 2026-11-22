@@ -1,9 +1,8 @@
 // Engine-only runtime: the compiler isn't needed to play an already compiled story.
-import { Rich } from './Rich';
 import type { SceneRequest } from './NewScene';
 import { pendingSuggestions } from '../core/adapt';
 import { Story } from 'inkjs';
-import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { fnv1a } from '../core/hash';
 import { lockedChoices } from '../core/gating';
 import { portraitFiles, referencedImages } from '../core/images';
@@ -12,104 +11,35 @@ import { CONTINUE_TEXT, exitOf, itemVar } from '../core/isr';
 import { isPause, knotOf, readOn, type Line } from '../core/reader';
 import type { ProcessedStory } from '../core/pipeline';
 import { audioFileName, referencedAudio } from '../core/audio';
-import { Badge, Empty } from './common';
-import { cutsceneSeconds, dialogueOnly as playersSeeDialogueOnly } from '../core/players';
+import { Empty } from './common';
+import { cutsceneSeconds } from '../core/players';
 import { sfx } from './sfx';
 import { plainKey } from './Shortcuts';
 import { VoiceQueue, type VoiceItem } from './voice';
-import { cueSounds, cuesIn, cueWantsSound, type ParsedCue } from '../core/cues';
+import { cueSounds } from '../core/cues';
 import { CuePlayer } from './cueAudio';
 import { translate } from '../core/export/translations';
-import { languageName } from './language';
-import { chosenKey } from '../core/chosen';
-import { chosenId, idOf } from '../core/readerCore';
+
+import { Toolbar } from './playtest/Toolbar';
+import { Transcript } from './playtest/Transcript';
+import { Choices } from './playtest/Choices';
+import { Inspector } from './playtest/Inspector';
+import {
+  cuesOf,
+  isCutscene,
+  nextShown,
+  offered,
+  reducedMotion,
+  replayChoices,
+  replayNote,
+  type OfferedChoice,
+  type Segment,
+  type Snapshot,
+} from './playtest/state';
 
 const VOICES_KEY = 'narrative-bridge.voices';
 const CUE_SOUNDS_KEY = 'narrative-bridge.cue-sounds';
 const LANGUAGE_KEY = 'narrative-bridge.playtest-language';
-
-/** Story state at the start of the current stretch of text, so a state change can replay it. */
-interface Segment {
-  state: string;
-  prefix: Line[];
-  overrides: Record<string, boolean | number | string>;
-}
-
-interface Snapshot {
-  state: string;
-  lines: Line[];
-  segment: Segment | null;
-}
-
-/** A cutscene line (#cutscene): shown one at a time, going on by itself. */
-const isCutscene = (l: Line | undefined) => !!l && l.kind === 'text' && l.tags.includes('cutscene');
-/**
- * How many lines show once the cutscene line at `n - 1` has been read: up to the next cutscene line (and any cues
- * before it), or 0 when the cutscene is over.
- */
-function nextShown(ls: Line[], n: number): number {
-  let i = n;
-  while (i < ls.length && ls[i].kind === 'cue') i++;
-  return isCutscene(ls[i]) ? i + 1 : 0;
-}
-
-/** The reader asked their system for less motion: scroll and show new text without animating it. */
-const reducedMotion = () => typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches;
-
-/** The choices on offer, each with how it's remembered once taken (see core/chosen.ts). */
-const offered = (s: Story): OfferedChoice[] =>
-  s.currentChoices.map((c) => {
-    const id = idOf(c.tags ?? []);
-    return { text: c.text, index: c.index, id: id ?? undefined, key: chosenId(id, c.sourcePath, c.text), legacy: chosenKey(c.sourcePath, c.text) };
-  });
-
-/** A choice on offer: its id when the Ink has ids, how it's remembered once taken, and how older stories remembered it. */
-interface OfferedChoice {
-  text: string;
-  index: number;
-  id?: string;
-  key: string;
-  legacy: string;
-}
-
-/** The cues among these lines, in order. */
-const cuesOf = (lines: Line[]): ParsedCue[] => lines.filter((l) => l.kind === 'cue').flatMap((l) => cuesIn(l.tags));
-
-/**
- * Brings a save from another version of the story forward: plays the new version from the start
- * making the same choices (by their id when both versions have ids, else by their text), so its text and variables apply. Stops at the first
- * choice the new version no longer offers. The playable story export does the same for readers.
- */
-function replayChoices(s: Story, chosen: { text: string; id?: string }[]): { lines: Line[]; history: Snapshot[]; segment: Segment; followed: number } {
-  let segment: Segment = { state: s.state.toJson(), prefix: [], overrides: {} };
-  let lines = readOn(s, []);
-  const history: Snapshot[] = [];
-  let followed = 0;
-  const take = (c: { index: number; text: string; tags?: string[] | null }) => {
-    history.push({ state: s.state.toJson(), lines, segment });
-    const pause = isPause(s);
-    s.ChooseChoiceIndex(c.index);
-    const choiceId = idOf(c.tags ?? []) ?? undefined;
-    const prefix: Line[] = [...lines, { text: c.text, tags: [], kind: 'choice', pause, ...(choiceId ? { choiceId } : {}) }];
-    segment = { state: s.state.toJson(), prefix, overrides: {} };
-    lines = readOn(s, prefix);
-  };
-  // Continue breaks added or removed since the save don't stop it: take or skip them.
-  for (let i = 0, steps = 0; i < chosen.length && steps < 10000; steps++) {
-    const want = chosen[i];
-    const c = (want.id ? s.currentChoices.find((x) => idOf(x.tags ?? []) === want.id) : undefined) ?? s.currentChoices.find((x) => x.text === want.text);
-    if (c) {
-      take(c);
-      i++;
-      followed++;
-    } else if (isPause(s)) take(s.currentChoices[0]);
-    else if (want.text === CONTINUE_TEXT) {
-      i++;
-      followed++;
-    } else break;
-  }
-  return { lines, history, segment, followed };
-}
 
 export function PlaytestView({
   processed,
@@ -334,7 +264,8 @@ export function PlaytestView({
     const behavior: ScrollBehavior = reducedMotion() ? 'auto' : 'smooth';
     // After a choice: the start of what it led to, at the top, so the reader reads on from its first line.
     const first = box && at !== null ? [...box.querySelectorAll<HTMLElement>('[data-at]')].find((e) => +e.dataset.at! >= at) : undefined;
-    if (box && first) box.scrollTo({ top: box.scrollTop + first.getBoundingClientRect().top - box.getBoundingClientRect().top - 8, behavior: at ? behavior : 'auto' });
+    if (box && first)
+      box.scrollTo({ top: box.scrollTop + first.getBoundingClientRect().top - box.getBoundingClientRect().top - 8, behavior: at ? behavior : 'auto' });
     // Otherwise (a cutscene's next line, a loaded save, a changed value) the end, where the story is now.
     else if (at === null) bottom.current?.scrollIntoView({ behavior, block: 'end' });
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -342,7 +273,10 @@ export function PlaytestView({
   // A cutscene goes on by itself once there's been time to read the line.
   useEffect(() => {
     if (!playing) return;
-    const t = setTimeout(() => setShown((s) => (s && s.lines === lines ? (nextShown(lines, s.n) ? { lines, n: nextShown(lines, s.n) } : null) : s)), cutsceneSeconds(lines[visible - 1]?.text ?? '') * 1000);
+    const t = setTimeout(
+      () => setShown((s) => (s && s.lines === lines ? (nextShown(lines, s.n) ? { lines, n: nextShown(lines, s.n) } : null) : s)),
+      cutsceneSeconds(lines[visible - 1]?.text ?? '') * 1000,
+    );
     return () => clearTimeout(t);
   }, [playing, visible, lines]);
   const skipCutscene = () => setShown(null);
@@ -366,8 +300,7 @@ export function PlaytestView({
       // Enter or Space goes on at a Continue break (or a cutscene, or a lone choice), unless a button has focus.
       else if ((e.key === 'Enter' || e.key === ' ') && !(e.target instanceof HTMLButtonElement || e.target instanceof HTMLSelectElement)) {
         if (!a.goOn()) return;
-      }
-      else if (e.key === 'Backspace') a.undo();
+      } else if (e.key === 'Backspace') a.undo();
       else if (e.key.toLowerCase() === 'r') a.restart();
       else if (e.key.toLowerCase() === 'v') a.voices();
       else return;
@@ -398,7 +331,8 @@ export function PlaytestView({
     sfx.choice();
     const pause = isPause(s);
     const taken = choices.find((c) => c.index === i);
-    if (taken && !pause && !exitOf(taken.text) && !chosenBefore.has(taken.key) && !chosenBefore.has(taken.legacy)) keepChosen(new Set([...chosenBefore, taken.key]));
+    if (taken && !pause && !exitOf(taken.text) && !chosenBefore.has(taken.key) && !chosenBefore.has(taken.legacy))
+      keepChosen(new Set([...chosenBefore, taken.key]));
     s.ChooseChoiceIndex(i);
     newFrom.current = lines.length;
     setFreshFrom(lines.length);
@@ -478,8 +412,34 @@ export function PlaytestView({
   const dropCapAt = lines.findIndex((l) => l.kind === 'text' && !l.speaker && !l.tags.includes('transition') && l.text.length >= 40);
   /** The lines a choice just led to fade in. */
   const fresh = (i: number) => (freshFrom !== null && i >= freshFrom ? ' t-fresh' : '');
-  const smoke = processed.smoke;
   const pending = pendingSuggestions(processed.project);
+
+  const saveSlot = () => {
+    setSlot({ version, state: story.current!.state.toJson(), lines });
+    setNotice(`Saved at story version ${version}.`);
+  };
+  const loadSlot = () => {
+    if (!slot) return;
+    voiceQueue.current.stop();
+    if (slot.version !== version) {
+      const chosen = slot.lines.filter((l) => l.kind === 'choice').map((l) => ({ text: l.text, id: l.choiceId }));
+      const s = freshStory();
+      const r = replayChoices(s, chosen);
+      segment.current = r.segment;
+      setHistory(r.history);
+      setLines(r.lines);
+      setChoices(offered(s));
+      setWhere(knotOf(s));
+      readVars();
+      setNotice(replayNote(slot.version, version, r.followed, chosen.length));
+      return;
+    }
+    story.current!.state.LoadJson(slot.state);
+    setLines(slot.lines);
+    setChoices(offered(story.current!));
+    readVars();
+    setNotice('Loaded.');
+  };
 
   return (
     <div className="view playtest-view">
@@ -487,8 +447,8 @@ export function PlaytestView({
         {pending > 0 && (
           <div className="pending-banner" role="status">
             <span>
-              <strong>{pending}</strong> suggestion{pending > 1 ? 's are' : ' is'} waiting for your OK and {pending > 1 ? 'aren’t' : 'isn’t'} in this playthrough, so
-              some choices may be missing.
+              <strong>{pending}</strong> suggestion{pending > 1 ? 's are' : ' is'} waiting for your OK and {pending > 1 ? 'aren’t' : 'isn’t'} in this
+              playthrough, so some choices may be missing.
             </span>
             <span className="row">
               {onReview && (
@@ -504,166 +464,56 @@ export function PlaytestView({
             </span>
           </div>
         )}
-        <div className="stage-head">
-          <h2>{processed.project.project.title}</h2>
-          {playersSeeDialogueOnly(processed.project) && (
-            <Badge tone="accent" title="Story settings: players see only the dialogue, so narration, transitions, scene headings and parentheticals are left out here and in every export">
-              players see dialogue only
-            </Badge>
-          )}
-          <div className="row">
-            <button
-              className={`btn tiny ${voicesOn ? 'ok' : ''}`}
-              aria-pressed={voicesOn}
-              title="Read dialogue aloud: recorded clips, or each character's voice from Story settings"
-              onClick={toggleVoices}
-            >
-              {voicesOn ? '🔊 Voices on' : '🔈 Voices off'}
-            </button>
-            {sounds.size > 0 && (
-              <button
-                className={`btn tiny ${cueSoundsOn ? 'ok' : ''}`}
-                aria-pressed={cueSoundsOn}
-                title="Play the music and sounds attached to the story's cues"
-                onClick={toggleCueSounds}
-              >
-                {cueSoundsOn ? '♪ Music & sounds on' : '♪ Music & sounds off'}
-              </button>
-            )}
-            {languages.length > 0 && (
-              <select className="input small language-pick" value={lang} onChange={(e) => setLanguage(e.target.value)} aria-label="Language" title="Show the story in a translation brought in on the Export page">
-                <option value="">As written</option>
-                {languages.map((l) => (
-                  <option key={l} value={l}>
-                    {languageName(l)}
-                  </option>
-                ))}
-              </select>
-            )}
-            <button className={`btn tiny ${dialogueOnly ? 'ok' : ''}`} aria-pressed={dialogueOnly} title="Show only dialogue (D)" onClick={() => onDialogueOnly(!dialogueOnly)}>
-              {dialogueOnly ? 'dialogue only' : 'all text'}
-            </button>
-            <button
-              className={`btn tiny ${showGated ? 'ok' : ''}`}
-              aria-pressed={showGated}
-              title="Also show choices that need an item or value you don't have yet, and what they need (G)"
-              onClick={() => onShowGated(!showGated)}
-            >
-              {showGated ? '🔒 locked shown' : '🔒 locked hidden'}
-            </button>
-            <button className="btn tiny" onClick={undo} disabled={!history.length}>
-              ↶ Undo choice
-            </button>
-            <button className="btn tiny" onClick={restart}>
-              Restart
-            </button>
-            {chosenBefore.size > 0 && (
-              <button
-                className="btn tiny"
-                onClick={() => keepChosen(new Set())}
-                title="Choices you’ve taken before are greyed out, as players see them. This forgets them, so every choice looks new again."
-              >
-                Forget chosen ({chosenBefore.size})
-              </button>
-            )}
-          </div>
-        </div>
-        <div className="transcript" ref={transcript} tabIndex={0} aria-label="Story text">
-          {lines.slice(0, visible).map((l, i) =>
-            dialogueOnly && ((l.kind === 'text' && !l.speaker) || l.kind === 'cue') ? null :
-            l.pause ? null :
-            l.kind === 'cue' ? (
-              <p key={i} data-at={i} className={`t-cue${fresh(i)}`} title="A cue for the game (Review → + Cue)">
-                ♪ {l.text.replace(':', ': ')}
-                {cuesIn(l.tags).some((c) => cueWantsSound(c.name, c.value) && !sounds.has(c.tag)) ? ' · no sound attached' : ''}
-              </p>
-            ) :
-            l.kind === 'choice' && exitOf(l.text) ? (
-              <p key={i} data-at={i} className={`t-exit${fresh(i)}`}>
-                ⇥ the game played here ({exitOf(l.text)}) ⇤
-              </p>
-            ) : l.kind === 'choice' ? (
-              <p key={i} data-at={i} className={`t-choice${fresh(i)}`}>
-                › <Rich text={T(l.text)} />
-              </p>
-            ) : l.speaker ? (
-              <p key={i} data-at={i} className={`t-dialogue${fresh(i)}${portraitOf(l) ? ' with-portrait' : ''}${isCutscene(l) ? ' t-cutscene' : ''}${isCutscene(l) && i === visible - 1 && playing ? ' now' : ''}`}>
-                {portraitOf(l) && <img className="t-portrait" src={portraitOf(l)!.url} alt="" />}
-                <span className="t-speaker">{T(l.speaker)}</span>
-                {l.tags.find((t) => t.startsWith('paren:')) && <span className="t-paren">({T(l.tags.find((t) => t.startsWith('paren:'))!.slice(6))})</span>}
-                <span className="t-text"><Rich text={T(l.text)} /></span>
-              </p>
-            ) : (
-              <Fragment key={i}>
-                {l.tags.find((t) => t.startsWith('scene:')) && <span data-at={i} className={`t-scene${fresh(i)}`}>{T(l.tags.find((t) => t.startsWith('scene:'))!.slice(6))}</span>}
-                {pictureFor(l) && (
-                  <figure data-at={i} className={`t-picture${fresh(i)}`}>
-                    <img src={pictureFor(l)!.url} alt={pictureFor(l)!.alt} />
-                  </figure>
-                )}
-                <p data-at={i} className={(l.tags.includes('transition') ? 't-transition' : `t-action${i === dropCapAt ? ' drop' : ''}`) + fresh(i)}><Rich text={T(l.text)} /></p>
-              </Fragment>
-            ),
-          )}
-          {ended && <p className="t-end">— The End —</p>}
-          <div ref={bottom} />
-        </div>
-        <div className="choices">
-          {playing ? (
-            <button className="choice-btn continue cutscene-skip" onClick={skipCutscene} title="Show the rest of the cutscene now (1)">
-              🎬 Cutscene · Skip
-            </button>
-          ) : choices.length === 1 && exitOf(choices[0].text) ? (
-            // An exit to the game: in the game, gameplay happens here until it resumes the story.
-            <div className="game-exit" role="group" aria-label="Exit to the game">
-              <p>
-                <strong>⇥ The game takes over here</strong> <code>{exitOf(choices[0].text)}</code>
-              </p>
-              {exitNote(exitOf(choices[0].text)!) && <p className="muted small">{exitNote(exitOf(choices[0].text)!)}</p>}
-              <p className="muted small">In the game, the dialogue stops and the player plays until the game resumes the story. Here, resume it yourself.</p>
-              <button className="choice-btn continue" onClick={() => choose(choices[0].index, choices[0].text)}>
-                Resume the story
-              </button>
-            </div>
-          ) : (
-            choices.map((c, n) => {
-              const goOn = choices.length === 1 && c.text === CONTINUE_TEXT;
-              const before = !goOn && (chosenBefore.has(c.key) || chosenBefore.has(c.legacy));
-              return (
-              <button
-                key={c.index}
-                className={`choice-btn${goOn ? ' continue' : ''}${before ? ' chosen' : ''}`}
-                onClick={() => choose(c.index, c.text)}
-                title={before ? `You’ve chosen this before${n < 9 ? ` (${n + 1})` : ''}` : goOn ? 'Go on (Enter, Space or 1)' : n < 9 ? `Press ${n + 1}` : undefined}
-              >
-                {!goOn && choices.length > 1 && n < 9 && (
-                  <kbd className="choice-key" aria-hidden="true">
-                    {n + 1}
-                  </kbd>
-                )}
-                <Rich text={T(c.text)} />
-                {before && <span className="sr-only"> (chosen before)</span>}
-              </button>
-              );
-            })
-          )}
-          {!playing && locked.map((l) => (
-            <p key={l.choiceId} className="choice-btn locked" aria-disabled="true">
-              <span className="locked-text"><Rich text={T(l.text)} /></span>
-              <span className="locked-needs">needs {l.needs.map(T).join(', ')}</span>
-            </p>
-          ))}
-          {ended && (
-            <button className="choice-btn" onClick={restart}>
-              Play again
-            </button>
-          )}
-          {ended && onNewScene && processed.project.passages.some((p) => p.id === lastWhere) && (
-            <button className="btn small playtest-add-scene" onClick={() => onNewScene({ from: lastWhere, link: 'continue' })} title="Add a scene the story goes on into from here, or a choice that leads to one">
-              + Add a scene here
-            </button>
-          )}
-        </div>
+        <Toolbar
+          processed={processed}
+          voicesOn={voicesOn}
+          toggleVoices={toggleVoices}
+          hasCueSounds={sounds.size > 0}
+          cueSoundsOn={cueSoundsOn}
+          toggleCueSounds={toggleCueSounds}
+          languages={languages}
+          lang={lang}
+          setLanguage={setLanguage}
+          dialogueOnly={dialogueOnly}
+          onDialogueOnly={onDialogueOnly}
+          showGated={showGated}
+          onShowGated={onShowGated}
+          canUndo={history.length > 0}
+          undo={undo}
+          restart={restart}
+          chosenCount={chosenBefore.size}
+          forgetChosen={() => keepChosen(new Set())}
+        />
+        <Transcript
+          lines={lines}
+          visible={visible}
+          dialogueOnly={dialogueOnly}
+          fresh={fresh}
+          dropCapAt={dropCapAt}
+          playing={playing}
+          ended={ended}
+          hasSound={(tag) => sounds.has(tag)}
+          T={T}
+          portraitOf={portraitOf}
+          pictureFor={pictureFor}
+          transcript={transcript}
+          bottom={bottom}
+        />
+        <Choices
+          choices={choices}
+          playing={playing}
+          ended={ended}
+          chosenBefore={chosenBefore}
+          locked={locked}
+          T={T}
+          exitNote={exitNote}
+          choose={choose}
+          skipCutscene={skipCutscene}
+          restart={restart}
+          canAddScene={processed.project.passages.some((p) => p.id === lastWhere)}
+          lastWhere={lastWhere}
+          onNewScene={onNewScene}
+        />
         {errors.length > 0 && (
           <div className="error-box">
             {errors.map((e, i) => (
@@ -673,137 +523,20 @@ export function PlaytestView({
         )}
       </main>
 
-      <aside className="inspector">
-        <section>
-          <h3>Position</h3>
-          {where ? (
-            <>
-              <button className="link mono" onClick={() => onOpen(where)}>
-                {where}
-              </button>
-              {onNewScene && processed.project.passages.some((p) => p.id === where) && (
-                <button className="btn tiny" onClick={() => onNewScene({ from: where })} title="Add a scene after this passage, or as a new choice in it">
-                  + New scene after it
-                </button>
-              )}
-            </>
-          ) : (
-            <span className="muted small">{ended ? 'ended' : '—'}</span>
-          )}
-        </section>
-        <section>
-          <h3>State</h3>
-          <p className="muted small">Toggle items to simulate the host game's inventory.</p>
-          {varNames.length === 0 && <p className="muted small">This story declares no variables.</p>}
-          <ul className="vars">
-            {varNames.map((n) => (
-              <li key={n}>
-                <span className="mono small">{n}</span>
-                {typeof vars[n] === 'boolean' ? (
-                  <input type="checkbox" checked={vars[n] as boolean} onChange={(e) => setVar(n, e.target.checked)} />
-                ) : typeof vars[n] === 'number' ? (
-                  <input className="input tiny-num" type="number" value={vars[n] as number} onChange={(e) => setVar(n, parseInt(e.target.value || '0', 10))} />
-                ) : (
-                  <span className="mono small">{JSON.stringify(vars[n])}</span>
-                )}
-              </li>
-            ))}
-          </ul>
-          {notice && <p className="muted small">{notice}</p>}
-        </section>
-        <section>
-          <h3>Save slot</h3>
-          <div className="row">
-            <button
-              className="btn tiny"
-              onClick={() => {
-                setSlot({ version, state: story.current!.state.toJson(), lines });
-                setNotice(`Saved at story version ${version}.`);
-              }}
-            >
-              Save
-            </button>
-            <button
-              className="btn tiny"
-              disabled={!slot}
-              onClick={() => {
-                if (!slot) return;
-                voiceQueue.current.stop();
-                if (slot.version !== version) {
-                  const chosen = slot.lines.filter((l) => l.kind === 'choice').map((l) => ({ text: l.text, id: l.choiceId }));
-                  const s = freshStory();
-                  const r = replayChoices(s, chosen);
-                  segment.current = r.segment;
-                  setHistory(r.history);
-                  setLines(r.lines);
-                  setChoices(offered(s));
-                  setWhere(knotOf(s));
-                  readVars();
-                  const n = (k: number) => `${k} choice${k === 1 ? '' : 's'}`;
-                  setNotice(
-                    `The story changed since this save (version ${slot.version} → ${version}). ` +
-                      (r.followed === chosen.length
-                        ? `Replayed ${chosen.length === 1 ? 'its choice' : `all ${n(chosen.length)}`} in the new version.`
-                        : r.followed
-                          ? `${r.followed} of ${n(chosen.length)} still exist, so it resumes after the last one that does.`
-                          : `None of its ${n(chosen.length)} exist any more, so it starts from the beginning.`) +
-                      ' Readers’ saves of the playable story carry over the same way.',
-                  );
-                  return;
-                }
-                story.current!.state.LoadJson(slot.state);
-                setLines(slot.lines);
-                setChoices(offered(story.current!));
-                readVars();
-                setNotice('Loaded.');
-              }}
-            >
-              Load
-            </button>
-          </div>
-          <p className="muted small">Edit the story and try loading: a save from another version replays its choices in the new version, as readers' saves do.</p>
-        </section>
-        {processed.smokePending && (
-          <section>
-            <h3>Automated playthroughs</h3>
-            <p className="muted small">Running…</p>
-          </section>
-        )}
-        {smoke && (
-          <section>
-            <h3>Automated playthroughs</h3>
-            <p className="small">
-              <strong>{smoke.completedRuns}</strong>/{smoke.runs} reached an ending · {smoke.visited.length}/{processed.project.passages.length} passages visited
-              {smoke.stopReason === 'deterministic' && <span className="muted"> · the story has no choices, so one playthrough covers it</span>}
-              {smoke.stopReason === 'no-new-coverage' && <span className="muted"> · stopped once more runs found nothing new</span>}
-            </p>
-            <ul className="endings">
-              {Object.entries(smoke.endingsReached).map(([id, n]) => (
-                <li key={id}>
-                  <button className="link mono small" onClick={() => onOpen(id)}>
-                    {id}
-                  </button>
-                  <span className="bar" style={{ width: `${(n / smoke.runs) * 100}%` }} />
-                  <span className="muted small">{n}</span>
-                </li>
-              ))}
-            </ul>
-            {smoke.gatedChoices.length > 0 && (
-              <>
-                <h4 className="small">Conditional choices</h4>
-                <ul className="gates">
-                  {smoke.gatedChoices.map((g) => (
-                    <li key={g.id} className="small">
-                      {g.seenEnabled > 0 ? <Badge tone="ok">seen {g.seenEnabled}×</Badge> : <Badge tone="warning">never available</Badge>} {g.text}
-                    </li>
-                  ))}
-                </ul>
-              </>
-            )}
-            {smoke.unvisited.length > 0 && <p className="muted small">Never reached: {smoke.unvisited.join(', ')}</p>}
-          </section>
-        )}
-      </aside>
+      <Inspector
+        processed={processed}
+        where={where}
+        ended={ended}
+        onOpen={onOpen}
+        onNewScene={onNewScene}
+        varNames={varNames}
+        vars={vars}
+        setVar={setVar}
+        notice={notice}
+        hasSlot={!!slot}
+        onSave={saveSlot}
+        onLoad={loadSlot}
+      />
     </div>
   );
 }
