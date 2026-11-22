@@ -113,8 +113,10 @@ for fixing them.
 - [x] `App.tsx` split into hooks (flaw 9, part): undo and redo (`editHistory.ts`), autosave (`useAutosave.ts`) and
       keyboard shortcuts (`useShortcuts.ts`) are their own files, with their pure parts tested (`tests/app-hooks.test.ts`),
       and `App.tsx` is about 140 lines shorter. It also fixes undo and redo in development, where React ran each state
-      update twice and left a stray redo step. **Not done:** `useProjectFiles` (opening, saving, drafts, links) is still
-      in `App.tsx`; `GraphView.tsx` and `PlaytestView.tsx` are still large.
+      update twice and left a stray redo step. Opening and saving are `useProjectFiles.ts` too: the project file (open from disk,
+      the cloud or a story link; Save and Save as), the "only in this browser" reminder and files the system opens with
+      the installed app. `App.tsx` is now about 740 lines (it was 1,060). **Not done:** drafts (`restoreDraft`) and
+      converting a script are still in `App.tsx`; `GraphView.tsx` and `PlaytestView.tsx` are still large.
 - [ ] Merge or redefine faithful/structured (flaw 8, second part): needs a decision on what *faithful* should mean
 - [x] Real Unreal build on 5.7 (flaw 7): it found two compile errors in the plugin (an include-order rule in
       `InkCompat.cpp` and a shadowed `Line` in the Enter Dialogue Trigger), now fixed; the archive sample builds and all

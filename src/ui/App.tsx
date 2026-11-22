@@ -2,7 +2,7 @@ import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } fro
 import { reviewAll } from '../core/adapt';
 import { buildStory, type SourceInput } from '../core/builder';
 import type { Diagnostic } from '../core/diagnostics';
-import { fileBase, type ConversionMode, type StoryProject } from '../core/isr';
+import type { ConversionMode, StoryProject } from '../core/isr';
 import type { ConversionState } from '../core/pipeline';
 import { DiagnosticsPanel, type PanelView } from './DiagnosticsPanel';
 import { ImportView, SITE } from './ImportView';
@@ -10,17 +10,16 @@ import { passageForEntity, STORY_SETTINGS } from './projectOps';
 import { useEditHistory } from './editHistory';
 import { loadSaved, useAutosave } from './useAutosave';
 import { useShortcuts } from './useShortcuts';
-import { packProject, unpackProject } from './projectFile';
-import { LINK_PREFIX, readStoryLink } from './storyLink';
+import { ago, useProjectFiles } from './useProjectFiles';
 import { ProjectsSheet } from './ProjectsSheet';
-import { errorData, log } from '../core/log';
+import { log } from '../core/log';
 import { Logo, Wordmark } from './Logo';
 import { Loading } from './Loading';
 import { ArrowLeftRight, BookOpen, Code2, FilePlus2, FileUp, FolderOpen, Keyboard, ListChecks, Menu, MessageSquare, Music, Network, Package, Play, Redo2, Save, SaveAll, Undo2 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import { designSetting, useWord } from './design/design';
 import { getDraft, keepDraft } from './draftStore';
-import { canUseFiles, pickProjectFile, rememberRecent, requestPersistence, saveFile, writeToHandle, type FileHandle } from './platform';
+import { canUseFiles, requestPersistence, type FileHandle } from './platform';
 
 const appLog = log('app');
 
@@ -81,17 +80,8 @@ const STATE_WORDS: Record<ConversionState, string> = {
   Cancelled: 'Stopped',
 };
 
-/** "just now", "5 min ago", "2 h ago", or a date. */
-function ago(at: number): string {
-  const min = Math.round((Date.now() - at) / 60_000);
-  if (min < 1) return 'just now';
-  if (min < 60) return `${min} min ago`;
-  if (min < 24 * 60) return `${Math.round(min / 60)} h ago`;
-  return new Date(at).toLocaleDateString();
-}
-
 export function App() {
-  const initial = useMemo(loadSaved, []);
+  const initial = useMemo(() => loadSaved(), []);
   const [project, setProject] = useState<StoryProject | null>(initial?.project ?? null);
   const [parseDiagnostics, setParseDiagnostics] = useState<Diagnostic[]>(initial?.parseDiagnostics ?? []);
   const [tab, setTab] = useState<Tab>(initial ? 'review' : 'import');
@@ -164,7 +154,6 @@ export function App() {
   const [showDiag, setShowDiag] = useState(true);
   const [busy, setBusy] = useState(false);
   const [exportState, setExportState] = useState<'Exporting' | 'Succeeded' | 'Failed' | null>(null);
-  const openRef = useRef<HTMLInputElement>(null);
 
   // Processed in a background worker; `stale` while a newer edit is being processed.
   const { processed, stale } = useProcessedStory(project, parseDiagnostics);
@@ -182,69 +171,28 @@ export function App() {
     },
   });
 
-  // Files the system opens with the installed app (manifest file_handlers, Chrome/Edge): project files
-  // open straight away; scripts and stories go to the Import page's file list.
-  const [incoming, setIncoming] = useState<File[]>();
-  const openRefFn = useRef<(f: File, h?: FileHandle) => void>(() => {});
-  useEffect(() => {
-    const queue = (window as unknown as { launchQueue?: { setConsumer(fn: (p: { files: FileHandle[] }) => void): void } }).launchQueue;
-    queue?.setConsumer(async ({ files }) => {
-      const scripts: File[] = [];
-      for (const h of files ?? []) {
-        const f = await h.getFile();
-        if (/\.json$/i.test(f.name)) openRefFn.current(f, h);
-        else scripts.push(f);
-      }
-      if (scripts.length) {
-        setIncoming(scripts);
-        setTab('import');
-      }
-      appLog.info('Opened files from the system', { files: files?.length ?? 0 });
-    });
-  }, []);
-
-  // The project file this story was opened from or saved to (Chrome/Edge), so Save writes back to it.
-  const [projectFile, setProjectFile] = useState<FileHandle | null>(null);
-  const [savedToFile, setSavedToFile] = useState<StoryProject | null>(null);
-  // When this project was last saved to a file or the cloud (remembered per project), and which version.
-  const [copy, setCopy] = useState<{ at: number; project: StoryProject | null } | null>(null);
-  const baseline = useRef<StoryProject | null>(project);
-  const [remindLater, setRemindLater] = useState(0);
-  // Since when the project has had work that isn't in a saved copy; the reminder waits a few minutes.
-  const unsaved = !!project && project !== copy?.project && project !== baseline.current;
-  const unsavedSince = useRef(0);
-  if (!unsaved) unsavedSince.current = 0;
-  else if (!unsavedSince.current) unsavedSince.current = Date.now();
-  const [, tick] = useState(0);
-  useEffect(() => {
-    const t = setInterval(() => tick((n) => n + 1), 60_000); // keeps "saved 5 min ago" current
-    return () => clearInterval(t);
-  }, []);
-  const projectKey = project ? `narrative-bridge.copy-saved.${project.project.id}` : '';
-  useEffect(() => {
-    if (!projectKey) return;
-    try {
-      const at = Number(localStorage.getItem(projectKey));
-      setCopy((c) => (c && c.project?.project.id === project?.project.id ? c : at ? { at, project: null } : null));
-    } catch {
-      /* not remembered */
-    }
-    // only when another project is opened
-  // eslint-disable-next-line react-hooks/exhaustive-deps -- keyed on the project id, not on every edit
-  }, [projectKey]);
-  const markCopied = (p: StoryProject) => {
-    const at = Date.now();
-    setCopy({ at, project: p });
-    try {
-      localStorage.setItem(`narrative-bridge.copy-saved.${p.project.id}`, String(at));
-    } catch {
-      /* not remembered */
-    }
-  };
-
   // Edit history (see editHistory.ts): `update` applies an edit to a copy; edits in one group within two seconds are one undo step.
   const onEdit = useCallback(() => setExportState(null), []);
   const { update, undo, redo, reset: resetHistory, keep: keepInHistory, canUndo, canRedo } = useEditHistory(setProject, onEdit);
+
+  const [incoming, setIncoming] = useState<File[]>();
+  // The project as a file (see useProjectFiles.ts): opening, saving, and the reminder to save a copy.
+  const files = useProjectFiles({
+    project,
+    parseDiagnostics,
+    onOpened: (p, diagnostics) => {
+      resetHistory();
+      setParseDiagnostics(diagnostics);
+      setProject(p);
+      setSelected(p.project.startPassage);
+      setTab('review');
+    },
+    onScripts: (scripts) => {
+      setIncoming(scripts);
+      setTab('import');
+    },
+  });
+  const { projectFile, savedToFile, copy, openRef, markCopied, keepBeforeReplacing, saveProject, chooseProject, openProject, openProjectText, detach } = files;
 
   useShortcuts(
     { project: !!project, tab },
@@ -268,16 +216,6 @@ export function App() {
     },
   );
 
-  /** Keeps the open story as an automatic draft before something replaces it (never blocks the change). */
-  const keepBeforeReplacing = async (label: string) => {
-    if (!project?.passages.length) return;
-    try {
-      await keepDraft(project, parseDiagnostics, label, true);
-    } catch {
-      /* logged; the change goes ahead */
-    }
-  };
-
   const restoreDraft = async (id: number) => {
     const d = await getDraft(id);
     if (!d) return;
@@ -293,8 +231,7 @@ export function App() {
     setParseDiagnostics(d.parseDiagnostics);
     setProject(d.project);
     if (replacing) {
-      setProjectFile(null);
-      setSavedToFile(null);
+      detach();
     }
     setSelected(replacing || !project ? d.project.project.startPassage : selected);
     setExportState(null);
@@ -346,8 +283,7 @@ export function App() {
       resetHistory();
       setParseDiagnostics(diagnostics);
       setProject(p);
-      setProjectFile(null); // a new story isn't saved anywhere yet
-      setSavedToFile(null);
+      detach(); // a new story isn't saved anywhere yet
       void requestPersistence();
       setSelected(p.project.startPassage);
       setExportState(null);
@@ -364,8 +300,7 @@ export function App() {
     resetHistory();
     setParseDiagnostics(replaced.parseDiagnostics);
     setProject(replaced.project);
-    setProjectFile(replaced.file);
-    setSavedToFile(null);
+    detach(replaced.file);
     setSelected(replaced.project.project.startPassage);
     setExportState(null);
     setJustImported(false);
@@ -387,98 +322,6 @@ export function App() {
     else if (pid) open(pid);
     else if (project.items.some((i) => i.id === d.entityId) || project.variables.some((v) => v.id === d.entityId)) open(STORY_SETTINGS);
   };
-
-  /**
-   * Saves the project as one .nbproj.json file, with voice clips embedded so it is complete on its own.
-   * Where the browser allows it, Save writes back to the file the project came from and Save As picks
-   * a new one; elsewhere the file is downloaded.
-   */
-  const saveProject = async (as = false) => {
-    if (!project) return;
-    const snapshot = project;
-    // Everything the project uses goes in the file, so it opens the same in any browser (projectFile.ts).
-    const { json, files } = await packProject(project, parseDiagnostics);
-    const audio = { length: files };
-    try {
-      let target: FileHandle | 'downloaded' | null;
-      if (projectFile && !as) {
-        await writeToHandle(projectFile, json);
-        target = projectFile;
-      } else target = await saveFile(`${fileBase(project)}.nbproj.json`, json, 'application/json', 'project');
-      if (!target) return; // cancelled
-      markCopied(snapshot);
-      if (target !== 'downloaded') {
-        setProjectFile(target);
-        setSavedToFile(snapshot);
-        void rememberRecent(target, project.project.title);
-      }
-      void requestPersistence();
-      appLog.info('Saved project file', { passages: project.passages.length, clips: audio.length, bytes: json.length, toFile: target !== 'downloaded' });
-    } catch (e) {
-      appLog.error('Could not save the project file', errorData(e));
-      alert(`Could not save the project file: ${e instanceof Error ? e.message : e}`);
-    }
-  };
-
-  /** Open project: the system's Open dialog where the browser allows it (so Save can write back), else the file input. */
-  const chooseProject = async () => {
-    if (!canUseFiles()) return openRef.current?.click();
-    const picked = await pickProjectFile();
-    if (picked) await openProject(picked.file, picked.handle);
-  };
-
-  const openProject = (file: File, handle?: FileHandle) => openProjectText(file.text(), 'file', handle);
-
-  /** Opens a project from a project file's text (a file, or the cloud). */
-  const openProjectText = async (text: Promise<string>, from: 'file' | 'cloud' | 'link', handle?: FileHandle) => {
-    try {
-      let unpacked: Awaited<ReturnType<typeof unpackProject>>;
-      try {
-        unpacked = await unpackProject(await text);
-      } catch (e) {
-        return alert(e instanceof Error ? e.message : String(e));
-      }
-      const p = unpacked.project;
-      appLog.info(from === 'cloud' ? 'Opened project from the cloud' : from === 'link' ? 'Opened story link' : 'Opened project file', { files: unpacked.files });
-      await keepBeforeReplacing(from === 'cloud' ? 'Before opening a project from the cloud' : from === 'link' ? 'Before opening a story link' : 'Before opening a project file');
-      resetHistory();
-      setParseDiagnostics(unpacked.parseDiagnostics);
-      setProject(p);
-      baseline.current = p;
-      if (from !== 'link') markCopied(p); // it came from a saved copy (a link isn't one the writer keeps)
-      setProjectFile(handle ?? null);
-      setSavedToFile(handle ? p : null);
-      if (handle) void rememberRecent(handle, p.project.title);
-      void requestPersistence();
-      setSelected(p.project.startPassage);
-      setTab('review');
-    } catch (e) {
-      appLog.error('Could not open project file', errorData(e));
-      alert(`Could not open project: ${e}`);
-    }
-  };
-
-  openRefFn.current = (f, h) => void openProject(f, h);
-
-  // A story link (#story=…, see storyLink.ts) opens that story, once; the open one is kept in Drafts first. It's read
-  // when the app opens with one, and when one is pasted into the address bar of a tab where the app is already open.
-  const openLinkRef = useRef((text: Promise<string>) => openProjectText(text, 'link'));
-  openLinkRef.current = (text) => openProjectText(text, 'link');
-  useEffect(() => {
-    const open = () => {
-      if (!location.hash.startsWith(LINK_PREFIX)) return;
-      const hash = location.hash;
-      history.replaceState(null, '', location.pathname + location.search);
-      void openLinkRef.current(
-        readStoryLink(hash)
-          .then((t) => t ?? Promise.reject(new Error('Not a story link.')))
-          .catch(() => Promise.reject(new Error('This story link couldn’t be read. It may have been cut short when it was copied: copy the whole link and try again.'))),
-      );
-    };
-    open();
-    window.addEventListener('hashchange', open);
-    return () => window.removeEventListener('hashchange', open);
-  }, []);
 
   // Latest handlers for the keyboard shortcuts (the listener is registered once).
   keys.current = {
@@ -652,7 +495,7 @@ export function App() {
         </div>
       </header>
 
-      {unsaved && Date.now() - unsavedSince.current > 5 * 60_000 && Date.now() > remindLater && (!copy || Date.now() - copy.at > 15 * 60_000) && (
+      {files.reminderDue() && (
         <div className="save-reminder" role="status">
           <span>
             {copy ? `Your last saved copy is from ${ago(copy.at)}.` : 'This project is only in this browser so far.'} Browsers can clear what they keep, so save a copy you can
@@ -661,7 +504,7 @@ export function App() {
           <button className="btn small primary" onClick={() => void saveProject()}>
             Save a copy now
           </button>
-          <button className="btn small ghost" onClick={() => setRemindLater(Date.now() + 30 * 60_000)}>
+          <button className="btn small ghost" onClick={files.remindLater}>
             Later
           </button>
         </div>
