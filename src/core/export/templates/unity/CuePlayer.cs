@@ -8,13 +8,13 @@ using UnityEngine.Events;
 namespace __NAMESPACE__
 {
     /// <summary>
-    /// Plays the story's cues without code. A writer adds cues in Narrative Bridge (#music:calm, #sound:door_creak,
+    /// Plays the story's cues without code. A writer adds cues in Pen to Ink (#music:calm, #sound:door_creak,
     /// #shake:0.5, or any name of their own; StoryInfo.Cues lists them), and this does what each one is set to: play
     /// or stop music (fading between tracks), play a sound, loop an ambience, shake the camera, or only raise its
-    /// event. A cue's value picks the clip with that name. Add it with Tools → Narrative Bridge → __MENU_TITLE__ →
+    /// event. A cue's value picks the clip with that name. Add it with Tools → Pen to Ink → __MENU_TITLE__ →
     /// Add Cue Player, which lists every cue in the story.
     /// </summary>
-    [AddComponentMenu("Narrative Bridge/__MENU_TITLE__/Narrative Cue Player")]
+    [AddComponentMenu("Pen to Ink/__MENU_TITLE__/Narrative Cue Player")]
     public class NarrativeCuePlayer : MonoBehaviour
     {
         public enum CueAction { EventOnly, PlayMusic, StopMusic, PlaySound, PlayAmbience, StopAmbience, ShakeCamera }
@@ -53,7 +53,7 @@ namespace __NAMESPACE__
         [Tooltip("How far it moves at strength 1 (a shake cue's value, 0 to 1; 0.5 when it has none).")]
         [Min(0f)] public float shakeDistance = 0.3f;
 
-        [Tooltip("Play the sounds the writer attached to cues in Narrative Bridge (StoryInfo.CueSoundTags) when a cue has no clip of its own named by its value.")]
+        [Tooltip("Play the sounds the writer attached to cues in Pen to Ink (StoryInfo.CueSoundTags) when a cue has no clip of its own named by its value.")]
         public bool playStorySounds = true;
 
         [Tooltip("Every cue, listed or not: its name and value.")]
@@ -146,7 +146,7 @@ namespace __NAMESPACE__
 
         /// <summary>
         /// The clip for a cue, then use(clip): the cue's own clip named by the value; else the sound the writer attached to
-        /// this cue in Narrative Bridge (loaded without waiting); else the cue's first clip; null when there's none.
+        /// this cue in Pen to Ink (loaded without waiting); else the cue's first clip; null when there's none.
         /// </summary>
         void WithClip(Cue cue, string value, string tag, Action<AudioClip> use)
         {

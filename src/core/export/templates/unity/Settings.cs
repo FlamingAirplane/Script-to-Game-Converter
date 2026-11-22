@@ -6,7 +6,7 @@ namespace __NAMESPACE__
     /// <summary>
     /// The player's own reading settings: text size, typing speed, auto-advance, high contrast and voice volume.
     /// The story panel's Settings button changes them; your game's own options menu can too. They are kept in
-    /// PlayerPrefs and shared by every Narrative Bridge story in the game. Changed is raised after each change.
+    /// PlayerPrefs and shared by every Pen to Ink story in the game. Changed is raised after each change.
     /// </summary>
     public static class NarrativeSettings
     {

@@ -7,7 +7,7 @@ namespace __NAMESPACE__.EditorTools
     /// <summary>
     /// Replays the story's playthrough routes (StoryRoutes) on a NarrativeController: each must offer the same
     /// choices, reach the same ending and finish on the same line as when it was exported. Run them with
-    /// Tools → Narrative Bridge → __MENU_TITLE__ → Run Playthrough Tests, the Test Runner (the package's tests), or
+    /// Tools → Pen to Ink → __MENU_TITLE__ → Run Playthrough Tests, the Test Runner (the package's tests), or
     /// headless: -executeMethod __NAMESPACE__.EditorTools.PlaythroughRunner.RunBatch
     /// </summary>
     public static class PlaythroughRunner
@@ -73,7 +73,7 @@ namespace __NAMESPACE__.EditorTools
             return failed == 0;
         }
 
-        [MenuItem("Tools/Narrative Bridge/__MENU_TITLE__/Run Playthrough Tests")]
+        [MenuItem("Tools/Pen to Ink/__MENU_TITLE__/Run Playthrough Tests")]
         static void RunMenu()
         {
             var ok = RunAll(out var log);

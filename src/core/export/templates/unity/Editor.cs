@@ -14,7 +14,7 @@ namespace __NAMESPACE__.EditorTools
     /// </summary>
     public static class NarrativeBridgeEditor
     {
-        const string Menu = "Tools/Narrative Bridge/__MENU_TITLE__/";
+        const string Menu = "Tools/Pen to Ink/__MENU_TITLE__/";
         const string AssetFolder = "__ASSET_FOLDER__";
         const string ScenePath = AssetFolder + "/NarrativeDemo.unity";
         const string ThemePath = AssetFolder + "/NarrativeTheme.asset";
@@ -26,7 +26,7 @@ namespace __NAMESPACE__.EditorTools
             return info != null ? info.resolvedPath : null;
         }
 
-        [MenuItem("GameObject/Narrative Bridge/__MENU_TITLE__", false, 10)]
+        [MenuItem("GameObject/Pen to Ink/__MENU_TITLE__", false, 10)]
         static void CreateStoryObjectMenu(MenuCommand command)
         {
             var go = CreateStoryObject();
@@ -84,7 +84,7 @@ namespace __NAMESPACE__.EditorTools
             Debug.Log("[NarrativeBridge] Demo scene created at " + ScenePath + ". Press Play to run the story.");
         }
 
-        /// <summary>For a new project only (Narrative Bridge's complete-project export calls it on first open).</summary>
+        /// <summary>For a new project only (Pen to Ink's complete-project export calls it on first open).</summary>
         public static void CreateDemoSceneIfMissing()
         {
             if (File.Exists(ScenePath)) return;
@@ -127,12 +127,12 @@ namespace __NAMESPACE__.EditorTools
             var theme = LoadOrCreateTheme();
             var exported = Resources.Load<TextAsset>(NarrativeTheme.ExportedResource);
             if (exported == null) { Debug.LogWarning("[NarrativeBridge] Resources/" + NarrativeTheme.ExportedResource + ".json is missing."); return; }
-            Undo.RecordObject(theme, "Reset Narrative Bridge theme");
+            Undo.RecordObject(theme, "Reset Pen to Ink theme");
             theme.ApplyExported(exported.text);
             EditorUtility.SetDirty(theme);
             AssetDatabase.SaveAssets();
             Selection.activeObject = theme;
-            Debug.Log("[NarrativeBridge] Theme reset to the look exported from Narrative Bridge.");
+            Debug.Log("[NarrativeBridge] Theme reset to the look exported from Pen to Ink.");
         }
 
         [MenuItem(Menu + "Run Story Smoke Test")]
@@ -251,7 +251,7 @@ namespace __NAMESPACE__.EditorTools
         }
 
         /// Makes up a language from the sheet ("[xx] " before every source text), plays the story in it, and checks every
-        /// line, choice and name the story shows was found in the sheet: the keys Narrative Bridge wrote match the ones
+        /// line, choice and name the story shows was found in the sheet: the keys Pen to Ink wrote match the ones
         /// the controller computes. The player's language and the package's sheet are put back afterwards.
         static string TranslationCheck(List<string> errors)
         {

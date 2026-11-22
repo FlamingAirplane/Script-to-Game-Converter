@@ -14,7 +14,7 @@ public class StoryExits : MonoBehaviour
     [System.Serializable]
     public class Exit
     {
-        [Tooltip("One of StoryInfo.Exits, as named in Narrative Bridge.")]
+        [Tooltip("One of StoryInfo.Exits, as named in Pen to Ink.")]
         public string name;
         public UnityEvent onReached = new UnityEvent();
     }

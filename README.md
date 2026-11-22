@@ -4,7 +4,7 @@
 
 # Pen to Ink
 
-*Formerly Narrative Bridge.* The Unity and Unreal packages it exports still use the Narrative Bridge names (menus, components, the `NarrativeBridge` folders), so games built with earlier exports keep working.
+*Formerly Narrative Bridge.* What people read now says Pen to Ink (menus, docs, the project name in Gists). What code and saved files depend on keeps the old name so earlier projects, saves and games keep working: the `NarrativeBridge` C# namespace, C++ module and folders, the `com.narrativebridge.*` package ids, the `narrative-bridge.*` storage keys and the `.nbproj.json` format.
 
 **Turn a script into a playable story, then hand it to a game developer.**
 
@@ -314,7 +314,7 @@ approved variables, a host-authoritative inventory bridge `IInventoryAuthority`,
 revised story versions), the `NarrativeView` story panel, the `NarrativeTheme` look, `StoryInfo`, and the story in
 `Runtime/Resources/NarrativeBridge/<story>/` (the compiled story, `Theme.json`, voice clips, and scene pictures as PNG/JPEG
 `.bytes` decoded at run time). For connecting it to a game: `StartAt(passage)`, `TagFound` for the story's own tags,
-`VariableChanged`, Inspector UnityEvents, *GameObject → Narrative Bridge → <Story>*, a *Voice Source* for the game's mixer,
+`VariableChanged`, Inspector UnityEvents, *GameObject → Pen to Ink → <Story>*, a *Voice Source* for the game's mixer,
 the view's *Sorting Order* and *Keyboard Shortcuts* (Input Manager or Input System), text drawn with **TextMeshPro** whenever the game has it (built into Unity 6; the TextMeshPro package on 2022.3; Unity's older Text otherwise), and a *Hooking into your game* sample.
 The validated ink is in `Ink~/MainStory.ink`. The **Story UI** settings on the Export page (about 70, described once in
 `UNITY_THEME_FIELDS` in `src/core/export/unityTheme.ts`, which also draws the card's controls) set the panel's colours,

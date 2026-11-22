@@ -11,7 +11,7 @@ namespace __NAMESPACE__.EditorTools
     /// <summary>
     /// When the story loads its voice clips and pictures with Addressables (StoryInfo.UsesAddressables), puts them in an
     /// Addressables group, "__MENU_TITLE__ Story", with the addresses the controller asks for. It runs by itself when the
-    /// group is missing; Tools → Narrative Bridge → __MENU_TITLE__ → Set Up Addressables runs it again (after an update).
+    /// group is missing; Tools → Pen to Ink → __MENU_TITLE__ → Set Up Addressables runs it again (after an update).
     /// </summary>
     [InitializeOnLoad]
     public static class AddressablesSetup
@@ -29,7 +29,7 @@ namespace __NAMESPACE__.EditorTools
             };
         }
 
-        [MenuItem("Tools/Narrative Bridge/__MENU_TITLE__/Set Up Addressables")]
+        [MenuItem("Tools/Pen to Ink/__MENU_TITLE__/Set Up Addressables")]
         static void SetUpMenu()
         {
             if (!StoryInfo.UsesAddressables) { Debug.Log("[NarrativeBridge] This story keeps its voice clips and pictures in Resources; export it with Addressables to load them on demand."); return; }

@@ -5,10 +5,10 @@ namespace __NAMESPACE__
 {
     /// <summary>
     /// How the story UI looks and behaves. The theme asset (Assets/NarrativeBridge/...) is made from the look
-    /// chosen in Narrative Bridge (StoryInfo.ThemeResource); change any of it in the Inspector, even while playing.
-    /// Tools → Narrative Bridge → __MENU_TITLE__ → Reset Theme to Exported Defaults brings back the exported look.
+    /// chosen in Pen to Ink (StoryInfo.ThemeResource); change any of it in the Inspector, even while playing.
+    /// Tools → Pen to Ink → __MENU_TITLE__ → Reset Theme to Exported Defaults brings back the exported look.
     /// </summary>
-    [CreateAssetMenu(menuName = "Narrative Bridge/__MENU_TITLE__ Theme", fileName = "NarrativeTheme")]
+    [CreateAssetMenu(menuName = "Pen to Ink/__MENU_TITLE__ Theme", fileName = "NarrativeTheme")]
     public class NarrativeTheme : ScriptableObject
     {
         public const string ExportedResource = StoryInfo.ThemeResource;
@@ -167,7 +167,7 @@ namespace __NAMESPACE__
             public bool showChoiceNumbers, continueArrow, showToolbar, showRestart, showSave, showLoad, showStatus, showPictures, showPortraits, portraitMirrorRight, keepPortraitForNarration, showLockedChoices, showSettings;
         }
 
-        /// <summary>Applies a theme exported from Narrative Bridge (the package's Theme.json).</summary>
+        /// <summary>Applies a theme exported from Pen to Ink (the package's Theme.json).</summary>
         public void ApplyExported(string json)
         {
             var e = JsonUtility.FromJson<Exported>(json);

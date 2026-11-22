@@ -18,7 +18,7 @@ namespace __NAMESPACE__.EditorTools
     {
         const string Folder = "__ASSET_FOLDER__/Localization";
 
-        [MenuItem("Tools/Narrative Bridge/__MENU_TITLE__/Create Localization Tables")]
+        [MenuItem("Tools/Pen to Ink/__MENU_TITLE__/Create Localization Tables")]
         static void CreateMenu()
         {
             var n = Create();

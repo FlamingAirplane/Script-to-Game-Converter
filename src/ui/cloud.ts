@@ -4,7 +4,9 @@
 // (design/live.ts); it stays in the browser and is sent only to GitHub.
 
 const API = 'https://api.github.com/gists';
-const PREFIX = 'Narrative Bridge project: ';
+const PREFIX = 'Pen to Ink project: ';
+/** Gists made before the rename start with the old name: still listed and opened, never written. */
+const OLD_PREFIX = 'Narrative Bridge project: ';
 const LINKS_KEY = 'narrative-bridge.cloud-gists';
 /** GitHub accepts large gists, but a very big project is better as a file. */
 export const CLOUD_LIMIT = 50 * 1024 * 1024;
@@ -52,9 +54,10 @@ function describe(title: string, projectId: string): string {
 }
 
 export function parseDescription(description: string | null): { title: string; projectId: string } | null {
-  if (!description?.startsWith(PREFIX)) return null;
-  const m = /^(.*) \(([^()]+)\)$/.exec(description.slice(PREFIX.length));
-  return m ? { title: m[1], projectId: m[2] } : { title: description.slice(PREFIX.length), projectId: '' };
+  const prefix = [PREFIX, OLD_PREFIX].find((p) => description?.startsWith(p));
+  if (!description || !prefix) return null;
+  const m = /^(.*) \(([^()]+)\)$/.exec(description.slice(prefix.length));
+  return m ? { title: m[1], projectId: m[2] } : { title: description.slice(prefix.length), projectId: '' };
 }
 
 /** Your projects in the cloud, newest first. */

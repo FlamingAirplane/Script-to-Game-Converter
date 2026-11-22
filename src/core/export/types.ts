@@ -4,7 +4,7 @@ import type { UnityTheme } from '../isr';
 import type { ProcessedStory } from '../pipeline';
 
 // Engine adapter contract (TypeScript rendering of the IEngineAdapter interface in the design doc).
-// These are Narrative Bridge interfaces, not APIs of Ink Unity Integration or Inkpot.
+// These are Pen to Ink interfaces, not APIs of Ink Unity Integration or Inkpot.
 
 export type EngineTarget = 'unity' | 'unreal';
 

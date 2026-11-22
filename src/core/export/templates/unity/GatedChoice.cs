@@ -4,7 +4,7 @@ using System.Collections.Generic;
 namespace __NAMESPACE__
 {
     /// <summary>
-    /// A choice that needs an item or a value, as approved in Narrative Bridge (StoryInfo.GatedChoices). Ink hides
+    /// A choice that needs an item or a value, as approved in Pen to Ink (StoryInfo.GatedChoices). Ink hides
     /// such a choice while its condition fails; NarrativeController.LockedChoices lists the ones locked right now,
     /// with what they need in plain words, so the story panel (or your UI) can show them greyed out.
     /// </summary>

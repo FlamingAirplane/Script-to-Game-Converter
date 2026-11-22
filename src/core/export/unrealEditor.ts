@@ -1,6 +1,6 @@
 // The Unreal export's editor module (NarrativeBridgeEditor): it imports the story files into Content/NarrativeBridge the first
 // time the project opens (the story through Inkpot's .ink importer, the voice clips and cue sounds as Sound Waves), adds
-// Tools → Narrative Bridge menu entries, and holds the automation tests: the playthrough routes, starting at every
+// Tools → Pen to Ink menu entries, and holds the automation tests: the playthrough routes, starting at every
 // passage, saves and their carry-over to a revised story, locked choices and translation keys. They take the place of
 // the Unity package's playthrough runner and smoke test. Filled with fillUnreal (unrealRuntime.ts).
 
@@ -23,7 +23,7 @@ public class ${module}Editor : ModuleRules
 `;
 }
 
-/** A few texts and their translation keys, worked out here, so a test proves the C++ key matches Narrative Bridge's. */
+/** A few texts and their translation keys, worked out here, so a test proves the C++ key matches Pen to Ink's. */
 export function keySamples(texts: string[]): [string, string][] {
   const base = ['The lamp is out.', '  Spaces   tidied\tup  ', 'Café — naïve “quotes”'];
   return [...new Set([...base, ...texts])].slice(0, 6).map((t) => [t, translationKey(t)]);

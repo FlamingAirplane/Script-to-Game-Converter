@@ -98,7 +98,12 @@ for fixing them.
       the page matches offered choices to it by id. Tests check it describes exactly what the Ink has. Kept Ink reports
       no line entries, since none were added to it. **Not done:** portraits and cue sounds (attached files, not Ink)
       still come from the model, and Twine and Ren'Py are still built from the model, not from the Ink output.
-- [ ] Display names vs compatibility names for "Narrative Bridge" (flaw 6)
+- [x] Display names vs compatibility names for "Narrative Bridge" (flaw 6): everything people read (Unity and Unreal
+      menus, Blueprint categories, plugin descriptions, exported READMEs and comments, the Gist description) now says
+      Pen to Ink; the names code depends on (`NarrativeBridge` namespace, module and folders, `com.narrativebridge.*`,
+      `narrative-bridge.*` keys, `.nbproj.json`) stay, and the README says which and why. Old Gists are still listed.
+      `tests/names.test.ts` fails if an export shows the old name with a space. **Not done:** a real Unreal build (only
+      strings changed; the stand-in compile and the Unity run pass).
 - [x] `presentation.unity` is now `presentation.panel` (flaw 8, first part): the editor writes the new key and drops the
       old one, and everything reads either (`panelThemeOf`), so older projects and files still open. A test keeps the
       panel words in the Unity panel, the Unreal panel and the translation sheet's list from drifting apart.

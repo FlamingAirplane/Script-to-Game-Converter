@@ -24,7 +24,7 @@ import { DEMO_CPP, DEMO_H, PANEL_CPP, PANEL_H, THEME_CPP, themeH, unrealThemeJso
 //   panel), and helpers for hooking the story into a game (see unrealRuntime.ts, unrealComponent.ts, unrealCues.ts,
 //   unrealUi.ts);
 // - its editor module, NarrativeBridgeEditor: it imports the story files the first time the project opens, adds
-//   Tools → Narrative Bridge (including importing a story into an existing project), and holds the automation tests
+//   Tools → Pen to Ink (including importing a story into an existing project), and holds the automation tests
 //   (see unrealEditor.ts).
 // The story itself is data: the canonical .ink, its compiled JSON and StoryInfo.json in StorySource/, imported into
 // Content/NarrativeBridge/. `npm run test:unreal:build` builds the export with a real Unreal Engine and Inkpot;
@@ -47,7 +47,7 @@ export const unrealAdapter: EngineAdapter = {
   },
   requirements: (o) => [
     { id: 'unreal', label: `Unreal Engine ${o.engineVersion}`, detail: 'Built and tested with Unreal Engine 5.7; Inkpot documents 5.7 and 5.8. Newer engines (5.9) may need a fix in Inkpot. Install via the Epic Games Launcher.', probe: { paths: ['/Users/Shared/Epic Games', 'C:\\Program Files\\Epic Games'] } },
-    { id: 'toolchain', label: 'C++ toolchain', detail: 'Visual Studio 2022 with "Game development with C++" on Windows, or Xcode on macOS. It builds Inkpot, which comes as source code, and the Narrative Bridge plugin unless the export carries a prebuilt one (the CLI\'s --plugin).', probe: { command: 'xcodebuild -version' } },
+    { id: 'toolchain', label: 'C++ toolchain', detail: 'Visual Studio 2022 with "Game development with C++" on Windows, or Xcode on macOS. It builds Inkpot, which comes as source code, and the Pen to Ink plugin unless the export carries a prebuilt one (the CLI\'s --plugin).', probe: { command: 'xcodebuild -version' } },
     { id: 'dotnet', label: '.NET runtime (optional)', detail: 'Only for Inkpot importing .ink through Inklecate. Without it, the editor makes the story asset from MainStory.compiled.json instead, and the story plays the same.', probe: { command: 'dotnet --list-runtimes' }, optional: true },
     { id: 'git', label: 'Git on PATH', detail: 'The setup script clones Inkpot at the pinned ref.', probe: { command: 'git --version' } },
   ],
@@ -77,7 +77,7 @@ export const unrealAdapter: EngineAdapter = {
       { path: `${root}StorySource/MainStory.compiled.json`, content: story.compile.json! },
       // The story's passages, lines, cues and the conditions of its locked choices, as data; the runtime reads it through a UNarrativeStoryData asset.
       { path: `${root}StorySource/StoryInfo.json`, content: json(info) },
-      { path: `${root}StorySource/ConditionChecks.json`, content: json({ about: 'What each locked choice\'s conditions give for sample variable values, worked out by Narrative Bridge. The NarrativeBridge.StoryData automation test checks the C++ evaluator agrees.', checks: conditionChecks(info) }) },
+      { path: `${root}StorySource/ConditionChecks.json`, content: json({ about: 'What each locked choice\'s conditions give for sample variable values, worked out by Pen to Ink. The NarrativeBridge.StoryData automation test checks the C++ evaluator agrees.', checks: conditionChecks(info) }) },
       ...(routes.length ? [{ path: `${root}StorySource/PlaythroughRoutes.json`, content: json({ about: 'Choices (by their text) that play from the start to each ending. The NarrativeBridge.Playthrough automation tests replay them.', routes }) }] : []),
       ...voice.files,
       // The story panel's look and the translation sheet, read at run time (see NarrativeTheme and NarrativeLocalization).
@@ -131,11 +131,11 @@ export const unrealAdapter: EngineAdapter = {
       { path: `${ed}NarrativeBridgeStoryDataTests.cpp`, content: fill(EDITOR_STORY_DATA_TESTS_CPP) },
       // The tests read StorySource/*.json, so they're the same for every story.
       { path: `${ed}NarrativeBridgeTests.cpp`, content: fill(EDITOR_TESTS_CPP) },
-      { path: `${root}StorySource/TestData.json`, content: json({ about: 'Translation keys worked out by Narrative Bridge, which the NarrativeBridge.TranslationKeys automation test checks the C++ against.', translationKeys: keySamples(story.project.passages.flatMap((p) => p.choices.map((c) => c.text)).slice(0, 3)).map(([text, key]) => ({ text, key })) }) },
+      { path: `${root}StorySource/TestData.json`, content: json({ about: 'Translation keys worked out by Pen to Ink, which the NarrativeBridge.TranslationKeys automation test checks the C++ against.', translationKeys: keySamples(story.project.passages.flatMap((p) => p.choices.map((c) => c.text)).slice(0, 3)).map(([text, key]) => ({ text, key })) }) },
       { path: `${root}Plugins/README.md`, content: `Run ../Scripts/setup_inkpot.sh (macOS/Linux) or ..\\Scripts\\setup_inkpot.ps1 (Windows) to install Inkpot @ ${options.integrationRef} into Plugins/Inkpot/.\n` },
       { path: `${root}Scripts/setup_inkpot.sh`, content: setupSh(options) },
       { path: `${root}Scripts/setup_inkpot.ps1`, content: setupPs1(options) },
-      { path: `${root}Content/NarrativeBridge/README.md`, content: 'The editor imports ../../StorySource/MainStory.ink here (as the Inkpot story asset MainStory) and the voice clips into Audio/ the first time the project opens; Tools → Narrative Bridge → Re-import Story Files does it again. Data/ holds the story panel\'s look, the translation sheet and the scene pictures, read while the game runs.\n' },
+      { path: `${root}Content/NarrativeBridge/README.md`, content: 'The editor imports ../../StorySource/MainStory.ink here (as the Inkpot story asset MainStory) and the voice clips into Audio/ the first time the project opens; Tools → Pen to Ink → Re-import Story Files does it again. Data/ holds the story panel\'s look, the translation sheet and the scene pictures, read while the game runs.\n' },
       { path: `${root}README.md`, content: readme(story, options, name) },
       ...commonFiles(story, manifest, `${root}NarrativeBridge/`),
       ...sourceFiles(story, `${root}NarrativeBridge/`, options.originals),
@@ -169,7 +169,7 @@ function uproject(o: ExportOptions) {
     FileVersion: 3,
     EngineAssociation: o.engineVersion,
     Category: '',
-    Description: 'Generated by Narrative Bridge',
+    Description: 'Generated by Pen to Ink',
     Plugins: [
       { Name: MODULE, Enabled: true },
       { Name: 'Inkpot', Enabled: true },
@@ -183,10 +183,10 @@ function uplugin() {
     FileVersion: 3,
     Version: 1,
     VersionName: GENERATOR_VERSION,
-    FriendlyName: 'Narrative Bridge',
-    Description: 'Plays a story written in Narrative Bridge: a story component, a themed story panel, cues, translations and saves. The story itself is data in the project (StorySource/ and Content/NarrativeBridge/).',
+    FriendlyName: 'Pen to Ink',
+    Description: 'Plays a story written in Pen to Ink: a story component, a themed story panel, cues, translations and saves. The story itself is data in the project (StorySource/ and Content/NarrativeBridge/).',
     Category: 'Narrative',
-    CreatedBy: 'Narrative Bridge',
+    CreatedBy: 'Pen to Ink',
     CanContainContent: false,
     Installed: false,
     Modules: [
@@ -275,11 +275,11 @@ function setupSteps(o: ExportOptions, name: string): string[] {
   return [
     `Use Unreal Engine 5.7 or 5.8: the project is built and tested with 5.7, and Inkpot @ ${o.integrationRef} documents 5.7 and 5.8. On 5.9 that Inkpot release may not compile until one line is fixed (see the README's integration notes).`,
     `Run Scripts/setup_inkpot.sh (or .ps1 on Windows) to clone Inkpot @ ${o.integrationRef} into Plugins/Inkpot.`,
-    `Open ${name}.uproject and accept the rebuild prompt: the project has no code of its own, only the Narrative Bridge plugin in Plugins/NarrativeBridge and Inkpot in Plugins/Inkpot. A C++ toolchain builds them once (the Narrative Bridge plugin needs none when the export carries a prebuilt one; Inkpot comes as source code, so it always does).`,
+    `Open ${name}.uproject and accept the rebuild prompt: the project has no code of its own, only the Pen to Ink plugin in Plugins/NarrativeBridge and Inkpot in Plugins/Inkpot. A C++ toolchain builds them once (the Pen to Ink plugin needs none when the export carries a prebuilt one; Inkpot comes as source code, so it always does).`,
     'Open the project: the first time, the editor imports StorySource/MainStory.ink (as an Inkpot story asset) and the voice clips into Content/NarrativeBridge.',
     o.includeDemo
-      ? 'Press Play: the story runs in its themed story panel. To put it in your own level, use Tools → Narrative Bridge → Add … to the Level.'
-      : 'Tools → Narrative Bridge → Add … to the Level adds an actor with the story, its story panel and its cue player; or add a "Narrative Bridge" component to any actor and bind its events in Blueprint.',
+      ? 'Press Play: the story runs in its themed story panel. To put it in your own level, use Tools → Pen to Ink → Add … to the Level.'
+      : 'Tools → Pen to Ink → Add … to the Level adds an actor with the story, its story panel and its cue player; or add a "Pen to Ink" component to any actor and bind its events in Blueprint.',
     `Optional: run the story's automation tests (Tools → Session Frontend → Automation, filter "NarrativeBridge").`,
   ];
 }
@@ -287,7 +287,7 @@ function setupSteps(o: ExportOptions, name: string): string[] {
 function readme(story: ProcessedStory, o: ExportOptions, name: string) {
   return `# ${story.project.project.title} — Unreal Engine export
 
-Generated by Narrative Bridge. Story version \`${storyVersion(story)}\`.
+Generated by Pen to Ink. Story version \`${storyVersion(story)}\`.
 
 ## Run it
 ${setupSteps(o, name).map((s, i) => `${i + 1}. ${s}`).join('\n')}
@@ -300,12 +300,12 @@ ${setupSteps(o, name).map((s, i) => `${i + 1}. ${s}`).join('\n')}
 
 ## Use it in a game you already have
 1. Copy \`Plugins/NarrativeBridge/\` (and install Inkpot with the setup script) into your project's \`Plugins/\`.
-2. Open the project, then choose *Tools → Narrative Bridge → Import Pen to Ink Story…* and pick this exported folder. It copies
+2. Open the project, then choose *Tools → Pen to Ink → Import Pen to Ink Story…* and pick this exported folder. It copies
    \`StorySource/\` and \`Content/NarrativeBridge/Data/\` in and imports the story. Export the story again later and import again:
    the assets are replaced in place, so Blueprints that refer to them keep working.
 3. A project that used an earlier export of this story (when its code was a module called \`${name}\`) keeps its Blueprints
    working through the \`[CoreRedirects]\` in \`Config/DefaultEngine.ini\`: copy that section into your project's.
-4. To skip compiling the Narrative Bridge plugin, export with a prebuilt one: \`narrative-bridge export … --engine unreal --plugin NarrativeBridge-<version>-UE<engine>.zip\`.
+4. To skip compiling the Pen to Ink plugin, export with a prebuilt one: \`narrative-bridge export … --engine unreal --plugin NarrativeBridge-<version>-UE<engine>.zip\`.
    Inkpot still comes as source code, so the project needs a C++ toolchain once for Inkpot until it is prebuilt too.
 
 ## Layout
@@ -318,11 +318,11 @@ ${setupSteps(o, name).map((s, i) => `${i + 1}. ${s}`).join('\n')}
 - \`Content/NarrativeBridge/Data/\` — the story panel's look (\`Theme.json\`), the translation sheet (\`Translations.csv\`) and the scene
   pictures, read while the game runs (\`Config/DefaultGame.ini\` stages them with the game).
 - \`Plugins/NarrativeBridge/\` — all the code, as a plugin that is the same for every story. \`Source/NarrativeBridge/\` is the runtime module (the story component, story panel, cue player, translations, settings, the story data reader and the demo game mode). The project itself has no \`Source/\`: it is Blueprint-only, and you can copy the plugin into your own project.
-- \`Plugins/NarrativeBridge/Source/NarrativeBridgeEditor/\` — the editor module: importing the story files, *Tools → Narrative Bridge*, and the automation tests.
+- \`Plugins/NarrativeBridge/Source/NarrativeBridgeEditor/\` — the editor module: importing the story files, *Tools → Pen to Ink*, and the automation tests.
 - \`NarrativeBridge/\` — manifest, validation report, ISR, source map and original sources.
 
 ## The story component
-Add a **Narrative Bridge** component to any actor (or use *Tools → Narrative Bridge → Add ${story.project.project.title} to the Level*, which also adds
+Add a **Pen to Ink** component to any actor (or use *Tools → Pen to Ink → Add ${story.project.project.title} to the Level*, which also adds
 the story panel and the cue player). It plays \`Content/NarrativeBridge/MainStory\` unless you set *Story Asset*.
 - **Start it where you want.** Turn off *Start On Begin Play* and call \`StartStory\`, or \`StartAt("passage")\` to begin at a scene
   (\`GetPassages\` lists them). The **Narrative Story Trigger** component starts it when the player walks in.
@@ -356,7 +356,7 @@ the story panel and the cue player). It plays \`Content/NarrativeBridge/MainStor
 The **Narrative Story Panel** component puts a **Narrative Story Widget** on screen for the story on its actor: story text (everything so far,
 the current scene, or one line at a time) typed out letter by letter, the speaking character's portrait, the scene picture behind, choices,
 the Continue button, the ending, and a toolbar with Restart, Save, Load and Settings. Keys: 1-9 choose, Space or Return continues (or finishes
-the line being typed), Escape closes a menu. Its look is the one chosen in Narrative Bridge (\`Content/NarrativeBridge/Data/Theme.json\`, about
+the line being typed), Escape closes a menu. Its look is the one chosen in Pen to Ink (\`Content/NarrativeBridge/Data/Theme.json\`, about
 70 settings in groups: colours, panel, text, speakers and scenes, typing and pacing, choices and buttons, toolbar, scene pictures, character
 portraits, screen and sound). To change it in the editor, make a **Narrative Theme** data asset and set it on the story panel. *Font Family*
 uses your own font. The UI scales with the screen from the theme's reference resolution (\`Config/DefaultEngine.ini\`). To design your own UI,
@@ -367,7 +367,7 @@ Lines keep the script's emphasis as \`<i>…</i>\`, \`<b>…</b>\` and \`<u>…<
 \`PlainText\` for a plain Text Block, or through \`RichText\` for a Rich Text Block whose text style set has rows named \`i\`, \`b\` and \`u\`.
 
 ## Cues
-Writers add cues in Narrative Bridge: music, a sound, an ambience, a camera shake, or a name of their own, with an optional value
+Writers add cues in Pen to Ink: music, a sound, an ambience, a camera shake, or a name of their own, with an optional value
 (\`#music:calm\`, \`#sound:door_creak\`, \`#shake:0.5\`), listed in \`StoryInfo.json\` (\`cues\` and \`cueTags\`). The **Narrative Cue Player**
 component plays them without code: it lists every cue with a likely action (play or stop music, play a sound, loop an ambience, shake the camera
 with your *Shake Class*, or only raise \`OnAnyCue\`). **Sounds the writer attached to cues come with the project and play by themselves**
@@ -393,7 +393,7 @@ language (\`""\` for the story as written; the first time, the player's system l
 
 ## Player settings
 The panel's *Settings* button opens a menu where the player sets the text size, typing speed (slow, normal, fast or instant), whether it goes on
-by itself, high contrast and the voice volume. They're kept in GameUserSettings and shared by every Narrative Bridge story in the game. Your own
+by itself, high contrast and the voice volume. They're kept in GameUserSettings and shared by every Pen to Ink story in the game. Your own
 options menu can set the same things through **Narrative Settings** (\`SetTextScale\`, \`SetTypingSpeed\`, \`SetAutoAdvance\`, \`SetHighContrast\`,
 \`SetVoiceVolume\`, \`ResetSettings\`); the menu's words are in the widget's *Words*.
 
@@ -405,13 +405,13 @@ save and load (and carry a save over from an earlier version), and check the tra
 
 ## Integration notes
 - Inkpot is not vendored. \`Scripts/setup_inkpot.*\` clones it at \`${o.integrationRef}\`.${isPinnedRef(o.integrationRef) ? '' : ' **This is a branch — pin a tested tag or commit SHA.**'}
-- **Engine versions:** built and tested with Unreal Engine 5.7 (\`npm run test:unreal:build\` in Narrative Bridge); Inkpot documents 5.7 and 5.8.
+- **Engine versions:** built and tested with Unreal Engine 5.7 (\`npm run test:unreal:build\` in Pen to Ink); Inkpot documents 5.7 and 5.8.
   Unreal 5.9 is newer than this Inkpot release promises: there its \`NativeFunctionCall.cpp\` (line 133) fails to compile because a log
   argument must now be an integer. Casting it, \`(int32)coercedType\`, gets the build through, and the story then plays; a newer Inkpot
   release may make that unnecessary. 5.6 and earlier aren't supported.
 - The C++ targets Inkpot's \`UInkpot::BeginStory\` / \`UInkpotStory\` API and InkPlusPlus's \`Ink::FStory\`. Header paths and method names can
   change between Inkpot releases; if the build fails, compare against \`Plugins/Inkpot/Source\`.
-- Exporting again replaces \`Plugins/NarrativeBridge/\`, \`StorySource/\`, \`Config/\` and \`Content/NarrativeBridge/Data/\`; run *Tools → Narrative Bridge →
+- Exporting again replaces \`Plugins/NarrativeBridge/\`, \`StorySource/\`, \`Config/\` and \`Content/NarrativeBridge/Data/\`; run *Tools → Pen to Ink →
   Re-import Story Files* afterwards. Your own Narrative Theme assets and levels are kept.
 `;
 }

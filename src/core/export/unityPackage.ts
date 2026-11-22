@@ -22,7 +22,7 @@ export interface UnityPackageId {
   menuTitle: string;
 }
 
-/** Names Narrative Bridge's C# uses unqualified; a namespace part with one of these names would hide it. */
+/** Names Pen to Ink's C# uses unqualified; a namespace part with one of these names would hide it. */
 const RESERVED = new Set(['Ink', 'UnityEngine', 'UnityEditor', 'System', 'Object', 'String', 'Editor', 'EditorTools', 'Setup', 'StoryInfo', 'NarrativeController', 'NarrativeView', 'NarrativeTheme', 'IInventoryAuthority', 'NarrativeLocalization', 'GatedChoice', 'NarrativeSettings', 'NarrativeCuePlayer', 'ISaveStorage', 'FileSaveStorage', 'Story', 'Debug', 'Resources', 'Application', 'Color', 'Font', 'Line', 'Choice', 'Mathf', 'Path', 'File', 'Directory', 'Samples']);
 
 export const SEMVER = /^\d+\.\d+\.\d+(-[0-9A-Za-z.-]+)?$/;
@@ -108,11 +108,11 @@ export function packageJson(id: UnityPackageId, o: { version: string; title: str
   return {
     name: id.name,
     version: o.version,
-    displayName: `${o.title} (Narrative Bridge)`.slice(0, 80),
+    displayName: `${o.title} (Pen to Ink)`.slice(0, 80),
     description: o.description,
     unity: o.unity,
     keywords: ['narrative', 'story', 'dialogue', 'ink', 'interactive fiction', 'narrative-bridge'],
-    author: { name: 'Narrative Bridge', url: 'https://flamingairplane.github.io/Script-to-Game-Converter/' },
+    author: { name: 'Pen to Ink', url: 'https://flamingairplane.github.io/Script-to-Game-Converter/' },
     // Ink Unity Integration isn't on Unity's registry, so it can't be listed here; the package's
     // editor helper installs it from GitHub when the game doesn't have it (see SETUP_CS).
     dependencies: {

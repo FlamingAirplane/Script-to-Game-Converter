@@ -19,11 +19,11 @@ namespace __NAMESPACE__
     /// continues (or finishes the typewriter). To design your own UI instead, remove this component and use
     /// the controller's events.
     /// </summary>
-    [AddComponentMenu("Narrative Bridge/__MENU_TITLE__/Narrative View")]
+    [AddComponentMenu("Pen to Ink/__MENU_TITLE__/Narrative View")]
     public class NarrativeView : MonoBehaviour
     {
         public NarrativeController controller;
-        [Tooltip("Leave empty to use the look exported from Narrative Bridge.")]
+        [Tooltip("Leave empty to use the look exported from Pen to Ink.")]
         public NarrativeTheme theme;
         [Tooltip("Draw order against your game's other screen-space canvases (higher draws on top).")]
         public int sortingOrder = 100;
