@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import { ArrowDown, ArrowUp, GitBranch, Trash2 } from 'lucide-react';
 import { cueName, type ContentBlock, type Passage, type StoryProject } from '../../core/isr';
 import { ProvenanceBadge } from '../common';
 import { CueSound, VoiceClip } from '../VoiceControls';
@@ -47,6 +48,7 @@ export function BlockRow({
             L{block.source.line}
           </button>
         )}
+        <ProvenanceBadge origin={block.origin} />
       </div>
       <div className="block-body">
         {block.type === 'dialogue' && (
@@ -156,21 +158,20 @@ export function BlockRow({
           </div>
         )}
       </div>
-      <div className="block-actions">
-        <ProvenanceBadge origin={block.origin} />
+      <div className="block-actions" role="toolbar" aria-label={`Tools for this ${block.type === 'pause' ? 'break' : block.type === 'exit' ? 'exit' : block.type}`}>
         {onToChoice && (
           <button className="icon" title="Turn this line into a choice the player clicks" aria-label="Turn this line into a choice" onClick={onToChoice}>
-            ⑂
+            <GitBranch size={15} aria-hidden />
           </button>
         )}
-        <button className="icon" title="Move up" onClick={() => onMove(-1)}>
-          ↑
+        <button className="icon" title="Move up" aria-label="Move up" onClick={() => onMove(-1)}>
+          <ArrowUp size={15} aria-hidden />
         </button>
-        <button className="icon" title="Move down" onClick={() => onMove(1)}>
-          ↓
+        <button className="icon" title="Move down" aria-label="Move down" onClick={() => onMove(1)}>
+          <ArrowDown size={15} aria-hidden />
         </button>
-        <button className="icon" title="Delete" onClick={onDelete}>
-          ×
+        <button className="icon icon-danger" title="Delete this block" aria-label="Delete this block" onClick={onDelete}>
+          <Trash2 size={15} aria-hidden />
         </button>
       </div>
     </div>
