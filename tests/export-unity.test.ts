@@ -32,7 +32,8 @@ describe('engine exports', () => {
     const res = await ADAPTERS.unity.export(processProject(project), { engine: 'unity', projectName: 'Locked Archive', engineVersion: ADAPTERS.unity.defaultEngineVersion, integrationRef: 'v1.2.3', includeDemo: true });
     const file = (name: string) => res.files.find((f) => f.path.endsWith(name))!.content as string;
     const controller = file('NarrativeController.cs');
-    expect(controller).toContain('choicePath.Add(Story.currentChoices[index].text);');
+    expect(controller).toContain('choicePath.Add(PathEntryOf(Story.currentChoices[index]));'); // the choice's id and its text
+    expect(controller).toContain('SplitPathEntry(path[i], out var wantId, out var wantText);'); // found by id, else by text
     expect(controller).toContain('saveJson.IndexOf("\\"choicePath\\"", StringComparison.Ordinal)');
     expect(file('NarrativeBridgeEditor.cs')).toContain('save.Replace("\\"storyVersion\\":\\"" + StoryInfo.StoryVersion');
   });

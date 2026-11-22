@@ -478,7 +478,16 @@ namespace __NAMESPACE__.EditorTools
                 var c = go.AddComponent<NarrativeController>();
                 c.StartStory();
                 if (c.Story == null) { errors.Add("Save carry-over: the controller could not start the story."); return "save carry-over not run"; }
-                for (int i = 0; i < 3 && c.Story.currentChoices.Count > 0; i++) c.Choose(0);
+                // A choice taken is remembered by its id (when the story has them), so rewording it keeps the mark.
+                if (c.Story.currentChoices.Count > 0)
+                {
+                    var first = c.Story.currentChoices[0];
+                    c.Choose(0);
+                    var reworded = new Ink.Runtime.Choice { text = first.text + " (reworded)", sourcePath = first.sourcePath, tags = first.tags };
+                    if (!c.WasChosen(first)) { errors.Add("Choices taken before: a choice taken was not remembered."); return "save carry-over failed"; }
+                    if (first.tags != null && first.tags.Exists(t => t.StartsWith("id:")) && !c.WasChosen(reworded)) { errors.Add("Choices taken before: a reworded choice lost its mark."); return "save carry-over failed"; }
+                }
+                for (int i = 0; i < 2 && c.Story.currentChoices.Count > 0; i++) c.Choose(0);
                 var expected = string.Join(" | ", c.Story.currentChoices.ConvertAll(x => x.text));
                 var save = c.SaveState();
                 var older = save.Replace("\"storyVersion\":\"" + StoryInfo.StoryVersion + "\"", "\"storyVersion\":\"earlier\"");
@@ -486,7 +495,22 @@ namespace __NAMESPACE__.EditorTools
                 if (!c.TryLoadState(older, out var err)) { errors.Add("Save carry-over: " + err); return "save carry-over failed"; }
                 var got = string.Join(" | ", c.Story.currentChoices.ConvertAll(x => x.text));
                 if (got != expected || c.LoadNote == null) { errors.Add("Save carry-over: expected choices [" + expected + "] but got [" + got + "]"); return "save carry-over failed"; }
-                return "save carry-over passed";
+                // A save from before ids has just the text of each choice; a story whose choices were reworded since the save keeps
+                // their ids. Both must land in the same place.
+                var marked = System.Text.RegularExpressions.Regex.IsMatch(older, "\\\\u0001");
+                if (marked)
+                {
+                    var legacy = System.Text.RegularExpressions.Regex.Replace(older, "\\\\u0001[^\\\\\"]*?\\\\u0001", "");
+                    var reworded = System.Text.RegularExpressions.Regex.Replace(older, "(\\\\u0001[^\\\\\"]*?\\\\u0001)[^\"]*", "$1Reworded since the save");
+                    foreach (var (label, json) in new[] { ("a save from before ids", legacy), ("reworded choices", reworded) })
+                    {
+                        c.StartStory();
+                        if (!c.TryLoadState(json, out var err2)) { errors.Add("Save carry-over (" + label + "): " + err2); return "save carry-over failed"; }
+                        var got2 = string.Join(" | ", c.Story.currentChoices.ConvertAll(x => x.text));
+                        if (got2 != expected) { errors.Add("Save carry-over (" + label + "): expected choices [" + expected + "] but got [" + got2 + "]"); return "save carry-over failed"; }
+                    }
+                }
+                return "save carry-over passed" + (marked ? " (by id, and from before ids)" : "");
             }
             finally { UnityEngine.Object.DestroyImmediate(go); }
         }

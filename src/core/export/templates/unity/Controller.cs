@@ -221,11 +221,50 @@ namespace __NAMESPACE__
         const string ChosenKey = "NarrativeBridge.Chosen." + StoryInfo.ProjectId;
         HashSet<string> chosenBefore;
 
-        static string ChosenKeyOf(Choice choice)
+        /// <summary>The id the story gave a choice (its #id tag inside the brackets), or null for a story written before ids.</summary>
+        static string ChoiceId(Choice choice)
+        {
+            if (choice?.tags == null) return null;
+            foreach (var t in choice.tags)
+                if (t.StartsWith("id:", StringComparison.Ordinal)) return t.Substring(3).Trim();
+            return null;
+        }
+
+        /// <summary>How a choice was remembered before ids: its passage and its text as written ("harbour|Take the boat").</summary>
+        static string LegacyChosenKey(Choice choice)
         {
             var path = choice.sourcePath ?? "";
             var dot = path.IndexOf('.');
             return (dot < 0 ? path : path.Substring(0, dot)) + "|" + choice.text.Trim();
+        }
+
+        /// <summary>How a choice is remembered now: by its id, which survives rewording; by passage and text when it has none.</summary>
+        static string ChosenKeyOf(Choice choice)
+        {
+            var id = ChoiceId(choice);
+            return id != null ? "id:" + id : LegacyChosenKey(choice);
+        }
+
+        /// <summary>Marks a choice's id inside a saved choice path entry: "\u0001id\u0001text". An entry without it is just the text (a save from before ids).</summary>
+        const char IdMark = '\u0001';
+
+        /// <summary>A save's choice path entry for a choice: its id and its text, so a later version of the story can find it by either.</summary>
+        static string PathEntryOf(Choice choice)
+        {
+            var id = ChoiceId(choice);
+            return id == null ? choice.text : IdMark + id + IdMark + choice.text;
+        }
+
+        /// <summary>Splits a choice path entry into its id (null for an older save) and its text.</summary>
+        static void SplitPathEntry(string entry, out string id, out string text)
+        {
+            id = null;
+            text = entry;
+            if (entry.Length > 1 && entry[0] == IdMark)
+            {
+                var end = entry.IndexOf(IdMark, 1);
+                if (end > 0) { id = entry.Substring(1, end - 1); text = entry.Substring(end + 1); }
+            }
         }
 
         HashSet<string> ChosenBefore
@@ -244,9 +283,19 @@ namespace __NAMESPACE__
 
         /// <summary>
         /// True if the player has taken this choice before, in this read or an earlier one (kept in PlayerPrefs, through
-        /// Restart). The demo UI greys these out but keeps them clickable. A choice is known by its passage and its text.
+        /// Restart). The demo UI greys these out but keeps them clickable. A choice is known by the id the story gave it, so rewording
+        /// it keeps the mark; one made before ids (or in a story without them) by its passage and its text.
         /// </summary>
-        public bool WasChosen(Choice choice) => choice != null && ChosenBefore.Contains(ChosenKeyOf(choice));
+        public bool WasChosen(Choice choice)
+        {
+            if (choice == null) return false;
+            var key = ChosenKeyOf(choice);
+            if (ChosenBefore.Contains(key)) return true;
+            if (!ChosenBefore.Contains(LegacyChosenKey(choice))) return false;
+            // Remembered by its words, before the story had ids: from now on by its id too, so rewording it keeps the mark.
+            if (ChosenBefore.Add(key)) PlayerPrefs.SetString(ChosenKey, string.Join("\n", ChosenBefore));
+            return true;
+        }
 
         /// <summary>Forgets which choices were taken before, so every choice looks new again.</summary>
         public void ForgetChosen()
@@ -471,7 +520,7 @@ namespace __NAMESPACE__
                 RememberChosen(Story.currentChoices[index]);
             if (!IsWaitingForContinue && !IsAtExit)
                 transcript.Add(Localize(new Line { Speaker = null, Text = Story.currentChoices[index].text, SourceText = Story.currentChoices[index].text, Tags = new List<string> { "choice" }, IsChoice = true }));
-            choicePath.Add(Story.currentChoices[index].text);
+            choicePath.Add(PathEntryOf(Story.currentChoices[index]));
             Story.ChooseChoiceIndex(index);
             StopVoice();
             Advance();
@@ -987,7 +1036,7 @@ namespace __NAMESPACE__
         }
 
         // A save from another version of the story: play the new version from the start (or the passage
-        // it was started at), silently, making the same choices (matched by their text), so its text and
+        // it was started at), silently, making the same choices (matched by their id when the save and the story both have ids, else by their text), so its text and
         // variables apply. Stops at the first choice the new version no longer offers.
         void ReplayChoices(List<string> path, string savedVersion)
         {
@@ -1018,11 +1067,12 @@ namespace __NAMESPACE__
                         i++;
                         continue;
                     }
-                    var match = Story.currentChoices.Find(c => c.text == path[i]);
+                    SplitPathEntry(path[i], out var wantId, out var wantText);
+                    var match = (wantId != null ? Story.currentChoices.Find(c => ChoiceId(c) == wantId) : null) ?? Story.currentChoices.Find(c => c.text == wantText);
                     if (match != null)
                     {
                         Story.ChooseChoiceIndex(match.index);
-                        choicePath.Add(path[i]);
+                        choicePath.Add(PathEntryOf(match));
                         followed++;
                         i++;
                     }
@@ -1031,7 +1081,7 @@ namespace __NAMESPACE__
                         Story.ChooseChoiceIndex(0);
                         choicePath.Add(ContinueText);
                     }
-                    else if (path[i] == ContinueText)
+                    else if (wantText == ContinueText)
                     {
                         followed++;
                         i++;

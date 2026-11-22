@@ -88,8 +88,11 @@ for fixing them.
 - [x] Stable ids for lines and choices, web side (flaw 2): lines get `id` in the model (`src/core/ids.ts`), every
       line carries `#id:…` in the Ink and every choice `[text #id:…]`; the importer reads them back; Playtest and the
       playable page remember chosen choices and replay saves by id, falling back to the words; a reworded line or choice
-      keeps its translation (`carryTranslations`). Unity and Unreal ignore `#id` (not a cue) but still match by text.
-      **Not done:** the engine readers matching by id, the translation sheet keyed by id, reader notes and recording
+      keeps its translation (`carryTranslations`). Unreal ignores `#id` (not a cue) but still matches by text. The Unity controller now matches too: a save's choice
+      path records each choice's id and text, so a revised story with reworded choices still replays it; a choice
+      taken before is remembered by id (older marks are upgraded the first time they show); saves and marks from before
+      ids keep working. The Unity smoke test checks all three cases.
+      **Not done:** the Unreal reader matching by id (no Unreal Engine here, and Inkpot's choice-tag API is unchecked), the translation sheet keyed by id, reader notes and recording
       matching by id, and showing ids to writers.
 - [x] Story info comes from the Ink pass (flaw 4): `generateInk` returns `info` (locked choices, passages with titles
       and acts, acts, line entries, item and story variables, exits, cues) from the same loop that writes the Ink; the
