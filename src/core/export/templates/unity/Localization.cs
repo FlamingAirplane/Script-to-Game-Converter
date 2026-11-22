@@ -13,7 +13,7 @@ namespace __NAMESPACE__
     /// Shows the story in another language. The package's translation sheet (Resources: StoryInfo.TranslationsResource,
     /// a CSV) lists every piece of text the player can see with a key made from its text; translators add a column per
     /// language ("fr", "de"…). Language picks one (or "" for the story as written); the story panel's Settings menu has
-    /// it too. With Unity's Localization package, Tools → Narrative Bridge → __MENU_TITLE__ → Create Localization Tables
+    /// it too. With Unity's Localization package, Tools → Pen to Ink → __MENU_TITLE__ → Create Localization Tables
     /// makes a String Table Collection from the sheet, and the story then follows the selected locale.
     /// </summary>
     public static class NarrativeLocalization
@@ -84,7 +84,7 @@ namespace __NAMESPACE__
             return table.TryGetValue(Key(text), out var row) && column < row.Length && !string.IsNullOrEmpty(row[column]) ? row[column] : text;
         }
 
-        /// <summary>The sheet's key for a text: its words with spaces tidied, hashed (FNV-1a), e.g. "nb_1c3f9a2e". The same as Narrative Bridge's.</summary>
+        /// <summary>The sheet's key for a text: its words with spaces tidied, hashed (FNV-1a), e.g. "nb_1c3f9a2e". The same as Pen to Ink's.</summary>
         public static string Key(string text)
         {
             var t = Normalise(text);

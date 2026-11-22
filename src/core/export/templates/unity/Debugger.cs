@@ -6,7 +6,7 @@ using UnityEngine;
 namespace __NAMESPACE__.EditorTools
 {
     /// <summary>
-    /// Tools → Narrative Bridge → __MENU_TITLE__ → Story Debugger. While the game plays it follows the story: the
+    /// Tools → Pen to Ink → __MENU_TITLE__ → Story Debugger. While the game plays it follows the story: the
     /// passage the reader is in, the choices (click to choose), the locked ones, every story variable and item (edit
     /// them), a jump to any passage, and saves to and from the clipboard.
     /// </summary>
@@ -18,7 +18,7 @@ namespace __NAMESPACE__.EditorTools
         string[] jumpTargets, jumpLabels;
         bool showVariables = true, showItems = true, showTranscript = true;
 
-        [MenuItem("Tools/Narrative Bridge/__MENU_TITLE__/Story Debugger")]
+        [MenuItem("Tools/Pen to Ink/__MENU_TITLE__/Story Debugger")]
         public static void Open() => GetWindow<StoryDebuggerWindow>(false, "Story Debugger", true);
 
         void OnEnable() => EditorApplication.playModeStateChanged += OnPlayModeChanged;

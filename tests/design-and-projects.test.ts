@@ -125,7 +125,10 @@ describe('projects on other browsers', () => {
     }) as typeof fetch;
     try {
       expect(await saveToCloud('t', '{"x":1}', 'The Archive', 'archive')).toEqual({ gistId: 'abc123', created: true });
-      expect(calls[0].body).toMatchObject({ public: false, description: 'Narrative Bridge project: The Archive (archive)' });
+      expect(calls[0].body).toMatchObject({ public: false, description: 'Pen to Ink project: The Archive (archive)' });
+      // Gists made under the old name are still read.
+      expect(parseDescription('Narrative Bridge project: The Archive (archive)')).toEqual({ title: 'The Archive', projectId: 'archive' });
+      expect(parseDescription('Pen to Ink project: The Archive (archive)')).toEqual({ title: 'The Archive', projectId: 'archive' });
       expect(Object.keys(calls[0].body!.files!)).toEqual(['archive.nbproj.json']);
       expect(cloudIdOf('archive')).toBe('abc123');
       expect(await saveToCloud('t', '{"x":2}', 'The Archive', 'archive')).toEqual({ gistId: 'abc123', created: false });

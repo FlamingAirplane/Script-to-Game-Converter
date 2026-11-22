@@ -23,7 +23,7 @@ namespace __NAMESPACE__
     /// player went off to fetch the flowers, comes back, and the talk goes on at "You found them!" instead of from the
     /// top. When the story has already run, it keeps what it knows (its variables and items); Fresh Start starts over.
     /// </summary>
-    [AddComponentMenu("Narrative Bridge/__MENU_TITLE__/Enter Dialogue Trigger")]
+    [AddComponentMenu("Pen to Ink/__MENU_TITLE__/Enter Dialogue Trigger")]
     public class NarrativeEnterDialogueTrigger : MonoBehaviour
     {
         [Tooltip("The story to enter. Empty uses the one in the scene.")]

@@ -16,7 +16,7 @@ namespace __NAMESPACE__.Setup
     {
         const string InkPackage = "__INK_URL__";
         const string Define = "NARRATIVE_BRIDGE_INK";
-        const string Title = "__MENU_TITLE__ (Narrative Bridge)";
+        const string Title = "__MENU_TITLE__ (Pen to Ink)";
 
 #if !NARRATIVE_BRIDGE_ADDRESSABLES
         /// <summary>The story was exported to load its voice clips and pictures with Addressables.</summary>
@@ -43,7 +43,7 @@ namespace __NAMESPACE__.Setup
                 InstallAddressables();
         }
 
-        [MenuItem("Tools/Narrative Bridge/__MENU_TITLE__/Install Addressables")]
+        [MenuItem("Tools/Pen to Ink/__MENU_TITLE__/Install Addressables")]
         static void InstallAddressables()
         {
             UnityEditor.PackageManager.Client.Add("com.unity.addressables");
@@ -58,7 +58,7 @@ namespace __NAMESPACE__.Setup
 
         static void Check()
         {
-            // One question per session, however many Narrative Bridge stories are installed.
+            // One question per session, however many Pen to Ink stories are installed.
             if (SessionState.GetBool("NarrativeBridge.InkChecked", false)) return;
             SessionState.SetBool("NarrativeBridge.InkChecked", true);
             if (Application.isBatchMode)
@@ -76,7 +76,7 @@ namespace __NAMESPACE__.Setup
         }
 
 #if !NARRATIVE_BRIDGE_INK
-        [MenuItem("Tools/Narrative Bridge/__MENU_TITLE__/Install Ink Unity Integration")]
+        [MenuItem("Tools/Pen to Ink/__MENU_TITLE__/Install Ink Unity Integration")]
 #endif
         static void InstallInk()
         {
@@ -85,7 +85,7 @@ namespace __NAMESPACE__.Setup
         }
 
 #if !NARRATIVE_BRIDGE_INK
-        [MenuItem("Tools/Narrative Bridge/__MENU_TITLE__/Use the Ink Already in This Project")]
+        [MenuItem("Tools/Pen to Ink/__MENU_TITLE__/Use the Ink Already in This Project")]
 #endif
         static void UseExistingInk()
         {

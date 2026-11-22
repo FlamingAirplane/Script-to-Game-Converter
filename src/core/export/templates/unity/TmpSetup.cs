@@ -9,7 +9,7 @@ namespace __NAMESPACE__.EditorTools
     /// The story panel's text is TextMeshPro, which shows nothing until the project has the "TMP Essential Resources"
     /// (its settings, default font and shaders). A new project doesn't, and Unity only offers them once Play is pressed,
     /// when they can no longer be imported. So they're imported here when they're missing, as soon as the project opens;
-    /// Tools → Narrative Bridge → __MENU_TITLE__ → Import TextMeshPro Essentials does it again.
+    /// Tools → Pen to Ink → __MENU_TITLE__ → Import TextMeshPro Essentials does it again.
     /// </summary>
     [InitializeOnLoad]
     public static class TextMeshProSetup
@@ -32,14 +32,14 @@ namespace __NAMESPACE__.EditorTools
             EditorApplication.playModeStateChanged += change =>
             {
                 if (change == PlayModeStateChange.EnteredPlayMode && Missing)
-                    Debug.LogWarning("[NarrativeBridge] The story panel's text is empty because the TextMeshPro essentials aren't in this project. Stop Play, choose Tools → Narrative Bridge → __MENU_TITLE__ → Import TextMeshPro Essentials (or Window → TextMeshPro → Import TMP Essential Resources), and press Play again.");
+                    Debug.LogWarning("[NarrativeBridge] The story panel's text is empty because the TextMeshPro essentials aren't in this project. Stop Play, choose Tools → Pen to Ink → __MENU_TITLE__ → Import TextMeshPro Essentials (or Window → TextMeshPro → Import TMP Essential Resources), and press Play again.");
             };
         }
 
         /// <summary>Whether the project has no TMP Settings asset yet.</summary>
         public static bool Missing => Resources.Load("TMP Settings") == null && AssetDatabase.FindAssets("t:TMP_Settings").Length == 0;
 
-        [MenuItem("Tools/Narrative Bridge/__MENU_TITLE__/Import TextMeshPro Essentials")]
+        [MenuItem("Tools/Pen to Ink/__MENU_TITLE__/Import TextMeshPro Essentials")]
         static void ImportMenu()
         {
             if (EditorApplication.isPlaying) { Debug.LogWarning("[NarrativeBridge] Stop Play first: Unity can't import a package while playing."); return; }

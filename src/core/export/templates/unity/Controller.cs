@@ -17,7 +17,7 @@ namespace __NAMESPACE__
     /// game systems can use the C# events or the Inspector events below instead.
     /// Includes an optional bare-bones IMGUI demo (drawDemoUI).
     /// </summary>
-    [AddComponentMenu("Narrative Bridge/__MENU_TITLE__/Narrative Controller")]
+    [AddComponentMenu("Pen to Ink/__MENU_TITLE__/Narrative Controller")]
     public class NarrativeController : MonoBehaviour
     {
 #if NARRATIVE_BRIDGE_INK_FILE
@@ -69,7 +69,7 @@ namespace __NAMESPACE__
         [Tooltip("A Continue break is waiting: call Continue().")]
         public UnityEvent onContinue = new UnityEvent();
         public UnityEvent onEnded = new UnityEvent();
-        [Tooltip("A tag the story uses that Narrative Bridge doesn't, e.g. #shake or #music:calm.")]
+        [Tooltip("A tag the story uses that Pen to Ink doesn't, e.g. #shake or #music:calm.")]
         public TextEvent onTag = new TextEvent();
         [Tooltip("A story variable or item changed: its name and new value.")]
         public VariableEvent onVariableChanged = new VariableEvent();
@@ -117,7 +117,7 @@ namespace __NAMESPACE__
         /// <summary>The transcript was cleared (start, restart or load): redraw from scratch.</summary>
         public event Action Restarted;
         public event Action<string> StatusChanged;
-        /// <summary>A tag on a line that isn't one of Narrative Bridge's own (speaker, scene, paren, image, audio, transition).</summary>
+        /// <summary>A tag on a line that isn't one of Pen to Ink's own (speaker, scene, paren, image, audio, transition).</summary>
         public event Action<string> TagFound;
         /// <summary>A story variable or item variable changed (name, new value). Raised for all of them after a load.</summary>
         public event Action<string, object> VariableChanged;

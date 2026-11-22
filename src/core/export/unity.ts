@@ -80,7 +80,7 @@ export const unityAdapter: EngineAdapter = {
     const packageFiles: ExportFile[] = [
       { path: `${pkg}package.json`, content: json(packageJson(id, { version, title: story.project.project.title, description: packageDescription(story), unity: '2022.3' })) },
       { path: `${pkg}README.md`, content: packageReadme(story, options, id) },
-      { path: `${pkg}CHANGELOG.md`, content: `# Changelog\n\n## ${version}\n\nExported from Narrative Bridge (story version \`${storyVersion(story)}\`).\n` },
+      { path: `${pkg}CHANGELOG.md`, content: `# Changelog\n\n## ${version}\n\nExported from Pen to Ink (story version \`${storyVersion(story)}\`).\n` },
       // The canonical, validated Ink. Folders ending in ~ aren't imported by Unity: the smoke test compiles it.
       { path: `${pkg}Ink~/MainStory.ink`, content: story.generated.ink },
       { path: `${pkg}Runtime/${id.namespace}.asmdef`, content: json(runtimeAsmdef(id)) },
@@ -221,11 +221,11 @@ export function minimumUnity(engineVersion: string): string {
 function packageDescription(story: ProcessedStory): string {
   const p = story.project;
   const n = p.passages.length;
-  return `The interactive story "${p.project.title}" (${n} passage${n === 1 ? '' : 's'}), with a themed story panel, voice clips, scene pictures, save/load and inventory hooks. Exported from Narrative Bridge; runs on Ink Unity Integration.`;
+  return `The interactive story "${p.project.title}" (${n} passage${n === 1 ? '' : 's'}), with a themed story panel, voice clips, scene pictures, save/load and inventory hooks. Exported from Pen to Ink; runs on Ink Unity Integration.`;
 }
 
 function setupSteps(o: ExportOptions, id: UnityPackageId): string[] {
-  const smoke = `Optional: check it with Tools → Narrative Bridge → ${id.menuTitle} → Run Story Smoke Test, or headless: Unity -batchmode -projectPath <path> -executeMethod ${id.namespace}.EditorTools.NarrativeBridgeEditor.RunSmokeTestBatch`;
+  const smoke = `Optional: check it with Tools → Pen to Ink → ${id.menuTitle} → Run Story Smoke Test, or headless: Unity -batchmode -projectPath <path> -executeMethod ${id.namespace}.EditorTools.NarrativeBridgeEditor.RunSmokeTestBatch`;
   if (o.unityLayout === 'project')
     return [
       `Open Unity Hub → Add → select the "${o.projectName}" folder. Open it with Unity ${o.engineVersion} or any later 2022.3+/6000.x editor.`,
@@ -233,7 +233,7 @@ function setupSteps(o: ExportOptions, id: UnityPackageId): string[] {
       'The story panel’s text is TextMeshPro: its essentials are imported by themselves on first open (Assets/TextMesh Pro). If the panel is ever empty on Play, stop, choose Window → TextMeshPro → Import TMP Essential Resources, and press Play again.',
       o.includeDemo
         ? `The "NarrativeDemo" scene is created automatically on first open (Assets/NarrativeBridge/). Press Play to run the story. Change its look in the NarrativeTheme asset next to it (even while playing).`
-        : `Add the story to a scene with GameObject → Narrative Bridge → ${id.menuTitle}, then press Play.`,
+        : `Add the story to a scene with GameObject → Pen to Ink → ${id.menuTitle}, then press Play.`,
       `The story itself is the package in Packages/${id.name}; copy that folder into any other Unity project to use it there.`,
       smoke,
     ];
@@ -241,7 +241,7 @@ function setupSteps(o: ExportOptions, id: UnityPackageId): string[] {
     `Unzip the download into your game's Packages folder (you should see Packages/${id.name}/package.json). Unity picks it up by itself. Or: Window → Package Manager → + → Install package from disk… and choose package.json, or Install package from tarball… with the .tgz download.`,
     `If your game doesn't have Ink Unity Integration yet, the package offers to install it (from GitHub; git must be installed). Until then its scripts stay switched off, so your project keeps compiling.`,
     `If your game has never used TextMeshPro, its essentials are imported when the package arrives (Assets/TextMesh Pro); without them the story panel shows no text.`,
-    `Add the story to a scene: GameObject → Narrative Bridge → ${id.menuTitle} (the controller with the story panel), or Tools → Narrative Bridge → ${id.menuTitle} → Create Demo Scene to try it on its own.`,
+    `Add the story to a scene: GameObject → Pen to Ink → ${id.menuTitle} (the controller with the story panel), or Tools → Pen to Ink → ${id.menuTitle} → Create Demo Scene to try it on its own.`,
     `Connect it to your game: use NarrativeController's events (LineShown, ChoicesShown, StoryEnded, TagFound, VariableChanged) or its Inspector events, give it your inventory (IInventoryAuthority), and start it where you like with StartAt("passage"). Package Manager → ${id.menuTitle} → Samples has examples. Code is in the ${id.namespace} namespace.`,
     smoke,
   ];
@@ -254,7 +254,7 @@ function csString(s: string): string {
 function storyRoutesCs(routes: StoryRoute[], id: UnityPackageId): string {
   const route = (r: StoryRoute) =>
     `            new Route(${csString(r.name)}, new string[] { ${r.choices.map(csString).join(', ')} }, ${r.ending ? csString(r.ending) : 'null'}, ${csString(r.lastLine)}),`;
-  return `// <auto-generated> by Narrative Bridge. Regenerated on every export. </auto-generated>
+  return `// <auto-generated> by Pen to Ink. Regenerated on every export. </auto-generated>
 namespace ${id.namespace}.EditorTools
 {
     /// <summary>
@@ -321,7 +321,7 @@ function storyInfoCs(story: ProcessedStory, id: UnityPackageId, addressables = f
   const knots = new Set(passages);
   const gatedInfo = story.generated.info.gated.filter((g) => knots.has(g.passage));
   const gated = gatedInfo.map((g) => `new GatedChoice(${csString(g.passage)}, ${csString(g.text)}, ${g.requirements.map((r) => `new GatedChoice.Requirement(${csString(r.words)}, r => ${conditionCs(r.condition)})`).join(', ')})`);
-  return `// <auto-generated> by Narrative Bridge. Regenerated on every export. </auto-generated>
+  return `// <auto-generated> by Pen to Ink. Regenerated on every export. </auto-generated>
 namespace ${id.namespace}
 {
     public static class StoryInfo
@@ -409,10 +409,10 @@ ${gated.map((g) => `            ${g},`).join('\n')}
 }
 
 function packageReadme(story: ProcessedStory, o: ExportOptions, id: UnityPackageId): string {
-  return `# ${story.project.project.title}: a Narrative Bridge story for Unity
+  return `# ${story.project.project.title}: a Pen to Ink story for Unity
 
-Package \`${id.name}\`, story version \`${storyVersion(story)}\`, generated by Narrative Bridge. Everything is in the
-\`${id.namespace}\` namespace and its own assemblies, so it sits beside your game's code (and other Narrative Bridge
+Package \`${id.name}\`, story version \`${storyVersion(story)}\`, generated by Pen to Ink. Everything is in the
+\`${id.namespace}\` namespace and its own assemblies, so it sits beside your game's code (and other Pen to Ink
 stories) without clashing, and it never changes your scenes, build settings or project settings on its own.
 
 ## Install
@@ -420,17 +420,17 @@ stories) without clashing, and it never changes your scenes, build settings or p
    Or in Unity: *Window → Package Manager → + → Install package from disk…* and choose \`package.json\`, or
    *Install package from tarball…* with the \`.tgz\`. (Keep the file inside your project, for example in \`Packages/\`.)
 2. **Ink Unity Integration.** The story runs on inkle's free ink runtime. If your game doesn't have it, the package
-   asks to install it (from GitHub; git must be installed), or use *Tools → Narrative Bridge → ${id.menuTitle} → Install
+   asks to install it (from GitHub; git must be installed), or use *Tools → Pen to Ink → ${id.menuTitle} → Install
    Ink Unity Integration*. Until it's there the story's scripts stay switched off, so your project still compiles.
    You can also add it yourself in \`Packages/manifest.json\`:
    \`"${INK_PACKAGE}": "${unityPackageUrl(o.integrationRef)}"\`.
    If your game already has ink some other way (for example a copy in Assets), choose *Use the Ink Already in This Project*.
 
 ## Add it to a scene
-- *GameObject → Narrative Bridge → ${id.menuTitle}* adds a GameObject with the **NarrativeController** (the story) and
+- *GameObject → Pen to Ink → ${id.menuTitle}* adds a GameObject with the **NarrativeController** (the story) and
   the **NarrativeView** (a themed story panel).
-- *Tools → Narrative Bridge → ${id.menuTitle} → Create Demo Scene* makes a scene with just the story, to try it.
-- Or add the components yourself (*Add Component → Narrative Bridge → ${id.menuTitle}*).
+- *Tools → Pen to Ink → ${id.menuTitle} → Create Demo Scene* makes a scene with just the story, to try it.
+- Or add the components yourself (*Add Component → Pen to Ink → ${id.menuTitle}*).
 
 ## Connect it to your game
 - **Start it where you want.** Turn off *Start On Awake* and call \`StartStory()\`, or \`StartAt("passage")\` to begin at a
@@ -438,12 +438,12 @@ stories) without clashing, and it never changes your scenes, build settings or p
 - **Pick a conversation up partway.** Every line of dialogue can be a starting point too: \`StartAt("passage.line_…")\`
   (listed in \`StoryInfo.Lines\`, with how each reads in \`StoryInfo.LineTexts\`). \`EnterAt(name)\` does the same but keeps
   what the story knows (its variables and items) when it has already run. Without code, add an **Enter Dialogue
-  Trigger** (*Add Component → Narrative Bridge → ${id.menuTitle}*) to an object with a trigger collider, pick the *Passage* and the *Line*
+  Trigger** (*Add Component → Pen to Ink → ${id.menuTitle}*) to an object with a trigger collider, pick the *Passage* and the *Line*
   the player picks up on, and, if you like, the item the player must have: talk about flowers, go and get them, come
   back, and the conversation goes on at "You found them!" instead of from the top.
 - **Events, from code:** \`LineShown\` (a \`Line\` with \`Speaker\`, \`Text\`, \`Scene\`, \`Paren\`, \`Image\`, \`Tags\`),
   \`ChoicesShown\` → \`Choose(i)\`, \`ContinueShown\` → \`Continue()\`, \`StoryEnded\`, \`Restarted\`, \`StatusChanged\`,
-  \`RuntimeError\`, plus **\`TagFound\`** for tags the story uses that Narrative Bridge doesn't (\`#shake\`, \`#music:calm\`)
+  \`RuntimeError\`, plus **\`TagFound\`** for tags the story uses that Pen to Ink doesn't (\`#shake\`, \`#music:calm\`)
   and **\`VariableChanged\`** for every story variable and item.
 - **Events, without code:** the same moments as UnityEvents in the controller's Inspector (*On Line*, *On Choices*,
   *On Continue*, *On Ended*, *On Tag*, *On Variable Changed*), to drive animations, sounds or quests.
@@ -490,13 +490,13 @@ The NarrativeView draws story text (everything so far, the current scene, or one
 character's portrait, the scene picture, choices, the Continue button, the ending and optional Restart / Save / Load.
 Its look and behaviour are a **NarrativeTheme** asset with about 70 settings in groups (colours, panel, text, speakers and
 scenes, typing and pacing, choices and buttons, toolbar, scene pictures, character portraits, screen and sound): the first time you add the story, one is made in
-\`Assets/NarrativeBridge/${id.namespace.split('.').pop()}/\` from the look chosen in Narrative Bridge, and you can change it in the
+\`Assets/NarrativeBridge/${id.namespace.split('.').pop()}/\` from the look chosen in Pen to Ink, and you can change it in the
 Inspector, even while playing. The view's *Sorting Order* sets where it draws among your canvases, *Keyboard
 Shortcuts* (1-9 choose, Space or Return continue) can be turned off, and it uses your scene's EventSystem when there
 is one (it works with the Input Manager and the Input System package). Its text is TextMeshPro whenever your game has it
 (built into Unity 6, or the TextMeshPro package on 2022.3): set *TMP Font* on the theme to use your own font asset.
 TextMeshPro shows no text until a project has its *TMP Essential Resources*; a project that doesn't gets them imported
-when it opens (\`Editor/TextMeshProSetup.cs\`), and *Tools → Narrative Bridge → ${id.menuTitle} → Import TextMeshPro Essentials*
+when it opens (\`Editor/TextMeshProSetup.cs\`), and *Tools → Pen to Ink → ${id.menuTitle} → Import TextMeshPro Essentials*
 does it by hand. If the panel is ever empty on Play, stop, run that, and press Play again.
 
 ## Italics and bold
@@ -505,18 +505,18 @@ TextMeshPro) and types them out letter by letter; any other \`<\` in the story i
 \`NarrativeView.Markup(text)\` for rich text or \`NarrativeView.Plain(text)\` for plain text.
 
 ## Cues
-Writers add cues in Narrative Bridge: music, a sound, an ambience, a camera shake, or a name of their own, with an optional
+Writers add cues in Pen to Ink: music, a sound, an ambience, a camera shake, or a name of their own, with an optional
 value (\`#music:calm\`, \`#sound:door_creak\`, \`#shake:0.5\`). They're listed in \`StoryInfo.Cues\` (and with their values in
-\`StoryInfo.CueTags\`). The **NarrativeCuePlayer** plays them without code: *Tools → Narrative Bridge → ${id.menuTitle} → Add Cue
+\`StoryInfo.CueTags\`). The **NarrativeCuePlayer** plays them without code: *Tools → Pen to Ink → ${id.menuTitle} → Add Cue
 Player to Selected Story* lists every cue with a likely action (play or stop music, play a sound, loop an ambience, shake the
-camera, or only raise its event). **Sounds the writer attached to cues in Narrative Bridge come with the package and play
+camera, or only raise its event). **Sounds the writer attached to cues in Pen to Ink come with the package and play
 by themselves** (\`StoryInfo.CueSoundTags\`; turn off *Play Story Sounds* to use only your own). To use your own sound for a
 value, add a clip named after it to the cue (a clip called *calm* for \`music:calm\`): it plays instead of the writer's.
 Each cue also has a UnityEvent, \`CuePlayed\` reports every cue from code, and \`TagFound\` still sees them all. A music cue
 or ambience cue with no value stops it. (Stories added to a scene after this export get a Cue Player automatically.)
 
 ## Story Debugger
-*Tools → Narrative Bridge → ${id.menuTitle} → Story Debugger* follows the story while the game plays: the passage the reader
+*Tools → Pen to Ink → ${id.menuTitle} → Story Debugger* follows the story while the game plays: the passage the reader
 is in, what it's waiting for, the choices (click one to choose it) and the locked ones, every story variable and item (change
 them to try a route), a jump to any passage, and saves copied to or loaded from the clipboard.
 
@@ -529,14 +529,14 @@ the first time, the player's system language if the sheet has it), and the Setti
 by their text, so revising the story keeps every translation whose line didn't change. \`Line.SourceText\` (and
 \`SourceSpeaker\`…) keep the original words.
 
-**Unity's Localization package:** *Tools → Narrative Bridge → ${id.menuTitle} → Create Localization Tables* makes a String Table
+**Unity's Localization package:** *Tools → Pen to Ink → ${id.menuTitle} → Create Localization Tables* makes a String Table
 Collection, \`${id.slug}-story\`, from the sheet (with a locale per language), and the story then follows the selected locale.
 Run it again to bring in a newer sheet.
 
 ## Player settings
 The panel's *Settings* button opens a menu where the player sets the text size, typing speed (slow, normal, fast or
 instant), whether it goes on by itself, high contrast (light text on a solid dark panel) and the voice volume. They're kept
-in PlayerPrefs and shared by every Narrative Bridge story in the game. Your own options menu can set the same things
+in PlayerPrefs and shared by every Pen to Ink story in the game. Your own options menu can set the same things
 through \`NarrativeSettings\` (\`TextScale\`, \`TypingSpeed\`, \`AutoAdvance\`, \`HighContrast\`, \`VoiceVolume\`, \`Reset()\`); the
 menu's words are in the view's *Settings Words*.
 
@@ -544,12 +544,12 @@ menu's words are in the view's *Settings Words*.
 ${o.unityAddressables ? `This story loads its voice clips and pictures **on demand with Addressables**, so they aren't all built into the game.
 They're in \`Runtime/StoryAssets/\`, and the package puts them in an Addressables group, *${id.menuTitle} Story*, at the
 addresses the controller asks for (\`StoryInfo.AddressPrefix\` + \`Audio/<clip>\` or \`Images/<file>\`). That happens by itself
-the first time; after updating the package, run *Tools → Narrative Bridge → ${id.menuTitle} → Set Up Addressables*. The package
+the first time; after updating the package, run *Tools → Pen to Ink → ${id.menuTitle} → Set Up Addressables*. The package
 offers to install Addressables (\`com.unity.addressables\`) if the project doesn't have it. Build the Addressables content with
 your game as usual (*Window → Asset Management → Addressables → Groups → Build*, or on player build). Voice clips and the
 story panel's pictures load without waiting (as WebGL needs); \`LoadPicture\` and \`LoadVoiceClip\` wait, and
 \`LoadPictureAsync\` / \`LoadVoiceClipAsync\` don't. \`NarrativeController.ReleaseLoadedMedia()\` lets go of what has loaded so far.` : `Voice clips and pictures are in the package's Resources, so they're always built into the game. For long or heavily voiced
-stories, export with *Load voice clips and pictures on demand (Addressables)* in Narrative Bridge's advanced settings instead.
+stories, export with *Load voice clips and pictures on demand (Addressables)* in Pen to Ink's advanced settings instead.
 From code: \`LoadVoiceClip\`, \`LoadPicture\` (and their \`Async\` versions) and \`ReleaseLoadedMedia()\`.`}
 
 ## Updating
@@ -565,16 +565,16 @@ keep their references. Your NarrativeTheme asset is never overwritten.
 - \`NarrativeBridge~/\`: the export manifest, validation report, story data and original source documents.
 
 ## Playthrough tests
-When the story was exported, Narrative Bridge found playthrough routes that between them reach every ending
+When the story was exported, Pen to Ink found playthrough routes that between them reach every ending
 (\`Editor/StoryRoutes.cs\`). Replay them to check your game still plays the story as written, after you wire it in or
-update it: *Tools → Narrative Bridge → ${id.menuTitle} → Run Playthrough Tests*, the Test Runner (*Window → General → Test
+update it: *Tools → Pen to Ink → ${id.menuTitle} → Run Playthrough Tests*, the Test Runner (*Window → General → Test
 Runner → Edit Mode*; add \`"testables": ["${id.name}"]\` to \`Packages/manifest.json\` to list the package's tests, which a
 complete-project export already does), or headless:
 \`Unity -batchmode -projectPath <your project> -executeMethod ${id.namespace}.EditorTools.PlaythroughRunner.RunBatch\`
 (exit code 0 when every route passes). Each failure says which step went differently and what the story offered instead.
 
 ## Smoke test
-*Tools → Narrative Bridge → ${id.menuTitle} → Run Story Smoke Test*, or headless:
+*Tools → Pen to Ink → ${id.menuTitle} → Run Story Smoke Test*, or headless:
 \`Unity -batchmode -projectPath <your project> -executeMethod ${id.namespace}.EditorTools.NarrativeBridgeEditor.RunSmokeTestBatch\`.
 It compiles the ink with the ink compiler inside Unity, plays the story 50 times, checks every voice clip and picture
 imported, saves and carries a save over, starts at every passage, clicks through the story panel (with its locked choices,
@@ -585,7 +585,7 @@ Settings and save-slot menus), plays the cues, and replays the playthrough route
 function projectReadme(story: ProcessedStory, o: ExportOptions, id: UnityPackageId): string {
   return `# ${story.project.project.title}: Unity project
 
-Generated by Narrative Bridge. Story version \`${storyVersion(story)}\`.
+Generated by Pen to Ink. Story version \`${storyVersion(story)}\`.
 
 ## Run it
 ${setupSteps(o, id).map((s, i) => `${i + 1}. ${s}`).join('\n')}
