@@ -1,5 +1,5 @@
-import { forcedOffered } from './forced';
-import { isActive, itemVar, type Choice, type Condition, type Effect, type StoryProject } from './isr';
+import type { GatedChoiceInfo } from './inkgen';
+import { itemVar, type Condition, type Effect, type StoryProject } from './isr';
 
 // Gated choices: choices that need an item or a value. Playtest uses these to show the ones the reader
 // can't take yet, and what each one needs.
@@ -104,24 +104,32 @@ export function effectInWords(e: Effect, project: StoryProject): string {
 }
 
 export interface LockedChoice {
-  choice: Choice;
+  text: string;
+  choiceId: string;
   /** The conditions that don't hold, in plain words. */
   needs: string[];
 }
 
+/** A choice the story is offering: its words and, when the Ink has ids, its id. */
+export type OfferedChoice = string | { text: string; id?: string | null };
+
 /**
- * The approved choices of a passage that the reader can't take right now because a condition fails.
- * `offered` is the text of the choices the story is offering, so nothing is listed twice.
+ * The choices with conditions (from generateInk's ReaderInfo) that the reader can't take right now because a
+ * condition fails. `offered` is what the story is offering, so nothing is listed twice: a choice is matched by its id
+ * when the Ink has ids, else by its words.
  */
-export function lockedChoices(project: StoryProject, passageId: string, read: (name: string) => unknown, offered: string[]): LockedChoice[] {
-  const passage = project.passages.find((p) => p.id === passageId);
+export function lockedChoices(gated: GatedChoiceInfo[], passageId: string, read: (name: string) => unknown, offered: OfferedChoice[]): LockedChoice[] {
+  const texts = offered.map((o) => (typeof o === 'string' ? o : o.text));
+  const ids = new Set(offered.flatMap((o) => (typeof o === 'string' || !o.id ? [] : [o.id])));
+  const isOffered = (g: GatedChoiceInfo) => ids.has(g.choiceId) || texts.includes(g.text);
+  const here = gated.filter((g) => g.passage === passageId);
   // While a forced choice applies, it's the only way on: nothing else is shown, not even as locked.
-  if (!passage || forcedOffered(passage, offered)) return [];
+  if (here.some((g) => g.forced && isOffered(g))) return [];
   const out: LockedChoice[] = [];
-  for (const choice of passage.choices) {
-    if (!isActive(choice.review) || !choice.conditions.length || offered.includes(choice.text)) continue;
-    const failing = choice.conditions.filter((c) => !conditionHolds(c, read));
-    if (failing.length) out.push({ choice, needs: failing.map((c) => describeNeed(c, project)) });
+  for (const g of here) {
+    if (isOffered(g)) continue;
+    const failing = g.requirements.filter((r) => !conditionHolds(r.condition, read));
+    if (failing.length) out.push({ text: g.text, choiceId: g.choiceId, needs: failing.map((r) => r.words) });
   }
   return out;
 }

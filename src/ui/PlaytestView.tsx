@@ -472,7 +472,7 @@ export function PlaytestView({
   // Choices the reader can't take yet. Not at a Continue break: a passage's choices come after its last break.
   const locked =
     showGated && story.current && !(choices.length === 1 && choices[0].text === CONTINUE_TEXT)
-      ? lockedChoices(processed.project, where, (n) => story.current!.variablesState.$(n), choices.map((c) => c.text))
+      ? lockedChoices(processed.generated.info.gated, where, (n) => story.current!.variablesState.$(n), choices)
       : [];
   // The drop cap opens the first real paragraph of prose, not a short line like "FADE IN:".
   const dropCapAt = lines.findIndex((l) => l.kind === 'text' && !l.speaker && !l.tags.includes('transition') && l.text.length >= 40);
@@ -648,8 +648,8 @@ export function PlaytestView({
             })
           )}
           {!playing && locked.map((l) => (
-            <p key={l.choice.id} className="choice-btn locked" aria-disabled="true">
-              <span className="locked-text"><Rich text={T(l.choice.text)} /></span>
+            <p key={l.choiceId} className="choice-btn locked" aria-disabled="true">
+              <span className="locked-text"><Rich text={T(l.text)} /></span>
               <span className="locked-needs">needs {l.needs.map(T).join(', ')}</span>
             </p>
           ))}

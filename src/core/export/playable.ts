@@ -4,9 +4,6 @@ import { imageFileName, portraitFiles, referencedImages } from '../images';
 import { log } from '../log';
 import { EXIT_PREFIX, fileBase } from '../isr';
 import { cueSounds } from '../cues';
-import { describeNeed } from '../gating';
-import { isActive } from '../isr';
-import { isForcing } from '../forced';
 import { translationEntries } from './translations';
 import { assertExportable, storyVersion } from './common';
 import { forPlayers } from '../players';
@@ -91,9 +88,7 @@ export function buildPlayableHtml(story: ProcessedStory, inkRuntimeJs: string, a
     ? { languages: t.languages, strings: Object.fromEntries(Object.entries(t.strings).filter(([k]) => keys.has(k))) }
     : { languages: [] as string[], strings: {} };
   // Choices that need something, to show greyed out with what they need while the reader lacks it.
-  const gated = story.project.passages.flatMap((p) =>
-    p.choices.filter((c) => isActive(c.review) && c.conditions.length).map((c) => ({ p: p.id, t: c.text.trim(), needs: c.conditions.map((x) => ({ w: describeNeed(x, story.project), c: x })), ...(isForcing(c) ? { f: 1 } : {}) })),
-  );
+  const gated = story.generated.info.gated.map((g) => ({ p: g.passage, i: g.choiceId, t: g.text, needs: g.requirements.map((r) => ({ w: r.words, c: r.condition })), ...(g.forced ? { f: 1 } : {}) }));
   const hasVoiceClips = story.project.passages.some((p) => p.content.some((b) => b.type === 'dialogue' && b.audio && clips[audioFileName(b.audio)]));
   const meta = jsonSafe(
     JSON.stringify({
@@ -342,9 +337,11 @@ const PLAYER_JS = `
     if (!c.length || isPause() || exitName()) return [];
     var knot = (c[0].sourcePath || '').split('.')[0];
     var offered = c.map(function (x) { return x.text; });
+    var offeredIds = c.map(function (x) { return choiceId(x); });
+    var isOffered = function (g) { return offeredIds.indexOf(g.i) >= 0 || offered.indexOf(g.t) >= 0; };
     // While a forced choice is on offer, it's the only way on: nothing is shown as locked.
-    if (meta.gated.some(function (g) { return g.p === knot && g.f && offered.indexOf(g.t) >= 0; })) return [];
-    return meta.gated.filter(function (g) { return g.p === knot && offered.indexOf(g.t) < 0; }).map(function (g) {
+    if (meta.gated.some(function (g) { return g.p === knot && g.f && isOffered(g); })) return [];
+    return meta.gated.filter(function (g) { return g.p === knot && !isOffered(g); }).map(function (g) {
       return { text: g.t, needs: g.needs.filter(function (n) { try { return !holds(n.c); } catch (e) { return false; } }).map(function (n) { return n.w; }) };
     }).filter(function (g) { return g.needs.length; });
   }

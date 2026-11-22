@@ -2,7 +2,7 @@ import { audioFileName, referencedAudio, type AudioAssets } from '../audio';
 import { imageFileName, referencedImages } from '../images';
 import { blocksExport, diag, type Diagnostic } from '../diagnostics';
 import { fnv1a, sha256Hex } from '../hash';
-import { foldAccents, itemVar, nameCode } from '../isr';
+import { foldAccents, nameCode } from '../isr';
 import type { ProcessedStory } from '../pipeline';
 import { GENERATOR_VERSION, INK_COMPILER, MANIFEST_VERSION } from '../version';
 import type { EngineAdapter, ExportFile, ExportManifest, ExportOptions, ExportResult } from './types';
@@ -127,10 +127,6 @@ export function countBySeverity(ds: Diagnostic[]) {
 
 export function json(v: unknown): string {
   return JSON.stringify(v, null, 2) + '\n';
-}
-
-export function itemVarNames(story: ProcessedStory): string[] {
-  return story.project.items.filter((i) => story.generated.ink.includes(`VAR ${itemVar(i.id)} `)).map((i) => itemVar(i.id));
 }
 
 /** Refuses to export a story with fatal errors — never "succeed" just because files were written. */
